@@ -21637,7 +21637,7 @@ async function testExercices(){
     // ajoute 'vitrineProgrammes', les programmes que le coach met en vente,
     // reduits au nom, au pitch, au prix, au lien et a l'image — jamais les
     // seances, jamais les exercices, jamais les charges.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo','defautsCoach'];  // série 6 : le défaut de bilan (defautsCoachPublics)
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -74660,6 +74660,80 @@ async function testExercices(){
       }); }finally{ window.renderMarqueCoach=_rm; }
       if(faux) return _echec(faux);
       return h>0&&h<=2*844?true:_echec('hauteur '+h);});
+
+    // ══ BUILD 1926 — LE DÉFAUT DE BILAN DU COACH (cadenceEffective) ════════════
+    ok('1926 — cadenceEffective : athlète > coach > RepCore ; questions séparées, invalides filtrées',()=>{
+      const f=[];
+      const coach={defautsCoach:{bilan:{freq:1,jour:1,questions:['  Comment va le genou ?  ','', 'x'.repeat(200),'a','b']}}};
+      const a=cadenceEffective({bilanCadence:{freq:4,jour:3}},coach);
+      if(a.source!=='athlete'||a.freq!==4||a.jour!==3) f.push('athlète : '+JSON.stringify(a));
+      if(a.questions[0]!=='Comment va le genou ?') f.push('questions du défaut sur réglage propre : '+JSON.stringify(a.questions));
+      const c=cadenceEffective({},coach);
+      if(c.source!=='coach'||c.freq!==1||c.jour!==1) f.push('coach : '+JSON.stringify(c));
+      if(c.questions.length!==3||c.questions[1].length!==120) f.push('questions bornées : '+JSON.stringify(c.questions));
+      const r=cadenceEffective({_bilanFreq:4},{});
+      if(r.source!=='repcore'||r.freq!==4||r.jour!==6) f.push('repcore : '+JSON.stringify(r));
+      const p=cadenceEffective({questionsCoach:['propre']},coach);
+      if(p.questions.join()!=='propre') f.push('questions propres ignorées');
+      if(cadenceEffective({},{defautsCoach:{bilan:{freq:3,jour:9}}}).source!=='repcore') f.push('défaut invalide retenu');
+      if(cadenceEffective({},{reglagesCoach:{cadence:{freq:2,jour:0}}}).source!=='coach') f.push('reglagesCoach.cadence ignoré');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1926 — echeanceBilan, bilanFreqEffective et questionsCoachDe passent par le défaut du coach',()=>{
+      const J=864e5, t=Date.now();
+      const coach={defautsCoach:{bilan:{freq:1,jour:new Date(t-3*J).getDay(),questions:['Q1']}}};
+      const ath={bilans:[{type:'coaching',date:t-10*J}]};
+      const e=echeanceBilan(ath,t,coach);
+      if(e.origine!=='coach'||e.freq!==1||!(e.retardJours>=1)) return _echec('échéance : '+JSON.stringify(e));
+      if(echeanceBilan(ath,t,{}).retardJours>=1) return _echec('sans défaut, 2 semaines : pas en retard');
+      if(bilanFreqEffective(ath,coach)!==1) return _echec('fréquence');
+      return questionsCoachDe(ath,coach).join()==='Q1'?true:_echec('questions : '+questionsCoachDe(ath,coach));});
+    ok('1926 — nouvel élève invité : aucune cadence recopiée, il suit le défaut',()=>{
+      const coach={role:'coach',defautsCoach:{bilan:{freq:1,jour:1}},reglagesCoach:{cadence:{freq:4,jour:2}}};
+      if(heritageCode(coach).bilanCadence) return _echec('cadence recopiée');
+      return cadenceEffective({},coach).freq===1?true:_echec('ne suit pas le défaut');});
+    ok('1926 — aperçu : suiveurs seulement ; celui qui passerait en retard est signalé',()=>{
+      const J=864e5, t=Date.now();
+      const cl=[{id:'a',email:'a@t',fname:'Léa',bilans:[{date:t-10*J}]},{id:'b',email:'b@t',fname:'Max',bilanCadence:{freq:2,jour:6},bilans:[{date:t-10*J}]},{id:'c',email:'c@t',fname:'Zoé',_fromCode:true}];
+      const ap=apercuDefautBilan(cl,{},{defautsCoach:{bilan:{freq:1,jour:new Date(t-3*J).getDay()}}},t);
+      if(ap.length!==1||ap[0].prenom!=='Léa') return _echec('suiveurs : '+JSON.stringify(ap));
+      return ap[0].retard===true?true:_echec('retard non signalé');});
+    okA('1926 — « Seulement aux nouveaux » fige les suiveurs, le réglage propre n’est pas touché, Annuler restaure',async()=>{
+      const brut=localStorage.getItem('rc_users'); const cu=currentUser;
+      const _gc=window.getClients, _su=window.saveUser, _po=CLOUD.pushOne, _pp=CLOUD.pushProfilCoach;
+      try{
+        const J=864e5, t=Date.now();
+        const A={id:'d1',email:'d1@t',fname:'Léa',role:'athlete',bilans:[{date:t-3*J}]};
+        const B={id:'d2',email:'d2@t',fname:'Max',role:'athlete',bilanCadence:{freq:4,jour:2},bilans:[{date:t-3*J}]};
+        DB.set('users',{'d1@t':A,'d2@t':B});
+        currentUser=Object.assign(_banCoach(),{defautsCoach:{bilan:{freq:2,jour:6}}});
+        window.getClients=()=>Object.values(DB.get('users')||{}); window.saveUser=()=>true;
+        CLOUD.pushOne=()=>Promise.resolve(true); CLOUD.pushProfilCoach=()=>Promise.resolve(true);
+        defautBilanAppliquer({freq:1,jour:1,questions:[]},'nouveaux');
+        let us=DB.get('users');
+        if(!us['d1@t'].bilanCadence||us['d1@t'].bilanCadence.freq!==2) return _echec('suiveur non figé : '+JSON.stringify(us['d1@t'].bilanCadence));
+        if(us['d2@t'].bilanCadence.freq!==4) return _echec('réglage propre touché');
+        if(currentUser.defautsCoach.bilan.freq!==1||currentUser.defautsCoach.bilan._precedent.freq!==2) return _echec('défaut / _precedent : '+JSON.stringify(currentUser.defautsCoach));
+        rcAnnulerDernier();
+        us=DB.get('users');
+        if(us['d1@t'].bilanCadence) return _echec('annuler n’a pas défigé');
+        return currentUser.defautsCoach.bilan.freq===2?true:_echec('annuler : '+JSON.stringify(currentUser.defautsCoach));
+      }finally{
+        window.getClients=_gc; window.saveUser=_su; CLOUD.pushOne=_po; CLOUD.pushProfilCoach=_pp; currentUser=cu;
+        if(brut==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',brut);
+      }});
+    ok('1926 — coach_public ne reçoit que le défaut de bilan ; la fiche dit « Suit ton défaut »',()=>{
+      if(CLOUD.CHAMPS_PROFIL_COACH.indexOf('defautsCoach')<0) return _echec('defautsCoach non publié');
+      const p=defautsCoachPublics({defautsCoach:{bilan:{freq:1,jour:1,questions:['a'],_precedent:{freq:2,jour:6}},prescription:{series:4}}});
+      if(JSON.stringify(p)!==JSON.stringify({bilan:{freq:1,jour:1,questions:['a']}})) return _echec('publié : '+JSON.stringify(p));
+      if(CHAMPS_NON_SANTE.indexOf('defautsCoach')<0) return _echec('non classé');
+      const cu=currentUser;
+      try{
+        currentUser=Object.assign(_banCoach(),{id:'cz',defautsCoach:{bilan:{freq:1,jour:1}}});
+        const h1=_htmlCadenceCoach({coachId:'cz',bilans:[]});
+        if(!/Suit ton défaut/.test(h1)) return _echec('« Suit ton défaut » absent');
+        const h2=_htmlCadenceCoach({coachId:'cz',bilanCadence:{freq:2,jour:6},bilans:[]});
+        return /Réglage propre/.test(h2)&&/revenir au défaut/.test(h2)?true:_echec('« Réglage propre » absent');
+      }finally{ currentUser=cu; }});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

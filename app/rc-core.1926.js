@@ -6063,7 +6063,11 @@ const CLOUD={
     // coachPrograms et recalcule par pushProfilCoach juste avant l'envoi —
     // l'oublier ici ne casserait rien de visible : la vitrine resterait vide
     // chez l'athlete, sans un mot, exactement comme le logo avant lui.
-    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
+    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo',
+    // Série 6 : le défaut de BILAN du coach (cadence, questions), et lui seul —
+    // defautsCoachPublics le réduit avant l'envoi. L'athlète en a besoin pour
+    // son échéance et ses questions (cadenceEffective).
+    'defautsCoach'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -6323,6 +6327,9 @@ const CLOUD={
       for(const c of this.CHAMPS_PROFIL_COACH)
         if(distant[c]!==undefined&&distant[c]!==null) profil[c]=distant[c];
     for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!==undefined&&u[c]!==null) profil[c]=u[c];
+    // Série 6 : de defautsCoach, seul le défaut de bilan part (et jamais _precedent).
+    { const dp=(u.defautsCoach!==undefined)?defautsCoachPublics(u):defautsCoachPublics(profil);
+      if(dp) profil.defautsCoach=dp; else delete profil.defautsCoach; }
     profil.maj=Date.now();
     let r;
     try{
@@ -7895,6 +7902,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'celebrations',
   // BUILD 1918-1921 : des horodatages d'interface (bravos du coach, récapitulatifs vus).
   'bravos','wrappedVus',
+  // Série 6 : les valeurs par défaut du coach (bilan, prescription, affichage,
+  // méthode, profil) et les exceptions d'affichage qu'il pose sur un dossier.
+  'defautsCoach',
   // Le parcours de démarrage : des étapes datées, rien de santé.
   'parcours',
   // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise
@@ -34315,12 +34325,56 @@ function bilanCadenceValide(x){
   if(BILAN_FREQS.indexOf(f)<0||!Number.isInteger(j)||j<0||j>6) return null;
   return {freq:f,jour:j};
 }
-// PURE. La fréquence en vigueur (semaines) : celle du coach, sinon celle de l'athlète.
-function bilanFreqEffective(c){
-  const cad=bilanCadenceValide(c&&c.bilanCadence);
-  if(cad) return cad.freq;
-  const f=Number(c&&c._bilanFreq);
-  return BILAN_FREQS.indexOf(f)>=0?f:2;
+// ══ SÉRIE 6, LOT 2 — L'ÉTAGE « DÉFAUT DU COACH » ════════════════════════════
+// Trois étages, le premier qui répond gagne :
+//   athlete  — bilanCadence posé par le coach sur CE dossier (réglage propre) ;
+//   coach    — defautsCoach.bilan du coach (ou, à défaut, la cadence des
+//              Réglages de coaching, reglagesCoach.cadence) : suivi EN DIRECT ;
+//   repcore  — la fréquence choisie par l'athlète (_bilanFreq, 2) et le samedi.
+// Les questions suivent la même règle, séparément : celles du dossier si le
+// coach en a posé, sinon celles du défaut.
+// Le Worker (relances.js, cadenceEffective) applique la même ; un test de
+// cloudflare/test extrait ce bloc et compare les deux.
+// ── cadenceEffective:debut
+function _cadValide(x){
+  if(!x||typeof x!=='object') return null;
+  const f=Number(x.freq), j=Number(x.jour);
+  if([1,2,4].indexOf(f)<0||!Number.isInteger(j)||j<0||j>6) return null;
+  return {freq:f,jour:j};
+}
+function _cadQuestions(l){
+  const a=Array.isArray(l)?l:((l&&typeof l==='object')?Object.values(l):[]);
+  return a.map(q=>String(q==null?'':q).replace(/\s+/g,' ').trim().slice(0,120)).filter(Boolean).slice(0,3);
+}
+// PURE. Le défaut de bilan d'un coach : {freq, jour, questions} ou null.
+function defautBilanCoach(coach){
+  const d=coach&&coach.defautsCoach&&coach.defautsCoach.bilan;
+  const cad=_cadValide(d);
+  if(cad) return {freq:cad.freq,jour:cad.jour,questions:_cadQuestions(d.questions)};
+  const r=_cadValide(coach&&coach.reglagesCoach&&coach.reglagesCoach.cadence);
+  return r?{freq:r.freq,jour:r.jour,questions:[]}:null;
+}
+// PURE. {freq, jour, questions, source:'athlete'|'coach'|'repcore'}.
+function cadenceEffective(athlete,coach){
+  const a=athlete||{};
+  const propre=_cadValide(a.bilanCadence), def=defautBilanCoach(coach);
+  const qa=_cadQuestions(a.questionsCoach);
+  const questions=qa.length?qa:(def?def.questions:[]);
+  if(propre) return {freq:propre.freq,jour:propre.jour,questions,source:'athlete'};
+  if(def) return {freq:def.freq,jour:def.jour,questions,source:'coach'};
+  const f=Number(a._bilanFreq);
+  return {freq:[1,2,4].indexOf(f)>=0?f:2,jour:6,questions,source:'repcore'};
+}
+// ── cadenceEffective:fin
+// Le coach d'un dossier, là où on le lit : le coach connecté sur SON appareil,
+// sinon son profil public (coachAffichable : local + coach_public).
+function _coachDeAthlete(c){
+  try{ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach'&&c&&c!==currentUser&&(!c.coachId||c.coachId===currentUser.id)) return currentUser; }catch(e){}
+  try{ return (c&&c.role!=='coach')?(coachAffichable(c)||null):null; }catch(e){ return null; }
+}
+// PURE si `coach` est fourni. La fréquence en vigueur (semaines).
+function bilanFreqEffective(c,coach){
+  return cadenceEffective(c,coach===undefined?_coachDeAthlete(c):coach).freq;
 }
 // PURE. « dateMs + freq semaines », arrondi au `jour` le plus proche (±3 jours).
 function _bilanAncre(dateMs,freqWeeks,jour){
@@ -34336,14 +34390,18 @@ function _bilanAncre(dateMs,freqWeeks,jour){
  * PURE. {echeance (ms, minuit local), retardJours (négatif avant l'échéance,
  * 0 le jour même), freq, jour, source:'coach'|'athlete'} ; tout à null sans bilan.
  */
-function echeanceBilan(c,maintenant){
+// `coach` (facultatif) : le coach dont le défaut s'applique ; absent, il est
+// retrouvé (_coachDeAthlete). `source` garde son sens historique ('coach' :
+// une cadence fixée par le coach, propre ou par défaut ; 'athlete' : celle de
+// l'athlète) ; `origine` dit l'étage (athlete | coach | repcore).
+function echeanceBilan(c,maintenant,coach){
+  const cad=cadenceEffective(c,coach===undefined?_coachDeAthlete(c):coach);
   const der=dernierBilan(c);
-  const vide={echeance:null,retardJours:null,freq:bilanFreqEffective(c),jour:null,source:null};
+  const vide={echeance:null,retardJours:null,freq:cad.freq,jour:null,source:null,origine:cad.source};
   if(!der||!(Number(der.date)>0)) return vide;
-  const cad=bilanCadenceValide(c&&c.bilanCadence);
-  const freq=cad?cad.freq:bilanFreqEffective(c), jour=cad?cad.jour:6;
-  const e=_bilanAncre(Number(der.date),freq,jour);
-  return {echeance:e.getTime(),retardJours:_bilRetardJours(e.getTime(),maintenant),freq,jour,source:cad?'coach':'athlete'};
+  const e=_bilanAncre(Number(der.date),cad.freq,cad.jour);
+  return {echeance:e.getTime(),retardJours:_bilRetardJours(e.getTime(),maintenant),freq:cad.freq,jour:cad.jour,
+    source:cad.source==='repcore'?'athlete':'coach',origine:cad.source};
 }
 // PURE. « Ton coach a fixé : bilan chaque lundi, toutes les 2 semaines. »
 function texteCadenceCoach(cad){
@@ -34352,9 +34410,10 @@ function texteCadenceCoach(cad){
   return 'Ton coach a fixé : bilan chaque '+BILAN_JOURS[c.jour]+(c.freq===1?'.':', toutes les '+c.freq+' semaines.');
 }
 // PURE. Les questions du coach, nettoyées : 3 au plus, 120 caractères chacune.
-function questionsCoachDe(u){
-  const l=Array.isArray(u&&u.questionsCoach)?u.questionsCoach:Object.values((u&&u.questionsCoach)||{});
-  return l.map(q=>String(q==null?'':q).replace(/\s+/g,' ').trim().slice(0,QUESTION_COACH_LONG)).filter(Boolean).slice(0,QUESTIONS_COACH_MAX);
+// Série 6 : celles du dossier, sinon celles du défaut du coach.
+function questionsCoachDe(u,coach){
+  if(u&&u.role==='coach') return _cadQuestions(u.questionsCoach);
+  return cadenceEffective(u,coach===undefined?_coachDeAthlete(u):coach).questions;
 }
 // PURE. Le libellé d'une réponse : pour une question du coach, SA question,
 // gardée dans le bilan (<clé>-q) au moment où l'athlète y a répondu.
@@ -34366,21 +34425,29 @@ function libelleQuestionBilan(q,b){
 // ── Chez le coach : la fiche, puis la barre de sélection ─────────────────
 function _htmlCadenceCoach(c){
   const cad=bilanCadenceValide(c&&c.bilanCadence);
-  const e=echeanceBilan(c,Date.now());
+  const coach=_coachDeAthlete(c);
+  const def=defautBilanCoach(coach);
+  const e=echeanceBilan(c,Date.now(),coach);
   const opt=(v,lib,sel)=>'<option value="'+v+'"'+(sel?' selected':'')+'>'+lib+'</option>';
-  const freqs=opt('','Au choix de l’athlète',!cad)+opt(1,'Chaque semaine',cad&&cad.freq===1)+opt(2,'Toutes les 2 semaines',cad&&cad.freq===2)+opt(4,'Toutes les 4 semaines',cad&&cad.freq===4);
+  // Série 6 : sans réglage propre, l'athlète SUIT LE DÉFAUT du coach.
+  const libDef=def?'Ton défaut ('+(def.freq===1?'chaque semaine':'toutes les '+def.freq+' sem.')+', '+BILAN_JOURS[def.jour]+')':'Au choix de l’athlète';
+  const freqs=opt('',libDef,!cad)+opt(1,'Chaque semaine',cad&&cad.freq===1)+opt(2,'Toutes les 2 semaines',cad&&cad.freq===2)+opt(4,'Toutes les 4 semaines',cad&&cad.freq===4);
   const jours=[1,2,3,4,5,6,0].map(j=>opt(j,BILAN_JOURS[j].charAt(0).toUpperCase()+BILAN_JOURS[j].slice(1),(cad?cad.jour:6)===j)).join('');
   const d=e.echeance?new Date(e.echeance).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'';
   const etat=!e.echeance?'Pas encore de bilan : la cadence partira du premier.'
     :e.retardJours>=1?'En retard de '+e.retardJours+' jour'+(e.retardJours>1?'s':'')+' (échéance du '+d+').'
     :e.retardJours===0?'Attendu aujourd’hui.':'Prochain bilan attendu le '+d+'.';
-  const qs=questionsCoachDe(c);
-  const champs=[0,1,2].map(i=>'<input class="bcad-q" id="bcad-q'+(i+1)+'" maxlength="'+QUESTION_COACH_LONG+'" value="'+escapeHtml(qs[i]||'')+'" placeholder="Question '+(i+1)+' (facultative)">').join('');
+  const qs=_cadQuestions(c&&c.questionsCoach);
+  const qd=def?def.questions:[];
+  const champs=[0,1,2].map(i=>'<input class="bcad-q" id="bcad-q'+(i+1)+'" maxlength="'+QUESTION_COACH_LONG+'" value="'+escapeHtml(qs[i]||'')+'" placeholder="'+escapeHtml(qd[i]?'Défaut : '+qd[i]:'Question '+(i+1)+' (facultative)')+'">').join('');
+  const suit=def?(cad
+      ?'<div class="bcad-d bcad-defaut">Réglage propre · <button type="button" class="rb-lien" onclick="ccdCadenceRevenirDefaut()">revenir au défaut</button></div>'
+      :'<div class="bcad-d bcad-defaut">Suit ton défaut</div>'):'';
   return '<div class="bcad">'
-    +'<div class="bcad-t">Cadence des bilans</div>'
+    +'<div class="bcad-t">Cadence des bilans</div>'+suit
     +'<div class="bcad-l"><select id="bcad-freq" aria-label="Fréquence">'+freqs+'</select>'
     +'<select id="bcad-jour" aria-label="Jour">'+jours+'</select></div>'
-    +'<div class="bcad-d">'+escapeHtml(etat)+(cad?'':' Sans cadence, l’athlète choisit sa fréquence, le samedi.')+'</div>'
+    +'<div class="bcad-d">'+escapeHtml(etat)+(cad||def?'':' Sans cadence, l’athlète choisit sa fréquence, le samedi.')+'</div>'
     +'<div class="bcad-t" style="margin-top:12px">Tes questions en fin de bilan</div>'
     +'<div class="bcad-d">Jusqu’à trois, 120 caractères chacune. Elles s’ajoutent à son prochain bilan de suivi.</div>'
     +champs
@@ -34392,7 +34459,7 @@ function _cadenceAppliquer(c,freq,jour,questions){
   const cad=bilanCadenceValide({freq:Number(freq),jour:Number(jour)});
   if(cad) c.bilanCadence=cad; else delete c.bilanCadence;
   if(questions!==undefined){
-    const q=questionsCoachDe({questionsCoach:questions});
+    const q=_cadQuestions(questions);
     if(q.length) c.questionsCoach=q; else delete c.questionsCoach;
   }
   c.updatedAt=Date.now();
@@ -34411,6 +34478,22 @@ function ccdCadenceEnregistrer(){
   try{ renderCalendrierBilansCoach(c); }catch(e){}
   return true;
 }
+// « Revenir au défaut » : le réglage propre est retiré (cadence ET questions).
+function ccdCadenceRevenirDefaut(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const avant={cad:c.bilanCadence,q:c.questionsCoach};
+  delete c.bilanCadence; delete c.questionsCoach; c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const defaire=()=>{ const us=DB.get('users')||{}, x=us[c.email]; if(!x) return;
+    if(avant.cad) x.bilanCadence=avant.cad; if(avant.q) x.questionsCoach=avant.q; x.updatedAt=Date.now();
+    us[c.email]=x; DB.set('users',us); CLOUD.pushOne(x.email,x); try{ renderCalendrierBilansCoach(x); }catch(e){} };
+  toastSyncAnnulable(ok,CLOUD.pushOne(c.email,c),'Suit ton défaut '+ICO.coche,'la cadence est',defaire,10000);
+  try{ renderCalendrierBilansCoach(c); }catch(e){}
+  return true;
+}
 // La barre de sélection : une cadence pour plusieurs athlètes d'un coup.
 function selCadence(){
   if(!SEL_ATHLETES.size) return false;
@@ -34421,19 +34504,24 @@ function selCadence(){
     +'<div class="bcad-t">Cadence des bilans · '+SEL_ATHLETES.size+' athlète'+(SEL_ATHLETES.size>1?'s':'')+'</div>'
     +'<div class="bcad-l"><select id="bcad-m-freq" aria-label="Fréquence">'+opt('','Au choix de l’athlète')+opt(1,'Chaque semaine')+'<option value="2" selected>Toutes les 2 semaines</option>'+opt(4,'Toutes les 4 semaines')+'</select>'
     +'<select id="bcad-m-jour" aria-label="Jour">'+[1,2,3,4,5,6,0].map(j=>'<option value="'+j+'"'+(j===6?' selected':'')+'>'+BILAN_JOURS[j].charAt(0).toUpperCase()+BILAN_JOURS[j].slice(1)+'</option>').join('')+'</select></div>'
-    +'<div class="bcad-d">L’échéance de chacun repart de son dernier bilan. Leurs questions de fin de bilan ne changent pas.</div>'
+    +'<div class="bcad-d">L’échéance de chacun repart de son dernier bilan.</div>'
+    // Série 6 : les questions aussi, mais seulement si la case est cochée.
+    +[1,2,3].map(i=>'<input class="bcad-q" id="bcad-m-q'+i+'" maxlength="'+QUESTION_COACH_LONG+'" placeholder="Question '+i+' (facultative)">').join('')
+    +'<label class="reg-ligne reg-ligne--nue bcad-remplacer"><input type="checkbox" id="bcad-m-remplacer"> <span>Remplacer leurs questions</span></label>'
     +'<div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="closeModal()">Annuler</button>'
     +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="selCadenceAppliquer()">Enregistrer</button></div></div></div>');
   return true;
 }
 function selCadenceAppliquer(){
   const f=(document.getElementById('bcad-m-freq')||{}).value, j=(document.getElementById('bcad-m-jour')||{}).value;
+  const remplacer=!!(document.getElementById('bcad-m-remplacer')||{}).checked;
+  const qs=remplacer?[1,2,3].map(i=>(document.getElementById('bcad-m-q'+i)||{}).value||''):undefined;
   const users=DB.get('users')||{};
   const faits=[];
   for(const id of SEL_ATHLETES){
     const c=getOwnedClient(id,users);
     if(!c||c._fromCode) continue;
-    _cadenceAppliquer(c,f===''?null:f,j);
+    _cadenceAppliquer(c,f===''?null:f,j,qs);
     users[c.email]=c; faits.push(c);
   }
   const ok=DB.set('users',users);
@@ -145033,7 +145121,10 @@ function seuilSignal(cle){ return reglageSeuil(_rgCoach(),cle); }
 // createAthlete, _appliquerPayloadCode et le Worker (redeemCode) le posent.
 function heritageCode(coach,extra){
   const o={};
-  const cad=reglageCadence(coach);
+  // SÉRIE 6 : la cadence n'est plus RECOPIÉE sur le nouvel athlète — il suit
+  // le défaut du coach en direct (cadenceEffective), et un changement de
+  // défaut l'atteint. La recopier en ferait un « réglage propre » figé.
+  const cad=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan)?null:reglageCadence(coach);
   if(cad) o.bilanCadence=cad;
   const dejaChoisi=extra&&extra.programmeModeleId;
   const mod=reglageModele(coach);
@@ -145576,7 +145667,7 @@ function _rgxRendre(){
   const l=lignesReglagesCoach(u);
   const pose=(id,h)=>{ const z=document.getElementById(id); if(z) z.innerHTML=h; };
   pose('rgx-defauts',(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
-  pose('rgx-bilans',(l.cadence||''));
+  pose('rgx-bilans',_htmlRgxBilans(u));
   pose('rgx-messages',_htmlRgxMessages(u,l));
   const aff=document.getElementById('rgx-affichage');
   if(aff&&!aff.firstChild) aff.innerHTML='<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>';
@@ -145604,6 +145695,146 @@ function ouvrirMesReglages(section){
 function fermerMesReglages(){
   go(_rgxRetour||'s-coach-home');
   if(_rgxRetour==='s-coach-home'){ try{ coachTab('profil'); }catch(e){} }
+}
+
+// ══ SÉRIE 6, LOT 2 — LE DÉFAUT DE BILAN DU COACH ═══════════════════════════
+// defautsCoach.bilan = {freq:1|2|4, jour:0..6, questions:[≤3 de ≤120],
+//   _precedent:{…}} — suivi EN DIRECT par chaque athlète sans réglage propre
+// (cadenceEffective). Changer de défaut ouvre une feuille : la liste des
+// athlètes qui le suivent, avec l'échéance recalculée de chacun, puis
+//   « Appliquer aussi aux N athlètes » — ils suivent le nouveau défaut ;
+//   « Seulement aux nouveaux »          — leur cadence actuelle est FIGÉE sur
+//                                          leur dossier (réglage propre).
+// Un athlète qui a déjà un réglage propre n'est jamais touché.
+// PURE. Le défaut saisi, normalisé ; null = « au choix de l'athlète ».
+function validerDefautBilan(x){
+  const c=_cadValide(x);
+  if(!c) return null;
+  return {freq:c.freq,jour:c.jour,questions:_cadQuestions(x&&x.questions)};
+}
+// PURE. Les athlètes qui suivent le défaut (aucune cadence propre).
+function suiveursDefautBilan(clients){
+  return (clients||[]).filter(c=>c&&!c._fromCode&&c.role!=='coach'&&!_cadValide(c.bilanCadence));
+}
+// PURE. L'aperçu : l'échéance de chacun avant et après, et qui passerait en
+// retard d'un coup. coachAvant / coachApres : le coach avec l'ancien et le
+// nouveau défaut.
+function apercuDefautBilan(clients,coachAvant,coachApres,maintenant){
+  const t=Number(maintenant)||Date.now();
+  return suiveursDefautBilan(clients).map(c=>{
+    const a=echeanceBilan(c,t,coachAvant), b=echeanceBilan(c,t,coachApres);
+    return {id:c.id,email:c.email,prenom:String(c.fname||c.email||'').split(/\s+/)[0],
+      avant:a.echeance,apres:b.echeance,retard:b.retardJours!=null&&b.retardJours>=1&&!(a.retardJours!=null&&a.retardJours>=1)};
+  });
+}
+const _RGX_JOURS_ORDRE=[1,2,3,4,5,6,0];
+function _htmlRgxBilans(coach){
+  const d=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan)||(()=>{ const r=defautBilanCoach(coach); return r; })();
+  const opt=(v,lib,sel)=>'<option value="'+v+'"'+(sel?' selected':'')+'>'+escapeHtml(lib)+'</option>';
+  const q=(d&&d.questions)||[];
+  const prec=coach&&coach.defautsCoach&&coach.defautsCoach.bilan&&coach.defautsCoach.bilan._precedent;
+  return '<div class="rg-l"><div class="rg-t">Cadence de bilan par défaut</div>'
+    +'<div class="bcad-l"><select id="rgx-b-freq" aria-label="Fréquence" onchange="rgxBilanChanger()">'
+      +opt('','Au choix de l’athlète',!d)+[1,2,4].map(f=>opt(f,_RG_FREQ_LIB[f].charAt(0).toUpperCase()+_RG_FREQ_LIB[f].slice(1),d&&d.freq===f)).join('')+'</select>'
+    +'<select id="rgx-b-jour" aria-label="Jour" onchange="rgxBilanChanger()">'+_RGX_JOURS_ORDRE.map(j=>opt(j,_rgJour(j),(d?d.jour:6)===j)).join('')+'</select></div></div>'
+    +'<div class="rg-l"><div class="rg-t">Tes questions en fin de bilan</div>'
+    +[0,1,2].map(i=>'<input class="rg-in bcad-q" id="rgx-b-q'+(i+1)+'" maxlength="'+QUESTION_COACH_LONG+'" value="'+escapeHtml(q[i]||'')+'" placeholder="Question '+(i+1)+' (facultative)" onchange="rgxBilanChanger()">').join('')
+    +'<div class="rg-o"><span>Jusqu’à trois, 120 caractères. Elles s’ajoutent au bilan de chaque athlète qui n’a pas ses propres questions.</span></div></div>'
+    +(prec?'<div class="rg-o"><button type="button" class="rg-reinit" onclick="rgxBilanPrecedent()">Revenir au défaut d’avant</button></div>':'')
+    +'<p class="bcad-d">Chaque athlète sans réglage propre suit ce défaut, y compris les nouveaux élèves invités. Un réglage posé sur une fiche n’est jamais touché.</p>';
+}
+function _rgxBilanSaisi(){
+  const v=id=>(document.getElementById(id)||{}).value;
+  const f=v('rgx-b-freq');
+  if(f===''||f==null) return null;
+  return validerDefautBilan({freq:Number(f),jour:Number(v('rgx-b-jour')),questions:[1,2,3].map(i=>v('rgx-b-q'+i)||'')});
+}
+// Le coach tel qu'il serait avec ce défaut (pour l'aperçu, sans rien écrire).
+function _coachAvecDefaut(coach,bilan){
+  const c=Object.assign({},coach);
+  const d=Object.assign({},coach.defautsCoach||{});
+  if(bilan) d.bilan=bilan; else delete d.bilan;
+  c.defautsCoach=d;
+  if(!bilan&&c.reglagesCoach&&c.reglagesCoach.cadence){ c.reglagesCoach=Object.assign({},c.reglagesCoach); delete c.reglagesCoach.cadence; }
+  return c;
+}
+function rgxBilanChanger(){
+  const u=_rgCoach(); if(!u) return false;
+  const nouveau=_rgxBilanSaisi();
+  const ancien=defautBilanCoach(u);
+  const cadenceChange=JSON.stringify(ancien&&{f:ancien.freq,j:ancien.jour})!==JSON.stringify(nouveau&&{f:nouveau.freq,j:nouveau.jour});
+  let clients=[]; try{ clients=getClients(); }catch(e){ clients=[]; }
+  const ap=cadenceChange?apercuDefautBilan(clients,u,_coachAvecDefaut(u,nouveau),Date.now()):[];
+  if(!ap.length) return defautBilanAppliquer(nouveau,'tous');
+  _rgxFeuilleBilan(nouveau,ap);
+  return true;
+}
+function _rgxFeuilleBilan(nouveau,ap){
+  document.getElementById('modal-overlay')?.remove();
+  const jr=t=>t?new Date(t).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}):'après son 1er bilan';
+  const lignes=ap.map(x=>'<li><b>'+escapeHtml(x.prenom)+'</b> <span>'+escapeHtml(jr(x.avant))+' → '+escapeHtml(jr(x.apres))+'</span>'
+    +(x.retard?' <span class="rgx-retard">passerait en retard</span>':'')+'</li>').join('');
+  const nRet=ap.filter(x=>x.retard).length;
+  window._rgxBilanEnAttente=nouveau;
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal();rgxBilanAbandonner()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Changer le défaut de bilan" class="bcad-feuille">'
+    +'<div class="bcad-t">'+ap.length+' athlète'+(ap.length>1?'s suivent':' suit')+' ton défaut</div>'
+    +'<ul class="rgx-apercu">'+lignes+'</ul>'
+    +(nRet?'<div class="bcad-d rgx-retard">'+nRet+' passerai'+(nRet>1?'ent':'t')+' en retard d’un coup : « Pour les nouveaux seulement » garde leur échéance actuelle.</div>':'')
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
+    +'<button type="button" class="btn btn-red btn-m" id="rgx-b-tous" onclick="defautBilanAppliquer(window._rgxBilanEnAttente,\'tous\')">Enregistrer pour les '+ap.length+' athlète'+(ap.length>1?'s':'')+'</button>'
+    +'<button type="button" class="btn btn-outline btn-m" id="rgx-b-nouveaux" onclick="defautBilanAppliquer(window._rgxBilanEnAttente,\'nouveaux\')">Enregistrer pour les nouveaux seulement</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal();rgxBilanAbandonner()">Annuler</button></div></div></div>');
+}
+function rgxBilanAbandonner(){ window._rgxBilanEnAttente=null; try{ _rgxRendre(); }catch(e){} }
+// L'ÉCRITURE. mode 'tous' : seul le défaut change. mode 'nouveaux' : la
+// cadence ACTUELLE de chaque suiveur est figée sur son dossier, avant.
+function defautBilanAppliquer(nouveau,mode){
+  const u=_rgCoach(); if(!u) return false;
+  try{ closeModal(); }catch(e){}
+  window._rgxBilanEnAttente=null;
+  const avantDefauts=_rgxCopie(u.defautsCoach);
+  const ancien=validerDefautBilan(u.defautsCoach&&u.defautsCoach.bilan);
+  const figes=[];
+  if(mode==='nouveaux'){
+    const users=DB.get('users')||{};
+    let clients=[]; try{ clients=getClients(); }catch(e){ clients=[]; }
+    for(const c0 of suiveursDefautBilan(clients)){
+      const c=users[c0.email]; if(!c) continue;
+      const cad=cadenceEffective(c,u);
+      figes.push({email:c.email,q:c.questionsCoach});
+      c.bilanCadence={freq:cad.freq,jour:cad.jour};
+      if(!_cadQuestions(c.questionsCoach).length&&cad.questions.length) c.questionsCoach=cad.questions.slice();
+      c.updatedAt=Date.now(); users[c.email]=c;
+    }
+    if(figes.length){ DB.set('users',users); figes.forEach(f=>{ CLOUD.pushOne(f.email,users[f.email]); }); }
+  }
+  const d=Object.assign({},u.defautsCoach||{});
+  if(nouveau) d.bilan=Object.assign({},nouveau,ancien?{_precedent:ancien}:{});
+  else if(ancien) d.bilan={_precedent:ancien};
+  else delete d.bilan;
+  u.defautsCoach=d;
+  let ok=false; try{ ok=saveUser(); }catch(e){}
+  const defaire=()=>{
+    if(avantDefauts===undefined) delete u.defautsCoach; else u.defautsCoach=avantDefauts;
+    try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){}
+    if(figes.length){ const us=DB.get('users')||{};
+      figes.forEach(f=>{ const c=us[f.email]; if(!c) return; delete c.bilanCadence; if(f.q===undefined) delete c.questionsCoach; else c.questionsCoach=f.q; c.updatedAt=Date.now(); us[c.email]=c; });
+      DB.set('users',us); figes.forEach(f=>{ CLOUD.pushOne(f.email,us[f.email]); }); }
+    try{ _rgxRendre(); }catch(e){}
+  };
+  try{ _rgxRendre(); }catch(e){}
+  return toastSyncAnnulable(ok,_rgxPousser(),figes.length?'Défaut enregistré, '+figes.length+' athlète'+(figes.length>1?'s':'')+' gardent leur cadence '+ICO.coche:'Défaut enregistré '+ICO.coche,'le défaut est',defaire,RGX_ANNULER_MS);
+}
+function rgxBilanPrecedent(){
+  const u=_rgCoach(); const p=u&&u.defautsCoach&&u.defautsCoach.bilan&&u.defautsCoach.bilan._precedent;
+  if(!p) return false;
+  return defautBilanAppliquer(validerDefautBilan(p),'tous');
+}
+// PURE. Ce que coach_public reçoit : le défaut de bilan, et seulement lui.
+function defautsCoachPublics(coach){
+  const b=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan);
+  return b?{bilan:{freq:b.freq,jour:b.jour,questions:b.questions}}:null;
 }
 // ══ LES FAITS CLÉS EN TÊTE DE FICHE (06/10/2026, build 1812) ══════════════
 //

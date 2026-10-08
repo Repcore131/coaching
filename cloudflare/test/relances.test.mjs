@@ -328,3 +328,34 @@ test('de bout en bout : le coach écrit sa relance d’inactivité, elle part un
   assert.equal(RL.journalListe(w.F.lire('relances_auto/' + COACH + '/lea@t,fr')).filter((e) => e.statut === 'parti').length, 1);
   assert.equal(w.F.recus.length, 1);
 });
+
+// ── SÉRIE 6 : LE DÉFAUT DE BILAN DU COACH ─────────────────────────────────
+test('défaut du coach : priorité dossier > coach > RepCore, et le retard suit', () => {
+  const coach = { defautsCoach: { bilan: { freq: 1, jour: 1, questions: ['a'] } } };
+  assert.deepEqual(RL.cadenceEffective({ freq: 4, jour: 3 }, 2, coach), { freq: 4, jour: 3, source: 'athlete' });
+  assert.deepEqual(RL.cadenceEffective(null, 2, coach), { freq: 1, jour: 1, source: 'coach' });
+  assert.deepEqual(RL.cadenceEffective(null, 4, {}), { freq: 4, jour: 6, source: 'repcore' });
+  assert.deepEqual(RL.cadenceEffective(null, 2, { reglagesCoach: { cadence: { freq: 2, jour: 0 } } }), { freq: 2, jour: 0, source: 'coach' });
+  assert.deepEqual(RL.cadenceEffective(null, 2, { defautsCoach: { bilan: { freq: 3, jour: 9 } } }), { freq: 2, jour: 6, source: 'repcore' }, 'défaut invalide ignoré');
+  // Bilan il y a 10 jours : hebdomadaire par défaut du coach → en retard ; sans défaut (2 sem.) → non.
+  const sig = (c) => RL.signauxRelance({ bilans: [{ date: T - 10 * J, reponseCoach: 'ok' }], coach: c }, T);
+  assert.ok(sig(coach).overdue, 'le défaut hebdomadaire lève le retard');
+  assert.equal(sig({}).overdue, undefined);
+});
+
+test('l’app et le Worker résolvent la même cadence (cadenceEffective)', () => {
+  const ici = path.dirname(fileURLToPath(import.meta.url));
+  const dossier = path.join(ici, '..', '..', 'app');
+  const src = fs.readFileSync(path.join(dossier, fs.readdirSync(dossier).find((n) => /^rc-core\.\d+\.js$/.test(n))), 'utf8');
+  const a = src.indexOf('// ── cadenceEffective:debut'), b = src.indexOf('// ── cadenceEffective:fin');
+  assert.ok(a > 0 && b > a, 'bloc cadenceEffective dans rc-core');
+  const app = new Function(src.slice(a, b) + '\nreturn { cadenceEffective, defautBilanCoach };')();
+  const coachs = [{}, { defautsCoach: { bilan: { freq: 1, jour: 1 } } }, { defautsCoach: { bilan: { freq: 4, jour: 0, questions: ['q'] } } },
+    { reglagesCoach: { cadence: { freq: 2, jour: 3 } } }, { defautsCoach: { bilan: { freq: 5, jour: 1 } } }];
+  const dossiers = [{}, { bilanCadence: { freq: 2, jour: 5 } }, { _bilanFreq: 4 }, { bilanCadence: { freq: 9, jour: 1 }, _bilanFreq: 1 }];
+  for (const c of coachs) for (const d of dossiers) {
+    const x = app.cadenceEffective(d, c);
+    const y = RL.cadenceEffective(d.bilanCadence, d._bilanFreq, c);
+    assert.deepEqual({ freq: x.freq, jour: x.jour, source: x.source }, y, JSON.stringify({ c, d }));
+  }
+});

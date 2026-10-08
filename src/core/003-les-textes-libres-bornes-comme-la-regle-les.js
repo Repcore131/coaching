@@ -1732,7 +1732,11 @@ const CLOUD={
     // coachPrograms et recalcule par pushProfilCoach juste avant l'envoi —
     // l'oublier ici ne casserait rien de visible : la vitrine resterait vide
     // chez l'athlete, sans un mot, exactement comme le logo avant lui.
-    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
+    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo',
+    // Série 6 : le défaut de BILAN du coach (cadence, questions), et lui seul —
+    // defautsCoachPublics le réduit avant l'envoi. L'athlète en a besoin pour
+    // son échéance et ses questions (cadenceEffective).
+    'defautsCoach'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -1992,6 +1996,9 @@ const CLOUD={
       for(const c of this.CHAMPS_PROFIL_COACH)
         if(distant[c]!==undefined&&distant[c]!==null) profil[c]=distant[c];
     for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!==undefined&&u[c]!==null) profil[c]=u[c];
+    // Série 6 : de defautsCoach, seul le défaut de bilan part (et jamais _precedent).
+    { const dp=(u.defautsCoach!==undefined)?defautsCoachPublics(u):defautsCoachPublics(profil);
+      if(dp) profil.defautsCoach=dp; else delete profil.defautsCoach; }
     profil.maj=Date.now();
     let r;
     try{

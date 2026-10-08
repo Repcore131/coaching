@@ -13731,3 +13731,10 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rgx-res{font-size:var(--fs-xs);color:var(--sub);line-height:1.4;min-height:1em}
 .rgx-c{padding:4px 0 16px;border-top:1px solid var(--border)}
 .rgx-c>div:first-child{margin-top:12px}
+/* SÉRIE 6, LOT 2 — le défaut de bilan : la feuille d'aperçu. */
+.rgx-apercu{list-style:none;margin:8px 0 0;padding:0;max-height:40vh;overflow-y:auto}
+.rgx-apercu li{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;font-size:var(--fs-xs);padding:6px 0;border-top:1px solid var(--border)}
+.rgx-apercu li span{color:var(--sub)}
+.rgx-retard{color:var(--orange)!important}
+.bcad-defaut{color:var(--text-strong)}
+.bcad-remplacer{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);margin-top:8px}

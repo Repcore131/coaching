@@ -169,6 +169,25 @@
         "questionsCoach": {
           "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" }
         },
+        // SERIE 6 : les valeurs par defaut du coach (Mes reglages). Le defaut de
+        // bilan est borne comme bilanCadence + questionsCoach ; les autres
+        // sections (prescription, affichage, methode, profil) sont bornees par
+        // leurs lots.
+        "defautsCoach": {
+          "bilan": {
+            ".validate": "newData.hasChildren(['freq', 'jour']) || newData.hasChildren(['_precedent'])",
+            "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+            "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+            "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+            "_precedent": {
+              "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+              "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+              "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+              "$autre": { ".validate": false }
+            },
+            "$autre": { ".validate": false }
+          }
+        },
         "rgpd": {
           "dernierExport": { ".validate": "newData.isNumber()" },
           "$autre": { ".validate": false }
@@ -697,6 +716,17 @@
       "$emailKey": {
         ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $emailKey)",
         ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        // SERIE 6 : le defaut de BILAN du coach, et lui seul (defautsCoachPublics).
+        "defautsCoach": {
+          "bilan": {
+            ".validate": "newData.hasChildren(['freq', 'jour'])",
+            "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+            "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+            "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+            "$autre": { ".validate": false }
+          },
+          "$autre": { ".validate": false }
+        },
         "fname": {
           ".validate": "newData.isString() && newData.val().length < 120"
         },
