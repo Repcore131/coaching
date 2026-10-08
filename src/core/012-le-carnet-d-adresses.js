@@ -705,6 +705,7 @@ function _riteLigne(lib,val,note){
   </div>`;
 }
 function ouvrirRite(cycle){
+  if(typeof seanceAEcran==='function'&&seanceAEcran()) return false;
   // L'écran de fin d'un rite précédent, s'il est encore là, cède la place.
   try{ const _o=document.getElementById('modal-overlay'); if(_o&&_o.querySelector('.rite-fin')) closeModal(); }catch(e){}
   const u=currentUser;

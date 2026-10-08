@@ -1413,6 +1413,9 @@ function woPersist(){
       // le contenu ne l’est pas : charges, séries validées, réponses de
       // douleur et photo de séance sont ceux d’une seule personne.
       email:(currentUser&&currentUser.email)||'',
+      // Série 7 (lot 2) : l'heure du dernier instantané, qui décide de la
+      // reprise directe au démarrage (moins de 3 h).
+      majA:Date.now(),
       exercises:woState.exercises,
       currentEx:woState.currentEx,
       startTime:woState.startTime,
@@ -2518,3 +2521,99 @@ function _renderExCard(ex,idx){
 }
 // ══════════════ SEANCE DU JOUR : L IMAGE A PARTAGER ══════════════════════
 const STORY_L=1080, STORY_H=1920;   // 9:16, le format des stories
+
+// ══ SÉRIE 7, LOT 2 — LA SÉANCE REPRISE OÙ ON L'A LAISSÉE ═══════════════════
+// Un rechargement en plein repos ramène DIRECTEMENT sur l'écran de séance
+// (moins de 3 h depuis le dernier instantané), sans l'accueil ni ses modales.
+// Au-delà, une carte en tête de l'accueil : « Reprendre » ou « Terminer avec
+// N séries », pour ne pas laisser une séance fantôme.
+const REPRISE_DIRECTE_MS=3*3600e3;
+// PURE.
+function doitRouvrirSeance(snap,maintenant){
+  if(!snap||snap.termine||!Array.isArray(snap.exercises)||!snap.exercises.length) return false;
+  const t=Number(maintenant)||Date.now(), der=Number(snap.majA)||Number(snap.startTime)||0;
+  return der>0&&t-der>=0&&t-der<REPRISE_DIRECTE_MS;
+}
+// PURE. Une séance a-t-elle été enregistrée le même jour APRÈS cet instantané
+// (terminée sur un autre appareil) ?
+function seanceDejaEnregistree(snap,u){
+  if(!snap||!u) return false;
+  const der=Number(snap.majA)||Number(snap.startTime)||0, jour=localISODate(new Date(Number(snap.startTime)||der));
+  return (u.sessions||[]).some(s=>s&&Number(s.date)>der&&localISODate(new Date(Number(s.date)))===jour);
+}
+// L'état brut de l'instantané : aucun, illisible (à effacer), ou lisible.
+function woSnapEtat(){
+  let raw=null; try{ raw=localStorage.getItem('rc_wo_state'); }catch(e){ raw=null; }
+  if(!raw) return {etat:'aucun'};
+  let o=null; try{ o=JSON.parse(raw); }catch(e){ o=null; }
+  if(o&&o.email&&currentUser&&o.email!==currentUser.email) return {etat:'aucun'};
+  if(!o||!Array.isArray(o.exercises)||!o.exercises.length) return {etat:'corrompu'};
+  const snap=_woLoadSnap();
+  return snap?{etat:'ok',snap}:{etat:'aucun'};
+}
+function seanceAEcran(){ const z=document.getElementById('s-workout'); return !!(z&&z.classList.contains('active')); }
+// PURE. « Séance reprise · repos : 01:12 ».
+function texteReprise(etat,maintenant){
+  const f=Number(etat&&etat.reposFin)||0, t=Number(maintenant)||Date.now();
+  return 'Séance reprise'+(f>t?' · repos : '+_fmtRepos((f-t)/1000):'');
+}
+let _woRepriseFaite=false;
+function _reprendreSeanceAuDemarrage(force){
+  if(_woRepriseFaite&&!force) return false;
+  _woRepriseFaite=true;
+  if(!currentUser||currentUser.role==='coach') return false;
+  const e=woSnapEtat();
+  if(e.etat!=='ok'||!doitRouvrirSeance(e.snap,Date.now())||seanceDejaEnregistree(e.snap,currentUser)) return false;
+  woResumeAndGo();
+  try{ toast(texteReprise(woState,Date.now()),'var(--sub)',2600); }catch(err){}
+  return true;
+}
+// #seance : la notification de repos, ou un lien. Même effet que le démarrage.
+function _woHashSeance(){
+  try{
+    if(location.hash!=='#seance') return false;
+    history.replaceState(null,'',location.pathname+location.search);
+  }catch(e){ return false; }
+  if(typeof currentUser==='undefined'||!currentUser){ window._pendingSeance=true; return false; }
+  return _reprendreSeanceAuDemarrage(true);
+}
+try{ window.addEventListener('hashchange',()=>{ try{ _woHashSeance(); }catch(e){} }); if(location.hash==='#seance') window._pendingSeance=true; }catch(e){}
+// La carte en tête de l'accueil (au-delà de 3 h, ou quand rien ne s'est rouvert).
+function rendreRepriseTete(u){
+  const z=document.getElementById('clh-reprise-tete'); if(!z) return false;
+  if(!u||u.role==='coach'){ z.hidden=true; z.innerHTML=''; return false; }
+  const e=woSnapEtat();
+  if(e.etat==='aucun'){ z.hidden=true; z.innerHTML=''; return false; }
+  const E=escapeHtml;
+  if(e.etat==='corrompu'){
+    z.innerHTML='<div class="rt-carte rt-err"><div><b>Séance en cours illisible</b><span>Elle ne peut pas être reprise.</span></div>'
+      +'<div class="rt-b"><button type="button" class="btn btn-outline btn-sm" onclick="repriseEffacer()">Effacer</button></div></div>';
+  } else {
+    const snap=e.snap, n=_woSeriesValidees(snap), deja=seanceDejaEnregistree(snap,u);
+    z.innerHTML='<div class="rt-carte"><div><b>'+E(snap.progName||'Séance')+' en cours</b><span>'
+      +(deja?'Une séance a déjà été enregistrée ce jour-là (peut-être sur un autre appareil).':n+' série'+(n>1?'s':'')+' faite'+(n>1?'s':''))+'</span></div>'
+      +'<div class="rt-b"><button type="button" class="btn btn-red btn-sm" onclick="woResumeAndGo()">Reprendre</button>'
+      +(deja?'<button type="button" class="rb-lien" onclick="repriseEffacer()">Effacer</button>'
+        :(n?'<button type="button" class="rb-lien" onclick="repriseTerminer()">Terminer avec '+n+' série'+(n>1?'s':'')+'</button>':''))+'</div></div>';
+    // Pas de doublon plus bas.
+    try{ const c=document.getElementById('clh-resume-workout'); if(c) c.style.display='none'; }catch(err){}
+    try{ const m=document.querySelector('#clh-moment [data-type="reprise_seance"]'); if(m) m.parentElement.innerHTML=''; }catch(err){}
+  }
+  z.hidden=false;
+  return true;
+}
+async function repriseTerminer(){
+  const snap=_woLoadSnap(); if(!snap) return false;
+  const n=_woSeriesValidees(snap);
+  if(!await rcConfirm('Terminer la séance avec '+n+' série'+(n>1?'s':'')+' ?','Elle est enregistrée telle quelle.','Terminer')) return false;
+  try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
+  woState={...snap};
+  finishWorkout(true);
+  return true;
+}
+async function repriseEffacer(){
+  if(!await rcConfirm('Effacer la séance en cours ?','Les séries saisies et non enregistrées sont perdues.','Effacer')) return false;
+  try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+  try{ rendreRepriseTete(currentUser); loadClientHome(); }catch(e){}
+  return true;
+}

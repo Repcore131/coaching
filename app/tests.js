@@ -75501,6 +75501,73 @@ async function testExercices(){
         if(!reposInviteNotif({sessions:[]},'default',true)) return _echec('invitation absente');
         if(reposInviteNotif({},'default',false)||reposInviteNotif({},'granted',true)||reposInviteNotif({vus:{notifReposRefus:true}},'default',true)) return _echec('invitation de trop');
         return true;});});
+    // ══ BUILD 1945 — LA SÉANCE REPRISE OÙ ON L'A LAISSÉE ═════════════════════════
+    ok('1945 — doitRouvrirSeance : vrai sous 3 h, faux au-delà, faux si terminée ou vide',()=>{
+      const t=Date.now(), ex=[{name:'Squat'}];
+      if(!doitRouvrirSeance({exercises:ex,startTime:t-3600e3,majA:t-60e3},t)) return _echec('1 min après la dernière série → vrai');
+      if(!doitRouvrirSeance({exercises:ex,startTime:t-2*3600e3},t)) return _echec('sans majA, startTime à 2 h → vrai');
+      if(doitRouvrirSeance({exercises:ex,startTime:t-5*3600e3,majA:t-3*3600e3-1000},t)) return _echec('3 h passées → faux');
+      if(doitRouvrirSeance({exercises:ex,startTime:t-60e3,majA:t-30e3,termine:true},t)) return _echec('terminée → faux');
+      if(doitRouvrirSeance({exercises:[],startTime:t},t)||doitRouvrirSeance(null,t)) return _echec('vide → faux');
+      return true;
+    });
+    ok('1945 — texteReprise : « Séance reprise · repos : 01:12 », sans repos en cours rien de plus',()=>{
+      const t=1e12;
+      if(texteReprise({reposFin:t+72000},t)!=='Séance reprise · repos : 01:12') return _echec(texteReprise({reposFin:t+72000},t));
+      if(texteReprise({reposFin:t-1000},t)!=='Séance reprise') return _echec('repos échu');
+      return true;
+    });
+    ok('1945 — seanceDejaEnregistree : une séance du même jour postérieure à l’instantané',()=>{
+      const t=new Date(); t.setHours(10,0,0,0); const d=t.getTime();
+      const snap={startTime:d,majA:d+1800e3,exercises:[{name:'A'}]};
+      if(!seanceDejaEnregistree(snap,{sessions:[{date:d+3600e3}]})) return _echec('même jour, après → vrai');
+      if(seanceDejaEnregistree(snap,{sessions:[{date:d-3600e3}]})) return _echec('avant → faux');
+      return true;
+    });
+    const _repBanc=(snap,fn)=>{
+      const svU=currentUser, svW=woState, _rg=window.woResumeAndGo, _t=window.toast, raw=localStorage.getItem('rc_wo_state'), svF=_woRepriseFaite;
+      const appels=[];
+      try{
+        currentUser={email:'rep1945@test.fr',role:'client',sessions:[]};
+        if(snap===undefined) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',typeof snap==='string'?snap:JSON.stringify({email:'rep1945@test.fr',...snap}));
+        window.woResumeAndGo=()=>{ appels.push(1); };
+        window.toast=()=>{};
+        return fn(appels);
+      }finally{
+        currentUser=svU; woState=svW; window.woResumeAndGo=_rg; window.toast=_t; _woRepriseFaite=svF;
+        if(raw===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',raw);
+      }
+    };
+    ok('1945 — hash #seance : appelle woResumeAndGo (espion) et nettoie l’adresse',()=>_repBanc({exercises:[{name:'Squat'}],startTime:Date.now()-600e3,majA:Date.now()-60e3,sessionData:{}},appels=>{
+      const h0=location.pathname+location.search;
+      history.replaceState(null,'',h0+'#seance');
+      const r=_woHashSeance();
+      if(!r||appels.length!==1) return _echec('woResumeAndGo appelé '+appels.length+' fois');
+      if(location.hash) { history.replaceState(null,'',h0); return _echec('le hash reste'); }
+      return true;
+    }));
+    ok('1945 — au démarrage : au-delà de 3 h, pas de réouverture directe ; une seule tentative',()=>_repBanc({exercises:[{name:'Squat'}],startTime:Date.now()-5*3600e3,majA:Date.now()-4*3600e3,sessionData:{0:{sets:[{done:true}]}}},appels=>{
+      _woRepriseFaite=false;
+      if(_reprendreSeanceAuDemarrage(false)||appels.length) return _echec('rouverte au-delà de 3 h');
+      return true;
+    }));
+    ok('1945 — instantané illisible : état « corrompu », la carte propose « Effacer »',()=>_repBanc('{"email":"rep1945@test.fr","exercises":[]}',()=>{
+      if(woSnapEtat().etat!=='corrompu') return _echec(woSnapEtat().etat);
+      const z=document.getElementById('clh-reprise-tete'); if(!z) return _echec('#clh-reprise-tete absent');
+      const h=z.innerHTML, hd=z.hidden;
+      try{
+        rendreRepriseTete(currentUser);
+        if(z.hidden||!/Effacer/.test(z.innerHTML)) return _echec('pas de bouton Effacer');
+      }finally{ z.innerHTML=h; z.hidden=hd; }
+      return true;
+    }));
+    ok('1945 — woPersist pose majA ; routeUser tente la reprise avant l’accueil',()=>{
+      const src=String(woPersist), r=String(routeUser);
+      if(!/majA\s*:\s*Date\.now\(\)/.test(src)) return _echec('majA absent de woPersist');
+      const i=r.indexOf('_reprendreSeanceAuDemarrage'), j=r.indexOf('loadClientHome()',i);
+      if(i<0||j<0) return _echec('reprise absente de routeUser');
+      return true;
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

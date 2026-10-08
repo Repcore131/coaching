@@ -2369,6 +2369,9 @@ function routeUser(){
   // téléphone part au premier toucher (pushActiverParDefaut).
   setTimeout(()=>{ try{ pushActiverParDefaut(); }catch(e){} },1200);
   if(_aiguillerNouvelInscrit()) return;
+  // Série 7 (lot 2) : une séance interrompue il y a moins de 3 h se rouvre
+  // DIRECTEMENT, sans passer par l'accueil ni ses modales.
+  try{ const _h=!!window._pendingSeance; window._pendingSeance=false; if(_reprendreSeanceAuDemarrage(_h)) return; }catch(e){ rcErreurMuette('_reprendreSeanceAuDemarrage',e); }
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}

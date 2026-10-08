@@ -1506,6 +1506,7 @@ function bdgRepartir(items,mode,dejaMontres,stats){
   return {ecrans:p.slice(0,n),trophees:p.slice(n)};
 }
 function _bdgAfficher(x,reste){
+  if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat([x]); return false; }
   if(x&&typeof x==='object'&&x.retour) _retourEcran(x.retour,reste);
   else if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
   else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,reste);
@@ -1767,6 +1768,8 @@ function _bdgArcs(z,duree){
 // LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
 // seul bouton. Chacun reste partageable depuis sa fiche.
 function _bdgEcranRecap(ids){
+  // Série 7 (lot 2) : pas par-dessus une séance ; ils reviennent après.
+  if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat(ids||[]); return false; }
   // Série 6 (lot 13) : la visite ne fête pas l'historique d'un compte fictif.
   if(typeof RC_VISITE!=='undefined'&&RC_VISITE) return false;
   const n=ids.length;

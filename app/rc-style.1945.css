@@ -13831,3 +13831,10 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .inv-lien{font-size:var(--fs-xs);color:var(--text);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px;overflow-wrap:anywhere;margin-bottom:8px}
 .inv-n{font-size:var(--fs-2xs);line-height:1.5;margin:0}
 .inv-ancien summary{font-size:var(--fs-xs);color:var(--sub);cursor:pointer}
+/* Série 7, lot 2 : la reprise en tête de l'accueil */
+.rt-carte{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface-1);border:1px solid var(--red);border-radius:var(--r-3);padding:12px 14px;margin:0 0 12px}
+.rt-err{border-color:var(--orange)}
+.rt-carte b{display:block;font-size:var(--fs-sm)}
+.rt-carte span{display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:2px}
+.rt-b{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.rt-b .btn{margin:0}
