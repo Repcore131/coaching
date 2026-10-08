@@ -59940,7 +59940,7 @@ const GENE_CHOIX=Object.freeze([
 // l'instantane meme si le rendu echoue.
 const WO_CHOIX=Object.freeze({
   rir:Object.freeze({champ:'rir',choix:RIR_CHOIX,id:'rir-menu',caseCls:'rir-choix',
-    titre:'RIR de la série ',effacer:'Effacer le RIR noté',siValidee:false,persister:false}),
+    titre:'RIR de la série ',effacer:'Effacer le RIR noté',siValidee:true,persister:false}),
   gene:Object.freeze({champ:'pain',choix:GENE_CHOIX,id:'gene-menu',caseCls:'gene-choix',
     titre:'Gêne ressentie sur la série ',effacer:'Effacer la gêne notée',siValidee:true,persister:true})
 });
@@ -60055,7 +60055,10 @@ function _woChoixEcrire(genre,idx,i,v){
   v=String(v==null?'':v);
   if(v!==''&&!c.choix.some(x=>x[0]===v)) return false;
   s[c.champ]=v;
-  if(c.persister) woPersist();
+  // Lot 4 : corriger une série validée ne la dévalide pas, ne relance pas le
+  // repos et ne touche pas tValid ; le badge RECORD part s'il n'est plus mérité.
+  if(s.done) try{ _reevaluerRecord(idx,i); }catch(e){}
+  if(c.persister||s.done) woPersist();
   renderSets(woState.exercises[idx],woState.sessionData[idx],idx);
   // Le focus revient sur la case repeinte, pas en haut de la page.
   const tr=document.querySelectorAll('#sets-body-'+idx+' tr')[i];
@@ -60236,7 +60239,9 @@ function renderSets(ex,data,idx,opts){
   const lignes=data.sets.map((s,i)=>{
     const _prop=_rp[i];
     const baseW=parseFloat(s.weight)||0;
-    const dis=s.done?'disabled':'';
+    // Lot 4 : la ligne en correction (appui long / double toucher) rouvre sa
+    // charge et ses répétitions, sans être dévalidée.
+    const dis=(s.done&&_woCorrection!==idx+':'+i)?'disabled':'';
     const rowCls=s.done?'done':(i===_iSuivante?'wo-suivante':'');
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
 
@@ -60351,13 +60356,13 @@ function renderSets(ex,data,idx,opts){
         // que rien n'est choisi) ; la liste, elle, dit ce que chaque valeur
         // veut dire (R15 : dessinee, voir rirMenuOuvrir).
         //
-        // LE `${dis}` RESTE : le RIR se ferme a la validation, il decrit un
-        // effort accompli.
+        // SÉRIE 7, LOT 4 : le RIR reste ouvert sur une série validée — on le
+        // note souvent après avoir reposé la barre.
         const cur=s.rir==null?'':String(s.rir);
         const _rirVal=RIR_OPTS.indexOf(cur)>=0?cur:'';
         const court=_rirVal==='echec'?'Échec':(_rirVal||'RIR');
-        return `<button type="button" class="rir-choix${s.done?' fermee':''}" aria-haspopup="listbox" aria-expanded="false"`
-          +` aria-label="RIR de la série ${i+1} : ${_rirVal?court:'non noté'}" onclick="rirMenuOuvrir(${idx},${i},this)" ${dis}>`
+        return `<button type="button" class="rir-choix" aria-haspopup="listbox" aria-expanded="false"`
+          +` aria-label="RIR de la série ${i+1} : ${_rirVal?court:'non noté'}" onclick="rirMenuOuvrir(${idx},${i},this)">`
           +`<span aria-hidden="true">${court}</span><span class="gene-fl" aria-hidden="true">▾</span></button>${_consRappel}`;
       })();
 
@@ -60446,6 +60451,7 @@ function renderSets(ex,data,idx,opts){
   // ne remplace que ce qui change ; et l'ecouteur de la touche « Suivant ».
   _woLignesRendues.set(tb,lignes);
   _woBrancherEnchainement(tb,idx);
+  _woBrancherCorrection(tb,idx);
   // Le « − » n'existe que tant que la dernière série n'est pas validée : sa
   // présence dépend donc du tableau qui vient d'être repeint.
   _majActionsSeries(ex,data,idx);
@@ -60770,6 +60776,7 @@ function toggleSet(i,idx){
     const sec=_reposApresSerie(idx,i);
     if(sec) demarrerRepos(sec,(woState.exercises[idx]||{}).name||'');
   }
+  _woCorrection=null;
   renderSets(woState.exercises[idx],d,idx);
   try{ woMajCompteurSeries(); }catch(e){}
   // APRÈS renderSets, jamais avant : la ligne que l'arc doit traverser vient
@@ -60779,7 +60786,76 @@ function toggleSet(i,idx){
   if(!avant) _arcSerieValidee(idx,i);
   // Le RIR en un toucher ; décocher la referme.
   try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
+  // Lot 4 : un ✓ de trop se défait en un geste, pendant 5 s.
+  if(!avant) try{ toast('Série '+(i+1)+' validée','var(--sub)',5000,{lib:'Annuler',fn:()=>annulerValidationSerie(idx,i)}); }catch(e){}
   woPersist();
+}
+function annulerValidationSerie(idx,i){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
+  if(!s||!s.done) return false;
+  s.done=false; delete s.tValid; delete s.reposReel;
+  try{ _recordsVus.delete(idx+':'+i); }catch(e){}
+  try{ annulerRepos(); }catch(e){}
+  try{ _rirBandeFermer(); }catch(e){}
+  try{ toast('Validation annulée','var(--sub)',1600); }catch(e){}
+  renderSets(woState.exercises[idx],d,idx);
+  try{ woMajCompteurSeries(); }catch(e){}
+  woPersist();
+  return true;
+}
+// ══ SÉRIE 7, LOT 4 — CORRIGER UNE SÉRIE VALIDÉE SANS LA DÉVALIDER ════════
+// Appui long (500 ms) ou double toucher sur la charge ou les répétitions
+// d'une ligne validée : elles se rouvrent, la série reste validée, le repos
+// et tValid ne bougent pas. La correction se referme quand le focus quitte
+// la ligne.
+const WO_APPUI_LONG_MS=500;
+let _woCorrection=null;
+function woCorrigerSerie(idx,i,champ){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
+  if(!s||!s.done) return false;
+  _woCorrection=idx+':'+i;
+  renderSets(woState.exercises[idx],d,idx);
+  const el=document.querySelector('#sets-body-'+idx+' input[data-serie="'+i+'"][data-champ="'+(champ||'weight')+'"]')
+    ||document.querySelector('#sets-body-'+idx+' input[data-serie="'+i+'"][data-champ="weight"]');
+  if(el) try{ el.focus({preventScroll:true}); el.select(); }catch(e){}
+  return true;
+}
+function woFinCorrection(idx){
+  if(_woCorrection==null) return false;
+  const [k,i]=String(_woCorrection).split(':').map(Number);
+  _woCorrection=null;
+  try{ _reevaluerRecord(k,i); }catch(e){}
+  try{ woPersist(); }catch(e){}
+  try{ renderSets(woState.exercises[k],woState.sessionData[k],k); }catch(e){}
+  return true;
+}
+function _woBrancherCorrection(tb,idx){
+  if(!tb||tb._woCorrige) return;
+  tb._woCorrige=true;
+  let minu=null, x0=0, y0=0, dernier=0, cible=null;
+  const viser=ev=>{
+    const td=ev.target&&ev.target.closest&&ev.target.closest('td'), tr=td&&td.closest('tr');
+    if(!tr||!tr.classList.contains('done')) return null;
+    const inp=td.querySelector('input.set-input[data-serie][disabled]');
+    if(!inp) return null;
+    return {i:parseInt(inp.getAttribute('data-serie'),10),champ:inp.getAttribute('data-champ')};
+  };
+  const stop=()=>{ if(minu){ clearTimeout(minu); minu=null; } };
+  tb.addEventListener('pointerdown',ev=>{
+    const c=viser(ev); stop(); if(!c) return;
+    const t=Date.now();
+    if(cible&&cible.i===c.i&&t-dernier<350){ dernier=0; cible=null; woCorrigerSerie(idx,c.i,c.champ); return; }
+    dernier=t; cible=c; x0=ev.clientX; y0=ev.clientY;
+    minu=setTimeout(()=>{ minu=null; cible=null; woCorrigerSerie(idx,c.i,c.champ); },WO_APPUI_LONG_MS);
+  });
+  tb.addEventListener('pointermove',ev=>{ if(minu&&(Math.abs(ev.clientX-x0)>10||Math.abs(ev.clientY-y0)>10)) stop(); });
+  tb.addEventListener('pointerup',stop); tb.addEventListener('pointercancel',stop);
+  tb.addEventListener('focusout',ev=>{
+    if(_woCorrection==null||String(_woCorrection).split(':')[0]!==String(idx)) return;
+    const tr=ev.target&&ev.target.closest&&ev.target.closest('tr'), vers=ev.relatedTarget;
+    if(vers&&tr&&tr.contains(vers)) return;
+    setTimeout(()=>{ const a=document.activeElement; if(a&&tr&&tr.contains(a)) return; woFinCorrection(idx); },0);
+  });
 }
 // ── ANIMATION 3 : LA VALIDATION DE SÉRIE — l'élément signature ─────────────
 // Le geste répété 25 à 40 fois par séance, et le seul endroit du système où
@@ -100713,8 +100789,11 @@ function _rebatirRecordsVus(){
       if(!nom) continue;
       const sets=(d[k]&&d[k].sets)||[];
       // estNouveauRecord ecarte deja les series non validees.
+      // Lot 4 (série 7) : un badge par exercice, le dernier record admissible.
+      let der=-1;
       for(let i=0;i<sets.length;i++)
-        if(estNouveauRecord(currentUser,nom,sets[i])) _recordsVus.add(k+':'+i);
+        if(recordAdmissible(exs[parseInt(k,10)],sets[i])&&estNouveauRecord(currentUser,nom,sets[i])) der=i;
+      if(der>=0) _recordsVus.add(k+':'+der);
     }
   }catch(e){}
 }
@@ -100750,8 +100829,36 @@ function _marquerRecordSiBesoin(idx,i){
     const ex=(woState.exercises||[])[idx];
     const d=woState.sessionData[idx];
     if(!ex||!d||!d.sets[i]) return;
-    if(estNouveauRecord(currentUser,ex.name,d.sets[i])) _recordsVus.add(idx+':'+i);
+    if(recordAdmissible(ex,d.sets[i])&&estNouveauRecord(currentUser,ex.name,d.sets[i])){
+      // UN SEUL BADGE PAR EXERCICE ET PAR SÉANCE : le nouveau remplace l'ancien.
+      _oublierRecordsBadges(idx);
+      _recordsVus.add(idx+':'+i);
+    }
   }catch(e){}
+}
+// SÉRIE 7, LOT 4. PURE. Une série « à l'échec » ou sous la borne basse de sa
+// fourchette n'est pas un record, quelle que soit la charge.
+function recordAdmissible(ex,s){
+  if(!s||String(s.rir)==='echec') return false;
+  const f=fourchetteReps(s.reps||(ex&&ex.reps));
+  if(f){ const r=(s.repsDone!=null&&s.repsDone!=='')?parseInt(s.repsDone,10):null; if(r!=null&&r<f.min) return false; }
+  return true;
+}
+function _oublierRecordsBadges(idx){
+  const pre=idx+':';
+  for(const k of Array.from(_recordsVus)) if(String(k).indexOf(pre)===0) _recordsVus.delete(k);
+}
+// Après une correction (RIR « Échec » noté plus tard, répétitions revues) :
+// le badge s'en va s'il n'est plus mérité.
+function _reevaluerRecord(idx,i){
+  try{
+    const k=idx+':'+i;
+    if(!_recordsVus.has(k)) return false;
+    const ex=(woState.exercises||[])[idx], s=woState.sessionData[idx]&&woState.sessionData[idx].sets[i];
+    if(recordAdmissible(ex,s)&&estNouveauRecord(currentUser,ex&&ex.name,s)) return false;
+    _recordsVus.delete(k);
+    return true;
+  }catch(e){ return false; }
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)

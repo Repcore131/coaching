@@ -1384,8 +1384,11 @@ function _rebatirRecordsVus(){
       if(!nom) continue;
       const sets=(d[k]&&d[k].sets)||[];
       // estNouveauRecord ecarte deja les series non validees.
+      // Lot 4 (série 7) : un badge par exercice, le dernier record admissible.
+      let der=-1;
       for(let i=0;i<sets.length;i++)
-        if(estNouveauRecord(currentUser,nom,sets[i])) _recordsVus.add(k+':'+i);
+        if(recordAdmissible(exs[parseInt(k,10)],sets[i])&&estNouveauRecord(currentUser,nom,sets[i])) der=i;
+      if(der>=0) _recordsVus.add(k+':'+der);
     }
   }catch(e){}
 }
@@ -1421,8 +1424,36 @@ function _marquerRecordSiBesoin(idx,i){
     const ex=(woState.exercises||[])[idx];
     const d=woState.sessionData[idx];
     if(!ex||!d||!d.sets[i]) return;
-    if(estNouveauRecord(currentUser,ex.name,d.sets[i])) _recordsVus.add(idx+':'+i);
+    if(recordAdmissible(ex,d.sets[i])&&estNouveauRecord(currentUser,ex.name,d.sets[i])){
+      // UN SEUL BADGE PAR EXERCICE ET PAR SÉANCE : le nouveau remplace l'ancien.
+      _oublierRecordsBadges(idx);
+      _recordsVus.add(idx+':'+i);
+    }
   }catch(e){}
+}
+// SÉRIE 7, LOT 4. PURE. Une série « à l'échec » ou sous la borne basse de sa
+// fourchette n'est pas un record, quelle que soit la charge.
+function recordAdmissible(ex,s){
+  if(!s||String(s.rir)==='echec') return false;
+  const f=fourchetteReps(s.reps||(ex&&ex.reps));
+  if(f){ const r=(s.repsDone!=null&&s.repsDone!=='')?parseInt(s.repsDone,10):null; if(r!=null&&r<f.min) return false; }
+  return true;
+}
+function _oublierRecordsBadges(idx){
+  const pre=idx+':';
+  for(const k of Array.from(_recordsVus)) if(String(k).indexOf(pre)===0) _recordsVus.delete(k);
+}
+// Après une correction (RIR « Échec » noté plus tard, répétitions revues) :
+// le badge s'en va s'il n'est plus mérité.
+function _reevaluerRecord(idx,i){
+  try{
+    const k=idx+':'+i;
+    if(!_recordsVus.has(k)) return false;
+    const ex=(woState.exercises||[])[idx], s=woState.sessionData[idx]&&woState.sessionData[idx].sets[i];
+    if(recordAdmissible(ex,s)&&estNouveauRecord(currentUser,ex&&ex.name,s)) return false;
+    _recordsVus.delete(k);
+    return true;
+  }catch(e){ return false; }
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)

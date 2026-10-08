@@ -65267,7 +65267,7 @@ async function testExercices(){
         }
         return true;})));
 
-    ok('R08 — une série validée garde sa gêne ouverte, et ferme son RIR',(()=>
+    ok('R08 — une série validée garde sa gêne ouverte, et son RIR (série 7, lot 4)',(()=>
       _r08Fix(359,d=>{
         const tb=_r08Rendre(d,_r08Ex,[_r08S({done:true,rir:'1'}),_r08S()]);
         const [l1,l2]=tb.querySelectorAll('tr');
@@ -65280,7 +65280,7 @@ async function testExercices(){
         if(woState.sessionData[0].sets[0].pain!=='3') return _echec('la gêne d’une série validée ne s’écrit pas');
         const r1=_r14Sel(l1);
         if(!r1) return _echec('pas de menu RIR sur la série validée');
-        if(!r1.disabled) return _echec('le RIR reste modifiable sur une série validée');
+        if(r1.disabled) return _echec('le RIR est fermé sur une série validée');
         if(!_r14Sel(l2)||_r14Sel(l2).disabled) return _echec('la série non validée a son RIR fermé');
         return true;})));
 
@@ -65406,10 +65406,9 @@ async function testExercices(){
         v.click();
         if(document.getElementById('rir-menu')) return _echec('le toucher dehors ne ferme pas');
         if(woState.sessionData[0].sets[1].rir!=='') return _echec('fermer a écrit un RIR');
-        // La série validée : la case est fermée, et un appel direct n'ouvre rien.
-        if(!_r14Sel(l1).disabled) return _echec('la case d’une série validée est ouverte');
-        if(rirMenuOuvrir(0,0,_r14Sel(l1))||document.getElementById('rir-menu')){ rirMenuFermer(false); return _echec('une série validée ouvre sa liste'); }
-        if(_woRirChoisir(0,0,'3')||woState.sessionData[0].sets[0].rir!=='1') return _echec('une série validée a changé de RIR');
+        // Série 7, lot 4 : la série validée garde son RIR ouvert, et reste validée.
+        if(_r14Sel(l1).disabled) return _echec('la case d’une série validée est fermée');
+        if(!_woRirChoisir(0,0,'3')||woState.sessionData[0].sets[0].rir!=='3'||!woState.sessionData[0].sets[0].done) return _echec('une série validée ne change pas de RIR');
         // Une valeur hors liste est refusée.
         if(_woRirChoisir(0,1,'9')||woState.sessionData[0].sets[1].rir!=='') return _echec('« 9 » a été écrit');
         return true;})));
@@ -65428,7 +65427,7 @@ async function testExercices(){
             // Le lecteur d'écran entend la valeur, sans la définition.
             if((sel.getAttribute('aria-label')||'').indexOf(v===''?'non noté':attendu)<0) return _echec(nom+' : aria-label « '+sel.getAttribute('aria-label')+' »');
             if(/réserve|réussi/.test(sel.textContent)) return _echec(nom+' : la définition est dans la case');
-            if(sel.disabled!==done) return _echec(nom+' : disabled='+sel.disabled);
+            if(sel.disabled) return _echec(nom+' : disabled='+sel.disabled);
             // LE RENDU NE RÉÉCRIT RIEN : 5 reste 5, et reste du même type.
             if(woState.sessionData[0].sets[0].rir!==v) return _echec(nom+' : réécrit en '+JSON.stringify(woState.sessionData[0].sets[0].rir));
             // La définition reste dans la liste : la case est étroite.
@@ -65446,7 +65445,7 @@ async function testExercices(){
         if(!/s\[c\.champ\]=v;[\s\S]*renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
           return _echec('le choix n’écrit plus avant de repeindre');
         // L'onchange d'origine du RIR ne persistait pas : le choix non plus.
-        if(WO_CHOIX.rir.persister!==false||!/if\(c\.persister\) woPersist\(\)/.test(src))
+        if(WO_CHOIX.rir.persister!==false||!/if\(c\.persister\|\|s\.done\) woPersist\(\)/.test(src))
           return _echec('le RIR persiste, ce que le menu ne faisait pas');
         const s0=_r08S({weight:'100'});
         const cles=Object.keys(s0).sort().join(',');
@@ -75605,6 +75604,54 @@ async function testExercices(){
       }finally{
         try{ _rirBandeFermer(); annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); }catch(e){}
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
+    });
+    // ══ BUILD 1947 — CORRIGER SANS DÉVALIDER ═════════════════════════════════════
+    ok('1947 — recordAdmissible : ni « Échec », ni sous la borne basse de la fourchette',()=>{
+      const ex={reps:'8-12'};
+      if(!recordAdmissible(ex,{reps:'8-12',repsDone:9,rir:'2',done:true})) return _echec('9 sur 8-12');
+      if(recordAdmissible(ex,{reps:'8-12',repsDone:6,rir:'2',done:true})) return _echec('6 sur 8-12');
+      if(recordAdmissible(ex,{reps:'5',rir:'echec',done:true})) return _echec('échec');
+      return true;
+    });
+    okA('1947 — ✓ : toast « Série 1 validée · Annuler » 5 s ; RIR corrigé sans dévalider ni toucher tValid ; « Échec » retire le badge ; un badge par exercice',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const toasts=[];
+      try{
+        window.saveUser=()=>true; window.toast=(m,c,du,a)=>toasts.push({m:String(m),du,a});
+        currentUser={id:'r1947',email:'r1947@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:3,reps:'5',repos:'2 min'}]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        _resetRecordsVus();
+        const d=woState.sessionData[0];
+        d.sets[0].weight='80'; toggleSet(0,0);
+        const t0=toasts.find(x=>x.m==='Série 1 validée');
+        if(!t0||t0.du!==5000||!t0.a||t0.a.lib!=='Annuler') return _echec('toast : '+JSON.stringify(toasts.map(x=>x.m)));
+        if(!_recordsVus.has('0:0')) return _echec('premier record non marqué');
+        const tv=d.sets[0].tValid, fin=woState.reposFin;
+        _woRirChoisir(0,0,'echec');
+        if(!d.sets[0].done||d.sets[0].tValid!==tv||woState.reposFin!==fin) return _echec('la correction a dévalidé ou relancé le repos');
+        if(_recordsVus.has('0:0')) return _echec('« Échec » garde le badge');
+        d.sets[1].weight='90'; d.sets[1].rir='1'; toggleSet(1,0);
+        d.sets[2].weight='95'; d.sets[2].rir='1'; toggleSet(2,0);
+        const n=Array.from(_recordsVus).filter(k=>k.indexOf('0:')===0).length;
+        if(n!==1||!_recordsVus.has('0:2')) return _echec(n+' badges : '+Array.from(_recordsVus));
+        // Annuler défait la validation.
+        toasts.filter(x=>x.m==='Série 3 validée').pop().a.fn();
+        if(d.sets[2].done||d.sets[2].tValid!=null) return _echec('Annuler ne défait pas');
+        // Correction : la charge d'une série validée se rouvre.
+        if(!woCorrigerSerie(0,1,'weight')) return _echec('pas de correction');
+        const inp=document.querySelector('#sets-body-0 input[data-serie="1"][data-champ="weight"]');
+        if(!inp||inp.disabled||!d.sets[1].done) return _echec('le champ reste fermé, ou la série est dévalidée');
+        woFinCorrection(0);
+        if(!document.querySelector('#sets-body-0 input[data-serie="1"][data-champ="weight"]').disabled) return _echec('la correction ne se referme pas');
+        return true;
+      }finally{
+        try{ annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); _rirBandeFermer(); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast; _resetRecordsVus();
         if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
       }
     });

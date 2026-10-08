@@ -13841,3 +13841,5 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 /* Série 7, lot 3 — répétitions proposées, série suivante */
 .series-table input.wo-reps.wo-reps-prop::placeholder{color:var(--sub);opacity:1}
 .series-table tr.wo-suivante td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+/* Série 7, lot 4 — l'appui long atteint la cellule sous un champ validé */
+.series-table tr.done .set-input:disabled{pointer-events:none}
