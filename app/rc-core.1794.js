@@ -17944,6 +17944,297 @@ function s100Enregistrer(){
   return true;
 }
 
+// ══ LOT MP1 — LES MODÈLES DE PROGRESSION ═════════════════════════════════
+//
+// Le coach pose un MODÈLE sur un exercice (exercise.modele) ; en séance, la
+// cible du jour s'affiche (« Semaine 3 : 1×10 + 2×9 ») et la charge proposée
+// suit le modèle au lieu de la seule règle RIR (chargeSuivante).
+//
+// ⚠ LA « SEMAINE » EST UNE ÉTAPE, PAS UNE DATE. On avance d'une étape quand
+//   la semaine d'entraînement est RÉUSSIE (toutes les séries prescrites, aux
+//   répétitions et à la charge prévues) ; une semaine RATÉE ramène à l'étape
+//   précédente ; une semaine sans séance de l'exercice ne change rien — on ne
+//   punit pas une absence, on ne la prend pas non plus pour une réussite.
+//   C'est la dernière séance de chaque semaine ISO qui fait foi.
+// ⚠ LA CHARGE VIENT DU RÉEL : la charge de la première séance sous le modèle
+//   si elle existe ; sinon l'e1RM des séances d'avant (chargePourReps, à
+//   RIR 2, arrondi vers le bas) ; sinon RIEN, et la consigne le dit : « charge
+//   à trouver à la première séance ».
+// ⚠ COEXISTENCE : une programmation RPE (ex.prog, consigneProgEx) active la
+//   même semaine passe devant le modèle ; l'éditeur le signale.
+// ⚠ PRÉ- ET POST-FATIGUE NE PRESCRIVENT PAS DE CHARGE : ce sont des ordres
+//   d'enchaînement. La charge suit alors la règle RIR habituelle.
+const MP_SERIES_RIR_DEPART=2;          // la première charge tirée de l'e1RM vise 2 répétitions en réserve
+const MP_TOL_KG=0.01;
+const MODELES_PROGRESSION=Object.freeze({
+  lineaire_debutant:Object.freeze({lib:'Linéaire débutant',
+    // Répétitions PAR SÉRIE, semaine par semaine ; puis +2 kg (+1 kg en
+    // isolation) et retour à 3×8.
+    semaines:Object.freeze([[8,8,8],[9,9,8],[10,9,9],[11,10,10],[12,11,11],[12,12,12]].map(x=>Object.freeze(x))),
+    reposS:90,pasKg:2,pasKgIsolation:1,repsMax:true}),
+  repos_evolutif:Object.freeze({lib:'Repos évolutif',
+    // Dix semaines : le volume descend de 5×10 à 3×6, le repos monte de 60 à
+    // 180 s, la charge prend 2,5 kg par semaine réussie.
+    semaines:Object.freeze([[5,10,60],[5,10,75],[5,9,85],[4,9,100],[4,8,115],[4,8,125],[4,7,140],[3,7,155],[3,6,165],[3,6,180]]
+      .map(x=>Object.freeze({series:x[0],reps:x[1],repos:x[2]}))),
+    pasKg:2.5,
+    // OPTION : la semaine 9 en décharge — 60 % des séries (le facteur de
+    // décharge déjà en usage), 85 % de la charge, 2 min de repos.
+    deload:Object.freeze({semaine:8,facteurSeries:DECHARGE_FACTEUR_SERIES,facteurCharge:0.85,repos:120})}),
+  double_progression:Object.freeze({lib:'Double progression',
+    fourchetteDefaut:Object.freeze({min:8,max:12}),seriesDefaut:3,pasKg:2.5,pasKgIsolation:1.25,reposS:120}),
+  pre_fatigue:Object.freeze({lib:'Pré-fatigue',paires:Object.freeze([
+    Object.freeze({a:'Oiseau',b:'Rowing prise large',ma:/OISEAU/,mb:/ROWING.*LARGE|LARGE.*ROWING/}),
+    Object.freeze({a:'Élévations latérales',b:'Développé militaire haltères',ma:/ELEVATION.*LATERAL/,mb:/DEVELOPPE MILITAIRE.*HALTERE|DEVELOPPE EPAULES? .*HALTERE/}),
+    Object.freeze({a:'Curl concentré',b:'Curl EZ',ma:/CURL CONCENTRE/,mb:/CURL .*EZ|CURL EZ/}),
+    Object.freeze({a:'Extension à la corde',b:'Développé prise serrée',ma:/EXTENSION.*CORDE/,mb:/DEVELOPPE.*SERRE/})])}),
+  post_fatigue:Object.freeze({lib:'Post-fatigue',paires:Object.freeze([
+    Object.freeze({a:'Développé',b:'Écarté poulie',ma:/^DEVELOPPE/,mb:/ECARTE.*POULIE/}),
+    Object.freeze({a:'Traction',b:'Pull-over',ma:/TRACTION/,mb:/PULL ?OVER/}),
+    Object.freeze({a:'Front squat',b:'Leg extension',ma:/FRONT SQUAT/,mb:/LEG EXTENSION/}),
+    Object.freeze({a:'Soulevé jambes tendues',b:'Leg curl',ma:/JAMBES TENDUES/,mb:/LEG CURL/})])})
+});
+/** PURE. « 1×10 + 2×9 » d'après les répétitions de chaque série. @param {number[]} reps @returns {string} */
+function libSeriesModele(reps){
+  const out=[]; let i=0;
+  while(i<reps.length){ let j=i; while(j+1<reps.length&&reps[j+1]===reps[i]) j++; out.push((j-i+1)+'×'+reps[i]); i=j+1; }
+  return out.join(' + ');
+}
+/** PURE. Le meilleur e1RM fiable d'un historique (les séances d'avant le modèle). */
+function _mpE1rm(hist){
+  let m=0;
+  for(const s of (hist||[])) for(const x of ((s&&s.series)||[])){
+    const r=Number(x.reps), w=Number(x.charge), i=(x.rir==='echec')?0:parseInt(x.rir,10);
+    if(!(w>0&&r>0)) continue;
+    const rir=isFinite(i)?i:0;
+    if(!e1rmFiable(r,rir)) continue;
+    const v=e1rm(w,r,rir); if(v>m) m=v;
+  }
+  return m>0?m:null;
+}
+/** PURE. La charge d'une étape : base, + le pas par étape franchie (et par cycle bouclé), × le facteur (décharge). */
+function _mpCharge(base,et,pas,cycle){
+  if(base==null) return null;
+  const v=base+pas*Math.max(0,et.pas)+pas*(cycle||0);
+  // Les pas du modèle (+2 kg, +1 kg, +2,5 kg) sont gardés tels quels ; seule
+  // la décharge, un pourcentage, est arrondie — vers le bas, au 1,25.
+  return et.facteur===1?Math.round(v*100)/100:_mpBas(v*et.facteur);
+}
+const _mpBas=kg=>{ const v=arrondiCharge(kg,{sens:'bas',pas:1.25,user:{}}); return v>0?v:null; };
+/** La forme d'une étape : répétitions par série, repos, facteur de charge. */
+function _mpEtape(M,cle,k,o){
+  if(cle==='lineaire_debutant') return {reps:M.semaines[k].slice(),repos:M.reposS,facteur:1,pas:0};
+  if(cle==='repos_evolutif'){
+    const s=M.semaines[k];
+    if(o&&o.deload&&k===M.deload.semaine){
+      const n=Math.max(1,Math.round(s.series*M.deload.facteurSeries));
+      return {reps:Array(n).fill(s.reps),repos:M.deload.repos,facteur:M.deload.facteurCharge,pas:k-1,deload:true};
+    }
+    return {reps:Array(s.series).fill(s.reps),repos:s.repos,facteur:1,pas:k};
+  }
+  return null;
+}
+/**
+ * PURE. OÙ EN EST L'ATHLÈTE dans le modèle, d'après ses séances.
+ * @param {{cle:string, debut?:number, options?:any}} modele
+ * @param {{date:number, series:{reps:number,charge:number,rir?:any}[]}[]} historique  toutes les séances de l'exercice, dans l'ordre
+ * @param {{isolation?:boolean, fourchette?:{min:number,max:number}|null, series?:number, rirCible?:number|null}} [opts]
+ */
+function avancementModele(modele,historique,opts){
+  const o=opts||{}, cle=modele&&modele.cle, M=MODELES_PROGRESSION[cle];
+  if(!M) return null;
+  const debut=Number(modele.debut)||0, opt=modele.options||{};
+  const H=(historique||[]).filter(s=>s&&Number(s.date)>0).slice().sort((a,b)=>a.date-b.date);
+  const avant=H.filter(s=>s.date<debut), sous=H.filter(s=>s.date>=debut);
+  const journal=[];
+  if(cle==='pre_fatigue'||cle==='post_fatigue') return {cle,semaine:null,cycle:0,base:null,termine:false,journal};
+  const top=s=>Math.max(0,...((s&&s.series)||[]).map(x=>Number(x.charge)||0));
+  if(cle==='double_progression'){
+    const f=o.fourchette||M.fourchetteDefaut, n=Math.max(1,Number(o.series)||M.seriesDefaut);
+    const pas=o.isolation?M.pasKgIsolation:M.pasKg;
+    const der=sous.length?sous[sous.length-1]:(avant.length?avant[avant.length-1]:null);
+    if(!der||!(top(der)>0)) return {cle,semaine:sous.length,cycle:0,base:null,charge:null,monte:false,termine:false,journal,fourchette:f,series:n};
+    const ch=top(der), aCh=(der.series||[]).filter(x=>Math.abs(Number(x.charge)-ch)<MP_TOL_KG);
+    const haut=aCh.length>=n&&aCh.slice(0,n).every(x=>Number(x.reps)>=f.max);
+    const cib=o.rirCible;
+    let rirOk=true, rirInconnu=false;
+    if(cib!=null){ const l=aCh.slice(0,n); rirInconnu=l.some(x=>x.rir===''||x.rir==null);
+      rirOk=!rirInconnu&&l.every(x=>(x.rir==='echec'?0:parseInt(x.rir,10))>=cib); }
+    const monte=haut&&rirOk;
+    if(haut&&rirInconnu) journal.push('RIR non noté : on garde la charge.');
+    return {cle,semaine:sous.length,cycle:0,base:ch,charge:monte?Math.round((ch+pas)*100)/100:ch,monte,termine:false,journal,fourchette:f,series:n,haut,rirInconnu};
+  }
+  // LINÉAIRE ET REPOS ÉVOLUTIF : on rejoue les semaines.
+  const pas=cle==='lineaire_debutant'?(o.isolation?M.pasKgIsolation:M.pasKg):M.pasKg;
+  let k=0, cycle=0, base=null, termine=false;
+  if(!sous.length){
+    const e=_mpE1rm(avant);
+    if(e){ const et=_mpEtape(M,cle,0,opt); base=_mpBas(chargePourReps(e,Math.max(...et.reps),MP_SERIES_RIR_DEPART)); }
+    return {cle,semaine:0,cycle:0,base,termine:false,journal,source:base?'e1rm':'aucune'};
+  }
+  base=top(sous[0])||null;
+  const parSem=new Map();
+  for(const s of sous) parSem.set(semaineISO(new Date(s.date)),s);   // la dernière de la semaine fait foi
+  for(const [sem,s] of parSem){
+    if(termine) break;
+    const et=_mpEtape(M,cle,k,opt);
+    const cible=_mpCharge(base,et,pas,cle==='lineaire_debutant'?cycle:0);
+    const L=(s.series||[]).filter(x=>Number(x.reps)>0);
+    const ok=L.length>=et.reps.length&&et.reps.every((r,i)=>Number(L[i].reps)>=r&&(cible==null||Number(L[i].charge)>=cible-MP_TOL_KG));
+    if(ok||et.deload){
+      journal.push(sem+' : semaine '+(k+1)+' réussie.');
+      if(cle==='lineaire_debutant'&&k===M.semaines.length-1){ k=0; cycle++; }
+      else if(cle==='repos_evolutif'&&k===M.semaines.length-1) termine=true;
+      else k++;
+    } else {
+      journal.push(sem+' : semaine '+(k+1)+' ratée, retour à la semaine '+Math.max(1,k)+'.');
+      k=Math.max(0,k-1);
+    }
+  }
+  return {cle,semaine:k,cycle,base,termine,journal,source:'seance'};
+}
+/**
+ * PURE. LA PRESCRIPTION d'une semaine du modèle.
+ * @param {{cle:string, debut?:number, options?:any, paire?:number}} modele
+ * @param {number|null} semaine  l'étape à montrer ; null = celle où en est l'athlète
+ * @param {any[]} historique
+ * @param {{isolation?:boolean, fourchette?:any, series?:number, rirCible?:number|null, reps?:string, nom?:string}} [opts]
+ * @returns {{series:{reps:any,charge:number|null,repos:number|null}[], phrase:string, semaine:number|null, total:number, termine:boolean}|null}
+ */
+function prescriptionModele(modele,semaine,historique,opts){
+  const o=opts||{}, cle=modele&&modele.cle, M=MODELES_PROGRESSION[cle];
+  if(!M) return null;
+  const av=avancementModele(modele,historique,o);
+  const kg=v=>v==null?'':' à '+String(v).replace('.',',')+' kg';
+  if(cle==='pre_fatigue'||cle==='post_fatigue'){
+    const p=M.paires[Number(modele.paire)]||null;
+    const n=Math.max(1,parseInt(o.series,10)||3);
+    return {series:Array(n).fill(0).map(()=>({reps:o.reps||'',charge:null,repos:null})),semaine:null,total:0,termine:false,
+      phrase:p?(M.lib+' : '+p.a+', puis enchaîne '+p.b+' sans repos.'):(M.lib+' : choisis la paire dans l’éditeur.')};
+  }
+  if(cle==='double_progression'){
+    const f=av.fourchette, n=av.series;
+    const reps=av.monte?String(f.min):(f.min+'-'+f.max);
+    return {series:Array(n).fill(0).map(()=>({reps,charge:av.charge,repos:M.reposS})),semaine:av.semaine,total:0,termine:false,
+      phrase:av.charge==null?n+'×'+f.min+'-'+f.max+' : charge à trouver à la première séance.'
+        :(av.monte?'Toutes les séries au haut de fourchette : on monte'+kg(av.charge)+', '+n+'×'+f.min+'.'
+          :n+'×'+f.min+'-'+f.max+kg(av.charge)+' : on monte quand toutes les séries atteignent '+f.max+(o.rirCible!=null?' à RIR '+o.rirCible:'')+'.'+(av.rirInconnu?' (RIR non noté : on garde la charge.)':''))};
+  }
+  const total=M.semaines.length;
+  const k=semaine==null?av.semaine:Math.max(0,Math.min(total-1,Math.round(Number(semaine))));
+  const opt=modele.options||{};
+  const et=_mpEtape(M,cle,k,opt);
+  const pas=cle==='lineaire_debutant'?(o.isolation?M.pasKgIsolation:M.pasKg):M.pasKg;
+  const charge=_mpCharge(av.base,et,pas,cle==='lineaire_debutant'?av.cycle:0);
+  const libS='Semaine '+(k+1)+' : '+libSeriesModele(et.reps);
+  let phrase=av.termine&&semaine==null?M.lib+' terminé : à renouveler ou à remplacer.'
+    :libS+(et.deload?' (décharge)':'')+(charge==null?' — charge à trouver à la première séance.':kg(charge)+', repos '+et.repos+' s.');
+  if(cle==='lineaire_debutant'&&charge!=null) phrase+=' Pas une répétition de plus que prévu.';
+  return {series:et.reps.map(r=>({reps:r,charge,repos:et.repos})),phrase,semaine:k,total,termine:!!av.termine,cycle:av.cycle,deload:!!et.deload};
+}
+/** PURE. La paire de pré-/post-fatigue à laquelle un exercice appartient, ou -1. */
+function paireModele(cle,nom){
+  const M=MODELES_PROGRESSION[cle]; if(!M||!M.paires) return -1;
+  const n=String(_normRech(nom)).toUpperCase();
+  return M.paires.findIndex(p=>p.ma.test(n)||p.mb.test(n));
+}
+// ── DU DOSSIER AU MODÈLE ────────────────────────────────────────────────────
+/** L'historique d'un exercice : ses séances, séries faites (sans les séries spéciales ni les décharges). */
+function historiqueModele(c,nomEx){
+  const out=[];
+  for(const sess of ((c&&c.sessions)||[])){
+    if(!sess||!sess.data||sess.deload||!(sess.date>0)) continue;
+    const d=_dataDeSeance(sess,nomEx); if(!d||!Array.isArray(d.sets)) continue;
+    const series=d.sets.filter(s=>s&&s.done===true&&!serieSpeciale(s)).map(s=>({reps:_perfReps(s),charge:parseFloat(s.weight)||0,rir:s.rir==null?'':s.rir}))
+      .filter(x=>x.reps>0);
+    if(series.length) out.push({date:sess.date,series});
+  }
+  return out.sort((a,b)=>a.date-b.date);
+}
+/** Les options réelles d'un exercice pour un dossier. */
+function _mpOpts(ex,c){
+  let sc=null; try{ sc=schemaDe(ex&&ex.name?ex:{name:String(ex&&ex.name||'')},c); }catch(e){ sc=null; }
+  const r=_rirPrescrit(ex);
+  return {isolation:/^isolation|^mollets/.test(String(sc||'')),fourchette:fourchetteReps(ex&&ex.reps),
+    series:parseInt(ex&&ex.series,10)||null,rirCible:r===''?null:Number(r),reps:String((ex&&ex.reps)||''),nom:String((ex&&ex.name)||'')};
+}
+/** La prescription du jour d'un exercice de programme, ou null. */
+function prescriptionDuJour(ex,c){
+  if(!ex||!ex.modele||!MODELES_PROGRESSION[ex.modele.cle]) return null;
+  try{ return prescriptionModele(ex.modele,null,historiqueModele(c,ex.name),_mpOpts(ex,c)); }catch(e){ return null; }
+}
+// ── LA SÉANCE ───────────────────────────────────────────────────────────────
+/** Les séries du jour suivent le modèle ; une série faite n'est jamais retirée. */
+function _mpAppliquerSeance(data,p){
+  if(!data||!p||!p.series.length) return;
+  const n=p.series.length;
+  while(data.sets.length<n) data.sets.push({weight:'',weight2:'',reps:'',rir:'',pain:'',done:false});
+  // Les séries en trop, non faites et en fin de liste, cèdent la place.
+  while(data.sets.length>n&&!data.sets[data.sets.length-1].done) data.sets.pop();
+  data.sets.forEach((s,i)=>{
+    const q=p.series[Math.min(i,n-1)];
+    if(s.done||!q) return;
+    if(q.reps!==''&&q.reps!=null) s.reps=String(q.reps);
+    if(q.charge!=null&&!s.userEdited&&!String(s.weight||'').trim()){ s.weight=q.charge; s.isAuto=true; }
+  });
+}
+function _htmlCibleModele(idx){
+  const p=woState&&woState._mp&&woState._mp[idx];
+  if(!p) return '';
+  return '<div class="mp-cible" role="note"><span class="mp-t">'+escapeHtml((MODELES_PROGRESSION[((woState.exercises[idx]||{}).modele||{}).cle]||{}).lib||'Modèle')+'</span>'
+    +'<span>'+escapeHtml(p.phrase)+'</span></div>';
+}
+// ── L'ÉDITEUR ───────────────────────────────────────────────────────────────
+function _selecteurModele(ex,i){
+  if(!ex||(()=>{ try{ return isCardio(ex); }catch(e){ return false; } })()) return '';
+  const cle=ex.modele&&MODELES_PROGRESSION[ex.modele.cle]?ex.modele.cle:'';
+  const opts='<option value="">Aucun : règle RIR</option>'+Object.keys(MODELES_PROGRESSION).map(k=>'<option value="'+k+'"'+(k===cle?' selected':'')+'>'+escapeHtml(MODELES_PROGRESSION[k].lib)+'</option>').join('');
+  let suite='';
+  if(cle){
+    const c=(()=>{ try{ return _cibleContraintes(); }catch(e){ return null; } })();
+    const H=c?historiqueModele(c,ex.name):[], o=_mpOpts(ex,c);
+    const M=MODELES_PROGRESSION[cle];
+    if(M.paires){
+      const p=ex.modele.paire!=null?Number(ex.modele.paire):paireModele(cle,ex.name);
+      suite='<select class="amc-in mp-paire" data-i="'+i+'" onchange="_progExModelePaire(+this.dataset.i,this.value)">'
+        +'<option value="">Paire…</option>'+M.paires.map((x,k)=>'<option value="'+k+'"'+(k===p?' selected':'')+'>'+escapeHtml(x.a+' → '+x.b)+'</option>').join('')+'</select>';
+    } else if(cle==='double_progression'){
+      const pr=prescriptionModele(ex.modele,null,H,o);
+      suite='<div class="mp-apercu"><div class="mp-l">'+escapeHtml(pr?pr.phrase:'')+'</div>'+(o.fourchette?'':'<div class="mp-l mp-n">Pas de fourchette dans les répétitions : 8-12 par défaut.</div>')+'</div>';
+    } else {
+      const lignes=M.semaines.map((_,k)=>prescriptionModele(ex.modele,k,H,o));
+      const av=prescriptionModele(ex.modele,null,H,o);
+      suite='<div class="mp-apercu">'+lignes.map((p,k)=>'<div class="mp-l'+(av&&av.semaine===k?' mp-ici':'')+'">'+escapeHtml(p.phrase.replace(' Pas une répétition de plus que prévu.',''))+'</div>').join('')
+        +(cle==='repos_evolutif'?'<label class="ta-cons"><input type="checkbox" data-i="'+i+'"'+(ex.modele.options&&ex.modele.options.deload?' checked':'')+' onchange="_progExModeleDeload(+this.dataset.i,this.checked)"> <span>Décharge en semaine 9</span></label>':'')
+        +'</div>';
+    }
+    let prog=null; try{ prog=progExDe(ex); }catch(e){}
+    if(prog) suite+='<div class="mp-l mp-n">Une programmation RPE est aussi posée : elle passe devant le modèle les semaines où elle est active.</div>';
+  }
+  return '<div class="mp-bloc"><label>Modèle de progression</label><select class="amc-in" data-i="'+i+'" onchange="_progExModele(+this.dataset.i,this.value)">'+opts+'</select>'+suite+'</div>';
+}
+function _progExModele(i,cle){
+  const ex=progEx[i]; if(!ex) return false;
+  _progExDirty=true;
+  if(!cle||!MODELES_PROGRESSION[cle]) delete ex.modele;
+  else { const p=paireModele(cle,ex.name);
+    ex.modele=Object.assign({cle,debut:_lundiDe(new Date()).getTime(),options:{}},p>=0?{paire:p}:{}); }
+  renderProgEx();
+  return true;
+}
+function _progExModelePaire(i,v){
+  const ex=progEx[i]; if(!ex||!ex.modele) return false;
+  _progExDirty=true;
+  if(v===''||v==null) delete ex.modele.paire; else ex.modele.paire=Number(v);
+  renderProgEx(); return true;
+}
+function _progExModeleDeload(i,on){
+  const ex=progEx[i]; if(!ex||!ex.modele) return false;
+  _progExDirty=true;
+  ex.modele.options=Object.assign({},ex.modele.options||{},{deload:!!on});
+  renderProgEx(); return true;
+}
+
 // ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════
 //
 // Une cible par exercice : une articulation, un angle à atteindre en bas
@@ -45230,6 +45521,9 @@ function _reposApresSerie(idx,i){
     const gi=g?grs.indexOf(g):-1;
     if(gi<0||gi>=grs.length-1) return null;   // la dernière série de la séance
   }
+  // LOT MP1 : le repos du modèle (90 s fixes, 60 → 180 s…) passe devant celui de la fiche.
+  const _mpr=woState._mp&&woState._mp[(g&&g.length>1)?g[g.length-1]:idx];
+  if(_mpr&&_mpr.series[0]&&_mpr.series[0].repos>0) return _mpr.series[0].repos;
   const src=(g&&g.length>1)?((woState.exercises[g[g.length-1]]||{}).repos||(woState.exercises[g[0]]||{}).repos):ex.repos;
   return parseRepos(src);
 }
@@ -45589,7 +45883,8 @@ function _selecteurTechnique(ex,i,partie){
     </div>`:''}
     ${_blocRegleMethode(ex,i)}
     ${_avertissementTechnique(ex,i)}
-    ${cardio?'':`<label class="ta-cons gf-100"><input type="checkbox" data-i="${i}"${ex&&ex.serie100?' checked':''} onchange="_progExSerie100(+this.dataset.i,this.checked)"> <span>Séries de 100 (protocole guidé)</span></label>`}`;
+    ${cardio?'':`<label class="ta-cons gf-100"><input type="checkbox" data-i="${i}"${ex&&ex.serie100?' checked':''} onchange="_progExSerie100(+this.dataset.i,this.checked)"> <span>Séries de 100 (protocole guidé)</span></label>`}
+    ${_selecteurModele(ex,i)}`;
   if(partie==='choix') return `<div class="px-tq">${choix}</div>`;
   if(partie==='suite') return `<div style="margin-bottom:10px">${suite}</div>`;
   return `<div style="margin-bottom:10px">${choix}${suite}</div>`;
@@ -54797,6 +55092,12 @@ function _blocExo(idx,estSS){
       }
     }
   }
+  // LOT MP1 : LE MODÈLE DE PROGRESSION, quand aucune programmation RPE
+  // n'est active cette semaine. Il pose les séries, les répétitions et la
+  // charge du jour, comme la consigne ci-dessus — la charge reste modifiable.
+  let _mp=null;
+  if(!_cons){ try{ _mp=prescriptionDuJour(ex,currentUser); }catch(e){ _mp=null; } }
+  if(_mp){ _mpAppliquerSeance(data,_mp); (woState._mp=woState._mp||{})[idx]=_mp; }
   const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
@@ -54827,7 +55128,10 @@ function _blocExo(idx,estSS){
   if(prev&&_decote!=null){ try{ const _fo=facteurChargeOrdonnance(ex,prev.weight,prev.rir,Date.now()); if(_fo!=null&&_fo>0) _decote=Math.min(_decote,_fo); }catch(e){} }
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
-  const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
+  // LOT MP1 : sous un modèle, la charge du jour est celle du modèle — la
+  // règle RIR ne la remplace pas ; une décote (reprise, ordonnance) s'applique.
+  const _sugMp=(_mp&&_mp.series[0]&&_mp.series[0].charge>0)?_mp.series[0].charge*((_decote!=null&&_decote<1)?_decote:1):null;
+  const _sugBrut=_sugMp!=null?_sugMp:(_rawSug!=null&&_rawSug>0?_rawSug:null);
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
   const _prevPdc=(!prev&&typeCharge(_exPourCharge(ex.name,currentUser))==='poids_corps')?_prevSeriePoidsCorps(ex.name,woState.slot,woState.progName):null;
@@ -54890,7 +55194,7 @@ function _blocExo(idx,estSS){
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
           ${_htmlAmplitudeSeance(ex)}
           ${_htmlNoteExo(idx,ex)}
-          <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
+          <div class="wo-serie">${_mp&&_mp.semaine!=null&&_mp.series.length?escapeHtml(libSeriesModele(_mp.series.map(x=>x.reps))):ex.series+' séries × '+escapeHtml(ex.reps)+' reps'}</div>
           <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes
                dans le même écran : c'est une CLASSE qui les marque, et
                woMajProgression ne garde que la première. -->
@@ -54932,7 +55236,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${_sugMp!=null?'Charge du modèle '+escapeHtml((MODELES_PROGRESSION[(ex.modele||{}).cle]||{}).lib||'')+', pas de la règle RIR':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
@@ -54968,6 +55272,7 @@ function _blocExo(idx,estSS){
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)?_htmlBouton100(ex,idx):''}
+      ${!isCardio(ex)?_htmlCibleModele(idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}

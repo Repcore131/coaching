@@ -16414,3 +16414,16 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .s100-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .s100-actions .btn{flex:1 1 90px;margin:0}
 .s100-note{font-size:var(--fs-2xs);color:var(--sub);margin-top:10px}
+
+/* ══ LOT MP1 — LES MODÈLES DE PROGRESSION ══════════════════════════════════
+   Éditeur : un sélecteur, puis l'aperçu des 6 ou 10 semaines (la semaine en
+   cours soulignée). Séance : la cible du jour, en une ligne sous le nom. */
+.mp-bloc{margin-top:10px}
+.mp-apercu{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.mp-l{font-size:var(--fs-2xs);color:var(--sub);line-height:1.5;padding:3px 8px;border-radius:var(--r-1)}
+.mp-l.mp-ici{background:var(--surface-3);color:var(--text);font-weight:700}
+.mp-l.mp-n{font-style:italic}
+.mp-paire{margin-top:6px}
+.mp-cible{display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--info);
+  border-radius:var(--r-2);padding:8px 12px;margin-bottom:12px;font-size:var(--fs-sm);color:var(--text);line-height:1.45}
+.mp-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--info)}

@@ -74435,6 +74435,117 @@ async function testExercices(){
           return (/_gfMajEditeur\(\)/.test(String(renderProgEx))&&/controleProtocole\(p\)/.test(String(_peMajApercu))&&/_gfAlerteSeance\(\)/.test(String(toggleSet))
             &&/_gfAlerteSeance\(\)/.test(String(_rirBandeChoisir))&&/_htmlBouton100\(ex,idx\)/.test(src)&&/id="prog-gf"/.test(src)&&/id="wo-gf-bande"/.test(src))||_echec('branchements');})());
       }
+      // ══ LOT MP1 — MODÈLES DE PROGRESSION : déroulés, semaine ratée, séance, éditeur ══
+      {
+        const _D=Date.UTC(2026,0,5,12), _J=864e5;
+        const _s=(sem,reps,ch,rir)=>({date:_D+sem*7*_J,series:reps.map(r=>({reps:r,charge:ch,rir:rir==null?'2':rir}))});
+        // Déroule un modèle : à chaque semaine, l'athlète fait exactement la prescription (ou `rate` la semaine donnée).
+        const _derouler=(m,n,ch0,rate,o)=>{ const H=[], l=[];
+          for(let w=0;w<n;w++){ const p=prescriptionModele(m,null,H,o||{}); l.push(p);
+            if(p.termine) break;
+            const reps=p.series.map(x=>x.reps), ch=p.series[0].charge||ch0;
+            H.push(_s(w,(rate&&rate.indexOf(w)>=0)?reps.map(r=>r-2):reps,ch)); }
+          return {l,fin:prescriptionModele(m,null,H,o||{}),H}; };
+        ok('MP1 — MODELES_PROGRESSION gelée, et les semaines du cahier',(()=>{
+          const M=MODELES_PROGRESSION;
+          if(!Object.isFrozen(M)||!Object.isFrozen(M.lineaire_debutant.semaines)||!Object.isFrozen(M.pre_fatigue.paires[0])) return _echec('non gelée');
+          const l=M.lineaire_debutant.semaines.map(libSeriesModele).join(' | ');
+          if(l!=='3×8 | 2×9 + 1×8 | 1×10 + 2×9 | 1×11 + 2×10 | 1×12 + 2×11 | 3×12') return _echec(l);
+          const r=M.repos_evolutif.semaines;
+          if(r.length!==10||r[0].series!==5||r[0].reps!==10||r[0].repos!==60||r[9].series!==3||r[9].reps!==6||r[9].repos!==180||M.repos_evolutif.pasKg!==2.5) return _echec('repos évolutif');
+          return (M.lineaire_debutant.reposS===90&&M.lineaire_debutant.pasKg===2&&M.lineaire_debutant.pasKgIsolation===1
+            &&M.pre_fatigue.paires.length===4&&M.post_fatigue.paires.length===4)||_echec('valeurs');})());
+        ok('MP1 — linéaire débutant : six semaines à charge fixe, puis +2 kg et retour à 3×8 ; +1 kg en isolation',(()=>{
+          const d=_derouler({cle:'lineaire_debutant',debut:_D},8,60);
+          const t=d.l.map(p=>libSeriesModele(p.series.map(x=>x.reps))+'@'+p.series[0].charge).join(' | ');
+          if(t!=='3×8@null | 2×9 + 1×8@60 | 1×10 + 2×9@60 | 1×11 + 2×10@60 | 1×12 + 2×11@60 | 3×12@60 | 3×8@62 | 2×9 + 1×8@62') return _echec(t);
+          if(!d.l.every(p=>p.series.every(x=>x.repos===90))||!/Pas une répétition de plus/.test(d.l[1].phrase)) return _echec('repos / consigne');
+          const iso=_derouler({cle:'lineaire_debutant',debut:_D},7,20,null,{isolation:true});
+          return iso.l[6].series[0].charge===21||_echec('isolation : '+iso.l[6].series[0].charge);})());
+        ok('MP1 — repos évolutif : dix semaines, +2,5 kg, repos 60 → 180 s, décharge en S9 en option, puis terminé',(()=>{
+          const d=_derouler({cle:'repos_evolutif',debut:_D},12,100);
+          const ch=d.l.map(p=>p.series[0].charge);
+          if(ch.slice(1,10).join()!=='102.5,105,107.5,110,112.5,115,117.5,120,122.5'||d.l.length!==11||!d.l[10].termine||!d.fin.termine||!/terminé/.test(d.fin.phrase)) return _echec(ch.join()+' / '+d.fin.phrase);
+          if(d.l.slice(0,10).map(p=>p.series[0].repos).join()!=='60,75,85,100,115,125,140,155,165,180') return _echec('repos');
+          const dl=_derouler({cle:'repos_evolutif',debut:_D,options:{deload:true}},12,100);
+          const s9=dl.l[8];
+          return (s9.deload&&s9.series.length===2&&s9.series[0].charge===98.75&&s9.series[0].repos===120&&dl.l[9].series[0].charge===122.5)||_echec(JSON.stringify(s9));})());
+        ok('MP1 — semaine ratée : retour à la semaine précédente ; semaine sans séance : rien ne bouge',(()=>{
+          const d=_derouler({cle:'lineaire_debutant',debut:_D},6,60,[3]);
+          const k=d.l.map(p=>p.semaine).join();
+          if(k!=='0,1,2,3,2,3') return _echec('linéaire : '+k);
+          const a=avancementModele({cle:'lineaire_debutant',debut:_D},d.H,{});
+          if(!a.journal.some(t=>/ratée, retour à la semaine 3/.test(t))) return _echec(a.journal.join(' | '));
+          const r=_derouler({cle:'repos_evolutif',debut:_D},5,100,[2]);
+          if(r.l.map(p=>p.semaine+'@'+p.series[0].charge).join()!=='0@null,1@102.5,2@105,1@102.5,2@105') return _echec('repos : '+r.l.map(p=>p.semaine+'@'+p.series[0].charge).join());
+          const trou=[_s(0,[8,8,8],60),_s(3,[9,9,8],60)];       // semaines 2 et 3 sans séance
+          const t=prescriptionModele({cle:'lineaire_debutant',debut:_D},null,trou,{});
+          return t.semaine===2||_echec('absence comptée : '+t.semaine);})());
+        ok('MP1 — double progression : on monte quand TOUTES les séries touchent le haut au RIR cible ; RIR non noté → on garde',(()=>{
+          const m={cle:'double_progression',debut:_D}, o={fourchette:{min:8,max:12},series:3,rirCible:2};
+          const p=(h,oo)=>prescriptionModele(m,null,h,Object.assign({},o,oo||{}));
+          const plein=[_s(0,[12,12,12],50,'2')];
+          if(p(plein).series[0].charge!==52.5||p(plein).series[0].reps!=='8'||!/on monte/.test(p(plein).phrase)) return _echec('monte : '+JSON.stringify(p(plein)));
+          if(p([_s(0,[12,12,11],50,'2')]).series[0].charge!==50) return _echec('une série courte');
+          if(p([_s(0,[12,12,12],50,'1')]).series[0].charge!==50) return _echec('RIR sous la cible');
+          const sans=p([_s(0,[12,12,12],50,'')]);
+          if(sans.series[0].charge!==50||!/RIR non noté/.test(sans.phrase)) return _echec('RIR vide');
+          if(p(plein,{isolation:true}).series[0].charge!==51.25) return _echec('isolation');
+          if(p(plein,{rirCible:null}).series[0].charge!==52.5) return _echec('sans RIR cible');
+          return /charge à trouver/.test(p([]).phrase)||_echec('sans historique');})());
+        ok('MP1 — la charge vient du réel : e1RM des séances d’avant, sinon « charge à trouver à la première séance »',(()=>{
+          const m={cle:'lineaire_debutant',debut:_D};
+          const avant=[{date:_D-10*_J,series:[{reps:8,charge:80,rir:'2'}]}];
+          const p=prescriptionModele(m,null,avant,{});
+          const att=arrondiCharge(chargePourReps(e1rm(80,8,2),8,2),{sens:'bas',pas:1.25,user:{}});
+          if(p.series[0].charge!==att||att!==80) return _echec(p.series[0].charge+' / '+att);
+          const r=prescriptionModele({cle:'repos_evolutif',debut:_D},null,avant,{});
+          if(!(r.series[0].charge<80&&r.series[0].charge>0)) return _echec('repos évolutif à 10 reps : '+r.series[0].charge);
+          const vide=prescriptionModele(m,null,[],{});
+          return (vide.series[0].charge===null&&/charge à trouver à la première séance/.test(vide.phrase))||_echec(vide.phrase);})());
+        ok('MP1 — pré- et post-fatigue : paires gelées, reconnues par le nom, sans charge imposée',(()=>{
+          const pre=['OISEAU HALTERES','ELEVATIONS LATERALES HALTERES','CURL CONCENTRE','EXTENSION TRICEPS CORDE'].map(n=>paireModele('pre_fatigue',n)).join();
+          const post=['DEVELOPPE COUCHE BARRE','TRACTIONS','FRONT SQUAT','SOULEVE DE TERRE JAMBES TENDUES'].map(n=>paireModele('post_fatigue',n)).join();
+          if(pre!=='0,1,2,3'||post!=='0,1,2,3') return _echec(pre+' / '+post);
+          if(paireModele('pre_fatigue','SQUAT')!==-1) return _echec('faux positif');
+          const p=prescriptionModele({cle:'pre_fatigue',paire:0},null,[],{series:3,reps:'12'});
+          if(p.series.length!==3||p.series[0].charge!==null||!/Oiseau, puis enchaîne Rowing prise large sans repos/.test(p.phrase)) return _echec(JSON.stringify(p));
+          return /choisis la paire/.test(prescriptionModele({cle:'post_fatigue'},null,[],{}).phrase)||_echec('sans paire');})());
+        ok('MP1 — la séance suit le modèle : séries et répétitions du jour, charge posée, rien de fait n’est retiré',(()=>{
+          const data={sets:[{done:true,reps:'8',weight:'60'},{done:false,reps:'10',weight:''},{done:false,reps:'10',weight:''},{done:false,reps:'10',weight:''},{done:false,reps:'10',weight:''}]};
+          _mpAppliquerSeance(data,{series:[{reps:10,charge:62,repos:90},{reps:9,charge:62,repos:90},{reps:9,charge:62,repos:90}]});
+          if(data.sets.length!==3||data.sets[0].reps!=='8'||data.sets[1].reps!=='9'||data.sets[1].weight!==62||!data.sets[1].isAuto) return _echec(JSON.stringify(data.sets));
+          const d2={sets:[{done:false,reps:'',weight:'70',userEdited:true}]};
+          _mpAppliquerSeance(d2,{series:[{reps:8,charge:62,repos:90},{reps:8,charge:62,repos:90}]});
+          if(d2.sets.length!==2||d2.sets[0].weight!=='70') return _echec('charge saisie écrasée');
+          const src=String(_blocExo);
+          return (/prescriptionDuJour\(ex,currentUser\)/.test(src)&&/_sugMp!=null\?_sugMp/.test(src)&&/_mpr\.series\[0\]\.repos/.test(String(_reposApresSerie))
+            &&/_htmlCibleModele\(idx\)/.test(src))||_echec('branchements séance');})());
+        ok('MP1 — la cible du jour s’affiche en séance (« Semaine 3 : 1×10 + 2×9 »)',(()=>{
+          const sv=woState;
+          try{
+            woState={exercises:[{name:'CURL BARRE',modele:{cle:'lineaire_debutant'}}],sessionData:{},_mp:{0:prescriptionModele({cle:'lineaire_debutant',debut:_D},2,[_s(0,[8,8,8],30)],{})}};
+            const h=_htmlCibleModele(0);
+            return (/Linéaire débutant/.test(h)&&/Semaine 3 : 1×10 \+ 2×9 à 30 kg/.test(h))||_echec(h);
+          } finally { woState=sv; }})());
+        ok('MP1 — l’éditeur : sélecteur, aperçu des 6 ou 10 semaines, décharge S9, paire',(()=>{
+          const svC=window._coachEditClient, sv=progEx;
+          try{
+            const a=document.createElement('div');
+            a.innerHTML=_selecteurModele({name:'CURL BARRE',series:3,reps:'8',modele:{cle:'lineaire_debutant',debut:_D}},0);
+            if(a.querySelectorAll('select option').length!==6||a.querySelectorAll('.mp-l').length!==6||!a.querySelector('.mp-l.mp-ici')) return _echec('linéaire : '+a.innerHTML.slice(0,200));
+            a.innerHTML=_selecteurModele({name:'SQUAT',series:3,reps:'8',modele:{cle:'repos_evolutif',debut:_D}},1);
+            if(a.querySelectorAll('.mp-l').length!==10||!a.querySelector('input[type=checkbox]')) return _echec('repos évolutif');
+            a.innerHTML=_selecteurModele({name:'OISEAU HALTERES',series:3,reps:'12',modele:{cle:'pre_fatigue',paire:0}},2);
+            if(a.querySelector('.mp-paire').value!=='0') return _echec('paire');
+            progEx=[{name:'CURL CONCENTRE',series:3,reps:'10'}];
+            _progExModele(0,'pre_fatigue');
+            if(!progEx[0].modele||progEx[0].modele.paire!==2||progEx[0].modele.debut!==_lundiDe(new Date()).getTime()) return _echec(JSON.stringify(progEx[0]));
+            _progExModele(0,'');
+            if(progEx[0].modele) return _echec('retrait');
+            return (/_selecteurModele\(ex,i\)/.test(String(_selecteurTechnique)))||_echec('non branché');
+          } finally { progEx=sv; }})());
+      }
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');
