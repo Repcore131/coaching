@@ -75147,6 +75147,51 @@ async function testExercices(){
       if(!h) return _echec('page illisible');
       if(!/prixPerso/.test(h)||!/C\.libre=/.test(h)||!/'Gratuit'/.test(h)) return _echec('surcharges non lues');
       return /k==='libre'\?'':v\.paiement/.test(h)?true:_echec('« Payer » sur la formule libre');});
+    // ══ BUILD 1935 — UN SEUL CHEMIN VERS L'ABONNEMENT ═══════════════════════════
+    ok('1935 — accueilChoisir : quatre chemins (visiteur, connecté mensuel, connecté annuel, abonné), jamais PayPal d’office',()=>{
+      const cu=currentUser, _go=window.go, _ls=window.loadSubscribePage, _ip=window.initPaypalSubscription, _sr=window.selectRole, sp=_subPalier;
+      const vus=[]; let ls=0, ip=0;
+      try{
+        window.go=s=>vus.push(s); window.loadSubscribePage=()=>{ ls++; }; window.initPaypalSubscription=()=>{ ip++; }; window.selectRole=()=>{};
+        currentUser=null; accueilChoisir('ultime',false);
+        if(vus.pop()!=='s-register'||ls) return _echec('visiteur');
+        currentUser=Object.assign(_banAth(),{}); _subPalier='annuel';
+        accueilChoisir('ultime',false);
+        if(vus.pop()!=='s-subscribe'||ls!==1||ip) return _echec('connecté : '+ls+'/'+ip);
+        if(subOffreChoisie()!=='ultime'||subPeriodeChoisie()!=='mensuel'||_subPalier!=='') return _echec('mensuel non retenu');
+        accueilChoisir('essentielle',true);
+        if(subOffreChoisie()!=='essentielle'||subPeriodeChoisie()!=='annuel'||ls!==2||ip) return _echec('annuel non retenu');
+        currentUser=Object.assign(_banAth(),{status:'ACTIVE',paymentStatus:'paid',paypalSubscriptionId:'I-X'});
+        accueilChoisir('ultime',false);
+        if(vus.pop()!=='s-subscribe'||ls!==3||ip) return _echec('abonné');
+        return /initPaypalSubscription/.test(String(accueilChoisir).replace(/\/\/.*$/gm,''))?_echec('accueilChoisir appelle encore initPaypalSubscription'):true;
+      }finally{ currentUser=cu; window.go=_go; window.loadSubscribePage=_ls; window.initPaypalSubscription=_ip; window.selectRole=_sr; _subPalier=sp;
+        try{ sessionStorage.removeItem('rc_offre_choisie'); sessionStorage.removeItem('rc_offre_annuel'); }catch(e){} }});
+    ok('1935 — la fin d’essai et le verrou proposent le mensuel ; l’écran présélectionne la période choisie',()=>{
+      if(/accueilChoisir\('ultime',true\)/.test(String(rcVerrouUltime))) return _echec('verrou : annuel');
+      const src=_prodSrc();
+      if(/accueilChoisir\(\\'(ultime|essentielle)\\',true\)">Continuer avec/.test(src)) return _echec('fin d’essai : annuel');
+      return /subPeriodeChoisie\(\)/.test(String(_renderSubPaliers))?true:_echec('période non présélectionnée');});
+    ok('1935 — le bouton dit « Souscrire à Ultime, 24,90 € par mois »',()=>{
+      const m=subPaliersDe('ultime').find(p=>p.cle==='mensuel');
+      if(!m) return _echec('pas de mensuel Ultime');
+      const t=libelleSouscrire(m,'ultime');
+      if(t!=='Souscrire à Ultime, '+prixOffre('ultime')+' par mois') return _echec(t);
+      if(!/24,90/.test(t)) return _echec('prix : '+t);
+      const a=subPaliersDe('essentielle').find(p=>p.cle==='annuel');
+      return a&&libelleSouscrire(a,'essentielle')==='Souscrire à Essentielle, '+prixOffre('essentielle',true)+' par an'?true:_echec('annuel : '+(a&&libelleSouscrire(a,'essentielle')));});
+    ok('1935 — PayPal ne se charge qu’avec un tarif payable et la renonciation cochée ; sinon « Réessayer »',()=>{
+      const cu=currentUser, z=document.getElementById('paypal-btn-container'), av=z?z.innerHTML:'';
+      const sdk=()=>!!document.getElementById('paypal-sdk');
+      const avant=sdk();
+      try{
+        currentUser=Object.assign(_banAth(),{});
+        delete currentUser.abonnement;
+        initPaypalSubscription();
+        if(!avant&&sdk()) return _echec('SDK chargé sans renonciation');
+        if(!z||!/Réessayer/.test(z.textContent)) return _echec('pas de « Réessayer »');
+        return /loadSubscribePage\(\)/.test(z.innerHTML)?true:_echec('« Réessayer » ne repeint pas l’écran');
+      }finally{ currentUser=cu; if(z) z.innerHTML=av; }});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

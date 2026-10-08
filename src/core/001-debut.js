@@ -1439,7 +1439,7 @@ function rcVerrou(capacite,user){
 // LA PORTE D'ULTIME. Le meme chemin que la carte de l'ecran d'arrivee : le
 // choix est memorise, et l'ecran d'abonnement s'ouvre.
 function rcVerrouUltime(){
-  try{ return accueilChoisir('ultime',true); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
+  try{ return accueilChoisir('ultime',false); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
   return true;
 }
 // PURE. CE QUE L'ANNÉE FAIT ÉCONOMISER, quand elle fait économiser quelque
@@ -1497,6 +1497,12 @@ function _palierEstCoach(cle){
 // PURE. LA FORMULE QUE LA PERSONNE A CHOISIE avant d'arriver ici. Posee par
 // accueilChoisir (carte de l'accueil, verrou, sortie de pack), lue ici.
 // « essentielle » par defaut : c'est ce que l'ecran a toujours presente.
+// PURE. LA PÉRIODE CHOISIE (série 6, lot 11) : 'annuel' si la carte l'a
+// demandée (rc_offre_annuel), 'mensuel' sinon.
+function subPeriodeChoisie(){
+  let a=''; try{ a=sessionStorage.getItem('rc_offre_annuel')||''; }catch(e){ a=''; }
+  return a==='1'?'annuel':'mensuel';
+}
 function subOffreChoisie(){
   let c='';
   try{ c=sessionStorage.getItem('rc_offre_choisie')||''; }catch(e){ c=''; }

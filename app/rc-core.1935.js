@@ -1439,7 +1439,7 @@ function rcVerrou(capacite,user){
 // LA PORTE D'ULTIME. Le meme chemin que la carte de l'ecran d'arrivee : le
 // choix est memorise, et l'ecran d'abonnement s'ouvre.
 function rcVerrouUltime(){
-  try{ return accueilChoisir('ultime',true); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
+  try{ return accueilChoisir('ultime',false); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
   return true;
 }
 // PURE. CE QUE L'ANNÉE FAIT ÉCONOMISER, quand elle fait économiser quelque
@@ -1497,6 +1497,12 @@ function _palierEstCoach(cle){
 // PURE. LA FORMULE QUE LA PERSONNE A CHOISIE avant d'arriver ici. Posee par
 // accueilChoisir (carte de l'accueil, verrou, sortie de pack), lue ici.
 // « essentielle » par defaut : c'est ce que l'ecran a toujours presente.
+// PURE. LA PÉRIODE CHOISIE (série 6, lot 11) : 'annuel' si la carte l'a
+// demandée (rc_offre_annuel), 'mensuel' sinon.
+function subPeriodeChoisie(){
+  let a=''; try{ a=sessionStorage.getItem('rc_offre_annuel')||''; }catch(e){ a=''; }
+  return a==='1'?'annuel':'mensuel';
+}
 function subOffreChoisie(){
   let c='';
   try{ c=sessionStorage.getItem('rc_offre_choisie')||''; }catch(e){ c=''; }
@@ -10436,8 +10442,10 @@ function accueilChoisir(cle,annuel){
   try{ sessionStorage.setItem('rc_offre_annuel',annuel?'1':''); }catch(e){}
   // UN ABONNÉ NE SOUSCRIT PAS UNE SECONDE FOIS (02/10/2026) : l'écran
   // d'abonnement lui propose « Changer de formule », sans bouton PayPal.
-  if(currentUser&&abonnementEnCours(currentUser)){ go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
-  if(currentUser){ go('s-subscribe'); try{ initPaypalSubscription(); }catch(e){} return true; }
+  // SÉRIE 6 (lot 11) : connecté, UN SEUL CHEMIN — l'écran d'abonnement, qui
+  // présélectionne la formule et la période choisies. PayPal ne se charge
+  // qu'au geste « Souscrire », jamais d'office (initPaypalSubscription).
+  if(currentUser){ _subPalier=''; go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
   go('s-register');
   try{ selectRole('athlete',true); }catch(e){}
   return true;
@@ -91031,7 +91039,7 @@ function rendreEssaiBilan(u){
       +ligne('Ta diète calculée et tes compléments')
       +'</ul>'
       +'<button type="button" class="btn btn-red" style="width:100%" '
-      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
+      +'onclick="accueilChoisir(\'ultime\',false)">Continuer avec Ultime</button>'
     +'</div>'
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Essentielle</div>'
@@ -91042,7 +91050,7 @@ function rendreEssaiBilan(u){
       +ligne('Ta nutrition et ton lifestyle')
       +'</ul>'
       +'<button type="button" class="btn btn-outline" style="width:100%" '
-      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
+      +'onclick="accueilChoisir(\'essentielle\',false)">Continuer avec Essentielle</button>'
     +'</div>'
     +'<div class="eb-pied">'
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
@@ -143572,7 +143580,8 @@ function _renderSubPaliers(){
   // vient de le choisir sur son écran, le lui redemander serait le perdre.
   const _pc=_palierCoachEnAttente();
   if(_pc&&dispo.some(p=>p.cle===_pc)) _subPalier=_pc;
-  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
+  // La période choisie sur la carte d'origine (lot 11), sinon la première.
+  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)){ const pc=subPeriodeChoisie(); _subPalier=dispo.some(p=>p.cle===pc)?pc:dispo[0].cle; }
   if(dispo.length===1){
     const p=dispo[0];
     zone.innerHTML='<div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text);line-height:1">'
@@ -143648,7 +143657,14 @@ function _majBoutonSouscrire(){
   const b=document.getElementById('paypal-loading-btn');
   if(!b) return;
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
-  if(p) b.textContent='Souscrire pour '+_prixPalier(p)+' '+p.periode+' →';
+  if(p) b.textContent=libelleSouscrire(p);
+}
+// PURE (lot 11). « Souscrire à Ultime, 24,90 € par mois » : la formule, le
+// montant et sa période, tels qu'ils seront débités.
+function libelleSouscrire(p,formule){
+  if(!p) return 'Souscrire';
+  const lib=_palierEstCoach(p.cle)?p.titre:((offre(formule||subOffreChoisie())||{}).lib||'');
+  return 'Souscrire à '+lib+', '+_prixPalier(p)+' '+p.periode;
 }
 function _planIdChoisi(){
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
@@ -143799,6 +143815,15 @@ function initPaypalSubscription(){
   // DÉFENSE EN PROFONDEUR : un abonnement court déjà, ce chemin ne charge pas
   // PayPal, quel que soit le bouton qui l'a appelé.
   if(abonnementEnCours(currentUser)){ loadSubscribePage(); return; }
+  // SÉRIE 6 (lot 11) : PayPal SEULEMENT avec un tarif payable ET la
+  // renonciation cochée ; sinon « Réessayer », qui repeint l'écran.
+  const _pret=_paliersDispo().length>0&&renonciationRetractation(currentUser).accepte;
+  if(!_pret){
+    const _c=document.getElementById('paypal-btn-container');
+    toast(_paliersDispo().length?'Coche d’abord la renonciation au délai de rétractation.':'Ce tarif n’est pas encore ouvert au paiement.','var(--orange)');
+    if(_c) _c.innerHTML='<button class="btn btn-red" onclick="loadSubscribePage()" id="paypal-loading-btn">Réessayer</button>';
+    return;
+  }
   const planId=_planIdChoisi();
   if(!planId){
     toast('Ce tarif n’est pas encore ouvert au paiement.','var(--orange)');

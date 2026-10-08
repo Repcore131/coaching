@@ -777,7 +777,7 @@ function rendreEssaiBilan(u){
       +ligne('Ta diète calculée et tes compléments')
       +'</ul>'
       +'<button type="button" class="btn btn-red" style="width:100%" '
-      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
+      +'onclick="accueilChoisir(\'ultime\',false)">Continuer avec Ultime</button>'
     +'</div>'
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Essentielle</div>'
@@ -788,7 +788,7 @@ function rendreEssaiBilan(u){
       +ligne('Ta nutrition et ton lifestyle')
       +'</ul>'
       +'<button type="button" class="btn btn-outline" style="width:100%" '
-      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
+      +'onclick="accueilChoisir(\'essentielle\',false)">Continuer avec Essentielle</button>'
     +'</div>'
     +'<div class="eb-pied">'
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '

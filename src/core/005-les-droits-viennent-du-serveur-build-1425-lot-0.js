@@ -1004,8 +1004,10 @@ function accueilChoisir(cle,annuel){
   try{ sessionStorage.setItem('rc_offre_annuel',annuel?'1':''); }catch(e){}
   // UN ABONNÉ NE SOUSCRIT PAS UNE SECONDE FOIS (02/10/2026) : l'écran
   // d'abonnement lui propose « Changer de formule », sans bouton PayPal.
-  if(currentUser&&abonnementEnCours(currentUser)){ go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
-  if(currentUser){ go('s-subscribe'); try{ initPaypalSubscription(); }catch(e){} return true; }
+  // SÉRIE 6 (lot 11) : connecté, UN SEUL CHEMIN — l'écran d'abonnement, qui
+  // présélectionne la formule et la période choisies. PayPal ne se charge
+  // qu'au geste « Souscrire », jamais d'office (initPaypalSubscription).
+  if(currentUser){ _subPalier=''; go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
   go('s-register');
   try{ selectRole('athlete',true); }catch(e){}
   return true;
