@@ -47,10 +47,10 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1793';
+window.RC_BUILD='1794';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
-window.RC_MAJ='2026-10-07';
+window.RC_MAJ='2026-10-08';
 // L'APPARENCE, AVANT LE PREMIER AFFICHAGE. Sombre par defaut ; « clair » ou
 // « auto » (comme le telephone) si l'utilisateur l'a choisi dans ses reglages.
 // Pose ici, et non dans rc-core, pour que l'ecran ne clignote pas en noir
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1793.css">
+<link rel="stylesheet" href="./rc-style.1794.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -6068,5 +6068,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1793.js"></script>
+<script src="./rc-core.1794.js"></script>
 </body></html>

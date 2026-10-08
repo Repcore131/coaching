@@ -76736,28 +76736,22 @@ async function testExercices(){
           if(!b||b.source===null) return _echec('aucune proposition');
           // Le cycle glucidique décale ON et OFF autour du total : leur moyenne
           // reste la dépense, aux arrondis près.
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
-
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('Critère : en maintien, le total vaut la dépense',(()=>{
           const b=besoinsProposes(_ath(62,'maintien'));
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
-
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('En recomposition aussi, le delta est nul',(()=>{
           const b=besoinsProposes(_ath(62,'recomp'));
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
-
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
