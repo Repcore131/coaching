@@ -1725,13 +1725,17 @@ const PLAN_MODELE_LIB=Object.freeze({
   maintien:'Maintien', peak:'Peak week'
 });
 function planModeleLib(cle){
+  // Série 6 (lot 7) : un modèle du coach se nomme par son nom.
+  if(String(cle||'').indexOf(PLAN_PERSO)===0){ const m=planModelePerso(cle); return m?m.nom:'Modèle supprimé'; }
   const fam=planModeleFamille(cle);
   if(!fam||!PLAN_MODELE_LIB[fam]) return '';
   return PLAN_MODELE_LIB[fam]+' '+(String(cle).slice(-2)==='_F'?'femme':'homme');
 }
 // Construit un plan COMPLET depuis le modèle : squelette, catalogues, paliers.
 // Rend null s'il n'y a pas de modèle pour cet athlète.
-function planDepuisModele(user,avecComplements,cleForcee){
+function planDepuisModele(user,avecComplements,cleForcee,modeles){
+  // Série 6 (lot 7) : un modèle du coach (« perso:<id> »).
+  if(String(cleForcee||'').indexOf(PLAN_PERSO)===0) return planDepuisModelePerso(user,cleForcee,modeles);
   const cle=cleForcee||planModeleCle(user);
   if(!cle||!PLAN_MODELES[cle]) return null;
   const poids=_planPoids(user),femme=_planFemme(user);

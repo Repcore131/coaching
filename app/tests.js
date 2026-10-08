@@ -74981,6 +74981,64 @@ async function testExercices(){
         if(!/ajusterVolumeAthlete/.test(String(renderVolumeCoach))&&!/htmlAjusterVolumeAthlete/.test(String(renderVolumeCoach))) return _echec('non branché');
         return /ajusterPoidsTechnique/.test(String(htmlAjusterVolumeAthlete))?true:_echec('poidsTechnique sans interface');
       }finally{ currentUser=cu; }});
+    // ══ BUILD 1931 — LES MODÈLES DE PLAN DU COACH ═══════════════════════════════
+    ok('1931 — modeleDepuisPlan : aucune donnée d’athlète, nom borné, « (2) » sur un nom pris, 30 au plus',()=>{
+      const base=planDepuisModele({sexe:'H',weightLog:[{date:'2026-10-01',kg:80}]},false,'seche_H');
+      const plan=Object.assign(_cplCopie(base),{momentSeance:'matin',majPar:'coach1',majAt:1,courses:{jours:{a:1},stock:{b:2}}});
+      const r=modeleDepuisPlan(plan,'Ma sèche',[]);
+      if(!r.ok) return _echec(r.erreur);
+      const m=r.modele, j=JSON.stringify(m);
+      for(const k of ['courses','momentSeance','majPar','majAt']) if(k in m) return _echec('donnée d’athlète : '+k);
+      if(m.squelette.some(x=>'id' in x)) return _echec('identifiants de ligne gardés');
+      if(m.famille!=='seche'||m.sexe!=='H'||!m.catalogues||!m.createdAt||!m.id) return _echec('champs : '+j.slice(0,200));
+      if(nomModeleUnique('Ma sèche',[m])!=='Ma sèche (2)') return _echec('doublon : '+nomModeleUnique('Ma sèche',[m]));
+      if(nomModeleUnique('Ma sèche',[m,{id:'x',nom:'Ma sèche (2)'}])!=='Ma sèche (3)') return _echec('doublon (3)');
+      if(nomModeleUnique('x'.repeat(80),[]).length!==40) return _echec('nom non borné');
+      const plein=Array.from({length:30},(_,i)=>({id:'m'+i,nom:'M'+i}));
+      if(modeleDepuisPlan(plan,'Encore',plein).ok) return _echec('31e modèle accepté');
+      if(modeleDepuisPlan({squelette:[],sources:{}},'Vide',[]).ok) return _echec('composition vide acceptée');
+      return true;});
+    ok('1931 — planDepuisModele accepte un modèle du coach et recalcule les œufs sur le poids de l’athlète',()=>{
+      const m={id:'mabc1',nom:'Ma base',famille:'seche',sexe:'H',avecComplements:false,createdAt:1,
+        squelette:[{repas:'petit_dej',portion:'oeuf',q:99,u:'u'},{repas:'midi',ciqual:32140,q:60,u:'g'}],catalogues:{proteines:[1],glucides:[2]}};
+      const a={sexe:'H',weightLog:[{date:'2026-10-01',kg:60}]}, b={sexe:'H',weightLog:[{date:'2026-10-01',kg:110}]};
+      const pa=planDepuisModele(a,false,'perso:mabc1',[m]), pb=planDepuisModele(b,false,'perso:mabc1',[m]);
+      if(!pa||pa.modele!=='perso:mabc1') return _echec('non posé');
+      const qa=pa.squelette[0].q, qb=pb.squelette[0].q;
+      if(qa===99||qa!==(oeufsSuggeres(_planPoids(a),false)||1)) return _echec('œufs non recalculés : '+qa);
+      if(qb!==(oeufsSuggeres(_planPoids(b),false)||1)) return _echec('œufs (110 kg) : '+qb);
+      if(!pa.squelette.every(x=>x.id)||pa.squelette[0].id===pb.squelette[0].id) return _echec('identifiants');
+      if(m.squelette[0].q!==99) return _echec('le modèle est modifié');
+      if(planDepuisModele(a,false,'perso:inconnu',[m])!==null) return _echec('modèle inconnu');
+      const cu=currentUser;
+      try{ currentUser=Object.assign(_banCoach(),{plansModeles:[m]}); if(planModeleLib('perso:mabc1')!=='Ma base') return _echec('libellé'); }
+      finally{ currentUser=cu; }
+      return true;});
+    okA('1931 — composition : « Mes modèles » avant RepCore ; Dupliquer, Supprimer confirmé, Annuler après application',async()=>{
+      const cu=currentUser, _su=window.saveUser, _po=CLOUD.pushOne, _c=window.rcConfirm, _r=window.renderPlanCoach, sv=_cplPlan, svc=window.currentClientId;
+      try{
+        const m={id:'mabc1',nom:'Ma base',famille:'seche',sexe:'H',avecComplements:false,createdAt:1,squelette:[{repas:'midi',ciqual:32140,q:60,u:'g'}],catalogues:{proteines:[],glucides:[]}};
+        currentUser=Object.assign(_banCoach(),{plansModeles:[m]});
+        window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.renderPlanCoach=()=>{};
+        _cplPlan=planDepuisModele({sexe:'H'},false,'seche_H');
+        const h=_cplHtmlModele({sexe:'H'});
+        const i1=h.indexOf('Mes modèles'), i2=h.indexOf('Modèles RepCore'), i3=h.indexOf('Ma base');
+        if(!(i1>=0&&i1<i3&&i3<i2)) return _echec('ordre : '+[i1,i3,i2]);
+        if(!/Enregistrer comme modèle/.test(h)||!/cplAppliquerModele\('seche_H'\)/.test(h)) return _echec('boutons');
+        cplDupliquerModele('mabc1');
+        if(currentUser.plansModeles.length!==2||currentUser.plansModeles[1].nom!=='Ma base (2)') return _echec('dupliquer : '+JSON.stringify(currentUser.plansModeles.map(x=>x.nom)));
+        rcAnnulerDernier();
+        if(currentUser.plansModeles.length!==1) return _echec('annuler la copie');
+        let q=0; window.rcConfirm=async()=>{ q++; return false; };
+        await cplSupprimerModele('mabc1');
+        if(!q||currentUser.plansModeles.length!==1) return _echec('suppression non confirmée');
+        window.rcConfirm=async()=>true;
+        await cplSupprimerModele('mabc1');
+        if(currentUser.plansModeles.length!==0) return _echec('suppression');
+        rcAnnulerDernier();
+        if(currentUser.plansModeles.length!==1) return _echec('rétablir');
+        return /cplAppliquerModele/.test(String(_cplHtmlMesModeles))&&/rcAnnulable/.test(String(cplAppliquerModele))?true:_echec('annuler après application');
+      }finally{ currentUser=cu; window.saveUser=_su; CLOUD.pushOne=_po; window.rcConfirm=_c; window.renderPlanCoach=_r; _cplPlan=sv; }});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
@@ -88629,7 +88687,8 @@ async function testExercices(){
             if(_sUsers) DB.set('users',_sUsers); else localStorage.removeItem('rc_users');
             CLOUD.push=_sPush;
           }
-          const manque=PLAN_MODELES_LISTE.filter(k=>h.indexOf("cplPoserModele('"+k+"')")<0);
+          // Série 6 (lot 7) : le bouton passe par cplAppliquerModele (Annuler), qui appelle cplPoserModele.
+          const manque=PLAN_MODELES_LISTE.filter(k=>h.indexOf("cplAppliquerModele('"+k+"')")<0);
           if(manque.length) return _echec('modèles absents du bandeau : '+manque.join(', '));
           return /recomposition/i.test(h)?true:_echec('la raison n\'est pas nommée');});
       } finally { currentUser=_sU; }

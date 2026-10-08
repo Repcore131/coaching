@@ -180,6 +180,21 @@
         "affichageCoach": {
           ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/) && (auth.token.email.replace('.', ',') !== $emailKey || data.val() === newData.val())"
         },
+        // SÉRIE 6 (lot 7) : les modèles de plan du coach, 30 au plus.
+        "plansModeles": {
+          "$i": {
+            ".validate": "$i.matches(/^([0-9]|[12][0-9])$/) && newData.hasChildren(['id', 'nom'])",
+            "id": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{4,32}$/)" },
+            "nom": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+            "famille": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "sexe": { ".validate": "newData.isString() && newData.val().matches(/^(H|F)$/)" },
+            "avecComplements": { ".validate": "newData.isBoolean()" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "squelette": { ".validate": "newData.hasChildren() || !newData.exists()" },
+            "catalogues": { ".validate": "newData.hasChildren() || !newData.exists()" },
+            "$autre": { ".validate": false }
+          }
+        },
         "defautsCoach": {
           "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/)" },
           "methode": {

@@ -13767,3 +13767,9 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rgx-mt-h{font-size:var(--fs-2xs);color:var(--sub);text-transform:uppercase;letter-spacing:1px;text-align:center}
 .rgx-mt-h>span:first-child{text-align:left}
 .rgx-mt-s{font-size:var(--fs-2xs);color:var(--text-faint);text-align:right}
+/* Série 6, lot 7 : Mes modèles de plan */
+.cpl-mm-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub);margin:8px 0 6px}
+.cpl-mm{display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border)}
+.cpl-mm-b{flex:1;min-width:0;text-align:left;background:none;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;padding:8px 0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpl-mm-on .cpl-mm-b{color:var(--red)}
+.cpl-mm-v{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}

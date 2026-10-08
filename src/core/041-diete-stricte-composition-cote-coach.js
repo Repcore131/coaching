@@ -231,7 +231,7 @@ function _cplIntact(){
 function cplToggleComplements(){
   if(!_cplPlan) return;
   const vise=!_cplPlan.avecComplements;
-  if(_cplIntact()){
+  if(_cplIntact()&&String(_cplPlan.modele||'').indexOf(PLAN_PERSO)!==0){
     const c=_cplAthlete();
     const m=c&&planDepuisModele(c,vise,_cplPlan.modele);
     if(m){
@@ -892,7 +892,7 @@ function _cplHtmlModele(c){
   const pose=_cplPlan&&_cplPlan.modele;
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
-    return `<button onclick="cplPoserModele('${k}')"
+    return `<button onclick="cplAppliquerModele('${k}')"
       style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
@@ -913,7 +913,9 @@ function _cplHtmlModele(c){
   }
   return `<div style="background:${_cplNeuf?'var(--info-bg)':'var(--surface-1)'};border:1px solid ${_cplNeuf?'var(--info-border)':'var(--border)'};border-radius:var(--r-3);padding:12px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:10px">${entete}</div>
+    ${(()=>{ try{ return _cplHtmlMesModeles(); }catch(e){ return ''; } })()}
     <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
+    <button type="button" class="rb-lien" style="display:block;margin:10px auto 0" onclick="cplEnregistrerModele()">Enregistrer comme modèle</button>
   </div>`;
 }
 // Le sélecteur vit JUSTE AU-DESSUS du squelette : c'est lui qui en change
@@ -3039,3 +3041,135 @@ function validerRecette(){
   return true;
 }
 
+
+// ══ SÉRIE 6, LOT 7 — LES MODÈLES DE PLAN DU COACH ══════════════════════════
+// currentUser.plansModeles = [{id, nom ≤40, famille, sexe, squelette,
+// catalogues:{proteines,glucides}, avecComplements, createdAt}], 30 au plus.
+// AUCUNE DONNÉE D'ATHLÈTE : ni courses, ni moment de séance, ni auteur, ni
+// historique — un modèle est un squelette de repas et deux catalogues.
+const PLAN_PERSO='perso:', PLANS_MODELES_MAX=30, PLAN_MODELE_NOM_MAX=40;
+const _PLAN_LIGNE_INTERDITS=['id','majAt','majPar'];
+function _plansModelesDe(coach){
+  const c=coach!==undefined?coach:((typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach')?currentUser:null);
+  return (c&&Array.isArray(c.plansModeles))?c.plansModeles.filter(m=>m&&typeof m==='object'&&m.id):[];
+}
+function planModelePerso(cle,modeles){
+  const id=String(cle||'').slice(PLAN_PERSO.length);
+  const l=Array.isArray(modeles)?modeles:_plansModelesDe();
+  return l.find(m=>m.id===id)||null;
+}
+// PURE. Un nom libre : « Sèche (2) » quand « Sèche » existe déjà.
+function nomModeleUnique(nom,modeles,sauf){
+  const base=String(nom||'').replace(/\s+/g,' ').trim().slice(0,PLAN_MODELE_NOM_MAX)||'Mon modèle';
+  const pris=new Set((modeles||[]).filter(m=>m&&m.id!==sauf).map(m=>String(m.nom||'').toLowerCase()));
+  if(!pris.has(base.toLowerCase())) return base;
+  const racine=base.replace(/\s*\(\d+\)$/,'');
+  for(let i=2;i<100;i++){
+    const suf=' ('+i+')', n=racine.slice(0,PLAN_MODELE_NOM_MAX-suf.length)+suf;
+    if(!pris.has(n.toLowerCase())) return n;
+  }
+  return base;
+}
+// PURE. Le modèle tiré d'une composition. Rend {ok, modele} ou {ok:false, erreur}.
+function modeleDepuisPlan(plan,nom,modeles,maintenant){
+  const l=Array.isArray(modeles)?modeles:[];
+  if(l.length>=PLANS_MODELES_MAX) return {ok:false,erreur:'30 modèles au plus : supprimes-en un d’abord'};
+  const sq=planSquelette(plan);
+  if(!sq.length&&!planCatalogue(plan,'p').length&&!planCatalogue(plan,'c').length) return {ok:false,erreur:'Composition vide : rien à enregistrer'};
+  const src=String((plan&&plan.modele)||'');
+  const base=src.indexOf(PLAN_PERSO)===0?planModelePerso(src,l):null;
+  const t=Number(maintenant)||Date.now();
+  const propre=x=>{ const y=JSON.parse(JSON.stringify(x)); _PLAN_LIGNE_INTERDITS.forEach(k=>delete y[k]); return y; };
+  return {ok:true,modele:{
+    id:'m'+t.toString(36)+Math.random().toString(36).slice(2,6),
+    nom:nomModeleUnique(nom,l),
+    famille:base?base.famille:(planModeleFamille(src)||null),
+    sexe:base?base.sexe:(/_F$/.test(src)?'F':(/_H$/.test(src)?'H':null)),
+    squelette:sq.map(propre),
+    catalogues:{proteines:planCatalogue(plan,'p').map(x=>typeof x==='object'?propre(x):x),
+                glucides:planCatalogue(plan,'c').map(x=>typeof x==='object'?propre(x):x)},
+    avecComplements:!!(plan&&plan.avecComplements),
+    createdAt:t}};
+}
+// Le plan posé depuis un modèle du coach. Les œufs et les amandes sont
+// RECALCULÉS sur le poids de CET athlète, comme dans les modèles RepCore.
+function planDepuisModelePerso(user,cle,modeles){
+  const m=planModelePerso(cle,modeles);
+  if(!m) return null;
+  const poids=_planPoids(user), femme=_planFemme(user);
+  const squelette=(Array.isArray(m.squelette)?m.squelette:[]).map(x=>{
+    const it=JSON.parse(JSON.stringify(x));
+    if(it.portion==='oeuf'){ const n=oeufsSuggeres(poids,femme); it.q=n>0?n:1; }
+    else if(it.portion==='amandes'){ const n=amandesSuggerees(poids,femme); it.q=n>0?n:1; }
+    it.id=_cplId();
+    return it;
+  });
+  const cat=m.catalogues||{};
+  return {v:PLAN_V,avecComplements:!!m.avecComplements,nRepasSourcesLibres:null,squelette,
+    sources:{proteines:(cat.proteines||[]).map(x=>typeof x==='object'?Object.assign({},x):x),
+             glucides:(cat.glucides||[]).map(x=>typeof x==='object'?Object.assign({},x):x)},
+    courses:{jours:{},stock:{}},modele:PLAN_PERSO+m.id};
+}
+function _plansModelesEcrire(l,message,defaire){
+  currentUser.plansModeles=l;
+  let ok=false; try{ ok=saveUser(); }catch(e){ ok=false; }
+  let pr=null; try{ pr=CLOUD.pushOne(currentUser.email,currentUser); }catch(e){ pr=Promise.reject(e); }
+  try{ renderPlanCoach(); }catch(e){}
+  return defaire?toastSyncAnnulable(ok,pr,message,'le modèle est',defaire,RGX_ANNULER_MS):toastSync(ok,pr,message,'le modèle est');
+}
+async function cplEnregistrerModele(){
+  if(!_cplPlan||!currentUser||currentUser.role!=='coach') return false;
+  const avant=_plansModelesDe();
+  const prop=nomModeleUnique(_cplPlan.modele?planModeleLib(_cplPlan.modele):'Mon modèle',avant);
+  const nom=await rcSaisie('Nom du modèle',prop,{max:PLAN_MODELE_NOM_MAX});
+  if(nom===null) return false;
+  const r=modeleDepuisPlan(_cplPlan,nom,avant);
+  if(!r.ok){ toast(r.erreur,'var(--orange)'); return false; }
+  const prec=avant.slice();
+  _plansModelesEcrire(avant.concat([r.modele]),'Modèle « '+r.modele.nom+' » enregistré '+ICO.coche,
+    ()=>_plansModelesEcrire(prec,'Modèle retiré'));
+  return r.modele;
+}
+function cplDupliquerModele(id){
+  const l=_plansModelesDe(), m=l.find(x=>x.id===id);
+  if(!m) return false;
+  if(l.length>=PLANS_MODELES_MAX){ toast('30 modèles au plus : supprimes-en un d’abord','var(--orange)'); return false; }
+  const t=Date.now();
+  const copie=Object.assign(JSON.parse(JSON.stringify(m)),{id:'m'+t.toString(36)+Math.random().toString(36).slice(2,6),nom:nomModeleUnique(m.nom,l),createdAt:t});
+  const prec=l.slice();
+  _plansModelesEcrire(l.concat([copie]),'Copie « '+copie.nom+' » créée '+ICO.coche,()=>_plansModelesEcrire(prec,'Copie retirée'));
+  return copie;
+}
+async function cplSupprimerModele(id){
+  const l=_plansModelesDe(), m=l.find(x=>x.id===id);
+  if(!m) return false;
+  if(!await rcConfirm('Supprimer le modèle « '+m.nom+' » ?','Les plans déjà posés chez tes athlètes ne changent pas.','Supprimer')) return false;
+  const prec=l.slice();
+  _plansModelesEcrire(l.filter(x=>x.id!==id),'Modèle supprimé',()=>_plansModelesEcrire(prec,'Modèle rétabli'));
+  return true;
+}
+// Poser un modèle (RepCore ou perso) : confirmé si une composition retouchée
+// serait remplacée, puis « Annuler » remet la composition d'avant. Rien ne
+// part chez l'athlète avant « Enregistrer » ; l'enregistrement range la
+// version précédente dans l'historique (planHisto).
+async function cplAppliquerModele(cle){
+  const ref=_cplPlan, avant=_cplPlan?_cplCopie(_cplPlan):null, neufAvant=_cplNeuf;
+  await cplPoserModele(cle);
+  if(_cplPlan===ref) return false;
+  if(avant) rcAnnulable({message:'Modèle « '+planModeleLib(_cplPlan.modele)+' » posé',duree:RGX_ANNULER_MS,
+    defaire:()=>{ _cplPlan=avant; _cplNeuf=neufAvant; try{ renderPlanCoach(); }catch(e){} }});
+  return true;
+}
+function _cplHtmlMesModeles(){
+  const l=_plansModelesDe();
+  const pose=_cplPlan&&_cplPlan.modele;
+  const btn=l.map(m=>{
+    const k=PLAN_PERSO+m.id, actif=pose===k;
+    return '<div class="cpl-mm'+(actif?' cpl-mm-on':'')+'"><button type="button" class="cpl-mm-b" onclick="cplAppliquerModele(\''+k+'\')">'+escapeHtml(m.nom)+'</button>'
+      +'<button type="button" class="rb-lien" onclick="cplDupliquerModele(\''+m.id+'\')">Dupliquer</button>'
+      +'<button type="button" class="rb-lien" onclick="cplSupprimerModele(\''+m.id+'\')">Supprimer</button></div>';
+  }).join('');
+  return '<div class="cpl-mm-t">Mes modèles'+(l.length?' ('+l.length+'/'+PLANS_MODELES_MAX+')':'')+'</div>'
+    +(btn||'<div class="cpl-mm-v">Aucun pour l’instant : compose un plan puis « Enregistrer comme modèle ».</div>')
+    +'<div class="cpl-mm-t">Modèles RepCore</div>';
+}
