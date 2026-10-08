@@ -1,5 +1,12 @@
 # RepCore pour Android (TWA + Health Connect)
 
+## Google Play en 5 lignes (série 6, lot 15)
+1. Play Console : créer l'app « RepCore » (fiche : `android/fiche-store/`, procédure : `android/play/LISEZMOI.md`).
+2. Lancer « APK Android » (Actions) : il produit aussi l'**AAB** signé (artefact `RepCore-<v>.aab`) — l'envoyer en test interne.
+3. Copier l'empreinte **Play App Signing** (Intégrité de l'application) dans `android/play/empreinte-play.txt`, puis l'ajouter en 2ᵉ position de `well-known/assetlinks.json` ; `node scripts/verif/assetlinks.mjs` doit dire « 2 empreintes ».
+4. Test fermé (12 testeurs, 14 jours), puis production.
+5. Rien à vendre dans l'app Play : `canalPlay()` (`?src=play`) masque tout achat ; l'abonnement se prend sur le site.
+
 Projet généré par Bubblewrap (`@bubblewrap/core` 1.25, voir `twa-manifest.json`),
 puis complété par la lecture de Health Connect (lot C, 28/09/2026).
 
@@ -92,7 +99,11 @@ le programme de facturation alternative permet de garder son propre système, av
 réduite et des écrans imposés par Google. Les achats PayPal de l'app, tels quels, risquent un **refus à
 la revue** ou un **retrait** de la fiche.
 
-**À trancher avant l'étape 4.** Trois voies : intégrer Play Billing dans la version Play, adhérer au
+**Tranché (série 6, lot 15) : l'achat est masqué dans la version Play** (`canalPlay()`, `?src=play`,
+gardé pour la session dans `rc_canal`) : ni PayPal, ni lien de paiement, ni bouton qui y mène ; l'écran
+d'abonnement dit seulement que les achats ne se font pas dans l'application Android.
+
+Pour mémoire, les trois voies étudiées : intégrer Play Billing dans la version Play, adhérer au
 programme de facturation alternative, ou masquer l'achat dans la version Play (l'app saurait qu'elle
 tourne dans le Play Store grâce à `src=play` ou à l'installateur). Lire les règles de paiement Google Play
 en vigueur au moment de l'envoi.

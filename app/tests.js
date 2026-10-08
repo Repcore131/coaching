@@ -75289,6 +75289,30 @@ async function testExercices(){
       if(!/92 %/.test(h)||!/nouvelle/.test(h)||!/en hausse/.test(h)) return _echec('rendu');
       if(!document.getElementById('s-sante-app')||!document.getElementById('ch-lien-sante')) return _echec('écran ou entrée absents');
       return /ch-lien-sante[\s\S]{0,120}isCreator/.test(String(loadMonetisationTab))?true:_echec('entrée non réservée au créateur');});
+    // ══ BUILD 1939 — LE CANAL GOOGLE PLAY ═══════════════════════════════════════
+    ok('1939 — canalPlay : aucun achat dans l’app du Play Store (abonnement, boutique, lien du coach)',()=>{
+      const sv=sessionStorage.getItem('rc_canal'), cu=currentUser, z=document.getElementById('paypal-btn-container'), av=z?z.innerHTML:'';
+      const sdk0=!!document.getElementById('paypal-sdk'), sdkA0=!!document.getElementById('paypal-sdk-achat');
+      try{
+        sessionStorage.removeItem('rc_canal');
+        if(canalPlay()) return _echec('canal Play sans ?src=play');
+        sessionStorage.setItem('rc_canal','play');
+        if(!canalPlay()) return _echec('canal Play non reconnu');
+        currentUser=Object.assign(_banAth(),{});
+        go('s-subscribe'); loadSubscribePage();
+        if(!z||z.textContent.indexOf(PLAY_ACHAT_TEXTE)<0||z.querySelector('#paypal-loading-btn')) return _echec('écran d’abonnement : '+(z&&z.textContent.slice(0,80)));
+        initPaypalSubscription();
+        if(!sdk0&&document.getElementById('paypal-sdk')) return _echec('SDK PayPal chargé');
+        if(_chargerPaypalAchat()!==false||(!sdkA0&&document.getElementById('paypal-sdk-achat'))) return _echec('boutique');
+        return /canalPlay\(\)/.test(String(pcProposerPaiement))?true:_echec('lien de paiement du coach');
+      }finally{ currentUser=cu; if(z) z.innerHTML=av; if(sv==null) sessionStorage.removeItem('rc_canal'); else sessionStorage.setItem('rc_canal',sv); try{ go('s-welcome'); }catch(e){} }});
+    okA('1939 — Android : versionCode 6, ?src=play au lancement, assetlinks contrôlé, AAB dans apk.yml',async()=>{
+      const lire=u=>{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; };
+      const g=lire('../android/app/build.gradle'), w=lire('../.github/workflows/apk.yml'), a=lire('../well-known/assetlinks.json');
+      if(!g||!w||!a) return _echec('fichiers non servis');
+      if(!/versionCode 6\b/.test(g)||!/launchUrl: '\/app\/index\.html\?src=play'/.test(g)) return _echec('build.gradle');
+      if(!/bundleRelease/.test(w)||!/assetlinks\.mjs/.test(w)) return _echec('apk.yml : AAB ou contrôle absent');
+      return JSON.parse(a)[0].target.sha256_cert_fingerprints.length>=1?true:_echec('assetlinks');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

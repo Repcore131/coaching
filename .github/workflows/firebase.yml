@@ -186,6 +186,9 @@ jobs:
       # SÉRIE 6 (lot 13) : les données fictives de la visite suivent leur générateur.
       - name: Donnees de la visite
         run: node scripts/visite.mjs --verifier
+      # SÉRIE 6 (lot 15) : /.well-known/assetlinks.json part avec le site.
+      - name: Controler assetlinks.json
+        run: node scripts/verif/assetlinks.mjs
 
       # LES PRIX. tarifs.json est la seule source : l'app en porte une copie,
       # la page de vente et les CGV lient chaque montant a une de ses cles. Un

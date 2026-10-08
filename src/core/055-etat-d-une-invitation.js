@@ -940,7 +940,10 @@ function loadSubscribePage(mode,payload){
   // ⚠ UN ABONNEMENT COURT DÉJÀ (02/10/2026) : aucun bouton de souscription,
   //   « Changer de formule » à la place. Souscrire de nouveau faisait payer
   //   deux abonnements, l'ancien continuant d'être prélevé.
-  if(abonnementEnCours(currentUser)){
+  if(canalPlay()){
+    // Série 6 (lot 15) : rien ne se paie dans l'app du Play Store.
+    _pp.innerHTML='<div class="bq-note">'+escapeHtml(PLAY_ACHAT_TEXTE)+'</div>';
+  }else if(abonnementEnCours(currentUser)){
     _pp.innerHTML=htmlChangerFormule(currentUser,_planIdChoisi());
   }else if(!_paliersDispo().length){
     _pp.innerHTML=(subOffreChoisie()==='ultime')
@@ -988,6 +991,7 @@ function initPaypalSubscription(){
   // DÉFENSE EN PROFONDEUR : un abonnement court déjà, ce chemin ne charge pas
   // PayPal, quel que soit le bouton qui l'a appelé.
   if(abonnementEnCours(currentUser)){ loadSubscribePage(); return; }
+  if(canalPlay()){ toast(PLAY_ACHAT_TEXTE,'var(--orange)'); return; }
   // SÉRIE 6 (lot 11) : PayPal SEULEMENT avec un tarif payable ET la
   // renonciation cochée ; sinon « Réessayer », qui repeint l'écran.
   const _pret=_paliersDispo().length>0&&renonciationRetractation(currentUser).accepte;

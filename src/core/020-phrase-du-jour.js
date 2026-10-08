@@ -1985,6 +1985,8 @@ function _majBoutonAchat(){
   if(b) b.style.display=(c&&c.checked)?'':'none';
 }
 function _chargerPaypalAchat(){
+  // Série 6 (lot 15) : pas d'achat dans l'app du Play Store.
+  if(canalPlay()){ const b=document.getElementById('ach-paypal'); if(b) b.innerHTML='<div class="bq-note">'+escapeHtml(PLAY_ACHAT_TEXTE)+'</div>'; return false; }
   const rendre=()=>_rendreBoutonAchat();
   if(document.getElementById('paypal-sdk-achat')){ rendre(); return; }
   const sc=document.createElement('script');

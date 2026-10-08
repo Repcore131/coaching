@@ -91,6 +91,16 @@ if(RC_VISITE){
     }
   }catch(e){}
 }
+// ══ SÉRIE 6, LOT 15 — LE CANAL GOOGLE PLAY ══════════════════════════════════
+// L'app installée depuis le Play Store s'ouvre sur ?src=play (LauncherActivity
+// le retire quand l'APK ne vient pas du Store). Le canal est gardé pour la
+// session (rc_canal) : les pages suivantes n'ont plus le paramètre.
+// ⚠ AUCUN ACHAT DANS LE CANAL PLAY : un abonnement numérique vendu dans une
+//   app du Play Store doit passer par Google Play Billing. Ni PayPal, ni
+//   lien de paiement, ni bouton qui y mène.
+const PLAY_ACHAT_TEXTE='Les abonnements et les achats ne se font pas dans l’application Android.';
+try{ if(new URLSearchParams(location.search).get('src')==='play') sessionStorage.setItem('rc_canal','play'); }catch(e){}
+function canalPlay(){ try{ return sessionStorage.getItem('rc_canal')==='play'; }catch(e){ return false; } }
 // « Voir l'app en 2 minutes » : la visite se charge dans une page neuve.
 function visiteOuvrir(role){
   const r=role==='coach'?'coach':'athlete';
@@ -24107,6 +24117,7 @@ function _pcPayerEnAttente(){
   return null;
 }
 async function pcProposerPaiement(){
+  if(canalPlay()){ try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){} return false; }
   const p=_pcPayerEnAttente();
   if(!p||!currentUser||currentUser.role==='coach') return false;
   try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
@@ -52070,6 +52081,8 @@ function _majBoutonAchat(){
   if(b) b.style.display=(c&&c.checked)?'':'none';
 }
 function _chargerPaypalAchat(){
+  // Série 6 (lot 15) : pas d'achat dans l'app du Play Store.
+  if(canalPlay()){ const b=document.getElementById('ach-paypal'); if(b) b.innerHTML='<div class="bq-note">'+escapeHtml(PLAY_ACHAT_TEXTE)+'</div>'; return false; }
   const rendre=()=>_rendreBoutonAchat();
   if(document.getElementById('paypal-sdk-achat')){ rendre(); return; }
   const sc=document.createElement('script');
@@ -143996,7 +144009,10 @@ function loadSubscribePage(mode,payload){
   // ⚠ UN ABONNEMENT COURT DÉJÀ (02/10/2026) : aucun bouton de souscription,
   //   « Changer de formule » à la place. Souscrire de nouveau faisait payer
   //   deux abonnements, l'ancien continuant d'être prélevé.
-  if(abonnementEnCours(currentUser)){
+  if(canalPlay()){
+    // Série 6 (lot 15) : rien ne se paie dans l'app du Play Store.
+    _pp.innerHTML='<div class="bq-note">'+escapeHtml(PLAY_ACHAT_TEXTE)+'</div>';
+  }else if(abonnementEnCours(currentUser)){
     _pp.innerHTML=htmlChangerFormule(currentUser,_planIdChoisi());
   }else if(!_paliersDispo().length){
     _pp.innerHTML=(subOffreChoisie()==='ultime')
@@ -144044,6 +144060,7 @@ function initPaypalSubscription(){
   // DÉFENSE EN PROFONDEUR : un abonnement court déjà, ce chemin ne charge pas
   // PayPal, quel que soit le bouton qui l'a appelé.
   if(abonnementEnCours(currentUser)){ loadSubscribePage(); return; }
+  if(canalPlay()){ toast(PLAY_ACHAT_TEXTE,'var(--orange)'); return; }
   // SÉRIE 6 (lot 11) : PayPal SEULEMENT avec un tarif payable ET la
   // renonciation cochée ; sinon « Réessayer », qui repeint l'écran.
   const _pret=_paliersDispo().length>0&&renonciationRetractation(currentUser).accepte;

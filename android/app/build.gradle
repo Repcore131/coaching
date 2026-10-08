@@ -74,8 +74,8 @@ android {
         applicationId "com.repcore.app"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 5
-        versionName "5"
+        versionCode 6
+        versionName "6"
         // L'adresse du serveur léger (réception Health Connect) et du site.
         buildConfigField "String", "SERVEUR", '"https://repcore-serveur.repcore.workers.dev"'
         buildConfigField "String", "SITE", '"https://repcore-sync.web.app"'

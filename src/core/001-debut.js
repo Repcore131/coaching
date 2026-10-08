@@ -91,6 +91,16 @@ if(RC_VISITE){
     }
   }catch(e){}
 }
+// ══ SÉRIE 6, LOT 15 — LE CANAL GOOGLE PLAY ══════════════════════════════════
+// L'app installée depuis le Play Store s'ouvre sur ?src=play (LauncherActivity
+// le retire quand l'APK ne vient pas du Store). Le canal est gardé pour la
+// session (rc_canal) : les pages suivantes n'ont plus le paramètre.
+// ⚠ AUCUN ACHAT DANS LE CANAL PLAY : un abonnement numérique vendu dans une
+//   app du Play Store doit passer par Google Play Billing. Ni PayPal, ni
+//   lien de paiement, ni bouton qui y mène.
+const PLAY_ACHAT_TEXTE='Les abonnements et les achats ne se font pas dans l’application Android.';
+try{ if(new URLSearchParams(location.search).get('src')==='play') sessionStorage.setItem('rc_canal','play'); }catch(e){}
+function canalPlay(){ try{ return sessionStorage.getItem('rc_canal')==='play'; }catch(e){ return false; } }
 // « Voir l'app en 2 minutes » : la visite se charge dans une page neuve.
 function visiteOuvrir(role){
   const r=role==='coach'?'coach':'athlete';

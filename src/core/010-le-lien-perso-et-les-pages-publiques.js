@@ -819,6 +819,7 @@ function _pcPayerEnAttente(){
   return null;
 }
 async function pcProposerPaiement(){
+  if(canalPlay()){ try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){} return false; }
   const p=_pcPayerEnAttente();
   if(!p||!currentUser||currentUser.role==='coach') return false;
   try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
