@@ -13843,3 +13843,6 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .series-table tr.wo-suivante td:first-child{box-shadow:inset 3px 0 0 var(--red)}
 /* Série 7, lot 4 — l'appui long atteint la cellule sous un champ validé */
 .series-table tr.done .set-input:disabled{pointer-events:none}
+/* Série 7, lot 5 — la carte de charge repliée en une ligne */
+.wo-charge-ligne{display:flex;width:100%;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;margin:0 0 10px;color:var(--sub);font:inherit;font-size:var(--fs-xs);text-align:left;cursor:pointer}
+.wo-charge-ligne[hidden]{display:none}

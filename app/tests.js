@@ -75655,6 +75655,50 @@ async function testExercices(){
         if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
       }
     });
+    // ══ BUILD 1948 — LE SUPERSET SE SUIT TOUT SEUL ═══════════════════════════════
+    ok('1948 — cibleSuivanteSuperset : A1 → B1 → A2 → B2 ; seul : la série suivante ; fin : null',()=>{
+      const exs=[{name:'A'},{name:'B',ss:true},{name:'C'}];
+      const sd=(a,b)=>({0:{sets:a.map(x=>({done:x}))},1:{sets:b.map(x=>({done:x}))},2:{sets:[{done:false},{done:false}]}});
+      let c=cibleSuivanteSuperset(exs,sd([true,false],[false,false]),0,0);
+      if(!c||c.idx!==1||c.i!==0||!c.superset) return _echec('A1 → '+JSON.stringify(c));
+      c=cibleSuivanteSuperset(exs,sd([true,false],[true,false]),1,0);
+      if(!c||c.idx!==0||c.i!==1) return _echec('B1 → '+JSON.stringify(c));
+      c=cibleSuivanteSuperset(exs,sd([true,true],[true,true]),1,1);
+      if(c!==null) return _echec('fin → '+JSON.stringify(c));
+      c=cibleSuivanteSuperset(exs,sd([true,true],[true,true]),2,0);
+      if(!c||c.idx!==2||c.i!==1||c.superset) return _echec('seul → '+JSON.stringify(c));
+      return true;
+    });
+    okA('1948 — superset : défilement après 600 ms, annulé si l’athlète défile ou tape ; carte de charge repliée après la série 1, ▾ la rouvre',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast, svAm=window._woAmenerLigne;
+      const vus=[];
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window._woAmenerLigne=(k,j)=>{ vus.push(k+':'+j); return true; };
+        currentUser={id:'r1948',email:'r1948@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:2,reps:'8',repos:'2 min'},{name:'ROWING BARRE',series:2,reps:'8',repos:'2 min',ss:true}]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        if(!document.getElementById('wo-charge-0')||!document.getElementById('wo-charge-ligne-0')) return _echec('carte de charge non enveloppée');
+        if(document.getElementById('wo-charge-0').hidden) return _echec('repliée avant la série 1');
+        woState.sessionData[0].sets[0].weight='60'; toggleSet(0,0);
+        if(!document.getElementById('wo-charge-0').hidden||document.getElementById('wo-charge-ligne-0').hidden) return _echec('pas repliée après la série 1');
+        await new Promise(r=>setTimeout(r,WO_DEFIL_ATTENTE_MS+80));
+        if(vus.join()!=='1:0') return _echec('défilement : '+vus.join());
+        // L'athlète défile : rien.
+        woState.sessionData[1].sets[0].weight='50'; toggleSet(0,1);
+        window.dispatchEvent(new WheelEvent('wheel',{deltaY:10}));
+        await new Promise(r=>setTimeout(r,WO_DEFIL_ATTENTE_MS+80));
+        if(vus.length!==1) return _echec('défilement malgré l’athlète');
+        woChargeDeplier(0);
+        if(document.getElementById('wo-charge-0').hidden) return _echec('▾ ne rouvre pas');
+        return true;
+      }finally{
+        try{ annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); _rirBandeFermer(); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast; window._woAmenerLigne=svAm;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

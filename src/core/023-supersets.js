@@ -817,7 +817,7 @@ function _blocExo(idx,estSS){
            et c'est exactement ainsi que l'inverse avait ete rapporte. -->
       ${(_cons&&_cons.maxDepasse)?`<div style="background:var(--surface-2);border-left:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Tu as déjà fait mieux que le 1RM noté par ton coach sur cet exercice (${_cons.max} kg au dossier, ${_cons.maxObserve} kg estimés d’après tes séries). La charge du jour est calculée sur ce que tu soulèves vraiment.</div>`:''}
 
-      ${isCardio(ex)?
+      <div id="wo-charge-${idx}" class="wo-charge">${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center">
           <div style="font-size:var(--fs-2xl);margin-bottom:6px">${icon('activity',28)}</div>
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
@@ -847,7 +847,7 @@ function _blocExo(idx,estSS){
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
-      `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
+      `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}</div>${isCardio(ex)?'':`<button type="button" id="wo-charge-ligne-${idx}" class="wo-charge-ligne" hidden onclick="woChargeDeplier(${idx})" aria-expanded="false">${sug?'Charge proposée · '+_aff(sug):_sugReps?'Visé · '+_sugReps.reps+' reps':'Repère de charge'}<span aria-hidden="true"> ▾</span></button>`}
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_contrainteHtml}
@@ -2191,6 +2191,7 @@ function renderSets(ex,data,idx,opts){
   _woLignesRendues.set(tb,lignes);
   _woBrancherEnchainement(tb,idx);
   _woBrancherCorrection(tb,idx);
+  try{ _woMajRepli(idx,data); }catch(e){}
   // Le « − » n'existe que tant que la dernière série n'est pas validée : sa
   // présence dépend donc du tableau qui vient d'être repeint.
   _majActionsSeries(ex,data,idx);
@@ -2525,6 +2526,8 @@ function toggleSet(i,idx){
   if(!avant) _arcSerieValidee(idx,i);
   // Le RIR en un toucher ; décocher la referme.
   try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
+  // Lot 5 : en superset, l'écran va chercher le prochain exercice à faire.
+  if(!avant) try{ _woDefilerApresValidation(idx,i); }catch(e){}
   // Lot 4 : un ✓ de trop se défait en un geste, pendant 5 s.
   if(!avant) try{ toast('Série '+(i+1)+' validée','var(--sub)',5000,{lib:'Annuler',fn:()=>annulerValidationSerie(idx,i)}); }catch(e){}
   woPersist();
@@ -2694,4 +2697,78 @@ function _foudreSurCharge(idx,i){
     });
     rcFoudreRecord(champ,anc||null,d.sets[i].weight);
   }catch(e){}
+}
+
+// ══ SÉRIE 7, LOT 5 — LE SUPERSET SE SUIT TOUT SEUL ═══════════════════════
+// PURE. Après la série i de l'exercice idx, où va le doigt ? Dans un superset :
+// l'exercice suivant du groupe à la même série, puis le premier du groupe à
+// la série suivante. Seul : la série suivante du même exercice. null quand
+// tout le groupe est fait.
+function cibleSuivanteSuperset(exercices,sessionData,idx,i){
+  const g=_groupeDe(exercices,idx), pos=g.indexOf(idx);
+  const ouverte=(k,j)=>{ const s=sessionData&&sessionData[k]&&sessionData[k].sets&&sessionData[k].sets[j]; return !!(s&&!s.done); };
+  const premiere=k=>{ const ss=(sessionData&&sessionData[k]&&sessionData[k].sets)||[]; const j=ss.findIndex(s=>s&&!s.done); return j; };
+  const ordre=[];
+  for(let p=pos+1;p<g.length;p++) ordre.push([g[p],i]);
+  for(let p=0;p<g.length;p++) ordre.push([g[p],i+1]);
+  for(const [k,j] of ordre) if(ouverte(k,j)) return {idx:k,i:j,superset:g.length>1};
+  for(const k of g){ const j=premiere(k); if(j>=0) return {idx:k,i:j,superset:g.length>1}; }
+  return null;
+}
+const WO_DEFIL_ATTENTE_MS=600;
+let _woDefilUtil=0;
+try{ for(const ev of ['wheel','touchmove']) window.addEventListener(ev,()=>{ _woDefilUtil=Date.now(); },{passive:true,capture:true}); }catch(e){}
+// Amène la ligne visée dans la zone qui défile — donc au-dessus du cadran de
+// repos et de la bande du RIR, qui vivent sous elle.
+function _woAmenerLigne(k,j){
+  const tr=document.querySelectorAll('#sets-body-'+k+' tr')[j];
+  const zone=document.querySelector('#s-workout>.scroll-area');
+  if(!tr||!zone) return false;
+  const r=tr.getBoundingClientRect(), z=zone.getBoundingClientRect();
+  const haut=z.top+56, bas=z.bottom-12;
+  let dy=0;
+  if(r.bottom>bas) dy=r.bottom-bas+Math.min(80,Math.max(0,(bas-haut)/3));
+  else if(r.top<haut) dy=r.top-haut;
+  if(!dy) return false;
+  try{ zone.scrollBy({top:dy,behavior:'smooth'}); }catch(e){ zone.scrollTop+=dy; }
+  return true;
+}
+function _woDefilerApresValidation(idx,i){
+  const c=cibleSuivanteSuperset(woState.exercises,woState.sessionData,idx,i);
+  if(!c||!c.superset) return false;
+  const t0=Date.now();
+  setTimeout(()=>{
+    // L'athlète a défilé lui-même, ou tape dans un champ : on ne bouge rien.
+    if(_woDefilUtil>=t0) return;
+    const a=document.activeElement;
+    if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    _woAmenerLigne(c.idx,c.i);
+  },WO_DEFIL_ATTENTE_MS);
+  return true;
+}
+// Après la série 1, la carte de charge (et l'échauffement) se replient en une
+// ligne ; ▾ les rouvre. Une fois rouverte, elle le reste pour la séance.
+function woChargeReplie(idx,data){
+  const g=_groupeDe(woState.exercises,idx);
+  if(g.length<2) return false;
+  if((woState.chargeDepliee||[]).indexOf(idx)>=0) return false;
+  return !!(data&&data.sets&&data.sets[0]&&data.sets[0].done);
+}
+function _woMajRepli(idx,data){
+  const c=document.getElementById('wo-charge-'+idx), l=document.getElementById('wo-charge-ligne-'+idx);
+  if(!c||!l) return false;
+  const r=woChargeReplie(idx,data);
+  c.hidden=r; l.hidden=!r;
+  if(r&&!woState.echauffReplie&&idx===_groupeDe(woState.exercises,idx)[0]){
+    woState.echauffReplie=true;
+    const w=document.getElementById('wo-warmup-body');
+    if(w&&w.style.display!=='none'){ w.style.display='none'; try{ const ch=w.parentElement.querySelector('.chev'); if(ch) ch.textContent='▸'; }catch(e){} }
+  }
+  return r;
+}
+function woChargeDeplier(idx){
+  woState.chargeDepliee=(woState.chargeDepliee||[]).concat([idx]);
+  try{ _woMajRepli(idx,woState.sessionData[idx]); }catch(e){}
+  try{ woPersist(); }catch(e){}
+  return true;
 }
