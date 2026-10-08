@@ -7,19 +7,19 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { etatMiseEnProd, texteMiseEnProd, uidDuDepot, SECRETS_REQUIS, UID_ABSENT } from '../mise_en_prod.mjs';
 
-const BASE_FAITE = { droitsServeur: { le: 1, v: 2 }, boutique: { a: { titre: 'X', aContenu: true } }, boutique_contenu: { a: { seances: '[]', maj: 1 } } };
+const BASE_FAITE = { droitsServeur: { le: 1, v: 2 }, boutique: { a: { titre: 'X', aContenu: true } }, boutique_contenu: { a: { seances: '[]', maj: 1 } }, fitpulse: [] };
 const etat = (l, k) => l.find((e) => e.cle === k).etat;
 
-test('tout est fait : six étapes FAIT', () => {
+test('tout est fait : sept étapes FAIT', () => {
   const l = etatMiseEnProd({ uid: 'abc123', secrets: SECRETS_REQUIS, sauvegarde: true, sante: { ok: true }, base: BASE_FAITE });
-  assert.equal(l.length, 6);
+  assert.equal(l.length, 7);
   assert.ok(l.every((e) => e.etat === 'FAIT'), JSON.stringify(l));
   assert.match(texteMiseEnProd(l), /Tout est fait/);
 });
 test('rien n’est fait : chaque étape dit son geste', () => {
   const l = etatMiseEnProd({ uid: UID_ABSENT, secrets: ['FIREBASE_SERVICE_ACCOUNT'], sante: { ok: false, raison: 'pouls_absent' },
-    base: { boutique: { a: { seances: '[1]', maj: 2 } } } });
-  for (const k of ['uid', 'secrets', 'droits', 'boutique', 'worker']) assert.equal(etat(l, k), 'A_FAIRE', k);
+    base: { boutique: { a: { seances: '[1]', maj: 2 } }, fitpulse: ['pulse'] } });
+  for (const k of ['uid', 'secrets', 'droits', 'boutique', 'worker', 'fitpulse']) assert.equal(etat(l, k), 'A_FAIRE', k);
   assert.equal(etat(l, 'sauvegarde'), 'INCONNU');
   assert.match(l.find((e) => e.cle === 'secrets').detail, /SAUVEGARDE_CLE, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID/);
   assert.match(l.find((e) => e.cle === 'boutique').detail, /1 fiche/);
@@ -27,7 +27,7 @@ test('rien n’est fait : chaque étape dit son geste', () => {
 });
 test('sans base ni secrets connus : INCONNU, jamais FAIT par défaut', () => {
   const l = etatMiseEnProd({ uid: 'x' });
-  for (const k of ['secrets', 'droits', 'boutique', 'worker', 'sauvegarde']) assert.equal(etat(l, k), 'INCONNU', k);
+  for (const k of ['secrets', 'droits', 'boutique', 'worker', 'sauvegarde', 'fitpulse']) assert.equal(etat(l, k), 'INCONNU', k);
 });
 test('l’UID se lit dans createur.js', () => {
   assert.equal(uidDuDepot("export const CREATEUR_UID = 'UID_CREATEUR_A_POSER';"), UID_ABSENT);

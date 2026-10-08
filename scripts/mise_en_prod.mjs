@@ -47,6 +47,9 @@ export function etatMiseEnProd(ctx) {
   if (b) { const p = planMigrationBoutique(b.boutique || {}, b.boutique_contenu || {}); bt = p.rapport; }
   pose('boutique', 'Boutique migrée', bt ? bt.deplacees === 0 : null, bt ? (bt.deplacees ? bt.deplacees + ' fiche(s) portent encore leurs séances' : bt.fiches + ' fiche(s), aucune séance publique') : '',
     'node scripts/migrer_boutique.mjs (simulation) puis --ecrire');
+  const fp = b && Array.isArray(b.fitpulse) ? b.fitpulse : null;
+  pose('fitpulse', 'Fit Pulse hors de la base RepCore', fp ? !fp.length : null, fp ? (fp.length ? 'encore là : ' + fp.join(', ') : 'aucun nœud Fit Pulse') : '',
+    'node scripts/migrer_fitpulse.mjs (à blanc), --ecrire, puis --purger — AVANT de déployer ces règles, qui ne portent plus le bloc Fit Pulse');
   pose('worker', 'Worker en ligne', c.sante ? c.sante.ok === true : null, c.sante ? (c.sante.ok ? '/sante répond, pouls frais' : '/sante : ' + (c.sante.raison || 'en panne')) : '/sante injoignable d’ici',
     'Déployer le Worker (workflow avec ecrire=oui, ou cd cloudflare && npx wrangler@4 deploy)');
   return l;
@@ -72,7 +75,10 @@ async function lireBaseReelle() {
   const compte = lireCompteService(readFileSync(chemin, 'utf8'));
   const db = creerBase({ url, jeton: () => jetonCompteService(compte) });
   const [droitsServeur, boutique, boutique_contenu] = await Promise.all(['reglages_publics/droitsServeur', 'boutique', 'boutique_contenu'].map((k) => db.ref(k).get().then((s) => s.val())));
-  return { droitsServeur, boutique, boutique_contenu };
+  const { NOEUDS_FITPULSE } = await import('./migrer_fitpulse.mjs');
+  const fpv = await Promise.all(NOEUDS_FITPULSE.map((k) => db.ref(k).shallow().catch(() => [])));
+  const fitpulse = NOEUDS_FITPULSE.filter((k, i) => Array.isArray(fpv[i]) ? fpv[i].length : !!fpv[i]);
+  return { droitsServeur, boutique, boutique_contenu, fitpulse };
 }
 async function sante() {
   try {

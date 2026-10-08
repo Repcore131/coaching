@@ -17,6 +17,9 @@ on:
       - 'scripts/mise_en_prod.mjs'
       - 'scripts/migrer_boutique.mjs'
       - 'scripts/verif/mise_en_prod.test.mjs'
+      - 'scripts/migrer_fitpulse.mjs'
+      - 'scripts/verif/migrer_fitpulse.test.mjs'
+      - 'scripts/verif/regles_en_ligne.mjs'
       - '.github/workflows/worker.yml'
   pull_request:
     paths:
@@ -24,6 +27,9 @@ on:
       - 'scripts/mise_en_prod.mjs'
       - 'scripts/migrer_boutique.mjs'
       - 'scripts/verif/mise_en_prod.test.mjs'
+      - 'scripts/migrer_fitpulse.mjs'
+      - 'scripts/verif/migrer_fitpulse.test.mjs'
+      - 'scripts/verif/regles_en_ligne.mjs'
       - '.github/workflows/worker.yml'
   workflow_dispatch:
 
@@ -51,4 +57,4 @@ jobs:
         run: node --test "test/*.test.mjs"
       # Série 6 (lot 10) : la liste de mise en production, sur une fausse base.
       - name: mise_en_prod (fausse base)
-        run: node --test scripts/verif/mise_en_prod.test.mjs
+        run: node --test scripts/verif/mise_en_prod.test.mjs scripts/verif/migrer_fitpulse.test.mjs

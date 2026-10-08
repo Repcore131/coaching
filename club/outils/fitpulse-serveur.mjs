@@ -11,7 +11,7 @@
 // scripts/envoyer_mail.mjs (le mot de passe de la messagerie ne passe par
 // aucun paquet tiers).
 //
-// Variables : FIREBASE_SERVICE_ACCOUNT, MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE,
+// Variables : FITPULSE_SERVICE_ACCOUNT, FITPULSE_DB_URL (projet dédié), MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE,
 //             FITPULSE_URL (https://fitpulse-niort.web.app), DRY_RUN=1 pour tester.
 
 import crypto from 'node:crypto';
@@ -22,7 +22,10 @@ import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
 
-const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
+// SÉRIE 6 (lot 12) : Fit Pulse vit dans SON projet Firebase. Plus aucun repli
+// sur la base de RepCore : sans FITPULSE_DB_URL, rien ne tourne.
+const DB = (process.env.FITPULSE_DB_URL || '').replace(/\/$/, '');
+export const BASE_FITPULSE_OK = !!DB && !/repcore-sync/.test(DB);
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
 const UTIL = process.env.MAIL_UTILISATEUR || 'kevinguellec.pro@gmail.com';
 const MDP = process.env.MAIL_MOT_DE_PASSE || '';
@@ -146,8 +149,8 @@ export const REGLE = `${DEBUT}
 
 // ── Jeton Google à partir du compte de service ────────────────────────────
 async function jeton() {
-  const c = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-  if (!c.client_email || !c.private_key) throw new Error('FIREBASE_SERVICE_ACCOUNT absent ou invalide');
+  const c = JSON.parse(process.env.FITPULSE_SERVICE_ACCOUNT || '{}');
+  if (!c.client_email || !c.private_key) throw new Error('FITPULSE_SERVICE_ACCOUNT absent ou invalide');
   const b64u = b => Buffer.from(b).toString('base64url');
   const iat = Math.floor(Date.now() / 1000);
   const tete = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -290,6 +293,7 @@ function message(dest, { objet, texte, html }) {
 
 // ── Passage ───────────────────────────────────────────────────────────────
 async function main() {
+  if (process.argv[2] !== 'apercu' && !BASE_FITPULSE_OK) { console.error('FITPULSE_DB_URL absente ou pointée sur la base RepCore : Fit Pulse ne tourne que sur son propre projet. Rien n’est fait.'); if (process.argv[2] === 'regles') process.exitCode = 1; return; }
   if (process.argv[2] === 'apercu') { writeFileSync(process.argv[3] || 'apercu-invitation.html', emailInvitation({ email: 'alex.martin@exemple.fr', first: 'Alex', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Fitness Park Niort' }).html); console.log('aperçu écrit'); return; }
   const tk = await jeton();
   console.log('Règles Fit Pulse :', await assurerRegle(tk));

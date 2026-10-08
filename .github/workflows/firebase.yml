@@ -281,6 +281,14 @@ jobs:
           firebase emulators:exec --only database --project demo-repcore \
             "node cloudflare/test/regles-amis.emu.mjs && node cloudflare/test/regles-evenements.emu.mjs && node cloudflare/test/regles-sante.emu.mjs && node cloudflare/test/regles-messages.emu.mjs"
 
+      # SÉRIE 6 (lot 12) : ce que le déploiement va retirer ou changer dans les
+      # règles EN LIGNE (lecture seule ; un avertissement, jamais un arrêt).
+      - name: Comparer les regles en ligne
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/verif/regles_en_ligne.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

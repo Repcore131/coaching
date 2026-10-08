@@ -7,8 +7,13 @@
 #    MAIL_UTILISATEUR, puis efface la demande et le code qu'elle porte ;
 #  - envoie les notifications push (club/outils/fitpulse-push.mjs) ;
 #  - envoie le rapport du lundi 15 h au directeur (club/outils/fitpulse-rapport.mjs).
-# Le planning (cron) ne tourne que depuis la branche principale : ce fichier y
-# est copie, et il lit le code Fit Pulse sur la branche de travail.
+# Le planning (cron) ne tourne que depuis la branche principale.
+#
+# ⚠ SÉRIE 6 (lot 12, 08/10/2026) : Fit Pulse vit dans SON projet Firebase.
+#   Ce travail ne voit plus le compte de service de RepCore
+#   (FIREBASE_SERVICE_ACCOUNT) et ne charge plus le code d'une autre branche :
+#   il lit FITPULSE_SERVICE_ACCOUNT (secret) et FITPULSE_DB_URL (variable),
+#   et les scripts refusent de tourner sur la base RepCore.
 name: Fit Pulse envois
 
 on:
@@ -64,14 +69,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: claude/eloquent-lamport-0qxwdd
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Envoyer les invitations en attente
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FITPULSE_SERVICE_ACCOUNT: ${{ secrets.FITPULSE_SERVICE_ACCOUNT }}
+          FITPULSE_DB_URL: ${{ vars.FITPULSE_DB_URL }}
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
           FITPULSE_URL: https://fitpulse-niort.web.app
@@ -91,8 +95,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: claude/eloquent-lamport-0qxwdd
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -101,7 +103,8 @@ jobs:
         id: chk
         if: ${{ inputs.robot_maj || github.event_name == 'schedule' }}
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FITPULSE_SERVICE_ACCOUNT: ${{ secrets.FITPULSE_SERVICE_ACCOUNT }}
+          FITPULSE_DB_URL: ${{ vars.FITPULSE_DB_URL }}
         run: node club/outils/resamania-robot.mjs besoin
       - name: Installer le navigateur du robot
         if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
@@ -116,7 +119,8 @@ jobs:
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
           RESAMANIA_MAIL: ${{ secrets.RESAMANIA_MAIL }}
           RESAMANIA_MAIL_MDP: ${{ secrets.RESAMANIA_MAIL_MDP }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FITPULSE_SERVICE_ACCOUNT: ${{ secrets.FITPULSE_SERVICE_ACCOUNT }}
+          FITPULSE_DB_URL: ${{ vars.FITPULSE_DB_URL }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
           ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || inputs.robot_resamania && 'reperage' || 'auto' }}
           TZ: Europe/Paris

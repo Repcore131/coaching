@@ -26,6 +26,19 @@ import {readFileSync} from 'node:fs';
 import {sourceProd} from './source-prod.mjs';
 
 const regles=readFileSync('database.rules.json','utf8');
+// SÉRIE 6 (lot 12, 08/10/2026) : FIT PULSE A SON PROJET. Un bloc Fit Pulse
+// (balise du script, ou nœud pulse* / fitpulse_*) dans les règles de RepCore
+// est ROUGE : déployé, il rouvrirait la base de RepCore à une autre app.
+{
+  const sansCom=regles.replace(/^\s*\/\/.*$/gm,'');
+  const top=Object.keys((JSON.parse(sansCom).rules)||{});
+  const fp=top.filter(k=>/^pulse($|_)|^fitpulse/.test(k));
+  if(/>>> FITPULSE/.test(regles)||fp.length){
+    console.error('BLOC FIT PULSE DANS LES RÈGLES DE REPCORE : '+(fp.join(', ')||'balise >>> FITPULSE'));
+    console.error('Fit Pulse vit dans son propre projet Firebase (club/outils/fitpulse-serveur.mjs regles).');
+    process.exit(1);
+  }
+}
 const source=sourceProd();
 
 // LE CREATEUR EST RECONNU PAR SON UID ET UNE ADRESSE VERIFIEE (01/10/2026),

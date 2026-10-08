@@ -26,11 +26,13 @@ const propre = s => court(s, 80).replace(/[\w.+-]+@[\w.-]+/g, '‹e-mail›').re
 // Resamania envoie un code à chaque connexion. Le manager le recopie dans
 // l'appli (page KPI du matin) ; le robot le relit ici, l'efface, et poursuit.
 // Le code n'est JAMAIS lu automatiquement dans une boîte mail.
-const DB = (process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com').replace(/\/$/, '');
+// SÉRIE 6 (lot 12) : le projet Fit Pulse seul, jamais la base RepCore.
+const DB = (process.env.FITPULSE_DB_URL || '').replace(/\/$/, '');
+const BASE_FITPULSE_OK = !!DB && !/repcore-sync/.test(DB);
 let TOKEN = null;
 async function fbToken() {
   if (TOKEN) return TOKEN;
-  const c = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  const c = JSON.parse(process.env.FITPULSE_SERVICE_ACCOUNT || '{}');
   if (!c.client_email || !c.private_key) return null;
   const b = s => Buffer.from(s).toString('base64url');
   const iat = Math.floor(Date.now() / 1000);
@@ -236,7 +238,7 @@ async function reperage(page) {
 // Test isolé du lien avec la base (sans Resamania ni code) : jeton, écriture, lecture.
 async function diagnostic() {
   const tk = await fbToken();
-  if (!tk) { log('DIAG base : pas de jeton (FIREBASE_SERVICE_ACCOUNT absent ou invalide)'); process.exitCode = 1; return; }
+  if (!tk) { log('DIAG base : pas de jeton (FITPULSE_SERVICE_ACCOUNT absent ou invalide)'); process.exitCode = 1; return; }
   log('DIAG base : jeton obtenu');
   const w = await fb('pulse/rsm/etat.json', { method: 'PUT', body: JSON.stringify({ step: 'diag', at: Date.now() }) });
   log('DIAG écriture état :', w === null ? 'ÉCHEC' : 'OK');
@@ -256,6 +258,7 @@ async function besoin() {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `go=${go ? 1 : 0}\n`);
 }
 async function main() {
+  if (!BASE_FITPULSE_OK) { console.error('FITPULSE_DB_URL absente ou pointée sur la base RepCore : rien ne tourne.'); return; }
   if (MODE === 'diag') return diagnostic();
   if (MODE === 'besoin') return besoin();
   // En mode automatique, on ne tourne que si une demande est en attente, et on la marque traitée.
