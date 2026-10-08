@@ -981,29 +981,38 @@ function morphoAxes(user,opts){
       f.posterieur={position:null,texte:tp?tp.texte:'',dateISO:tp&&tp.date?localISODate(new Date(tp.date)):null,
         perime:!!(tp&&tp.perime),niveau:bp.niveau||null};
       if(tp&&tp.date&&bp.niveau) f.posterieur.position=bp.niveau==='bas'?'bas':'neutre';
+      // LOT TC1 : LES TESTS FILMÉS (squat, développé, traction, soulevé)
+      //   entrent ici, comme facettes de même nature et de même source. Ils
+      //   renseignent l'axe ; aucun profil ne se signe sur eux, et la position
+      //   de l'axe reste celle de la hanche.
+      const fc=(function(){ try{ return _morphoFacettesCompat(user,now); }catch(e){ return {}; } })();
+      Object.assign(f,fc);
       a.facettes=f;
       // L'ASYMÉTRIE DE MOBILITÉ : genou au mur, rotation interne de hanche,
       // épaule. Elle peut seule signer P14, avec la source « test ».
       a.asymetriesMobilite=asymetriesMobilite(user,now);
       const faites=['hanche','epaule','posterieur'].filter(k=>f[k].dateISO);
+      const filmes=Object.keys(fc);
       const lignesAsy=a.asymetriesMobilite.map(x=>x.phrase);
-      if(!faites.length&&lignesAsy.length){
+      if(!faites.length&&!filmes.length&&lignesAsy.length){
         a.source='test'; a.confiance=MORPHO_CONF.test;
         a.texte='Asymétrie de mobilité : '+lignesAsy.join(' · ');
         return a;
       }
-      if(!faites.length){
+      if(!faites.length&&!filmes.length){
         a.manque='absente';
         a.aMesurer='les tests de hanche, d’épaule et de flexion avant';
         a.texte='Aucun test d’amplitude articulaire relevé.';
         return a;
       }
       a.source='test'; a.confiance=MORPHO_CONF.test;
-      a.dateISO=f[faites[0]].dateISO;
-      a.perime=faites.some(k=>f[k].perime);
+      a.dateISO=faites.length?f[faites[0]].dateISO
+        :filmes.map(k=>fc[k].dateISO).sort().slice(-1)[0];
+      a.perime=faites.some(k=>f[k].perime)||filmes.some(k=>fc[k].perime);
       a.position=f.hanche.position;
       a.texte=faites.map(k=>({hanche:'Hanche',epaule:'Épaule',posterieur:'Chaîne postérieure'})[k]
-        +' : '+(f[k].texte||'-')+(f[k].perime?' (périmé)':'')).join(' · ')
+        +' : '+(f[k].texte||'-')+(f[k].perime?' (périmé)':''))
+        .concat(filmes.map(k=>fc[k].texte+(fc[k].perime?' (périmé)':''))).join(' · ')
         +(lignesAsy.length?' · Asymétrie de mobilité : '+lignesAsy.join(' · '):'');
       return a;
     }
@@ -1724,6 +1733,12 @@ function renderRevueMorphoCoach(c){
   if(!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return false; }
   let h='';
   try{ h=htmlRevueMorpho(_etatRevueMorpho(c,_morphoCalCache(),_morphoAthletesDuCoach())); }catch(e){ h=''; }
+  // LOT TC1 : les tests filmés, avec leur valeur brute et leurs variantes.
+  try{ h+=htmlCompatCoach(c); }catch(e){}
+  // LOT TA1 : les tests articulaires, leurs conséquences et l'interrupteur.
+  try{ h+=htmlArticCoach(c); }catch(e){}
+  // LOT SC1 : son corps en position, dès qu'une longueur est mesurée.
+  try{ if(_corpsMesure(longueursCorps(c))) h+=htmlCarteSchemaCorps(c,'squat','coach'); }catch(e){}
   z.innerHTML=h;
   return !!h;
 }
@@ -1865,17 +1880,23 @@ function morphoInstrument(profils){
  * @param {{calibrage?:any}} [opts]
  */
 function morphoPourExercice(user,ex,opts){
-  const vide={schema:null,lignes:[],variantes:[],reglages:[]};
+  const vide={schema:null,lignes:[],variantes:[],reglages:[],consequences:[]};
   let schema=null;
   try{ schema=schemaDe(ex,user); }catch(e){ schema=null; }
   // « DEVELOPPE COUCHE », « SQUAT BARRE » : un nom tapé à la main, absent de
   // la banque, garde sa consigne chiffrée par le motif des trois mouvements.
   if(!schema) schema=_morphoSchemaChiffre((ex&&ex.name)||ex||'');
   if(!schema) return vide;
+  // LOT TA1 : les conséquences des tests articulaires, filtrées sur CET
+  // exercice (schéma et matériel). Elles ne dépendent pas des profils : un
+  // dossier sans aucun profil peut porter « barre EZ plutôt que barre droite ».
+  let consequences=[];
+  try{ consequences=consequencesArticPourExercice(user,ex); }catch(e){ consequences=[]; }
+  vide.schema=schema; vide.consequences=consequences;
   let axes=[],res={profils:[]};
   try{ axes=morphoAxes(user,opts); res=morphoProfils(axes); }catch(e){ return vide; }
   const lignes=[];
-  for(const p of res.profils){
+  for(const p of (res.profils||[])){
     for(const am of (p.amenager||[])){
       if(am.schema!==schema||!amenagementVise(am,(ex&&ex.name)||ex||'')) continue;
       lignes.push({profil:p.cle,lib:p.lib,quoi:am.quoi,reglage:am.reglage,
@@ -1886,12 +1907,12 @@ function morphoPourExercice(user,ex,opts){
   // LA CONSIGNE CHIFFRÉE des modèles anat, pour CET athlète (build 1821).
   let chiffre=null;
   try{ chiffre=morphoConsigneChiffree(user,schema,(ex&&ex.name)||ex||''); }catch(e){ chiffre=null; }
-  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[],chiffre};
+  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[],chiffre,consequences};
   let variantes=[];
   // LES VARIANTES CHOISIES PAR LES PROFILS D'ABORD, le catalogue à défaut.
   const pref=[].concat(...lignes.map(l=>l.variantes));
   try{ variantes=_variantesSchema(schema,3,{exclure:(ex&&ex.name)||ex||'',preferees:pref}); }catch(e){}
-  return {schema,lignes,variantes:variantes.slice(0,3),reglages,chiffre};
+  return {schema,lignes,variantes:variantes.slice(0,3),reglages,chiffre,consequences};
 }
 
 /**
@@ -2037,7 +2058,7 @@ function _htmlMorphoExercice(ex){
   if(!c) return '';
   let r=null;
   try{ r=morphoPourExercice(c,ex,{calibrage:_morphoCalCache()}); }catch(e){ return ''; }
-  if(!r||(!r.lignes.length&&!r.reglages.length&&!r.chiffre)) return '';
+  if(!r||(!r.lignes.length&&!r.reglages.length&&!r.chiffre&&!(r.consequences||[]).length)) return '';
   const bloc=(titre,corps)=>'<div style="margin-bottom:8px">'
     +'<span style="color:var(--sub);font-weight:800">'+escapeHtml(titre)+' :</span> '
     +'<span style="color:var(--text-dim)">'+corps+'</span></div>';
@@ -2051,6 +2072,7 @@ function _htmlMorphoExercice(ex){
     h+=bloc(x.lib,'<span style="color:var(--text-strong);font-weight:700">'+escapeHtml(x.consigne)
       +'</span> '+escapeHtml(x.pourquoi));
   });
+  (r.consequences||[]).forEach(x=>{ h+=bloc('Test articulaire',escapeHtml(x.texte)); });
   if(r.chiffre){
     const ch=r.chiffre;
     // Le bouton pose la CONSIGNE en réglage du coach sur cet exercice ; rien
@@ -2078,6 +2100,907 @@ function _morphoCalCache(){
   if(_morphoCal&&now-_morphoCalT<30000) return _morphoCal;
   _morphoCal=morphoCalibrageCoach(); _morphoCalT=now;
   return _morphoCal;
+}
+
+// ══ LOT TA1 — QUATRE TESTS ARTICULAIRES, RELIÉS AUX CONSIGNES ════════════
+//
+// Coude, avant-bras, genoux, bassin. Chaque test rend un RÉSULTAT et des
+// CONSÉQUENCES : des objets {id, exerciceSchema, motif?, type, texte} qui
+// passent par morphoPourExercice et s'affichent dans la consigne
+// d'exécution de l'athlète, sur les seuls exercices concernés.
+//
+// ⚠ CONFORT ET CHOIX DE MATÉRIEL, JAMAIS DE DIAGNOSTIC. « Barre EZ ou
+//   haltères, plus confortables pour tes coudes » ; jamais « valgus
+//   pathologique », jamais « à corriger », jamais une promesse.
+// ⚠ AUCUNE VALEUR INVENTÉE. Un point vu à moins de 0,5 sur la photo : le
+//   test est « à refaire », et il n'a aucune conséquence.
+// ⚠ PAS DE TEST, PAS DE CONSÉQUENCE. Un test absent ne se remplace par rien.
+// ⚠ LE BASSIN NE SE MESURE PAS SUR LA PHOTO. Le modèle de pose ne voit ni
+//   l'épine iliaque antérieure ni la postérieure : estimer leur inclinaison
+//   depuis la hanche et l'épaule, ce serait mesurer la posture du buste et
+//   l'appeler bassin. Le test est donc le questionnaire guidé, seul.
+// ⚠ SEUILS. Coude : 15°, celui du cahier des charges. Genoux : SEUILS DE
+//   TRAVAIL (voir MORPHO_TESTS_ARTIC), à valider sur les athlètes du coach ;
+//   le coach peut désactiver toute conséquence.
+// ⚠ L'ANGLE DE PORT DU COUDE EXISTE DÉJÀ dans l'analyse anatomique (A10) :
+//   même définition ici — 180° moins l'angle épaule → coude → poignet —, sur
+//   une photo que l'athlète prend lui-même pour ce test.
+
+/** Rangs MediaPipe (33 points) lus par les tests. */
+const ARTIC_PTS=Object.freeze({epauleG:11,epauleD:12,coudeG:13,coudeD:14,poignetG:15,poignetD:16,
+  hancheG:23,hancheD:24,genouG:25,genouD:26,chevilleG:27,chevilleD:28});
+const ARTIC_VIS_MIN=0.5;
+/** Au-delà, le bras n'est pas tendu : l'angle mesuré serait une flexion. */
+const ARTIC_COUDE_PLIE=45;
+/** Les quatre tests. `source` : 'photo' ou 'declare' (réponse guidée). */
+const MORPHO_TESTS_ARTIC=Object.freeze([
+  Object.freeze({cle:'valgus_coude',lib:'Coudes',source:'photo',vue:'face',
+    consigne:Object.freeze(['Debout de face, à 2 m, en entier dans l’image.',
+      'Bras tendus le long du corps, légèrement écartés, paumes tournées vers l’avant.']),
+    mesure:'180° moins l’angle épaule → coude → poignet, de chaque côté (points 11-13-15 et 12-14-16).',
+    seuils:Object.freeze({marque:15}),seuilsTexte:'au-delà de 15° : angle marqué'}),
+  Object.freeze({cle:'rotation_avantbras',lib:'Rotation des avant-bras',source:'declare',
+    consigne:Object.freeze(['Coude collé au corps, plié à angle droit, poing fermé.',
+      'Tourne le pouce vers l’extérieur au maximum, puis vers l’intérieur au maximum.']),
+    questions:Object.freeze([
+      Object.freeze({cle:'sup',q:'Pouce vers l’extérieur : le dos de ta main dépasse-t-il le dessous, la paume tournée au-delà du plafond ?'}),
+      Object.freeze({cle:'pro',q:'Pouce vers l’intérieur : la paume dépasse-t-elle le sol, tournée au-delà vers l’extérieur ?'})]),
+    mesure:'Réponse guidée : une rotation qui dépasse le demi-tour d’un seul côté.'}),
+  Object.freeze({cle:'genoux',lib:'Genoux',source:'photo',vue:'face',
+    consigne:Object.freeze(['Debout de face, à 2 m, en entier dans l’image, en short.',
+      'Pieds joints, jambes tendues, poids sur les deux jambes.']),
+    mesure:'Écart entre les chevilles moins écart entre les genoux, rapporté à la longueur de jambe (hanche → cheville).',
+    // ⚠ SEUILS DE TRAVAIL. Ce sont des centres articulaires, pas des
+    // surfaces : pieds joints et jambes droites, le genou étant plus large
+    // que la cheville, l'écart des genoux dépasse naturellement celui des
+    // chevilles. La zone neutre est donc décalée vers le négatif.
+    seuils:Object.freeze({valgum:0.04,varum:-0.10}),
+    seuilsTexte:'à partir de +0,04 : genoux plus proches que les chevilles ; à −0,10 ou moins : plus écartés (seuils de travail)'}),
+  Object.freeze({cle:'bassin',lib:'Bassin',source:'declare',
+    consigne:Object.freeze(['Dos contre un mur, talons à 5 cm du mur, fesses et omoplates en contact.',
+      'Glisse une main à plat entre le mur et le creux de tes lombaires.']),
+    questions:Object.freeze([
+      Object.freeze({cle:'main',q:'Ta main passe…',choix:Object.freeze([
+        Object.freeze({v:'large',lib:'Largement, il reste de la place (le poing passe)'}),
+        Object.freeze({v:'plat',lib:'Juste à plat'}),
+        Object.freeze({v:'non',lib:'Elle ne passe pas'})])})]),
+    mesure:'Réponse guidée : l’espace entre le mur et les lombaires.'})
+]);
+/** Les résultats, dits à l'écran. */
+const ARTIC_RESULTAT_LIB=Object.freeze({marque:'angle marqué',normal:'dans la moyenne',
+  hyper_supinateur:'rotation ample vers l’extérieur',hyper_pronateur:'rotation ample vers l’intérieur',neutre:'dans la moyenne',
+  valgum:'genoux plus proches que les chevilles',varum:'genoux plus écartés que les chevilles',
+  anteversion:'creux lombaire marqué',retroversion:'creux lombaire réduit',a_refaire:'à refaire'});
+
+// LES CONSÉQUENCES, PAR RÉSULTAT. `motif` (sur exKey du nom) restreint au
+// matériel visé : la barre droite, la prise en supination.
+const _ARTIC_EZ_CURL={id:'ez_curl',exerciceSchema:'isolation-coude',motif:'(^| )CURL.*BARRE|REVERSE CURL BARRE',type:'materiel',
+  texte:'Barre EZ ou haltères plutôt que barre droite : plus confortable pour tes coudes.'};
+const _ARTIC_EZ_TV={id:'ez_tirage_v',exerciceSchema:'tirage-vertical',motif:'SUPINATION',type:'materiel',
+  texte:'En prise supination, poignées neutres ou haltères plutôt que barre droite : plus confortable pour tes coudes.'};
+const _ARTIC_EZ_TH={id:'ez_tirage_h',exerciceSchema:'tirage-horizontal',motif:'SUPINATION',type:'materiel',
+  texte:'En prise supination, barre EZ ou poignées neutres plutôt que barre droite : plus confortable pour tes coudes.'};
+const ARTIC_CONSEQUENCES=Object.freeze({
+  valgus_coude:Object.freeze({marque:Object.freeze([_ARTIC_EZ_CURL,_ARTIC_EZ_TV,_ARTIC_EZ_TH].map(x=>Object.freeze(x)))}),
+  // BARRE DROITE EN SUPINATION : confortable seulement quand la rotation va
+  // franchement vers l'extérieur. Pour les deux autres résultats, le même
+  // choix de matériel que pour un angle de coude marqué.
+  rotation_avantbras:Object.freeze({
+    neutre:Object.freeze([_ARTIC_EZ_CURL,_ARTIC_EZ_TV,_ARTIC_EZ_TH].map(x=>Object.freeze(x))),
+    hyper_pronateur:Object.freeze([_ARTIC_EZ_CURL,_ARTIC_EZ_TV,_ARTIC_EZ_TH].map(x=>Object.freeze(x)))}),
+  genoux:Object.freeze({valgum:Object.freeze([
+    Object.freeze({id:'pieds_squat',exerciceSchema:'squat',type:'pieds',
+      texte:'Pointes de pieds légèrement ouvertes plutôt que parallèles : plus confortable pour tes genoux.'}),
+    Object.freeze({id:'pieds_fente',exerciceSchema:'fente',type:'pieds',
+      texte:'Pointe du pied avant légèrement ouverte, genou dans l’axe du pied : plus confortable pour tes genoux.'})])}),
+  bassin:Object.freeze({
+    anteversion:Object.freeze([
+      Object.freeze({id:'prio_ante',exerciceSchema:null,type:'priorite',
+        texte:'Priorités : assouplir l’avant des hanches (fléchisseurs), renforcer l’arrière des cuisses, les fessiers et la sangle abdominale.'}),
+      Object.freeze({id:'prio_ante_ch',exerciceSchema:'charniere-hanche',type:'priorite',
+        texte:'Bon exercice pour toi : l’arrière des cuisses et les fessiers sont ta priorité de renforcement. Pense à ouvrir l’avant des hanches à l’échauffement.'})]),
+    retroversion:Object.freeze([
+      Object.freeze({id:'prio_retro',exerciceSchema:null,type:'priorite',
+        texte:'Priorités : assouplir l’arrière des cuisses (ischios), renforcer l’avant des hanches et le bas du dos.'}),
+      Object.freeze({id:'prio_retro_ch',exerciceSchema:'charniere-hanche',type:'priorite',
+        texte:'Descends dans l’amplitude où ton dos reste neutre : l’arrière des cuisses est ta priorité d’assouplissement.'})])})
+});
+
+/** PURE. Les conséquences d'un résultat, privées de celles que le coach a désactivées. */
+function consequencesArtic(cle,resultat,off){
+  const t=ARTIC_CONSEQUENCES[cle], l=(t&&t[resultat])||[];
+  const o=(off&&typeof off==='object')?off:{};
+  return l.filter(x=>!o[x.id]).map(x=>Object.assign({},x));
+}
+/** PURE. Un point lisible de la photo, ou null. */
+function _articPt(points,rang){
+  const q=Array.isArray(points)?points[rang]:null;
+  if(!q||!isFinite(Number(q.x))||!isFinite(Number(q.y))||!(Number(q.v)>=ARTIC_VIS_MIN)) return null;
+  return {x:Number(q.x),y:Number(q.y)};
+}
+/** PURE. Le résultat « à refaire », avec sa raison. */
+function _articARefaire(raison){
+  return {resultat:'a_refaire',valeur:null,confiance:0,consequences:[],raison};
+}
+
+/**
+ * PURE. COUDES. L'angle de port de chaque bras, 180° − angle(épaule, coude,
+ * poignet). Plus de 15° (moyenne des côtés lisibles) : « marqué ».
+ * @param {{x:number,y:number,v:number}[]} points  les 33 points, en pixels
+ * @returns {{resultat:string, valeur:number|null, confiance:number, consequences:any[], raison?:string, cotes?:any}}
+ */
+function testValgusCoude(points){
+  const P=ARTIC_PTS, cotes={};
+  const ang=(e,c,w)=>{
+    const ux=e.x-c.x, uy=e.y-c.y, vx=w.x-c.x, vy=w.y-c.y, nu=Math.hypot(ux,uy), nv=Math.hypot(vx,vy);
+    if(!(nu>1&&nv>1)) return null;
+    return 180-Math.acos(Math.max(-1,Math.min(1,(ux*vx+uy*vy)/(nu*nv))))*180/Math.PI;
+  };
+  let plie=false;
+  for(const [s,e,c,w] of [['g',P.epauleG,P.coudeG,P.poignetG],['d',P.epauleD,P.coudeD,P.poignetD]]){
+    const a=_articPt(points,e), b=_articPt(points,c), d=_articPt(points,w);
+    if(!a||!b||!d) continue;
+    const x=ang(a,b,d);
+    if(x==null) continue;
+    if(x>ARTIC_COUDE_PLIE){ plie=true; continue; }
+    cotes[s]=Math.round(x*10)/10;
+  }
+  const l=Object.values(cotes);
+  if(!l.length) return _articARefaire(plie?'bras plié : la photo se prend bras tendus le long du corps'
+    :'épaule, coude ou poignet mal vus (visibilité sous 0,5)');
+  const valeur=Math.round(l.reduce((a,b)=>a+b,0)/l.length*10)/10;
+  const resultat=valeur>MORPHO_TESTS_ARTIC[0].seuils.marque?'marque':'normal';
+  return {resultat,valeur,confiance:Math.round(MORPHO_CONF.photo*(l.length===2?1:0.9)*100)/100,
+    consequences:consequencesArtic('valgus_coude',resultat),cotes};
+}
+/**
+ * PURE. AVANT-BRAS, réponse guidée. Une rotation qui dépasse le demi-tour
+ * d'un seul côté donne son nom ; des deux côtés ou d'aucun : neutre.
+ * @param {{sup?:string, pro?:string}} rep  'oui' | 'non'
+ */
+function testRotationAvantbras(rep){
+  const r=rep||{}, ok=v=>v==='oui'||v==='non';
+  if(!ok(r.sup)||!ok(r.pro)) return _articARefaire('il manque une réponse');
+  const resultat=(r.sup==='oui'&&r.pro==='non')?'hyper_supinateur':(r.pro==='oui'&&r.sup==='non')?'hyper_pronateur':'neutre';
+  return {resultat,valeur:null,confiance:MORPHO_CONF.test,consequences:consequencesArtic('rotation_avantbras',resultat)};
+}
+/**
+ * PURE. GENOUX. Pieds joints, de face : écart des chevilles moins écart des
+ * genoux, rapporté à la longueur de jambe (hanche → cheville, moyenne des deux).
+ * @param {{x:number,y:number,v:number}[]} points
+ */
+function testGenoux(points){
+  const P=ARTIC_PTS, g=k=>_articPt(points,P[k]);
+  const hG=g('hancheG'), hD=g('hancheD'), kG=g('genouG'), kD=g('genouD'), cG=g('chevilleG'), cD=g('chevilleD');
+  if(!hG||!hD||!kG||!kD||!cG||!cD) return _articARefaire('hanches, genoux ou chevilles mal vus (visibilité sous 0,5)');
+  const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const jambe=(d(hG,cG)+d(hD,cD))/2;
+  if(!(jambe>10)) return _articARefaire('jambes trop petites dans l’image');
+  const valeur=Math.round(((d(cG,cD)-d(kG,kD))/jambe)*1000)/1000;
+  const s=MORPHO_TESTS_ARTIC[2].seuils;
+  const resultat=valeur>=s.valgum?'valgum':valeur<=s.varum?'varum':'neutre';
+  return {resultat,valeur,confiance:MORPHO_CONF.photo,consequences:consequencesArtic('genoux',resultat)};
+}
+/**
+ * PURE. BASSIN, réponse guidée au mur.
+ * @param {{main?:string}} rep  'large' | 'plat' | 'non'
+ */
+function testBassin(rep){
+  const m=(rep||{}).main;
+  const resultat=({large:'anteversion',plat:'neutre',non:'retroversion'})[m];
+  if(!resultat) return _articARefaire('il manque la réponse');
+  return {resultat,valeur:null,confiance:MORPHO_CONF.test,consequences:consequencesArtic('bassin',resultat)};
+}
+
+/**
+ * PURE. Ce qui s'enregistre sous /users/{clé}/morpho/artic/{test}, ou null
+ * pour un test à refaire.
+ */
+function entreeTestArtic(cle,r,maintenant,source){
+  if(!r||r.resultat==='a_refaire'||!MORPHO_TESTS_ARTIC.some(t=>t.cle===cle)) return null;
+  const e={date:Math.round(Number(maintenant)||Date.now()),resultat:String(r.resultat),source:source==='photo'?'photo':'declare'};
+  if(r.valeur!=null&&isFinite(Number(r.valeur))) e.valeur=Number(r.valeur);
+  return e;
+}
+/**
+ * PURE. Les tests articulaires d'un dossier, relus : résultat, date,
+ * conséquences actives (celles que le coach n'a pas désactivées) et
+ * désactivées.
+ */
+function testsArticDe(user){
+  const src=(user&&user.morpho&&user.morpho.artic&&typeof user.morpho.artic==='object')?user.morpho.artic:{};
+  const out={};
+  for(const t of MORPHO_TESTS_ARTIC){
+    const e=src[t.cle];
+    if(!e||typeof e!=='object'||!(Number(e.date)>0)||!ARTIC_RESULTAT_LIB[e.resultat]||e.resultat==='a_refaire') continue;
+    const off=(e.off&&typeof e.off==='object')?e.off:{};
+    out[t.cle]={date:Number(e.date),resultat:e.resultat,valeur:isFinite(Number(e.valeur))&&e.valeur!=null?Number(e.valeur):null,
+      source:e.source==='photo'?'photo':'declare',off,
+      consequences:consequencesArtic(t.cle,e.resultat,off),
+      toutes:consequencesArtic(t.cle,e.resultat)};
+  }
+  return out;
+}
+/**
+ * PURE. Les conséquences qui s'appliquent à UN exercice : son schéma moteur,
+ * et le motif de matériel s'il y en a un. Sans dédoublonnage, coude et
+ * avant-bras diraient deux fois « barre EZ ».
+ */
+function consequencesArticPourExercice(user,ex){
+  let schema=null; try{ schema=schemaDe(ex,user); }catch(e){ schema=null; }
+  const nom=(()=>{ try{ return exKey((ex&&ex.name)||ex||''); }catch(e){ return ''; } })();
+  const l=testsArticDe(user), out=[], vus={};
+  for(const cle in l) for(const c of l[cle].consequences){
+    if(!c.exerciceSchema||c.exerciceSchema!==schema) continue;
+    if(c.motif&&!new RegExp(c.motif).test(nom)) continue;
+    if(vus[c.texte]) continue;
+    vus[c.texte]=1; out.push(Object.assign({test:cle},c));
+  }
+  return out;
+}
+
+// ── L'ÉCRAN : quatre cartes dans le parcours morpho (écran des tests) ──────
+const ARTIC_SCHEMAS=Object.freeze({
+  valgus_coude:'<path d="M22 14 L22 58 L22 104" class="ta-ok"/><text x="22" y="118" text-anchor="middle">aligné</text>'
+    +'<path d="M78 14 L78 58 L94 102" class="ta-mk"/><line x1="78" y1="58" x2="78" y2="104" class="ta-axe"/><text x="84" y="118" text-anchor="middle">angle</text>',
+  rotation_avantbras:'<circle cx="60" cy="60" r="34" class="ta-ok"/><path d="M60 26 A34 34 0 0 1 94 60" class="ta-mk"/><path d="M90 52 L94 62 L102 54" class="ta-mk"/><line x1="60" y1="60" x2="60" y2="22" class="ta-axe"/>',
+  genoux:'<path d="M18 12 L30 58 L18 104 M42 12 L30 58 L42 104" class="ta-mk"/><text x="30" y="118" text-anchor="middle">X</text>'
+    +'<path d="M82 12 L74 58 L84 104 M102 12 L110 58 L100 104" class="ta-ok"/><text x="92" y="118" text-anchor="middle">O</text>',
+  bassin:'<line x1="96" y1="8" x2="96" y2="112" class="ta-axe"/><path d="M72 14 C66 40 78 60 70 80 L74 110" class="ta-ok"/><path d="M84 66 L96 66" class="ta-mk"/>'
+});
+/** PURE. Le HTML des quatre cartes, côté athlète : consigne, saisie, résultat — sans mot de diagnostic. */
+function htmlTestsArtic(user,enCours){
+  const E=escapeHtml, l=testsArticDe(user), ec=enCours||{};
+  return '<div class="ta-titre-sec">Tests articulaires</div>'+MORPHO_TESTS_ARTIC.map(t=>{
+    const e=l[t.cle], prog=ec[t.cle];
+    let saisie='';
+    if(t.source==='photo'){
+      saisie='<label class="btn btn-outline tc-filmer'+(prog?' tc-off':'')+'">'+(e?'Reprendre la photo':'Prendre la photo')
+        +'<input type="file" accept="image/*" capture="user" class="tc-fichier" data-cle="'+E(t.cle)+'"'+(prog?' disabled':'')
+        +' onchange="_articPhoto(this)"></label>';
+    } else {
+      saisie='<form class="ta-form" data-cle="'+E(t.cle)+'" onsubmit="return _articRepondre(this)">'
+        +t.questions.map(q=>'<fieldset class="ta-q"><legend>'+E(q.q)+'</legend>'
+          +(q.choix||[{v:'oui',lib:'Oui'},{v:'non',lib:'Non'}]).map(c=>'<label class="ta-choix"><input type="radio" name="'+E(q.cle)
+            +'" value="'+E(c.v)+'" required> '+E(c.lib)+'</label>').join('')+'</fieldset>').join('')
+        +'<button type="submit" class="btn btn-outline tc-filmer">Enregistrer</button></form>';
+    }
+    const res=prog?'<div class="tc-res tc-res-encours" role="status">'+E(prog)+'</div>'
+      :e?'<div class="tc-res"><span>'+E(e.consequences.length?e.consequences.filter(c=>c.type!=='priorite'||c.exerciceSchema===null)
+          .map(c=>c.texte).filter((x,i,a)=>a.indexOf(x)===i).slice(0,2).join(' ')
+          :'Rien à changer dans ton matériel ni ton placement.')+'</span>'
+        +'<span class="tc-date">Fait le '+E(dateLocaleDeCle(e.date).toLocaleDateString('fr-FR'))+'</span></div>'
+      :'<div class="tc-res tc-res-attente">Pas encore fait.</div>';
+    return '<div class="card tc-carte" id="ta-'+E(t.cle)+'"><div class="tc-tete"><span class="tc-titre">'+E(t.lib)+'</span>'
+      +'<span class="tc-vue">'+(t.source==='photo'?'Photo de face':'Test guidé')+'</span></div>'
+      +'<div class="tc-corps"><svg class="tc-schema ta-schema" viewBox="0 0 120 120" aria-hidden="true">'+ARTIC_SCHEMAS[t.cle]+'</svg>'
+      +'<ul class="tc-consigne">'+t.consigne.map(x=>'<li>'+E(x)+'</li>').join('')+'</ul></div>'+saisie+res+'</div>';
+  }).join('');
+}
+const _articEnCours={};
+function renderTestsArtic(){
+  const z=document.getElementById('ta-cartes');
+  if(!z||!currentUser) return false;
+  z.innerHTML=htmlTestsArtic(currentUser,_articEnCours);
+  return true;
+}
+/** Enregistre un résultat sur le dossier de l'athlète. Le désactivé du coach est gardé. */
+function _articEnregistrer(cle,r,source){
+  const e=entreeTestArtic(cle,r,Date.now(),source);
+  if(!e) return false;
+  if(!currentUser.morpho||typeof currentUser.morpho!=='object') currentUser.morpho={};
+  if(!currentUser.morpho.artic||typeof currentUser.morpho.artic!=='object') currentUser.morpho.artic={};
+  currentUser.morpho.artic[cle]=e;
+  return saveUser();
+}
+/** Réponse guidée. @param {HTMLFormElement} f */
+function _articRepondre(f){
+  const cle=String((f&&f.dataset&&f.dataset.cle)||'');
+  if(!currentUser||!f) return false;
+  const v=n=>{ const x=f.querySelector('input[name="'+n+'"]:checked'); return x?x.value:''; };
+  const r=cle==='rotation_avantbras'?testRotationAvantbras({sup:v('sup'),pro:v('pro')})
+    :cle==='bassin'?testBassin({main:v('main')}):null;
+  if(!r||r.resultat==='a_refaire'){ toast((r&&r.raison)||'Réponse incomplète','var(--orange)'); return false; }
+  const ok=_articEnregistrer(cle,r,'declare');
+  renderTestsArtic();
+  toast(ok?'Test enregistré '+ICO.coche:'Réponse lue, mais pas enregistrée sur l’appareil.',ok?'var(--green)':'var(--orange)');
+  return false;
+}
+/** Photo prise : lue sur l'appareil, mesurée, enregistrée si elle est lisible. */
+async function _articPhoto(input){
+  const cle=String((input&&input.dataset&&input.dataset.cle)||'');
+  const f=input&&input.files&&input.files[0];
+  try{ if(input) input.value=''; }catch(e){}
+  if(!f||!currentUser||_articEnCours[cle]||(cle!=='valgus_coude'&&cle!=='genoux')) return false;
+  _articEnCours[cle]='Lecture de la photo…';
+  renderTestsArtic();
+  let r=null;
+  try{ await chargerMotionLab(); r=await window.mlPointsPhoto(f); }catch(e){ r={ok:false,code:'moteur'}; }
+  delete _articEnCours[cle];
+  if(!r||!r.ok){
+    renderTestsArtic();
+    toast(r&&r.code==='personne'?'Personne n’a été reconnu : à refaire, en entier dans l’image.':'La photo n’a pas pu être lue.','var(--orange)');
+    return false;
+  }
+  const m=cle==='valgus_coude'?testValgusCoude(r.points):testGenoux(r.points);
+  if(m.resultat==='a_refaire'){ renderTestsArtic(); toast('À refaire : '+m.raison,'var(--orange)'); return false; }
+  const ok=_articEnregistrer(cle,m,'photo');
+  renderTestsArtic();
+  toast(ok?'Test enregistré '+ICO.coche:'Photo lue, mais pas enregistrée sur l’appareil.',ok?'var(--green)':'var(--orange)');
+  return ok;
+}
+
+// ── LA FICHE COACH : résultats, conséquences, et l'interrupteur ──────────────
+/** PURE. La section de la revue morpho. '' quand aucun test n'a été fait. */
+function htmlArticCoach(c){
+  const l=testsArticDe(c), cles=Object.keys(l);
+  if(!c||!cles.length) return '';
+  const E=escapeHtml, cid=String(c.id||'');
+  let h='<div class="rvm ta-coach"><div class="rvm-t">Tests articulaires</div>'
+    +'<div class="rvm-s">Confort et choix de matériel, pas un diagnostic. Chaque conséquence s’affiche dans la consigne de l’exercice concerné ; tu peux la désactiver.</div>';
+  for(const t of MORPHO_TESTS_ARTIC){
+    const e=l[t.cle]; if(!e) continue;
+    const val=e.valeur==null?'':(t.cle==='valgus_coude'?' · '+String(e.valeur).replace('.',',')+'°':' · '+String(e.valeur).replace('.',','));
+    h+='<div class="rvm-l"><div class="rvm-ex">'+E(t.lib)+' <span>· '+E(ARTIC_RESULTAT_LIB[e.resultat])+E(val)
+      +' · '+(e.source==='photo'?'photo':'réponse guidée')+' · '+E(dateLocaleDeCle(e.date).toLocaleDateString('fr-FR'))+'</span></div>'
+      +'<div class="rvm-src">'+E(t.mesure)+(t.seuilsTexte?' Seuils : '+E(t.seuilsTexte)+'.':'')+'</div>';
+    if(!e.toutes.length) h+='<div class="rvm-r">Aucune conséquence sur le programme.</div>';
+    for(const q of e.toutes){
+      const on=!e.off[q.id];
+      h+='<label class="ta-cons"><input type="checkbox"'+(on?' checked':'')+' data-cid="'+E(cid)+'" data-cle="'+E(t.cle)+'" data-id="'+E(q.id)+'"'
+        +' onchange="basculerConsequenceArtic(this)"> <span'+(on?'':' class="ta-off"')+'>'
+        +E((q.exerciceSchema?(SCHEMA_LIB[q.exerciceSchema]||q.exerciceSchema)+' : ':'Général : ')+q.texte)+'</span></label>';
+    }
+    h+='</div>';
+  }
+  return h+'</div>';
+}
+/** Le coach active ou désactive une conséquence, pour CET athlète. */
+function basculerConsequenceArtic(cb){
+  if(!currentUser||currentUser.role!=='coach'||!cb) return false;
+  const ds=cb.dataset||{}, users=DB.get('users')||{};
+  const c=getOwnedClient(String(ds.cid||''),users);
+  const e=c&&c.morpho&&c.morpho.artic&&c.morpho.artic[ds.cle];
+  if(!c||!c.email||!e||!/^[a-z_]{1,40}$/.test(String(ds.id||''))) return false;
+  const off=(e.off&&typeof e.off==='object')?e.off:{};
+  if(cb.checked) delete off[ds.id]; else off[ds.id]=true;
+  if(Object.keys(off).length) e.off=off; else delete e.off;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ renderRevueMorphoCoach(c); }catch(x){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),cb.checked?'Conséquence réactivée '+ICO.coche:'Conséquence désactivée '+ICO.coche,'le réglage est');
+  return true;
+}
+
+// ══ LOT TC1 — TESTS DE COMPATIBILITÉ : DU MOUVEMENT FILMÉ À LA VARIANTE ══
+//
+// Quatre tests filmés par l'athlète (squat, développé couché, traction,
+// soulevé de terre). motion-lab mesure, répétition par répétition
+// (mlMesuresCompat) ; ce lot JUGE (verdictCompat), ENREGISTRE
+// (/users/{clé}/morpho/tests/{test}) et MONTRE — une phrase à l'athlète, le
+// raisonnement et la valeur brute au coach.
+//
+// ⚠ CE N'EST PAS UNE ANALYSE MÉDICALE. On parle d'amplitude, de confort, de
+//   variante : jamais de douleur, de lésion ou de correction d'un défaut. Une
+//   couleur dit « tel quel » ou « une variante peut être plus confortable »,
+//   rien d'autre.
+// ⚠ RIEN NE CHANGE DANS LE PROGRAMME SANS LE COACH. Le verdict PROPOSE ; seul
+//   le bouton « accepter la variante » de la fiche coach remplace un exercice,
+//   et il demande confirmation en nommant chaque ligne touchée.
+// ⚠ AUCUNE VALEUR INVENTÉE. Points mal vus (visibilité sous 0,5), moins de
+//   deux répétitions valides, valeurs hors de ce qu'un corps peut faire : le
+//   verdict est « inconnu », avec sa raison, et rien n'est enregistré.
+// ⚠ LES SEUILS DU SQUAT VIENNENT DU CAHIER DES CHARGES (45° / 55°). CEUX DU
+//   DÉVELOPPÉ ET DU SOULEVÉ SONT DES SEUILS DE TRAVAIL, à valider sur les
+//   athlètes réels du coach : ils sont écrits ici, en clair, pour qu'on les
+//   discute plutôt que de les découvrir.
+// ⚠ LA TRACTION N'A PAS DE ROUGE. Ce qu'elle mesure est une AMPLITUDE
+//   NATURELLE, enregistrée comme référence : ce n'est jamais un échec.
+
+/** Sous cette visibilité moyenne des points exigés, aucun verdict. */
+const COMPAT_VIS_MIN=0.5;
+/** Il faut au moins deux répétitions valides : une seule ne se recoupe pas. */
+const COMPAT_REPS_MIN=2;
+/**
+ * Les quatre tests. `vises` : les exercices du catalogue que le test juge, et
+ * que « accepter la variante » peut remplacer. `variantes[].nom` null : un
+ * RÉGLAGE, pas un exercice — il s'écrit à la main dans la séance.
+ * `bornes` : hors de cet intervalle, une répétition est aberrante (le modèle
+ * s'est trompé de point), et elle est écartée en le disant.
+ */
+const TESTS_COMPAT=Object.freeze([
+  Object.freeze({cle:'squat',lib:'Squat',schemaVise:'squat',vue:'profil',
+    vises:Object.freeze(['SQUAT','DEEP SQUAT','SQUAT SMITH MACHINE','SAFETY SQUAT BARRE']),
+    consigneFilmage:Object.freeze(['Téléphone posé à hauteur de hanche, à 3 m environ, exactement de profil.',
+      'Tout le corps dans l’image, des pieds à la tête.',
+      'Trois à cinq répétitions à charge légère ou à vide, à ta profondeur habituelle.']),
+    mesure:'Inclinaison du tronc (hanche → épaule) sur la verticale, au point bas de chaque répétition (hanche au plus bas).',
+    unite:'°',bornes:Object.freeze([0,90]),
+    seuils:Object.freeze({vert:45,orange:55}),
+    variantes:Object.freeze([
+      Object.freeze({cas:'incline',lib:'Squat avant (barre devant)',nom:'SQUAT BARRE DEVANT'}),
+      Object.freeze({cas:'incline',lib:'Hack squat',nom:'HACKSQUAT'}),
+      Object.freeze({cas:'incline',lib:'Belt squat',nom:'SQUAT AU BELT SQUAT'}),
+      Object.freeze({cas:'incline',lib:'Presse à cuisses',nom:'PRESSE A CUISSE INCLINE'}),
+      Object.freeze({cas:'incline',lib:'Talons surélevés',nom:null,
+        reglage:'cale d’au moins '+String(MORPHO_CALE_CM).replace('.',',')+' cm sous les talons, sur le squat actuel.'})])}),
+  Object.freeze({cle:'developpe',lib:'Développé couché',schemaVise:'poussee-horizontale',vue:'face',
+    vises:Object.freeze(['DEVELOPPE COUCHE BARRE','DEVELOPPE COUCHE BARRE AVEC CALLE','DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE',
+      'DEVELOPPE COUCHE HALTERE','DEVELOPPE COUCHE SMITH MACHINE','DEVELOPPE COUCHE POWER SMITH MACHINE','DEVELOPPE COUCHE LARSEN']),
+    consigneFilmage:Object.freeze(['Téléphone posé au sol au bout du banc, côté pieds, à hauteur du banc.',
+      'Les deux épaules, les coudes et la barre dans l’image.',
+      'Trois à cinq répétitions à charge légère, barre jusqu’à la poitrine.']),
+    mesure:'Au point bas : profondeur du coude sous la ligne des épaules, rapportée à la longueur du bras (0 = coude à hauteur d’épaule), et inclinaison de l’avant-bras sur la verticale.',
+    unite:'× bras',bornes:Object.freeze([-0.5,1.2]),
+    // ⚠ SEUILS DE TRAVAIL : sous 0,2 bras le coude reste haut (peu
+    // d'étirement), au-delà de 0,5 il descend très bas. L'avant-bras au-delà
+    // de 20° de la verticale : la profondeur dépend alors aussi de la prise.
+    seuils:Object.freeze({haut:0.2,tresBas:0.5,avantBrasMax:20}),
+    variantes:Object.freeze([
+      Object.freeze({cas:'coude-bas',lib:'Amplitude jusqu’à l’humérus parallèle au sol',nom:null,
+        reglage:'arrêter la descente quand le bras est parallèle au sol, sur le développé actuel.'}),
+      Object.freeze({cas:'coude-bas',lib:'Développé décliné',nom:'DEVELOPPE DECLINE BARRE'}),
+      Object.freeze({cas:'coude-bas',lib:'Développé machine convergente',nom:'DEVELOPPE A LA MACHINE CONVERGENTE'}),
+      Object.freeze({cas:'coude-haut',lib:'Développé incliné',nom:'DEVELOPPE INCLINE BARRE'}),
+      Object.freeze({cas:'coude-haut',lib:'Développé incliné aux haltères',nom:'DEVELOPPE INCLINE HALTERE'})])}),
+  Object.freeze({cle:'traction',lib:'Traction',schemaVise:'tirage-vertical',vue:'profil',
+    vises:Object.freeze(['TRACTIONS','TRACTIONS LESTE','TRACTIONS PRISE NEUTRE','TRACTION PRISE SERREE','TRACTIONS ELASTIQUE']),
+    consigneFilmage:Object.freeze(['Téléphone à 3 m, de profil, à hauteur de poitrine.',
+      'La barre, les mains et la tête dans l’image pendant toute la série.',
+      'Trois à cinq répétitions, lentement, en t’arrêtant là où le mouvement reste propre.']),
+    mesure:'Au sommet : écart vertical restant entre l’épaule et le poignet, rapporté à la longueur du membre supérieur (0 = épaules à hauteur des mains). Les répétitions où les épaules remontent vers les oreilles ou où le menton avance sont écartées.',
+    unite:'× membre',bornes:Object.freeze([-0.6,1.2]),
+    seuils:Object.freeze({}),
+    variantes:Object.freeze([])}),
+  Object.freeze({cle:'souleve',lib:'Soulevé de terre',schemaVise:'charniere-hanche',vue:'profil',
+    vises:Object.freeze(['SOULEVE DE TERRE','SOULEVE DE TERRE SUMO','SOULEVE DE TERRE TRAP BARRE','SOULEVE DE TERRE HALTERE']),
+    consigneFilmage:Object.freeze(['Téléphone posé à hauteur de hanche, à 3 m environ, exactement de profil.',
+      'Tout le corps et la barre dans l’image, des pieds à la tête.',
+      'Trois à cinq répétitions à charge légère, en reposant la barre au sol à chaque fois.']),
+    mesure:'Angle de hanche (épaule – hanche – genou) au départ de chaque tirage, barre au sol.',
+    unite:'°',bornes:Object.freeze([30,180]),
+    // ⚠ SEUILS DE TRAVAIL : au-delà de 100°, la hanche part peu fléchie et
+    // les ischios sont peu étirés au départ ; au-delà de 115°, nettement.
+    seuils:Object.freeze({vert:100,orange:115}),
+    variantes:Object.freeze([
+      Object.freeze({cas:'peu-flechi',lib:'Soulevé de terre roumain',nom:'SOULEVE DE TERRE ROUMAIN'}),
+      Object.freeze({cas:'peu-flechi',lib:'Jambes tendues, sur banc, amplitude choisie',nom:null,
+        reglage:'soulevé jambes tendues sur banc, amplitude choisie : à poser à la main dans la séance.'}),
+      Object.freeze({cas:'peu-flechi',lib:'Hip thrust',nom:'HIP THRUST'})])})
+]);
+
+/** PURE. La définition d'un test, null si la clé n'en désigne aucun. */
+function _testCompat(cle){
+  return TESTS_COMPAT.find(t=>t.cle===cle)||null;
+}
+/** PURE. « 45,1 » : un nombre à la française, `d` décimales. */
+function _compatNb(v,d){
+  return (Math.round(Number(v)*Math.pow(10,d))/Math.pow(10,d)).toFixed(d).replace('.',',');
+}
+/**
+ * PURE. Le cas mécanique d'une valeur déjà validée : la couleur, et le nom du
+ * cas qui choisit les variantes (null quand tout passe tel quel).
+ * ⚠ LES BORNES SONT ATTEINTES, PAS DÉPASSÉES : 45,0° est vert, 45,1° orange.
+ * @param {any} t  une entrée de TESTS_COMPAT
+ * @param {number} v
+ * @returns {{couleur:string, cas:string|null}}
+ */
+function _casCompat(t,v){
+  const s=t.seuils||{};
+  if(t.cle==='squat')
+    return v<=s.vert?{couleur:'vert',cas:null}:v<=s.orange?{couleur:'orange',cas:'incline'}:{couleur:'rouge',cas:'incline'};
+  if(t.cle==='souleve')
+    return v<=s.vert?{couleur:'vert',cas:null}:v<=s.orange?{couleur:'orange',cas:'peu-flechi'}:{couleur:'rouge',cas:'peu-flechi'};
+  if(t.cle==='developpe'){
+    if(v>s.tresBas) return {couleur:'orange',cas:'coude-bas'};
+    if(v<s.haut) return {couleur:'orange',cas:'coude-haut'};
+    return {couleur:'vert',cas:null};
+  }
+  // LA TRACTION : une amplitude naturelle, enregistrée. Jamais un échec.
+  return {couleur:'vert',cas:null};
+}
+/**
+ * PURE. La phrase de l'ATHLÈTE : une consigne simple, sans chiffre, sans
+ * squelette, sans promesse.
+ * @param {string} cle @param {string} couleur
+ * @returns {string}
+ */
+function phraseCompat(cle,couleur){
+  if(couleur==='inconnu') return 'Mesure impossible sur cette vidéo : refilme en suivant la consigne.';
+  if(cle==='traction') return 'Amplitude naturelle enregistrée : c’est ta référence, pas une note.';
+  if(couleur==='vert') return 'Ce mouvement te convient tel quel.';
+  if(couleur==='orange') return 'Possible tel quel ; une variante peut être plus confortable. Ton coach te dira laquelle.';
+  if(couleur==='rouge') return 'Une variante sera sans doute plus confortable pour toi. Ton coach va choisir avec toi.';
+  return '';
+}
+/**
+ * PURE. Le raisonnement du COACH, à partir de la valeur retenue : ce qu'on a
+ * mesuré, sur combien de répétitions, et les seuils.
+ * @param {any} t @param {number} v @param {number} n @param {number|null} aux
+ * @returns {string}
+ */
+function _raisonCompat(t,v,n,aux){
+  const s=t.seuils||{}, rep=n+' répétition'+(n>1?'s':'');
+  if(t.cle==='squat')
+    return 'Tronc à '+_compatNb(v,1)+'° de la verticale au point bas (médiane de '+rep+'). '
+      +'Repères : jusqu’à '+s.vert+'° tel quel, '+s.vert+' à '+s.orange+'° à surveiller, au-delà une variante peut être plus confortable.';
+  if(t.cle==='souleve')
+    return 'Hanche à '+_compatNb(v,1)+'° au départ (médiane de '+rep+'). '
+      +'Repères de travail : jusqu’à '+s.vert+'° la hanche part fléchie ; au-delà de '+s.orange+'°, les ischios sont peu étirés au départ.';
+  if(t.cle==='developpe')
+    return 'Coude à '+_compatNb(v,2)+' longueur de bras sous la ligne des épaules au point bas (médiane de '+rep+')'
+      +(aux!=null?', avant-bras à '+_compatNb(aux,0)+'° de la verticale':'')+'. '
+      +'Repères de travail : sous '+_compatNb(s.haut,1)+' le coude reste haut, au-delà de '+_compatNb(s.tresBas,1)+' il descend très bas.';
+  return 'Au sommet, l’épaule s’arrête à '+_compatNb(v,2)+' longueur de membre sous les mains (médiane de '+rep
+    +' sans compensation)'+(aux!=null?', coude à '+_compatNb(aux,0)+'°':'')+'. C’est son amplitude naturelle : une référence, pas un échec.';
+}
+
+/**
+ * PURE. LE VERDICT D'UN TEST, à partir des mesures de mlMesuresCompat.
+ *
+ * Rend toujours le même objet. « inconnu » est une sortie de première classe :
+ * elle porte sa raison, ses variantes sont vides, sa confiance nulle, et
+ * l'appelant n'enregistre rien.
+ *
+ * @param {string} cle
+ * @param {{visibilite?:number|null, reps?:{valeur:number|null, vis:number, comp?:string[], compVue?:boolean, aux?:number|null}[]}} mesures
+ * @returns {{cle:string, couleur:string, valeur:number|null, phrase:string, raison:string,
+ *   variantes:{lib:string, nom:string|null, reglage?:string}[], confiance:number, n:number,
+ *   aux:number|null, cas:string|null}}
+ */
+function verdictCompat(cle,mesures){
+  const t=_testCompat(cle);
+  /** @param {string} raison */
+  const inconnu=raison=>({cle:String(cle||''),couleur:'inconnu',valeur:null,phrase:phraseCompat(String(cle||''),'inconnu'),
+    raison,variantes:[],confiance:0,n:0,aux:null,cas:null});
+  if(!t) return inconnu('Test inconnu.');
+  const m=(mesures&&typeof mesures==='object')?mesures:{};
+  const vis=(m.visibilite==null)?NaN:Number(m.visibilite);
+  if(!isFinite(vis)||vis<COMPAT_VIS_MIN)
+    return inconnu('Points du corps mal vus'+(isFinite(vis)?' (visibilité '+_compatNb(vis,2)+', sous '+_compatNb(COMPAT_VIS_MIN,1)+')':'')
+      +' : aucun verdict sur ce qu’on ne voit pas. Mieux éclairé, tout le corps dans l’image.');
+  const reps=Array.isArray(m.reps)?m.reps.filter(r=>r&&typeof r==='object'):[];
+  const [bMin,bMax]=t.bornes;
+  let masquees=0, aberrantes=0, compensees=0;
+  const valides=[];
+  for(const r of reps){
+    const v=(r.valeur==null)?NaN:Number(r.valeur);
+    if(!isFinite(v)||!(Number(r.vis)>=COMPAT_VIS_MIN)){ masquees++; continue; }
+    if(v<bMin||v>bMax){ aberrantes++; continue; }
+    if(t.cle==='traction'&&Array.isArray(r.comp)&&r.comp.length){ compensees++; continue; }
+    valides.push({v,aux:(r.aux==null||!isFinite(Number(r.aux)))?null:Number(r.aux),compVue:r.compVue!==false});
+  }
+  if(valides.length<COMPAT_REPS_MIN){
+    const det=[];
+    if(masquees) det.push(masquees+' mal vue'+(masquees>1?'s':''));
+    if(aberrantes) det.push(aberrantes+' aberrante'+(aberrantes>1?'s':'')+' (hors de '+bMin+' à '+bMax+')');
+    if(compensees) det.push(compensees+' avec compensation');
+    return inconnu((valides.length===1?'Une seule répétition valide':reps.length?'Aucune répétition valide':'Aucune répétition reconnue')
+      +(det.length?' ('+det.join(', ')+')':'')+' : il en faut au moins '+COMPAT_REPS_MIN+' pour recouper la mesure.');
+  }
+  const vs=valides.map(x=>x.v).sort((a,b)=>a-b), n=vs.length;
+  const med=n%2?vs[(n-1)/2]:(vs[n/2-1]+vs[n/2])/2;
+  const d=(t.unite==='°')?1:2;
+  const valeur=Math.round(med*Math.pow(10,d))/Math.pow(10,d);
+  const auxL=valides.map(x=>x.aux).filter(x=>x!=null).sort((a,b)=>a-b);
+  const aux=auxL.length?Math.round(auxL[auxL.length>>1]*10)/10:null;
+  const c=_casCompat(t,valeur);
+  // LA CONFIANCE part de celle d'un test (MORPHO_CONF.test) et baisse quand
+  // la mesure se recoupe mal : deux répétitions seulement, des répétitions
+  // qui divergent, un avant-bras trop incliné, une tête qu'on n'a pas vue.
+  let conf=MORPHO_CONF.test;
+  if(n<3) conf*=0.9;
+  const ecart=vs[n-1]-vs[0], tol=(t.unite==='°')?10:0.2;
+  if(ecart>tol) conf*=0.8;
+  let raison=_raisonCompat(t,valeur,n,aux);
+  if(t.cle==='developpe'&&aux!=null&&aux>t.seuils.avantBrasMax){
+    conf*=0.8; raison+=' Avant-bras incliné au-delà de '+t.seuils.avantBrasMax+'° : la profondeur dépend aussi de la largeur de prise.';
+  }
+  if(t.cle==='traction'&&valides.some(x=>!x.compVue)){
+    conf*=0.9; raison+=' La tête n’était pas assez visible sur toutes les répétitions pour vérifier les compensations.';
+  }
+  if(masquees||aberrantes||compensees)
+    raison+=' Écartées : '+[masquees?masquees+' mal vue'+(masquees>1?'s':''):'',
+      aberrantes?aberrantes+' aberrante'+(aberrantes>1?'s':''):'',
+      compensees?compensees+' avec compensation':''].filter(Boolean).join(', ')+'.';
+  if(ecart>tol) raison+=' Les répétitions divergent ('+_compatNb(vs[0],d)+' à '+_compatNb(vs[n-1],d)+') : à refilmer pour confirmer.';
+  return {cle:t.cle,couleur:c.couleur,valeur,phrase:phraseCompat(t.cle,c.couleur),raison,
+    variantes:c.cas?t.variantes.filter(x=>x.cas===c.cas).map(x=>Object.assign({lib:x.lib,nom:x.nom},x.reglage?{reglage:x.reglage}:{})):[],
+    confiance:Math.round(conf*100)/100,n,aux,cas:c.cas};
+}
+
+/**
+ * PURE. Ce qui s'enregistre sous /users/{clé}/morpho/tests/{test} — ou null
+ * quand il n'y a rien à enregistrer (verdict inconnu).
+ * @param {any} v  sortie de verdictCompat
+ * @param {number} [maintenant]
+ * @returns {{date:number, valeur:number, couleur:string, n:number, source:string, aux?:number}|null}
+ */
+function entreeTestCompat(v,maintenant){
+  if(!v||!_testCompat(v.cle)||v.couleur==='inconnu'||v.valeur==null||!isFinite(Number(v.valeur))) return null;
+  const e={date:Math.round(Number(maintenant)||Date.now()),valeur:Number(v.valeur),couleur:String(v.couleur),
+    n:Math.max(COMPAT_REPS_MIN,Math.min(100,Math.round(Number(v.n)||0))),source:'test'};
+  if(v.aux!=null&&isFinite(Number(v.aux))) e.aux=Number(v.aux);
+  return e;
+}
+/**
+ * PURE. Les tests de compatibilité d'un dossier, relus et vérifiés : une
+ * entrée illisible n'existe pas — elle ne se « devine » pas.
+ * @param {any} user
+ * @returns {Object<string,{date:number, valeur:number, couleur:string, n:number, aux:number|null,
+ *   variante:string|null, varianteDate:number|null}>}
+ */
+function testsCompatDe(user){
+  const src=(user&&user.morpho&&user.morpho.tests&&typeof user.morpho.tests==='object')?user.morpho.tests:{};
+  const out={};
+  for(const t of TESTS_COMPAT){
+    const e=src[t.cle];
+    if(!e||typeof e!=='object') continue;
+    const date=Number(e.date), valeur=Number(e.valeur);
+    if(!(date>0)||!isFinite(valeur)||['vert','orange','rouge'].indexOf(e.couleur)<0) continue;
+    out[t.cle]={date,valeur,couleur:e.couleur,n:Number(e.n)||0,
+      aux:(e.aux!=null&&isFinite(Number(e.aux)))?Number(e.aux):null,
+      variante:typeof e.variante==='string'?e.variante:null,
+      varianteDate:Number(e.varianteDate)>0?Number(e.varianteDate):null};
+  }
+  return out;
+}
+/**
+ * PURE. Les facettes que les tests de compatibilité ajoutent à l'axe A8 de
+ * morphoAxes — source 'test', avec sa péremption. La position reste
+ * mécanique : 'haut' pour un tronc très incliné ou un coude très bas, 'bas'
+ * pour un coude qui reste haut ou une hanche peu fléchie, 'neutre' sinon.
+ * Aucun profil ne se signe sur elles : elles renseignent, elles ne classent pas.
+ * @param {any} user @param {number} [maintenant]
+ */
+function _morphoFacettesCompat(user,maintenant){
+  const now=Number(maintenant)||Date.now();
+  const l=testsCompatDe(user), out={};
+  for(const cle in l){
+    const t=_testCompat(cle), e=l[cle], c=_casCompat(t,e.valeur);
+    const jours=Math.floor((now-e.date)/864e5);
+    out[cle]={position:(c.cas==='incline'||c.cas==='coude-bas')?'haut'
+        :(c.cas==='coude-haut'||c.cas==='peu-flechi')?'bas':'neutre',
+      texte:t.lib+' filmé : '+_compatNb(e.valeur,t.unite==='°'?1:2)+(t.unite==='°'?'°':' '+t.unite)
+        +' ('+e.n+' répétitions)',
+      dateISO:localISODate(new Date(e.date)),perime:jours>MORPHO_PEREMPTION_J,
+      couleur:e.couleur,valeur:e.valeur,source:'test',confiance:MORPHO_CONF.test};
+  }
+  return out;
+}
+
+/**
+ * PURE. Les exercices d'un programme que le test juge : ceux de sa liste
+ * `vises`, reconnus par leur nom ou par l'alias de l'athlète.
+ * @param {any[]} programme  sessions_config
+ * @param {string} cle
+ * @returns {{is:number, ie:number, nom:string, seance:string}[]}
+ */
+function exercicesConcernesCompat(programme,cle){
+  const t=_testCompat(cle);
+  if(!t) return [];
+  const vises=t.vises.map(n=>exKey(n));
+  const out=[];
+  (Array.isArray(programme)?programme:[]).forEach((s,is)=>{
+    if(!s||s.active===false) return;
+    (Array.isArray(s.exercises)?s.exercises:[]).forEach((ex,ie)=>{
+      const nom=String((ex&&ex.name)||'').trim();
+      if(!nom) return;
+      const k=exKey(nom);
+      let a=null; try{ a=resoudreAlias(k); }catch(e){ a=null; }
+      if(vises.indexOf(k)>=0||(a&&vises.indexOf(a)>=0))
+        out.push({is,ie,nom,seance:String(s.name||s.day||('Séance '+(is+1)))});
+    });
+  });
+  return out;
+}
+/**
+ * PURE, NE MUTE PAS SON ENTRÉE. Le programme avec les exercices concernés
+ * renommés en `nom`. Séries, répétitions et repos restent ceux du coach.
+ * L'appelant passe ensuite chaque ligne remplacée par _oublierAncienMouvement.
+ * @param {any[]} programme @param {string} cle @param {string} nom
+ * @returns {{programme:any[], remplaces:{is:number, ie:number, nom:string, seance:string}[]}}
+ */
+function remplacerExerciceCompat(programme,cle,nom){
+  const src=Array.isArray(programme)?programme:[];
+  const cibles=String(nom||'').trim()?exercicesConcernesCompat(src,cle):[];
+  const out=src.map(s=>(s&&typeof s==='object')?Object.assign({},s,{
+    exercises:(Array.isArray(s.exercises)?s.exercises:[]).map(x=>(x&&typeof x==='object')?Object.assign({},x):x)}):s);
+  for(const c of cibles) out[c.is].exercises[c.ie].name=String(nom).trim();
+  return {programme:out,remplaces:cibles};
+}
+
+// ── L'ÉCRAN ATHLÈTE ─────────────────────────────────────────────────────────
+// Quatre cartes : comment filmer, un bouton, le résultat. Rien d'autre :
+// pas de chiffre, pas d'angle, pas de mot sur le squelette (règle G7 du lot M5).
+
+/** Les silhouettes de la consigne : de quel côté poser le téléphone. */
+const COMPAT_SCHEMAS=Object.freeze({
+  squat:'<line x1="70" y1="8" x2="70" y2="112" class="tc-axe"/><circle cx="62" cy="22" r="8"/><path d="M60 32 L48 62 L76 74 L58 104 M48 62 L36 44 M58 104 L72 106"/><path d="M8 70 h14 v20 h-14 z" class="tc-tel"/>',
+  developpe:'<line x1="20" y1="34" x2="100" y2="34" class="tc-axe"/><circle cx="60" cy="58" r="9"/><path d="M38 34 L34 62 L44 80 M82 34 L86 62 L76 80 M44 80 L76 80"/><path d="M14 30 h92" class="tc-barre"/><path d="M53 100 h14 v14 h-14 z" class="tc-tel"/>',
+  traction:'<path d="M20 12 h80" class="tc-barre"/><circle cx="60" cy="40" r="8"/><path d="M50 12 L46 30 L58 52 M70 12 L72 30 L60 52 M58 52 L58 86 L54 112"/><line x1="40" y1="8" x2="40" y2="112" class="tc-axe"/><path d="M98 52 h14 v20 h-14 z" class="tc-tel"/>',
+  souleve:'<line x1="70" y1="8" x2="70" y2="112" class="tc-axe"/><circle cx="84" cy="34" r="8"/><path d="M78 42 L46 58 L62 86 L58 108 M60 52 L60 96 M46 58 L52 82"/><path d="M40 100 h44" class="tc-barre"/><path d="M8 70 h14 v20 h-14 z" class="tc-tel"/>'
+});
+/** L'analyse en cours, par test : « Analyse : image 12 sur 80… ». @type {Object<string,string>} */
+const _compatEnCours={};
+
+/**
+ * PURE. Le HTML de l'écran athlète, pour un dossier donné.
+ * @param {any} user
+ * @param {Object<string,string>} [enCours]  test → texte de progression
+ * @returns {string}
+ */
+function htmlTestsCompat(user,enCours){
+  const E=escapeHtml, l=testsCompatDe(user), ec=enCours||{};
+  return TESTS_COMPAT.map(t=>{
+    const e=l[t.cle], prog=ec[t.cle];
+    const res=prog
+      ?'<div class="tc-res tc-res-encours" role="status">'+E(prog)+'</div>'
+      :e?'<div class="tc-res"><span class="tc-pastille tc-'+E(e.couleur)+'" aria-hidden="true"></span>'
+        +'<span>'+E(phraseCompat(t.cle,e.couleur))+'</span>'
+        +'<span class="tc-date">Filmé le '+E(dateLocaleDeCle(e.date).toLocaleDateString('fr-FR'))+'</span></div>'
+      :'<div class="tc-res tc-res-attente">Pas encore filmé.</div>';
+    return '<div class="card tc-carte" id="tc-'+E(t.cle)+'">'
+      +'<div class="tc-tete"><span class="tc-titre">'+E(t.lib)+'</span>'
+      +'<span class="tc-vue">'+(t.vue==='face'?'De face, depuis les pieds':'De profil')+'</span></div>'
+      +'<div class="tc-corps"><svg class="tc-schema" viewBox="0 0 120 120" aria-hidden="true">'+COMPAT_SCHEMAS[t.cle]+'</svg>'
+      +'<ul class="tc-consigne">'+t.consigneFilmage.map(x=>'<li>'+E(x)+'</li>').join('')+'</ul></div>'
+      +'<label class="btn btn-outline tc-filmer'+(prog?' tc-off':'')+'">'
+      +(e?'Refilmer':'Filmer')
+      +'<input type="file" accept="video/*" capture="environment" class="tc-fichier" data-cle="'+E(t.cle)+'"'
+      +(prog?' disabled':'')+' onchange="_compatFichier(this)"></label>'
+      +res+'</div>';
+  }).join('');
+}
+/** Remplit l'écran athlète. */
+function renderTestsCompat(){
+  const z=document.getElementById('tc-cartes');
+  if(!z||!currentUser) return false;
+  z.innerHTML=htmlTestsCompat(currentUser,_compatEnCours);
+  return true;
+}
+/** Ouvre l'écran des tests, depuis le profil de l'athlète. */
+function ouvrirTestsCompat(){
+  // LOT SC1 : le schéma « ton corps en position », en tête de l'écran.
+  try{ const z=document.getElementById('tc-schema');
+    if(z) z.innerHTML=currentUser?htmlCarteSchemaCorps(currentUser,'squat','athlete'):''; }catch(e){}
+  renderTestsCompat();
+  try{ renderTestsArtic(); }catch(e){}
+  go('s-tests-compat');
+}
+/**
+ * La vidéo vient d'être choisie ou filmée : on la lit sur l'appareil, on
+ * juge, et on enregistre si — et seulement si — le verdict est connu.
+ * Rien ne quitte l'appareil que la mesure elle-même.
+ * @param {HTMLInputElement} input  porte le test dans data-cle
+ */
+async function _compatFichier(input){
+  const cle=String((input&&input.dataset&&input.dataset.cle)||'');
+  const f=input&&input.files&&input.files[0];
+  try{ if(input) input.value=''; }catch(e){}
+  if(!f||!_testCompat(cle)||!currentUser||_compatEnCours[cle]) return false;
+  _compatEnCours[cle]='Chargement du moteur d’analyse…';
+  renderTestsCompat();
+  /** @type {any} */
+  let r=null;
+  try{
+    await chargerMotionLab();
+    const lire=window.mlTestCompatVideo;
+    if(typeof lire!=='function') throw new Error('indisponible');
+    r=await lire(f,cle,{progres:(n,total)=>{
+      _compatEnCours[cle]='Analyse : image '+n+' sur '+total+'…';
+      const z=document.querySelector('#tc-'+cle+' .tc-res-encours'); if(z) z.textContent=_compatEnCours[cle];
+    }});
+  }catch(e){ r={ok:false,code:'moteur'}; }
+  delete _compatEnCours[cle];
+  if(!r||!r.ok){
+    renderTestsCompat();
+    toast(({moteur:'Le moteur d’analyse ne s’est pas chargé. La première fois, il lui faut du réseau.',
+      longue:'Vidéo trop longue : 45 secondes au plus, une seule série.',
+      personne:'Personne n’a été reconnu : cadre-toi en entier, en suivant la consigne.',
+      chargement:'La vidéo ne s’ouvre pas sur cet appareil.'})[r&&r.code]||'La vidéo n’a pas pu être lue.','var(--orange)');
+    return false;
+  }
+  const v=verdictCompat(cle,r.mesures);
+  const e=entreeTestCompat(v);
+  if(!e){
+    renderTestsCompat();
+    // LA RAISON EST DITE, en clair : une vidéo ratée n'est pas un résultat.
+    toast(v.raison,'var(--orange)');
+    return false;
+  }
+  if(!currentUser.morpho||typeof currentUser.morpho!=='object') currentUser.morpho={};
+  if(!currentUser.morpho.tests||typeof currentUser.morpho.tests!=='object') currentUser.morpho.tests={};
+  currentUser.morpho.tests[cle]=e;
+  const ok=saveUser();
+  renderTestsCompat();
+  toast(ok?'Test enregistré '+ICO.coche+' Ton coach le verra dans ta fiche.':'Test mesuré, mais pas enregistré sur l’appareil.',ok?'var(--green)':'var(--orange)');
+  return ok;
+}
+
+// ── LA FICHE COACH ──────────────────────────────────────────────────────────
+// La valeur brute, le raisonnement, les variantes — et un bouton par variante
+// qui est un exercice. Le coach peut toujours ignorer la suggestion : rien ne
+// bouge tant qu'il n'a pas cliqué ET confirmé.
+
+/**
+ * PURE. La section « tests de compatibilité » de la revue morpho. '' quand
+ * l'athlète n'a filmé aucun test.
+ * @param {any} c  le dossier de l'athlète
+ * @param {number} [maintenant]
+ * @returns {string}
+ */
+function htmlCompatCoach(c,maintenant){
+  const l=testsCompatDe(c), cles=Object.keys(l);
+  if(!cles.length||!c) return '';
+  const E=escapeHtml, now=Number(maintenant)||Date.now();
+  const cid=String(c.id||'');
+  let h='<div class="rvm tc-coach"><div class="rvm-t">Tests de compatibilité filmés</div>'
+    +'<div class="rvm-s">Mesuré sur ses vidéos, répétition par répétition. Une suggestion, jamais un changement : le programme ne bouge que si tu acceptes une variante.</div>';
+  for(const t of TESTS_COMPAT){
+    const e=l[t.cle];
+    if(!e) continue;
+    const c0=_casCompat(t,e.valeur);
+    const jours=Math.floor((now-e.date)/864e5);
+    const brut=_compatNb(e.valeur,t.unite==='°'?1:2)+(t.unite==='°'?'°':' '+t.unite);
+    h+='<div class="rvm-l"><div class="rvm-ex"><span class="tc-pastille tc-'+E(e.couleur)+'" aria-hidden="true"></span> '
+      +E(t.lib)+' <span>· '+E(brut)+' · '+e.n+' rép. · '+E(dateLocaleDeCle(e.date).toLocaleDateString('fr-FR'))
+      +(jours>MORPHO_PEREMPTION_J?' · à refilmer (plus de trois mois)':'')+'</span></div>'
+      +'<div class="rvm-r">'+E(_raisonCompat(t,e.valeur,e.n,e.aux))+'</div>'
+      +'<div class="rvm-src">'+E(t.mesure)+'</div>';
+    if(e.variante)
+      h+='<div class="rvm-r"><b>Variante acceptée'+(e.varianteDate?' le '+E(new Date(e.varianteDate).toLocaleDateString('fr-FR')):'')
+        +' :</b> '+E(e.variante)+'</div>';
+    const vars=c0.cas?t.variantes.filter(x=>x.cas===c0.cas):[];
+    if(vars.length){
+      const concernes=exercicesConcernesCompat(c.sessions_config,t.cle);
+      h+='<div class="tc-variantes">';
+      t.variantes.forEach((x,i)=>{
+        if(x.cas!==c0.cas) return;
+        h+='<div class="tc-var"><span>'+E(x.lib)+(x.reglage?' : '+E(x.reglage):'')+'</span>'
+          +((x.nom&&concernes.length)
+            ?'<button type="button" class="btn btn-outline btn-sm" data-cid="'+E(cid)+'" data-cle="'+E(t.cle)+'" data-i="'+i+'"'
+              +' onclick="accepterVarianteCompat(this)">Accepter la variante</button>'
+            :'')
+          +'</div>';
+      });
+      if(!concernes.length)
+        h+='<div class="rvm-src">Aucun exercice de son programme ne correspond à ce test : rien à remplacer.</div>';
+      h+='</div>';
+    }
+  }
+  return h+'</div>';
+}
+/**
+ * Le coach accepte une variante : les exercices concernés de SON programme
+ * sont remplacés, après confirmation qui les nomme un par un.
+ * @param {HTMLElement} bouton  porte data-cid, data-cle et data-i (rang dans t.variantes)
+ */
+async function accepterVarianteCompat(bouton){
+  const ds=(bouton&&bouton.dataset)||{};
+  const cid=String(ds.cid||''), cle=String(ds.cle||''), i=parseInt(ds.i,10);
+  if(!currentUser||currentUser.role!=='coach') return false;
+  const t=_testCompat(cle), x=t&&t.variantes[i];
+  if(!x||!x.nom) return false;
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(cid,users);
+  if(!c||c._fromCode||!c.email) return false;
+  const r=remplacerExerciceCompat(c.sessions_config,cle,x.nom);
+  if(!r.remplaces.length){ toast('Aucun exercice de son programme ne correspond à ce test.','var(--orange)'); return false; }
+  if(!await rcConfirm('Remplacer par « '+x.lib+' » ?',
+    r.remplaces.map(z=>z.nom+' ('+z.seance+')').join(', ')
+      +'.\n\nSéries, répétitions et repos sont gardés ; la charge et la programmation de l’ancien mouvement sont retirées.',
+    'Remplacer')) return false;
+  for(const z of r.remplaces) _oublierAncienMouvement(r.programme[z.is].exercises[z.ie]);
+  c.sessions_config=r.programme;
+  const e=c.morpho&&c.morpho.tests&&c.morpho.tests[cle];
+  if(e&&typeof e==='object'){ e.variante=x.nom; e.varianteDate=Date.now(); }
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ renderRevueMorphoCoach(c); }catch(err){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Variante appliquée '+ICO.coche,'le remplacement est');
+  return true;
 }
 
 /**

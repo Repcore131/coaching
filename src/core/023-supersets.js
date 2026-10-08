@@ -501,7 +501,11 @@ function renderWoEx(){
 function _htmlConsigneExo(ex){
   if(!ex) return '';
   const img=(()=>{ try{ return illustrationExo(ex); }catch(e){ return null; } })();
-  if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img)) return '';
+  // LOT TA1 : ce que les tests articulaires changent au matériel ou au
+  // placement, sur CET exercice — et rien d'autre (règle G7 : la consigne
+  // traverse, l'explication reste chez le coach).
+  const conf=(()=>{ try{ return currentUser?(morphoPourExercice(currentUser,ex).consequences||[]):[]; }catch(e){ return []; } })();
+  if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img||conf.length)) return '';
   return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:6px">CONSIGNE</div>
         ${blocTempo(ex)}
@@ -510,6 +514,7 @@ function _htmlConsigneExo(ex){
              condition d'affichage du bloc, sans ça, un exercice qui ne
              porterait QUE son matériel n'aurait rien affiché du tout. -->
         ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
+        ${conf.map(c=>`<div class="ex-confort" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Pour ton confort :</span> ${escapeHtml(c.texte)}</div>`).join('')}
         ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Réglage du coach :</span> ${escapeHtml(ex.reglageCoach)}</div>`:''}
         <div style="display:flex;gap:12px;align-items:flex-start">
           ${_htmlVignetteExo(ex)}
@@ -869,6 +874,7 @@ function _blocExo(idx,estSS){
         <div id="wo-consigne-${idx}">${_consigneHtml}</div>
         ${_videoTech}
       </details>
+      ${!isCardio(ex)?_htmlPourquoiExo(ex):''}
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">

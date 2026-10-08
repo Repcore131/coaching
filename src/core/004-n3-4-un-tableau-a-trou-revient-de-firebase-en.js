@@ -999,6 +999,13 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // La lignee de synchronisation (voir CLOUD._baseDe) : un horodatage du
   // serveur, retire avant tout envoi. Rien de l'athlete.
   '_syncMaj',
+  // LOT TC1 — LES TESTS DE COMPATIBILITÉ FILMÉS (morpho.tests) : un angle
+  // ou un rapport de MOUVEMENT par test, une couleur, un nombre de
+  // répétitions. Ni longueur de segment, ni contour, ni image — la vidéo ne
+  // quitte pas l'appareil. Même nature que morphoTests (les amplitudes au mur)
+  // et que mesuresVideo (le tronc au plus bas lu par Motion Lab), qui ne sont
+  // pas classés santé non plus.
+  'morpho',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'

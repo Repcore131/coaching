@@ -15,7 +15,7 @@ const PLAN_DEFAULT = {
   partenariats: 2, cibles: ['MAIF', 'MACIF', 'MAAF', 'IMA'], blackFriday: '2026-11-15',
   avisDepart: 920, avisDepartDate: '2026-10-06',
   primes: { palier: 150, avis: [[50, 50], [75, 80]], equipeMoisVentes: 60 },
-  directeur: 'j.laigo.holdingzarathoustra@gmail.com', copie: 'kevinguellec.pro@gmail.com', rapport: 'lundi 15 h',
+  directeur: 'kevinguellec.pro@gmail.com', copie: null, rapport: 'lundi 15 h',
 };
 const planStore = (club = CLUB.id) => deepGet(S, ['plans', club, PLAN_DEFAULT.id]) || {};
 function planOf(club = CLUB.id) {
@@ -218,12 +218,12 @@ function planRapport() {
   const vs = sumRange(CLUB.id, null, 'contrats', wStart, wEnd); const res = Object.values(S.resiliations || {}).filter(r => r && r.clubId === CLUB.id && !r.hidden && r.date >= wStart && r.date <= wEnd);
   const fins = finsCampagne(CLUB.id, curMonth()); const btq = htBoutique(CLUB.id, wStart, wEnd); const rec = (typeof recovList === 'function' ? recovList(CLUB.id, wStart, wEnd) : []).reduce((s, x) => s + x.amount, 0);
   const sent = deepGet(S, ['serveur', 'rapport']) || {};
-  return `<div class="card"><div class="card-head">${ico('mail')}<h3>Rapport du lundi au directeur</h3></div>
-    <p class="muted small" style="margin-top:-6px">Envoyé automatiquement chaque ${esc(P.rapport)} à ${esc(P.directeur)} (copie ${esc(P.copie)}), avec graphiques. Pensez à déposer les exports Resamania le lundi matin.${sent.at ? ` Dernier envoi : ${dmy(isoOf(new Date(sent.at)))} ${new Date(sent.at).toTimeString().slice(0, 5)}.` : ''}</p>
+  return `<div class="card"><div class="card-head">${ico('mail')}<h3>Rapport du lundi</h3></div>
+    <p class="muted small" style="margin-top:-6px">Envoyé automatiquement chaque ${esc(P.rapport)} à ${esc(P.directeur)}${P.copie ? ` (copie ${esc(P.copie)})` : ''}, avec graphiques. Pensez à déposer les exports Resamania le lundi matin.${sent.at ? ` Dernier envoi : ${dmy(isoOf(new Date(sent.at)))} ${new Date(sent.at).toTimeString().slice(0, 5)}.` : ''}</p>
     <div class="plan-rapport"><b>Semaine du ${dm(wStart)} au ${dm(wEnd)}</b>
       <div class="plan-kpis"><div><span>Ventes</span><b>${fmtN(vs)}</b></div><div><span>Résiliations abonnements</span><b>${res.filter(r => r.nature !== 'option').length}</b></div><div><span>Résiliations options</span><b>${res.filter(r => r.nature === 'option').length}</b></div><div><span>Fins d’engagement traitées</span><b>${fins.appeles} / ${fins.total}</b></div><div><span>CA boutique HT</span><b>${fmtE(btq)}</b></div><div><span>Dette récupérée</span><b>${fmtE(rec)}</b></div></div>
       <b>Trimestre</b><div class="plan-kpis"><div><span>CA HT</span><b>${st.ca == null ? 'n.d.' : fmtE(st.ca)}</b><small>/ ${fmtE(P.targets.ca)}</small></div><div><span>Abonnements</span><b>${st.ventes}</b><small>/ ${P.targets.ventes}</small></div><div><span>Engagement</span><b>${st.engagementPct == null ? 'n.d.' : Math.round(st.engagementPct) + ' %'}</b><small>/ ${P.targets.engagementPct} %</small></div><div><span>Options</span><b>${st.optionsPct == null ? 'n.d.' : Math.round(st.optionsPct) + ' %'}</b><small>/ ${P.targets.optionsPct} %</small></div><div><span>Boutique HT</span><b>${fmtE(st.boutique)}</b><small>/ ${fmtE(P.targets.boutique)}</small></div><div><span>Transformation</span><b>${tr.team == null ? 'n.d.' : Math.round(tr.team) + ' %'}</b><small>/ ${P.targets.transfoEquipe} %</small></div><div><span>Avis Google</span><b>${st.avis.n}</b><small>/ ${P.targets.avis}</small></div><div><span>Options résiliées jour J</span><b>${ch.jourJ.length}</b><small>objectif 0</small></div></div></div>
-    <div class="row wrap" style="gap:8px;margin-top:12px"><button class="btn" data-act="planSendNow" data-to="apercu">${ico('mail')} M’envoyer un aperçu</button><button class="btn primary" data-act="planSendNow" data-to="directeur">${ico('send')} Envoyer au directeur maintenant</button><span class="muted small">L’aperçu part à ${esc(P.copie || P.directeur)}. Envoi au prochain passage du serveur (quelques minutes).</span></div></div>`;
+    <div class="row wrap" style="gap:8px;margin-top:12px"><button class="btn" data-act="planSendNow" data-to="apercu">${ico('mail')} M’envoyer un aperçu</button><button class="btn primary" data-act="planSendNow" data-to="directeur">${ico('send')} Envoyer le rapport maintenant</button><span class="muted small">Le rapport part à ${esc(P.directeur)}. Envoi au prochain passage du serveur (quelques minutes).</span></div></div>`;
 }
 function planReglages() {
   const P = planOf(); const t = P.targets; const mo = P.mois[curMonth()] || {};

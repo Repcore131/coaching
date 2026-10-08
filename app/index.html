@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1953';
+window.RC_BUILD='1954';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1953.css">
+<link rel="stylesheet" href="./rc-style.1954.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1953.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1954.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -4155,6 +4155,15 @@ const COACH_PHOTO='icons/coach.jpg';
            dans l'écran « Trophées ». Le profil garde l'identité, la photo et
            le médical. -->
       <button type="button" class="atp-med-lien" id="atp-trophees" onclick="ouvrirTrophees()" style="margin-bottom:14px">Trophées<span class="sub" style="font-size:var(--fs-xs);font-weight:600"> · badges, page publique, parrainage</span></button>
+      <!-- LOT TC1 : LES TESTS DE COMPATIBILITÉ. Quatre mouvements filmés, lus
+           sur l'appareil ; le verdict détaillé va au coach. -->
+      <button type="button" class="card tc-entree" onclick="ouvrirTestsCompat()">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Tests de compatibilité</span>
+          <span class="tc-entree-d">Squat, développé, traction, soulevé : filme-les, ton coach adapte les variantes</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
       <!-- LA LANGUE DE L'APP (07/10/2026) : le meme choix qu'a l'inscription. -->
@@ -5511,6 +5520,21 @@ const COACH_PHOTO='icons/coach.jpg';
      l'est du leur : un complement se conseille, un medicament ne se conseille
      pas. Les deux ecrans se ressemblent ; ce qu'ils portent ne se ressemble
      pas. -->
+<!-- LOT TC1 : les quatre tests filmés. Les cartes sont rendues par
+     renderTestsCompat (htmlTestsCompat), le résultat aussi. -->
+<div id="s-tests-compat" class="screen">
+  <div class="topbar"><button class="back-btn" aria-label="Retour au profil" onclick="retourDe('s-tests-compat','s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Tests de compatibilité</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin:0 0 14px">Filme chaque mouvement en suivant la consigne. La vidéo est lue sur ton téléphone et n’est pas envoyée : seule la mesure part chez ton coach, qui choisit avec toi s’il faut une variante. Ce n’est pas un examen médical.</p>
+      <div id="tc-schema"></div>
+      <div id="tc-cartes"></div>
+      <!-- LOT TA1 : les quatre tests articulaires (renderTestsArtic). -->
+      <div id="ta-cartes"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-traitements" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-traitements','s-supplements')" aria-label="Retour"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button>
@@ -5918,6 +5942,10 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
      de rester à l'écran sur Nutrition, Corrections, Lifestyle, Évolution et Bilan.
+     LIBELLÉS COURTS (Kevin, 08/10/2026) : Food, Analyse, Daily, Results à la
+     place de Nutrition, Corrections, Lifestyle, Évolution — sur un téléphone
+     étroit, les mots longs se touchaient et on ne voyait plus où finissait
+     un onglet. Les écrans eux-mêmes gardent leur titre.
      Ni son affichage ni l'onglet surligné ne sont décidés ici : go() les déduit
      de l'écran réellement affiché — voir _majTabbar(). -->
 <div class="tab-bar" id="client-tabbar" aria-label="Navigation athlète">
@@ -6404,5 +6432,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1953.js"></script>
+<script src="./rc-core.1954.js"></script>
 </body></html>

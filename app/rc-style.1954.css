@@ -13864,3 +13864,75 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .sp-libre .sp-jour{font-weight:800}
 /* Le minuteur compact n'affiche pas l'invitation aux notifications */
 .rep-compact #rep-notif{display:none}
+/* ══ LOT TC1 — TESTS DE COMPATIBILITÉ ══ */
+.tc-entree{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 14px;padding:14px 16px;
+  text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)}
+.tc-entree-t{display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase}
+.tc-entree-d{display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:4px;line-height:1.45}
+.tc-carte{margin-bottom:14px;padding:14px}
+.tc-tete{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+.tc-titre{font-size:var(--fs-md,var(--fs-sm));font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-strong)}
+.tc-vue{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+.tc-corps{display:flex;gap:12px;align-items:flex-start}
+.tc-schema{flex:none;width:84px;height:84px;fill:none;stroke:var(--text);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.tc-schema .tc-axe{stroke:var(--red);stroke-width:2;stroke-dasharray:5 5}
+.tc-schema .tc-barre{stroke:var(--sub);stroke-width:5}
+.tc-schema .tc-tel{stroke:var(--red);stroke-width:3}
+.tc-consigne{margin:0;padding-left:18px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55}
+.tc-filmer{position:relative;display:block;margin-top:12px;text-align:center;cursor:pointer;min-height:44px;box-sizing:border-box}
+.tc-filmer.tc-off{opacity:.5;pointer-events:none}
+.tc-fichier{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.tc-res{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-sm);color:var(--text);line-height:1.5}
+.tc-res-attente,.tc-res-encours{color:var(--sub)}
+.tc-date{flex-basis:100%;font-size:var(--fs-2xs);color:var(--text-faint)}
+.tc-pastille{display:inline-block;flex:none;width:10px;height:10px;border-radius:var(--r-full);vertical-align:middle}
+.tc-vert{background:var(--green)}
+.tc-orange{background:var(--orange)}
+.tc-rouge{background:var(--red)}
+.tc-variantes{margin-top:8px}
+.tc-var{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-size:var(--fs-sm);color:var(--text);line-height:1.45}
+.tc-var .btn{flex:none}
+/* ══ LOT SC1 — TON CORPS EN POSITION ══ */
+.sc-carte{margin-bottom:14px;padding:14px}
+.sc-titre{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-strong);margin-bottom:10px}
+.sc-onglets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.sc-onglet{flex:1;min-height:40px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-1);background:none;
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+.sc-onglet[aria-pressed="true"]{border-color:var(--red);color:var(--text-strong)}
+.sc-svg svg{display:block;width:100%;height:auto;border-radius:var(--r-2)}
+.sc-txt{margin-top:8px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55}
+.sc-pourquoi{display:block;width:100%;min-height:44px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);
+  border-radius:var(--r-2);background:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);
+  font-weight:700;text-align:left;cursor:pointer}
+/* ══ LOT TA1 — TESTS ARTICULAIRES ══ */
+.ta-titre-sec{margin:18px 0 10px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.ta-schema .ta-ok{stroke:var(--text)}
+.ta-schema .ta-mk{stroke:var(--red)}
+.ta-schema .ta-axe{stroke:var(--sub);stroke-width:2;stroke-dasharray:5 5}
+.ta-schema text{fill:var(--sub);stroke:none;font-family:Montserrat,sans-serif;font-size:11px}
+.ta-form{margin-top:10px}
+.ta-q{border:0;margin:0 0 10px;padding:0}
+.ta-q legend{font-size:var(--fs-sm);color:var(--text);line-height:1.5;margin-bottom:6px;padding:0}
+.ta-choix{display:flex;align-items:center;gap:8px;min-height:40px;font-size:var(--fs-sm);color:var(--text);cursor:pointer}
+.ta-cons{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:var(--fs-sm);color:var(--text);line-height:1.5;cursor:pointer}
+.ta-cons input{margin-top:4px}
+.ta-off{color:var(--text-faint);text-decoration:line-through}
+/* Les libellés de case et de choix gardent la casse et l'alignement du texte :
+   le style global des <label> (majuscules, centrage) ne s'y applique pas. */
+label.ta-cons,label.ta-choix{display:flex;justify-content:flex-start;width:auto;text-align:left;text-transform:none;
+  letter-spacing:normal;font-weight:500;margin:6px 0 0;padding:0}
+label.ta-cons input,label.ta-choix input{flex:none;width:auto;min-height:0;margin:3px 0 0}
+/* LOT TA1 — AÉRATION SUR PETIT ÉCRAN (retour du 08/10/2026 : « en bas, quand
+   il n'y a qu'une question, tout est collé »). Chaque choix devient une ligne
+   bordée, à 44 px au moins, séparée de la suivante ; le bouton s'écarte des
+   choix ; et l'écran garde de la place sous la dernière carte, barre de
+   gestes du téléphone comprise. */
+.ta-q{margin:0 0 18px}
+.ta-q legend{margin-bottom:10px}
+label.ta-choix{min-height:44px;margin:0 0 8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-2);
+  align-items:center;box-sizing:border-box;width:100%}
+label.ta-choix input{margin:0}
+label.ta-choix:has(input:checked){border-color:var(--red)}
+.ta-form .tc-filmer{margin-top:16px}
+.tc-carte .tc-res{margin-top:14px}
+#s-tests-compat .pad{padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
