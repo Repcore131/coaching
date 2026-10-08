@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1931';
+window.RC_BUILD='1932';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1931.css">
+<link rel="stylesheet" href="./rc-style.1932.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1931.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1932.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1571,6 +1571,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <input id="inv-prenom" placeholder="Prénom" autocomplete="off" style="flex:1;min-width:0;font-size:var(--fs-md)">
       <input id="inv-nom" placeholder="Nom" autocomplete="off" style="flex:1;min-width:0;font-size:var(--fs-md)">
     </div>
+    <select id="inv-profil" class="rg-sel" aria-label="Profil de suivi" style="width:100%;margin-bottom:10px"></select>
     <div id="inv-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-bottom:8px;display:none;line-height:1.5"></div>
     <button class="btn btn-red" style="width:100%;margin-bottom:10px;min-height:46px" onclick="_envoyerInvitation()">
       Inviter et partager le lien</button>
@@ -6366,5 +6367,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1931.js"></script>
+<script src="./rc-core.1932.js"></script>
 </body></html>

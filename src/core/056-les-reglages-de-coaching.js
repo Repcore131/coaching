@@ -80,6 +80,7 @@ function heritageCode(coach,extra){
   // défaut l'atteint. La recopier en ferait un « réglage propre » figé.
   const cad=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan)?null:reglageCadence(coach);
   if(cad) o.bilanCadence=cad;
+  if(extra&&profilCoaching(extra.profilSuivi)) o.profilSuivi=extra.profilSuivi;
   const dejaChoisi=extra&&extra.programmeModeleId;
   const mod=reglageModele(coach);
   if(!dejaChoisi&&mod) o.programmeModeleId=mod;
@@ -622,7 +623,7 @@ function _rgxRendre(){
   const u=_rgCoach(); if(!u||!document.getElementById('s-coach-reglages')) return false;
   const l=lignesReglagesCoach(u);
   const pose=(id,h)=>{ const z=document.getElementById(id); if(z) z.innerHTML=h; };
-  pose('rgx-defauts',_htmlRgxPrescription(u)+_htmlRgxMethode(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
+  pose('rgx-defauts',_htmlRgxProfil(u)+_htmlRgxPrescription(u)+_htmlRgxMethode(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
   pose('rgx-bilans',_htmlRgxBilans(u));
   pose('rgx-messages',_htmlRgxMessages(u,l));
   pose('rgx-affichage',_htmlRgxAffichage(u)+'<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>');
@@ -917,6 +918,9 @@ const AFFICHAGE_PROFILS=Object.freeze({
 function affichageDe(athlete,coach){
   const a=athlete&&athlete.affichageCoach;
   if(AFFICHAGE_PROFILS[a]) return {profil:a,source:'athlete'};
+  // Série 6 (lot 8) : le profil de suivi posé par l'invitation.
+  const ps=athlete&&athlete.profilSuivi&&(typeof profilCoaching==='function')&&profilCoaching(athlete.profilSuivi);
+  if(ps&&AFFICHAGE_PROFILS[ps.affichage]) return {profil:ps.affichage,source:'invitation'};
   const d=coach&&coach.defautsCoach&&coach.defautsCoach.affichage;
   if(AFFICHAGE_PROFILS[d]) return {profil:d,source:'coach'};
   return {profil:'complet',source:'repcore'};
@@ -1133,3 +1137,128 @@ function ajusterPoidsTechnique(f){
   if(n!=null&&!(isFinite(n)&&n>=POIDS_TECHNIQUE_MIN&&n<=POIDS_TECHNIQUE_MAX)){ if(msg) msg.textContent='Poids de '+POIDS_TECHNIQUE_MIN+' à '+POIDS_TECHNIQUE_MAX; if(e) e.style.borderColor='var(--orange)'; return false; }
   return _avxEcrire('poidsTechnique',f,n==null?null:Math.round(n*10)/10);
 }
+
+// ══ SÉRIE 6, LOT 8 — DÉMARRER AVEC UN PROFIL DE COACHING ═══════════════════
+// Quatre points de départ. Un profil n'est qu'un JEU DE DÉFAUTS : il écrit
+// prescription, bilan, affichage et relances, puis tout reste modifiable.
+// defautsCoach.profil = {cle, le, _precedent?} ; cle 'moi' = « Je règle moi-même ».
+const PROFILS_COACHING=Object.freeze([
+  Object.freeze({cle:'debutant',lib:'Débutant accompagné',phrase:'Des séances simples, un bilan chaque semaine, ni calories ni poids à l’écran.',
+    prescription:{series:3,reps:'10-12',repos:'1 min 30',rir:'3',dechargeSeriesPct:60,dechargeRirPlus:1},
+    bilan:{freq:1,jour:0,questions:['Comment se sont passées tes séances ?','Qu’est-ce qui a été difficile cette semaine ?']},
+    affichage:'sansChiffres',relances:{nostart:{actif:true,delai:2},inactif:{actif:true,delai:7}}}),
+  Object.freeze({cle:'hypertrophie',lib:'Prise de muscle',phrase:'Du volume dur, un bilan toutes les deux semaines, tous les chiffres visibles.',
+    prescription:{series:4,reps:'8-10',repos:'2 min',rir:'2',dechargeSeriesPct:60,dechargeRirPlus:1},
+    bilan:{freq:2,jour:0,questions:['Tes charges ont-elles progressé ?']},
+    affichage:'complet',relances:{overdue:{actif:true,delai:2},inactif:{actif:true,delai:10}}}),
+  Object.freeze({cle:'seche',lib:'Perte de gras',phrase:'Un bilan chaque semaine le lundi, la faim suivie de près, les relances serrées.',
+    prescription:{series:3,reps:'10-12',repos:'1 min 30',rir:'2',dechargeSeriesPct:60,dechargeRirPlus:1},
+    bilan:{freq:1,jour:1,questions:['Comment as-tu géré la faim cette semaine ?','Combien de repas hors plan ?']},
+    affichage:'complet',relances:{bilan:{actif:true,delai:1},overdue:{actif:true,delai:2},inactif:{actif:true,delai:7}}}),
+  Object.freeze({cle:'forme',lib:'Remise en forme',phrase:'L’essentiel seulement : s’entraîner, rien à compter, un bilan toutes les deux semaines.',
+    prescription:{series:3,reps:'12',repos:'1 min 30',rir:'3',dechargeSeriesPct:50,dechargeRirPlus:2},
+    bilan:{freq:2,jour:0,questions:['Comment te sens-tu au quotidien ?']},
+    affichage:'essentiel',relances:{nostart:{actif:true,delai:2},inactif:{actif:true,delai:14}}})
+]);
+const PROFILS_CLES=PROFILS_COACHING.map(p=>p.cle);
+function profilCoaching(cle){ return PROFILS_COACHING.find(p=>p.cle===cle)||null; }
+// PURE. Le coach n'a encore rien réglé (la bande s'affiche).
+function defautsCoachVides(coach){
+  const d=(coach&&coach.defautsCoach)||{};
+  return !['prescription','bilan','affichage','methode','profil'].some(k=>d[k]!=null&&!(typeof d[k]==='object'&&!Object.keys(d[k]).length));
+}
+// PURE. L'aperçu en quatre lignes.
+function apercuProfilCoaching(cle){
+  const p=profilCoaching(cle); if(!p) return [];
+  const rel=Object.keys(p.relances).map(s=>({nostart:'pas commencé',overdue:'séance en retard',bilan:'bilan en retard',inactif:'inactif',expiring:'fin d’accès',noprog:'sans programme'})[s]||s);
+  return [
+    apercuPrescription({defautsCoach:{prescription:validerPrescription(p.prescription).valeur}}),
+    'Bilan : '+(_RG_FREQ_LIB[p.bilan.freq]||'')+', '+(BILAN_JOURS[p.bilan.jour]||'')+' · '+p.bilan.questions.length+' question'+(p.bilan.questions.length>1?'s':''),
+    'Affichage : '+AFFICHAGE_PROFILS[p.affichage].lib,
+    'Relances : '+rel.join(', ')];
+}
+// PURE. Le profil dont on part, et s'il a été retouché depuis.
+function profilBaseDe(coach){
+  const d=(coach&&coach.defautsCoach)||{}, pr=d.profil, p=pr&&profilCoaching(pr.cle);
+  if(!p) return null;
+  const pres=validerPrescription(p.prescription).valeur;
+  const meme=(a,b)=>JSON.stringify(a||null)===JSON.stringify(b||null);
+  const b=validerDefautBilan(d.bilan);
+  const modifie=!meme(d.prescription,pres)||!b||b.freq!==p.bilan.freq||b.jour!==p.bilan.jour||!meme(b.questions,p.bilan.questions)||d.affichage!==p.affichage;
+  return {cle:p.cle,lib:p.lib,modifie};
+}
+function _profilInstantane(u){
+  const d=JSON.parse(JSON.stringify((u&&u.defautsCoach)||{}));
+  if(d.profil) delete d.profil._precedent;
+  return {pris:Date.now(),defautsCoach:d,regles:JSON.parse(JSON.stringify(((u&&u.relancesAuto)||{}).regles||null))};
+}
+function _profilRestaurer(u,inst){
+  u.defautsCoach=JSON.parse(JSON.stringify(inst.defautsCoach||{}));
+  if(!Object.keys(u.defautsCoach).length) delete u.defautsCoach;
+  if(inst.regles!==undefined){ try{ _relEcrire(u,n=>{ n.regles=inst.regles||{}; }); }catch(e){} }
+}
+// Applique un profil : écrit les quatre défauts, garde l'état d'avant
+// (_precedent) pour « Revenir à mes réglages d'avant », annulable 10 s.
+function appliquerProfilCoaching(cle){
+  const u=_rgCoach(), p=profilCoaching(cle); if(!u||!p) return null;
+  const avant=_profilInstantane(u);
+  const d=(u.defautsCoach&&typeof u.defautsCoach==='object')?u.defautsCoach:(u.defautsCoach={});
+  d.prescription=validerPrescription(p.prescription).valeur;
+  d.bilan=validerDefautBilan(p.bilan);
+  d.affichage=p.affichage;
+  d.profil={cle:p.cle,le:Date.now(),_precedent:avant};
+  try{ _relEcrire(u,n=>{ for(const s of Object.keys(p.relances)) n.regles[s]=Object.assign({},n.regles[s]||{},p.relances[s],{delai:_relDelaiBorne(s,p.relances[s].delai)}); }); }catch(e){}
+  let ok=false; try{ ok=saveUser(); }catch(e){}
+  const defaire=()=>{ _profilRestaurer(u,avant); try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){} try{ _rgxRendre(); }catch(e){} };
+  try{ _rgxRendre(); }catch(e){}
+  return toastSyncAnnulable(ok,_rgxPousser(),'Profil « '+p.lib+' » appliqué '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+}
+function profilJeRegleMoiMeme(){
+  return reglageCoachEcrire('defautsCoach.profil',{cle:'moi',le:Date.now()},{apresAnnuler:()=>{ try{ _rgxRendre(); }catch(e){} }});
+}
+async function profilRevenirAvant(){
+  const u=_rgCoach(); const pr=u&&u.defautsCoach&&u.defautsCoach.profil;
+  if(!pr||!pr._precedent) return false;
+  if(!await rcConfirm('Revenir à tes réglages d’avant le profil ?','Prescription, bilan, affichage et relances reprennent leurs valeurs d’avant.','Revenir')) return false;
+  const avant=_profilInstantane(u), prec=pr._precedent;
+  avant.defautsCoach.profil=JSON.parse(JSON.stringify(pr));
+  _profilRestaurer(u,prec);
+  let ok=false; try{ ok=saveUser(); }catch(e){}
+  const defaire=()=>{ _profilRestaurer(u,avant); try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){} try{ _rgxRendre(); }catch(e){} };
+  try{ _rgxRendre(); }catch(e){}
+  return toastSyncAnnulable(ok,_rgxPousser(),'Réglages d’avant remis '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+}
+let _profilApercu=null;
+function profilApercevoir(cle){ _profilApercu=profilCoaching(cle)?cle:null; try{ _rgxRendre(); const s=document.getElementById('rgx-s-defauts'); if(s) s.open=true; }catch(e){} return _profilApercu; }
+function _htmlRgxProfil(coach){
+  const d=(coach&&coach.defautsCoach)||{};
+  const base=profilBaseDe(coach);
+  if(base) return '<div class="rg-l rgx-pf-base"><span>Basé sur : '+escapeHtml(base.lib)+(base.modifie?' (modifié)':'')+'</span>'
+    +(d.profil&&d.profil._precedent?'<button type="button" class="rb-lien" onclick="profilRevenirAvant()">Revenir à mes réglages d’avant</button>':'')+'</div>';
+  if(!defautsCoachVides(coach)) return '';
+  const ap=_profilApercu&&profilCoaching(_profilApercu);
+  return '<div class="rg-l rgx-pf"><div class="rg-t">Démarrer avec un profil</div>'
+    +'<div class="rgx-pf-l">'+PROFILS_COACHING.map(p=>'<button type="button" class="rgx-pf-b'+(ap&&ap.cle===p.cle?' on':'')+'" onclick="profilApercevoir(\''+p.cle+'\')"><b>'+escapeHtml(p.lib)+'</b><span>'+escapeHtml(p.phrase)+'</span></button>').join('')+'</div>'
+    +(ap?'<ul class="rgx-pf-ap">'+apercuProfilCoaching(ap.cle).map(l=>'<li>'+escapeHtml(l)+'</li>').join('')+'</ul>'
+      +'<button type="button" class="btn btn-red btn-sm" style="width:100%" onclick="appliquerProfilCoaching(\''+ap.cle+'\')">Partir de « '+escapeHtml(ap.lib)+' »</button>':'')
+    +'<button type="button" class="rb-lien" onclick="profilJeRegleMoiMeme()">Je règle moi-même</button></div>';
+}
+// ── LE PROFIL DE SUIVI D'UNE INVITATION ────────────────────────────────────
+// Le code porte profilSuivi ; au rattachement il est posé UNE FOIS sur le
+// dossier (s'il n'en a pas) et donne l'affichage de départ. Une exception
+// posée ensuite par le coach (affichageCoach) passe devant.
+function heriterProfilSuivi(u,payload){
+  const k=payload&&payload.profilSuivi;
+  if(!u||!profilCoaching(k)||u.profilSuivi) return false;
+  u.profilSuivi=k;
+  return true;
+}
+function _htmlOptionsProfilSuivi(){
+  return '<option value="">Profil de suivi : mon défaut</option>'+PROFILS_COACHING.map(p=>'<option value="'+p.cle+'">'+escapeHtml(p.lib)+'</option>').join('');
+}
+function _rendreProfilSuiviInvitation(){
+  const s=document.getElementById('inv-profil'); if(!s) return false;
+  if(!s.options.length) s.innerHTML=_htmlOptionsProfilSuivi();
+  return true;
+}
+try{ document.addEventListener('DOMContentLoaded',()=>{ try{ _rendreProfilSuiviInvitation(); }catch(e){} }); _rendreProfilSuiviInvitation(); }catch(e){}

@@ -2373,7 +2373,7 @@ async function _envoyerInvitation(){
   const err=document.getElementById('inv-err');
   const dire=(m)=>{ if(err){ err.textContent=m; err.style.display='block'; } };
   if(err) err.style.display='none';
-  const r=await inviterAthlete(v('inv-prenom'),v('inv-nom'));
+  const r=await inviterAthlete(v('inv-prenom'),v('inv-nom'),{profilSuivi:v('inv-profil')||undefined});
   if(!r.ok){ dire(r.raison); return false; }
   const p1=document.getElementById('inv-prenom'), p2=document.getElementById('inv-nom');
   if(p1) p1.value=''; if(p2) p2.value='';
@@ -2427,7 +2427,7 @@ async function inviterAthlete(prenom,nom,opts){
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
   try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT,undefined,
-    {programmeModeleId:opts&&opts.programmeModeleId}); }
+    {programmeModeleId:opts&&opts.programmeModeleId,profilSuivi:opts&&opts.profilSuivi}); }
   catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
     createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,

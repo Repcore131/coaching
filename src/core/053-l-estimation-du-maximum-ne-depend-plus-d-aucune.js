@@ -1150,6 +1150,7 @@ async function createAthlete(){
   athlete.accessExpiry=expiry;
   // La cadence des Réglages de coaching, portée par le code (build 1811).
   heriterCadence(athlete,payload);
+  try{ heriterProfilSuivi(athlete,payload); }catch(e){}
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
   currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now(),etat:'cree',creeLe:new Date().toISOString()});
   if(!currentUser.clients) currentUser.clients=[];

@@ -180,6 +180,8 @@
         "affichageCoach": {
           ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/) && (auth.token.email.replace('.', ',') !== $emailKey || data.val() === newData.val())"
         },
+        // SÉRIE 6 (lot 8) : le profil de suivi pose par l invitation.
+        "profilSuivi": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme)$/)" },
         // SÉRIE 6 (lot 7) : les modèles de plan du coach, 30 au plus.
         "plansModeles": {
           "$i": {
@@ -196,6 +198,12 @@
           }
         },
         "defautsCoach": {
+          "profil": {
+            "cle": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme|moi)$/)" },
+            "le": { ".validate": "newData.isNumber()" },
+            "_precedent": { ".validate": "newData.hasChildren()" },
+            "$autre": { ".validate": false }
+          },
           "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/)" },
           "methode": {
             "reperesVolume": {
@@ -1382,6 +1390,8 @@
         // 05/10/2026) : l identifiant d un de SES modeles, rien d autre. C est
         // le Worker (redeemCode) qui le lit et pose le programme.
         "programmeModeleId": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)" },
+        // Serie 6 (lot 8) : le profil de suivi de l invitation, liste fermee.
+        "profilSuivi": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme)$/)" },
         // La cadence de bilan des Reglages de coaching (06/10/2026), donnee au
         // nouvel athlete : memes bornes que users/bilanCadence.
         "bilanCadence": {

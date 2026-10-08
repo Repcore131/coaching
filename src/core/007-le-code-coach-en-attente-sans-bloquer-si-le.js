@@ -319,6 +319,7 @@ function _appliquerPayloadCode(payload){
       Number(_exp)||0)||_exp;
     // La cadence de bilan du coach (Réglages de coaching), si le dossier n'en a pas.
     heriterCadence(currentUser,payload);
+    try{ heriterProfilSuivi(currentUser,payload); }catch(e){}
     try{ _appliquerProgrammeDepart(currentUser,payload); }catch(e){ rcErreurMuette('_appliquerProgrammeDepart',e); }
     users[currentUser.email]=currentUser;
     const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);

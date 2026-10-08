@@ -75039,6 +75039,59 @@ async function testExercices(){
         if(currentUser.plansModeles.length!==1) return _echec('rétablir');
         return /cplAppliquerModele/.test(String(_cplHtmlMesModeles))&&/rcAnnulable/.test(String(cplAppliquerModele))?true:_echec('annuler après application');
       }finally{ currentUser=cu; window.saveUser=_su; CLOUD.pushOne=_po; window.rcConfirm=_c; window.renderPlanCoach=_r; _cplPlan=sv; }});
+    // ══ BUILD 1932 — DÉMARRER AVEC UN PROFIL DE COACHING ═══════════════════════
+    ok('1932 — PROFILS_COACHING : quatre profils complets et valides',()=>{
+      if(PROFILS_COACHING.length!==4) return _echec('nombre');
+      for(const p of PROFILS_COACHING){
+        for(const k of ['cle','lib','phrase','prescription','bilan','affichage','relances']) if(p[k]==null) return _echec(p.cle+' : '+k);
+        if(validerPrescription(p.prescription).erreur) return _echec(p.cle+' : prescription invalide');
+        if(!validerDefautBilan(p.bilan)) return _echec(p.cle+' : bilan invalide');
+        if(!AFFICHAGE_PROFILS[p.affichage]) return _echec(p.cle+' : affichage');
+        if(Object.keys(p.relances).some(s=>RELANCE_SIGNAUX.indexOf(s)<0)) return _echec(p.cle+' : relance inconnue');
+        if(apercuProfilCoaching(p.cle).length!==4) return _echec(p.cle+' : aperçu');
+      }
+      return true;});
+    okA('1932 — la bande s’affiche sur des défauts vides ; « Partir de » écrit les quatre défauts, « (modifié) », Annuler et « Revenir à mes réglages d’avant »',async()=>{
+      const cu=currentUser, _su=window.saveUser, _pp=CLOUD.pushProfilCoach, _c=window.rcConfirm;
+      try{
+        currentUser=Object.assign(_banCoach(),{});
+        window.saveUser=()=>true; CLOUD.pushProfilCoach=()=>Promise.resolve(true); window.rcConfirm=async()=>true;
+        if(!/Démarrer avec un profil/.test(_htmlRgxProfil(currentUser))||!/Je règle moi-même/.test(_htmlRgxProfil(currentUser))) return _echec('bande absente');
+        _profilApercu='debutant';
+        const h=_htmlRgxProfil(currentUser);
+        if((h.match(/<li>/g)||[]).length!==4||!/Partir de « Débutant accompagné »/.test(h)) return _echec('aperçu / bouton');
+        appliquerProfilCoaching('debutant');
+        const d=currentUser.defautsCoach;
+        if(!d||d.affichage!=='sansChiffres'||!d.bilan||d.bilan.freq!==1||d.prescription.reps!=='10-12'||d.profil.cle!=='debutant') return _echec('défauts : '+JSON.stringify(d));
+        if(!relancesRegles(currentUser).nostart.actif) return _echec('relances');
+        if(/Démarrer avec un profil/.test(_htmlRgxProfil(currentUser))) return _echec('la bande reste');
+        if(!/Basé sur : Débutant accompagné<\/span>/.test(_htmlRgxProfil(currentUser))) return _echec('Basé sur');
+        currentUser.defautsCoach.affichage='complet';
+        if(!/Basé sur : Débutant accompagné \(modifié\)/.test(_htmlRgxProfil(currentUser))) return _echec('(modifié)');
+        if(!/Revenir à mes réglages d’avant/.test(_htmlRgxProfil(currentUser))) return _echec('revenir absent');
+        await profilRevenirAvant();
+        if(currentUser.defautsCoach&&(currentUser.defautsCoach.affichage||currentUser.defautsCoach.prescription)) return _echec('revenir : '+JSON.stringify(currentUser.defautsCoach));
+        if(relancesRegles(currentUser).nostart.actif) return _echec('relances non remises');
+        appliquerProfilCoaching('forme'); rcAnnulerDernier();
+        if(currentUser.defautsCoach&&currentUser.defautsCoach.affichage) return _echec('annuler');
+        profilJeRegleMoiMeme();
+        if(_htmlRgxProfil(currentUser)!=='') return _echec('« Je règle moi-même » ne masque pas la bande');
+        return true;
+      }finally{ currentUser=cu; window.saveUser=_su; CLOUD.pushProfilCoach=_pp; window.rcConfirm=_c; _profilApercu=null; }});
+    ok('1932 — invitation : sélecteur « Profil de suivi », porté par le code, posé une seule fois au rattachement',()=>{
+      const s=document.getElementById('inv-profil');
+      if(!s||s.options.length!==5) return _echec('sélecteur : '+(s&&s.options.length));
+      if(!/profilSuivi:v\('inv-profil'\)/.test(String(_envoyerInvitation))) return _echec('non transmis');
+      const o=heritageCode({},{profilSuivi:'seche'});
+      if(o.profilSuivi!=='seche') return _echec('payload');
+      if(heritageCode({},{profilSuivi:'pirate'}).profilSuivi) return _echec('profil inconnu accepté');
+      const u={};
+      if(!heriterProfilSuivi(u,{profilSuivi:'forme'})||u.profilSuivi!=='forme') return _echec('pose');
+      if(heriterProfilSuivi(u,{profilSuivi:'seche'})||u.profilSuivi!=='forme') return _echec('reposé une seconde fois');
+      if(affichageDe(u,{defautsCoach:{affichage:'complet'}}).profil!=='essentiel') return _echec('affichage du profil');
+      if(affichageDe({profilSuivi:'forme',affichageCoach:'complet'},null).profil!=='complet') return _echec('l’exception du coach ne passe pas devant');
+      if(!/heriterProfilSuivi/.test(String(_appliquerPayloadCode))) return _echec('non branché');
+      return CHAMPS_NON_SANTE.indexOf('profilSuivi')>=0?true:_echec('non classé');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

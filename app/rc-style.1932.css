@@ -13773,3 +13773,10 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .cpl-mm-b{flex:1;min-width:0;text-align:left;background:none;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;padding:8px 0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cpl-mm-on .cpl-mm-b{color:var(--red)}
 .cpl-mm-v{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
+/* Série 6, lot 8 : démarrer avec un profil */
+.rgx-pf-l{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.rgx-pf-b{display:flex;flex-direction:column;gap:4px;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;min-width:0}
+.rgx-pf-b span{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.4}
+.rgx-pf-b.on{border-color:var(--red)}
+.rgx-pf-ap{margin:6px 0 10px;padding-left:18px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
+.rgx-pf-base{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:var(--fs-xs);color:var(--sub)}
