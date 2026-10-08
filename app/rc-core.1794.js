@@ -17492,7 +17492,7 @@ function historiquePlateau(c,maintenant){
       const _ex=_exPourCharge(nom,c);
       let best=0, top=0, repsTop=0;
       for(const se of d.sets){
-        if(!se||se.done!==true) continue;
+        if(!se||se.done!==true||serieSpeciale(se)) continue;
         const w=chargeEffective(se,_ex,c), r=_perfReps(se);
         if(!(w>0)||!(r>0)) continue;
         if(e1rmFiable(r,_perfRir(se,c))){ const v=e1rm(w,r,_perfRir(se,c)); if(v>best) best=v; }
@@ -17634,6 +17634,314 @@ async function poEtape(btn){
         o.statut='terminee'; o.verdict=ev.verdict; o.fin=t; }
     }
   },et==='reprise'?'Reprise en place ✓':et==='fin'?'Programme rétabli ✓':'Ordonnance close ✓');
+}
+
+// ══ LOT GF1 — LES GARDE-FOUS D'INTENSITÉ ════════════════════════════════
+//
+// INFORMATIFS, JAMAIS BLOQUANTS. Côté programme (coach), une pastille dit la
+// règle franchie et d'où elle vient ; côté séance (athlète), un bandeau
+// discret, une seule fois par séance. Rien n'est refusé, rien n'est réécrit :
+// le coach garde la main, l'athlète garde sa séance.
+//
+// ⚠ L'ANCIENNETÉ N'EST CONNUE QUE PAR LE NIVEAU DÉCLARÉ (c.level), en
+//   tranches : débutant < 1 an, intermédiaire 1 à 3 ans, avancé 3 à 5 ans.
+//   Une tranche entièrement sous le seuil → alerte ; une tranche à cheval →
+//   avertissement NEUTRE (« à vérifier ») ; niveau absent → neutre aussi.
+//   On ne devine pas une ancienneté qu'on ne connaît pas.
+// ⚠ AUCUNE ALERTE INVENTÉE EN SÉANCE : une série sans RIR saisi ne compte pas
+//   comme une série à l'échec. On lit le RIR TAPÉ, pas le RIR corrigé par le
+//   calibrage (rirCorrige) — l'athlète doit pouvoir retrouver dans sa saisie
+//   ce que le bandeau lui dit.
+// ⚠ LA SOURCE affichée est la règle RepCore et son réglage (GARDE_FOUS),
+//   plus la donnée du dossier qui l'a déclenchée. Aucune étude n'est citée :
+//   ces seuils sont des réglages de coaching, et ils le disent.
+const GARDE_FOUS=Object.freeze({
+  // Trois séries à RIR 0 dans une séance : au-delà, la qualité des suivantes
+  // se paie plus qu'elle ne rapporte.
+  echecMaxParSeance:3,
+  // Années de pratique demandées avant chaque technique.
+  ancienneteMinTechniques:Object.freeze({degressive:2,superset:0,restPause:2,partielles:2,series100:3}),
+  series100:Object.freeze({maxParSemaine:4,dureeMaxSemaines:26,isolationSeulement:true,finDeSeance:true,unMuscleSeulement:true}),
+  repetitionsForcees:'deconseille'
+});
+// Le vocabulaire des techniques du programme (familles du catalogue, plus le
+// chaînage ex.ss et la série de 100) vers les clés de GARDE_FOUS.
+// ⚠ myo_reps N'A PAS DE SEUIL : la consigne n'en donne pas, on n'en invente pas.
+const GF_FAMILLES=Object.freeze({degressive:'degressive',superset:'superset',rest_pause:'restPause',partielles:'partielles'});
+const GF_LIB=Object.freeze({degressive:'dégressive',superset:'superset',restPause:'rest-pause',partielles:'partielles',series100:'séries de 100'});
+const GF_SOURCE='Garde-fou RepCore (réglage GARDE_FOUS)';
+const GF_BANDES=Object.freeze([
+  Object.freeze({re:/débutant|debutant/i,min:0,max:1,lib:'débutant (moins d’un an)'}),
+  Object.freeze({re:/intermédiaire|intermediaire/i,min:1,max:3,lib:'intermédiaire (1 à 3 ans)'}),
+  Object.freeze({re:/avancé|avance/i,min:3,max:5,lib:'avancé (3 à 5 ans)'})]);
+/** PURE. La tranche d'ancienneté déclarée, ou null. @param {any} profil @returns {{min:number,max:number,lib:string}|null} */
+function ancienneteBande(profil){
+  const l=String((profil&&profil.level)||'');
+  const b=GF_BANDES.find(x=>x.re.test(l));
+  return b?{min:b.min,max:b.max,lib:b.lib}:null;
+}
+/** PURE. La série est-elle une série spéciale (série de 100) ? @param {any} s @returns {boolean} */
+function serieSpeciale(s){ return !!(s&&s.special==='series100'); }
+
+/**
+ * PURE. LES AVERTISSEMENTS D'UN PROGRAMME.
+ * @param {any[]} programme  sessions_config (créneaux actifs seulement)
+ * @param {any} profil  le dossier de l'athlète, ou null (modèle sans athlète)
+ * @param {{maintenant?:number, schemaDe?:(nom:string)=>string|null, musclesDe?:(ex:any)=>string[]|null}} [opts]
+ * @returns {{regle:string,niveau:string,texte:string,source:string,slot:number,ex:string}[]}
+ */
+function controleProgramme(programme,profil,opts){
+  const o=opts||{}, now=Number(o.maintenant)||Date.now(), G=GARDE_FOUS, out=[];
+  const bande=ancienneteBande(profil);
+  const jour=(s,i)=>String((s&&(s.name||s.day))||('créneau '+(i+1)));
+  const sch=n=>{ try{ return o.schemaDe?o.schemaDe(n):null; }catch(e){ return null; } };
+  const mus=ex=>{ try{ return o.musclesDe?o.musclesDe(ex):null; }catch(e){ return null; } };
+  const vus=new Set();
+  const pousser=(a)=>{ const k=a.regle+'|'+a.ex+'|'+a.slot; if(!vus.has(k)){ vus.add(k); out.push(a); } };
+  // L'ANCIENNETÉ D'UNE TECHNIQUE.
+  const anciennete=(cle,s,i,ex)=>{
+    const min=G.ancienneteMinTechniques[cle];
+    if(!(min>0)) return;
+    const lib=GF_LIB[cle], src=GF_SOURCE+' · '+lib+' : '+min+' an'+(min>1?'s':'')+' de pratique';
+    if(!bande) pousser({regle:'anciennete_'+cle,niveau:'neutre',slot:i,ex:String(ex.name||''),source:src+' · niveau non renseigné',
+      texte:String(ex.name||'Exercice')+' ('+jour(s,i)+') : '+lib+' demande '+min+' ans de pratique ; ancienneté inconnue, à vérifier.'});
+    else if(bande.max<=min) pousser({regle:'anciennete_'+cle,niveau:'alerte',slot:i,ex:String(ex.name||''),source:src+' · niveau déclaré : '+bande.lib,
+      texte:String(ex.name||'Exercice')+' ('+jour(s,i)+') : '+lib+' avant les '+min+' ans de pratique conseillés.'});
+    else if(bande.min<min) pousser({regle:'anciennete_'+cle,niveau:'neutre',slot:i,ex:String(ex.name||''),source:src+' · niveau déclaré : '+bande.lib,
+      texte:String(ex.name||'Exercice')+' ('+jour(s,i)+') : '+lib+' conseillée à partir de '+min+' ans ; le niveau déclaré ne permet pas de le dire, à vérifier.'});
+  };
+  let n100=0;
+  const P=Array.isArray(programme)?programme:[];
+  P.forEach((s,i)=>{
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) return;
+    const L=s.exercises.filter(e=>e&&typeof e==='object'&&String(e.name||'').trim());
+    let rir0=0;
+    L.forEach((ex,k)=>{
+      let fam='normale'; try{ fam=techniqueDe(ex); }catch(e){}
+      if(GF_FAMILLES[fam]) anciennete(GF_FAMILLES[fam],s,i,ex);
+      if(ex.ss&&fam!=='superset') anciennete('superset',s,i,ex);
+      if(ex.methode==='repetitions_forcees') pousser({regle:'repetitions_forcees',niveau:'alerte',slot:i,ex:String(ex.name),source:GF_SOURCE+' · répétitions forcées : déconseillées',
+        texte:String(ex.name)+' ('+jour(s,i)+') : répétitions forcées déconseillées — l’échec assisté ajoute de la fatigue sans garantir de gain.'});
+      if(_rirPrescrit(ex)==='0') rir0+=Math.max(1,parseInt(ex.series,10)||1);
+      // LA SÉRIE DE 100.
+      if(ex.serie100){
+        const R=G.series100;
+        anciennete('series100',s,i,ex);
+        n100+=Math.max(1,parseInt(ex.series,10)||1);
+        const sc=sch(ex.name);
+        if(R.isolationSeulement){
+          if(sc==null) pousser({regle:'serie100_isolation',niveau:'neutre',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : isolation seulement',
+            texte:String(ex.name)+' : schéma moteur inconnu, impossible de vérifier que c’est une isolation.'});
+          else if(!/^isolation|^mollets/.test(sc)) pousser({regle:'serie100_isolation',niveau:'alerte',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : isolation seulement · schéma : '+sc,
+            texte:String(ex.name)+' ('+jour(s,i)+') : série de 100 sur un polyarticulaire ; réservée aux isolations.'});
+        }
+        if(R.unMuscleSeulement){
+          const m=mus(ex);
+          if(m==null) pousser({regle:'serie100_muscle',niveau:'neutre',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : un muscle seulement',
+            texte:String(ex.name)+' : muscles non attribués, impossible de vérifier qu’un seul muscle travaille.'});
+          else if(m.length>1) pousser({regle:'serie100_muscle',niveau:'alerte',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : un muscle seulement · muscles : '+m.map(x=>(MUSCLES[x]||{}).lib||x).join(', '),
+            texte:String(ex.name)+' ('+jour(s,i)+') : série de 100 sur deux muscles ou plus ; un seul muscle conseillé.'});
+        }
+        if(R.finDeSeance&&k!==L.length-1) pousser({regle:'serie100_fin',niveau:'alerte',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : en fin de séance',
+          texte:String(ex.name)+' ('+jour(s,i)+') : série de 100 placée avant d’autres exercices ; elle se fait en dernier.'});
+        const dep=Number(ex.serie100Depuis);
+        if(dep>0&&now-dep>R.dureeMaxSemaines*7*864e5) pousser({regle:'serie100_duree',niveau:'alerte',slot:i,ex:String(ex.name),source:GF_SOURCE+' · séries de 100 : '+R.dureeMaxSemaines+' semaines au plus',
+          texte:String(ex.name)+' : séries de 100 depuis plus de '+R.dureeMaxSemaines+' semaines ; prévoir une pause.'});
+      }
+    });
+    if(rir0>G.echecMaxParSeance) pousser({regle:'rir0_seance',niveau:'alerte',slot:i,ex:'',source:GF_SOURCE+' · '+G.echecMaxParSeance+' séries à RIR 0 par séance au plus',
+      texte:jour(s,i)+' : '+rir0+' séries prescrites à RIR 0 ; '+G.echecMaxParSeance+' au plus conseillées.'});
+  });
+  if(n100>GARDE_FOUS.series100.maxParSemaine) pousser({regle:'serie100_semaine',niveau:'alerte',slot:-1,ex:'',source:GF_SOURCE+' · séries de 100 : '+GARDE_FOUS.series100.maxParSemaine+' par semaine au plus',
+    texte:n100+' séries de 100 dans la semaine ; '+GARDE_FOUS.series100.maxParSemaine+' au plus conseillées.'});
+  return out;
+}
+/**
+ * PURE. LE CONTRÔLE EN SÉANCE.
+ * @param {{done?:boolean, rir?:any, special?:string}[]} seriesFaites  dans l'ordre de validation
+ * @returns {{alerte:boolean, n:number, texte:string}}
+ */
+function controleSeance(seriesFaites){
+  let n=0;
+  for(const s of (seriesFaites||[])){
+    if(!s||s.done!==true||serieSpeciale(s)) continue;
+    const r=String(s.rir==null?'':s.rir).trim();
+    if(r==='0'||r==='echec') n++;          // '' : pas saisi, ne compte pas
+  }
+  const M=GARDE_FOUS.echecMaxParSeance;
+  return {alerte:n>=M,n,texte:n>=M?n+' séries à RIR 0 aujourd’hui : garde la suivante à RIR\u00a01‑2.':''};
+}
+/**
+ * PURE. Les garde-fous d'un protocole de la bibliothèque. Un protocole
+ * n'appartient à aucun athlète : l'ancienneté y est toujours inconnue, et
+ * l'avertissement donc neutre.
+ * @param {{etapes?:string[], desc?:string, nom?:string}} proto
+ */
+function controleProtocole(proto){
+  const p=proto||{}, txt=[p.nom,p.desc].concat(p.etapes||[]).join(' · ');
+  const out=[];
+  let cle=''; try{ cle=_methodeDansTexte(txt); }catch(e){ cle=''; }
+  const fam=cle&&TECHNIQUES[cle]?TECHNIQUES[cle].famille:'';
+  if(cle==='repetitions_forcees'||/r[ée]p[ée]titions? forc[ée]es?/i.test(txt))
+    out.push({regle:'repetitions_forcees',niveau:'alerte',slot:-1,ex:'',source:GF_SOURCE+' · répétitions forcées : déconseillées',texte:'Le protocole mentionne des répétitions forcées : déconseillées.'});
+  else if(GF_FAMILLES[fam]&&GARDE_FOUS.ancienneteMinTechniques[GF_FAMILLES[fam]]>0){
+    const k=GF_FAMILLES[fam], m=GARDE_FOUS.ancienneteMinTechniques[k];
+    out.push({regle:'anciennete_'+k,niveau:'neutre',slot:-1,ex:'',source:GF_SOURCE+' · '+GF_LIB[k]+' : '+m+' ans de pratique',
+      texte:'Le protocole mentionne « '+TECHNIQUES[cle].nom+' » ('+GF_LIB[k]+') : conseillé à partir de '+m+' ans de pratique.'});
+  }
+  if(/[àa] l['’]?[ée]chec|jusqu['’]?[àa] l['’]?[ée]chec/i.test(txt))
+    out.push({regle:'echec_protocole',niveau:'neutre',slot:-1,ex:'',source:GF_SOURCE+' · '+GARDE_FOUS.echecMaxParSeance+' séries à RIR 0 par séance au plus',
+      texte:'Le protocole va à l’échec : il compte dans les '+GARDE_FOUS.echecMaxParSeance+' séries à RIR 0 de la séance.'});
+  return out;
+}
+/** Les pastilles, pour l'éditeur. Non bloquantes : un <details> par règle. */
+function htmlGardeFous(avs){
+  if(!avs||!avs.length) return '';
+  const E=escapeHtml;
+  return '<div class="gf-liste" role="note">'+avs.map(a=>'<details class="gf-pastille gf-'+E(a.niveau)+'"><summary><span class="gf-ico" aria-hidden="true">'+(a.niveau==='alerte'?'!':'i')+'</span>'
+    +E(a.texte)+'</summary><div class="gf-src">'+E(a.source)+'</div></details>').join('')+'</div>';
+}
+/** Le programme tel que l'éditeur le voit : la séance ouverte remplace sa version enregistrée. */
+function _gfProgrammeEditeur(cible){
+  const cfg=cible?_creneauxDe(cible).map(s=>s):[];
+  const i=(typeof _progEditorCtx!=='undefined'&&_progEditorCtx&&typeof _progEditorCtx.sessionIdx==='number')?_progEditorCtx.sessionIdx:-1;
+  const ouverte={day:'',name:'Séance en cours',active:true,exercises:(typeof progEx!=='undefined'&&Array.isArray(progEx))?progEx:[]};
+  if(i>=0&&cfg[i]) cfg[i]=Object.assign({},cfg[i],{active:true,exercises:ouverte.exercises});
+  else cfg.push(ouverte);
+  return cfg;
+}
+function _gfOpts(cible){
+  return {schemaDe:n=>{ try{ return schemaDe({name:n},cible||currentUser); }catch(e){ return null; } },
+    musclesDe:ex=>{ let cls=null; try{ cls=resoudreMusclesLecture(ex.name,ex,cible||currentUser); }catch(e){ cls=null; }
+      return (cls&&cls!==VOL_CARDIO&&Array.isArray(cls.p)&&cls.p.length)?cls.p:null; }};
+}
+function _gfMajEditeur(){
+  const z=document.getElementById('prog-gf'); if(!z) return;
+  let h=''; try{ const c=_cibleContraintes(); h=htmlGardeFous(controleProgramme(_gfProgrammeEditeur(c),c,_gfOpts(c))); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+function _progExSerie100(i,on){
+  const ex=progEx[i]; if(!ex) return false;
+  _progExDirty=true;
+  if(on){ ex.serie100=true; if(!ex.serie100Depuis) ex.serie100Depuis=Date.now(); }
+  else { delete ex.serie100; delete ex.serie100Depuis; }
+  renderProgEx();
+  return true;
+}
+// ── LA SÉANCE : LE BANDEAU, UNE FOIS ────────────────────────────────────────
+function _gfAlerteSeance(){
+  if(typeof woState==='undefined'||!woState||woState.gfVu) return false;
+  const l=[];
+  // sessionData est un OBJET indexé par exercice ({0:…, 1:…}), pas un tableau.
+  for(const d of Object.values(woState.sessionData||{})) for(const s of ((d&&d.sets)||[])) if(s&&s.done) l.push(s);
+  l.sort((a,b)=>(Number(a.tValid)||0)-(Number(b.tValid)||0));
+  const r=controleSeance(l);
+  if(!r.alerte) return false;
+  woState.gfVu=true;
+  const z=document.getElementById('wo-gf-bande');
+  if(z){ z.innerHTML='<div class="gf-bande" role="status"><span>'+escapeHtml(r.texte)+'</span><button type="button" class="gf-x" aria-label="Fermer" onclick="this.closest(\'#wo-gf-bande\').hidden=true">×</button></div>'; z.hidden=false; }
+  return true;
+}
+
+// ══ LA SÉRIE DE 100, PROTOCOLE GUIDÉ ═══════════════════════════════════
+//
+// Une charge légère, 100 répétitions au total, en s'accordant des pauses de
+// 1 à 5 secondes (rest-pause) quand il le faut. Un chrono, un compteur, une
+// alerte quand une pause dépasse 5 s. ENREGISTRÉE COMME UNE SEULE SÉRIE
+// SPÉCIALE (special:'series100').
+// ⚠ PAS D'E1RM SUR CETTE SÉRIE, ET POURQUOI : les formules d'e1RM ne valent
+//   que pour une série continue de peu de répétitions (ce fichier les arrête
+//   à douze, e1rmFiable) avec une réserve connue. Une série de 100 est
+//   FRACTIONNÉE par des pauses et n'a pas de RIR : l'e1RM n'y aurait aucun
+//   sens. Et son tonnage-série (charge × 100) écraserait la série de
+//   référence de l'exercice dans perfExercice, faussant plateaux et records.
+//   serieSpeciale() l'écarte donc de perfExercice, maxE1rmObserve,
+//   recordsExercice et historiquePlateau. Le tonnage, lui, reste compté : il
+//   a été soulevé.
+const S100_CIBLE=100, S100_PAUSE_MIN_S=1, S100_PAUSE_MAX_S=5;
+/**
+ * PURE. L'état d'une série de 100 d'après ses événements.
+ * @param {{t:number,type:string,n?:number}[]} ev  'debut' | 'rep' (n) | 'pause' | 'reprise'
+ * @param {number} maintenant
+ */
+function etatSerie100(ev,maintenant){
+  const l=(ev||[]).filter(e=>e&&Number(e.t)>0).slice().sort((a,b)=>a.t-b.t);
+  const t0=l.length?l[0].t:Number(maintenant)||0;
+  let reps=0, pauses=0, pauseMax=0, depassements=0, courtes=0, enPause=null;
+  for(const e of l){
+    if(e.type==='rep'&&!enPause) reps=Math.min(S100_CIBLE,reps+Math.max(1,Math.round(Number(e.n)||1)));
+    else if(e.type==='pause'&&!enPause) enPause=e.t;
+    else if(e.type==='reprise'&&enPause){ const d=(e.t-enPause)/1000; pauses++; pauseMax=Math.max(pauseMax,d);
+      if(d>S100_PAUSE_MAX_S) depassements++; else if(d<S100_PAUSE_MIN_S) courtes++; enPause=null; }
+  }
+  const now=Number(maintenant)||t0;
+  return {reps,reste:S100_CIBLE-reps,fini:reps>=S100_CIBLE,pauses,pauseMax:Math.round(pauseMax*10)/10,depassements,courtes,
+    enPause:enPause!=null,pauseEnCours:enPause!=null?Math.round((now-enPause)/100)/10:0,duree:Math.round((now-t0)/1000)};
+}
+/** PURE. La série spéciale à enregistrer. @param {any} etat @param {number|string} charge @param {number} t */
+function serieSerie100(etat,charge,t){
+  return {done:true,special:'series100',weight:String(charge==null?'':charge),reps:String(S100_CIBLE),repsDone:etat.reps,rir:'',
+    tValid:Number(t)||Date.now(),serie100:{duree:etat.duree,pauses:etat.pauses,pauseMax:etat.pauseMax,depassements:etat.depassements}};
+}
+let _s100=null, _s100Tick=null;
+function _htmlBouton100(ex,idx){
+  if(!ex||!ex.serie100) return '';
+  return '<button type="button" class="btn btn-outline gf-100-btn" data-idx="'+idx+'" onclick="ouvrirSerie100(+this.dataset.idx)">Série de 100 guidée</button>';
+}
+function ouvrirSerie100(idx){
+  if(typeof woState==='undefined'||!woState||!woState.exercises||!woState.exercises[idx]) return false;
+  const d=woState.sessionData[idx], s0=d&&d.sets&&d.sets.find(s=>s&&!s.done);
+  _s100={idx,ev:[],charge:s0?s0.weight:''};
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div id="s100-corps" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 14px 20px;width:100%;max-width:520px"></div></div>');
+  _s100Rendre();
+  if(_s100Tick) clearInterval(_s100Tick);
+  _s100Tick=setInterval(_s100Rendre,250);
+  return true;
+}
+function _s100Rendre(){
+  const z=document.getElementById('s100-corps');
+  if(!z||!_s100){ if(_s100Tick){ clearInterval(_s100Tick); _s100Tick=null; } return; }
+  const e=etatSerie100(_s100.ev,Date.now()), ex=woState.exercises[_s100.idx]||{};
+  const mm=Math.floor(e.duree/60), ss=e.duree%60;
+  z.innerHTML='<div class="s100"><div class="s100-t">Série de 100 · '+escapeHtml(ex.name||'')+'</div>'
+    +'<div class="s100-n" aria-live="polite">'+e.reps+'<span>/ '+S100_CIBLE+'</span></div>'
+    +'<div class="s100-c">'+(e.duree?mm+':'+String(ss).padStart(2,'0'):'0:00')+(e.pauses?' · '+e.pauses+' pause'+(e.pauses>1?'s':''):'')+'</div>'
+    +(e.enPause?'<div class="s100-p'+(e.pauseEnCours>S100_PAUSE_MAX_S?' s100-trop':'')+'">Pause : '+String(e.pauseEnCours).replace('.',',')+' s'
+      +(e.pauseEnCours>S100_PAUSE_MAX_S?' — au-delà de 5 s, ce n’est plus du rest-pause : reprends':' (1 à 5 s)')+'</div>':'')
+    +'<div class="s100-actions">'
+    +(e.fini?'<button type="button" class="btn btn-red" onclick="s100Enregistrer()">Enregistrer la série</button>'
+      :(e.enPause?'<button type="button" class="btn btn-red" onclick="s100Ev(\'reprise\')">Reprendre</button>'
+        :'<button type="button" class="btn btn-red" onclick="s100Ev(\'rep\',1)">+1</button><button type="button" class="btn btn-outline" onclick="s100Ev(\'rep\',5)">+5</button>'
+          +'<button type="button" class="btn btn-outline" onclick="s100Ev(\'pause\')">Pause</button>'))
+    +'<button type="button" class="btn btn-outline" onclick="s100Fermer()">Fermer</button></div>'
+    +'<div class="s100-note">Une seule série spéciale : pas de RIR, pas d’e1RM calculé dessus.</div></div>';
+}
+function s100Ev(type,n){
+  if(!_s100) return false;
+  _s100.ev.push({t:Date.now(),type,n});
+  _s100Rendre();
+  return true;
+}
+function s100Fermer(){
+  if(_s100Tick){ clearInterval(_s100Tick); _s100Tick=null; }
+  _s100=null;
+  try{ closeModal(); }catch(e){}
+  return true;
+}
+function s100Enregistrer(){
+  if(!_s100||typeof woState==='undefined'||!woState) return false;
+  const e=etatSerie100(_s100.ev,Date.now());
+  if(!e.fini) return false;
+  const idx=_s100.idx, d=woState.sessionData[idx], ex=woState.exercises[idx];
+  if(!d||!ex) return false;
+  // UNE SEULE SÉRIE : les séries prévues et non faites cèdent la place.
+  d.sets=d.sets.filter(s=>s&&s.done).concat([serieSerie100(e,_s100.charge,Date.now())]);
+  s100Fermer();
+  try{ renderSets(ex,d,idx); woMajCompteurSeries(); }catch(err){}
+  woPersist();
+  return true;
 }
 
 // ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════
@@ -45280,7 +45588,8 @@ function _selecteurTechnique(ex,i,partie){
         placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
     ${_blocRegleMethode(ex,i)}
-    ${_avertissementTechnique(ex,i)}`;
+    ${_avertissementTechnique(ex,i)}
+    ${cardio?'':`<label class="ta-cons gf-100"><input type="checkbox" data-i="${i}"${ex&&ex.serie100?' checked':''} onchange="_progExSerie100(+this.dataset.i,this.checked)"> <span>Séries de 100 (protocole guidé)</span></label>`}`;
   if(partie==='choix') return `<div class="px-tq">${choix}</div>`;
   if(partie==='suite') return `<div style="margin-bottom:10px">${suite}</div>`;
   return `<div style="margin-bottom:10px">${choix}${suite}</div>`;
@@ -45597,6 +45906,8 @@ function renderProgEx(){
   // seul point par lequel TOUS les chemins d'edition passent.
   try{ _appliquerDeprecationImport(); }catch(e){}
   setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
+  // LOT GF1 : les garde-fous d'intensité, en pastilles non bloquantes.
+  setTimeout(()=>{try{_gfMajEditeur();}catch(e){}},0);
   // Sync chips
   for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
   _normaliserSS(progEx);
@@ -54656,6 +54967,7 @@ function _blocExo(idx,estSS){
       ${!isCardio(ex)?_htmlPourquoiExo(ex):''}
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
+      ${!isCardio(ex)?_htmlBouton100(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
@@ -56152,6 +56464,8 @@ function toggleSet(i,idx){
   // Le RIR en un toucher, pendant 4 s ; décocher la referme.
   try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
   woPersist();
+  // LOT GF1 : la troisième série à RIR 0, une fois par séance.
+  if(!avant){ try{ _gfAlerteSeance(); }catch(e){} }
 }
 // ── ANIMATION 3 : LA VALIDATION DE SÉRIE — l'élément signature ─────────────
 // Le geste répété 25 à 40 fois par séance, et le seul endroit du système où
@@ -57230,7 +57544,7 @@ function perfExercice(sess,exNom,user){
   // LA CHARGE EFFECTIVE (typeCharge) : le poids du corps, le lest, l'assistance.
   const _ex=_exPourCharge(exNom,user);
   for(const s of d.sets){
-    if(!s||s.done!==true) continue;
+    if(!s||s.done!==true||serieSpeciale(s)) continue;   // GF1 : la série de 100 n'est pas une mesure
     const w=chargeEffective(s,_ex,user);
     if(!(w>0)) continue;
     // Un essai raté (0 répétition) n'est pas une mesure : il ne devient pas le
@@ -73351,6 +73665,7 @@ function _rirBandeChoisir(idx,i,v){
   // Le RIR noté décide maintenant de la série suivante (chargeSuivante).
   renderSets(woState.exercises[idx],d,idx);
   woPersist();
+  try{ _gfAlerteSeance(); }catch(e){}
   return true;
 }
 function getPrevPerf(name,slot,progName){
@@ -74140,7 +74455,7 @@ function maxE1rmObserve(user,nomEx,maintenant){
     const dd=_dataDeSeance(sess,nomEx);
     if(!dd||!Array.isArray(dd.sets)) continue;
     for(const se of dd.sets){
-      if(!se||se.done!==true) continue;
+      if(!se||se.done!==true||serieSpeciale(se)) continue;
       const w=chargeEffective(se,_ex,user); if(!(w>0)) continue;
       const r=_perfReps(se);
       // Au-dela de douze repetitions l'e1RM n'est plus fiable : la meme borne
@@ -91042,7 +91357,7 @@ function recordsExercice(user,nomEx){
     const d=pt.sess.data[pt.nom];
     if(!d||!Array.isArray(d.sets)) continue;
     for(const s of d.sets){
-      if(!s||s.done!==true) continue;
+      if(!s||s.done!==true||serieSpeciale(s)) continue;
       const w=parseFloat(s.weight)||0;
       const r=_perfReps(s);
       if(_t==='assiste'){
@@ -132810,6 +133125,8 @@ function _peMajApercu(){
   const a=document.getElementById('pe-apercu'); if(!a) return;
   const p=_peNormaliser();
   a.textContent=p.etapes.length?protoTexte(p):'(aucune étape)';
+  const g=document.getElementById('pe-gf');
+  if(g){ try{ g.innerHTML=htmlGardeFous(controleProtocole(p)); }catch(e){ g.innerHTML=''; } }
   const d=document.getElementById('pe-duree-chrono');
   if(d){
     const n=p.etapes.filter(e=>dureeEtape(e)!=null).length;
@@ -132892,6 +133209,7 @@ function _peRendre(){
       'Affiché en garde-fou, jamais utilisé pour masquer le protocole.')}
 
     <div style="margin-bottom:16px">
+      <div id="pe-gf"></div>
       <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Ce que verra l'athlète</div>
       <pre id="pe-apercu" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:#bbb;line-height:1.7;white-space:pre-wrap;margin:0"></pre>
     </div>

@@ -16383,3 +16383,34 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .po-verdict{font-size:var(--fs-sm);font-weight:800;margin-top:8px}
 .po-efficace{color:var(--green)}
 .po-sans_effet,.po-indetermine{color:var(--sub)}
+
+/* ══ LOT GF1 — LES GARDE-FOUS D'INTENSITÉ ══════════════════════════════════
+   Pastilles non bloquantes dans les éditeurs (programme, protocole) : une
+   ligne, et la source au dépli. Ambre pour une alerte, gris pour un
+   avertissement neutre (ancienneté inconnue) — jamais de rouge : rien n'est
+   interdit. En séance, un bandeau discret, une fois. */
+.gf-liste{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+.gf-pastille{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--sub);border-radius:var(--r-2);padding:6px 10px}
+.gf-pastille.gf-alerte{border-left-color:var(--amber)}
+.gf-pastille summary{cursor:pointer;font-size:var(--fs-2xs);color:var(--text);line-height:1.5;list-style:none;display:flex;gap:8px;align-items:flex-start;min-height:28px}
+.gf-pastille summary::-webkit-details-marker{display:none}
+.gf-ico{flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;
+  font-size:var(--fs-2xs);background:var(--surface-3);color:var(--sub)}
+.gf-alerte .gf-ico{background:var(--amber);color:#111}
+.gf-src{font-size:var(--fs-2xs);color:var(--sub);line-height:1.5;margin:4px 0 2px 26px}
+.gf-100{margin-top:8px}
+.gf-bande{display:flex;align-items:center;gap:10px;margin:0 14px 8px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);
+  border-left:3px solid var(--amber);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--text);line-height:1.45}
+.gf-bande span{flex:1;min-width:0}
+.gf-x{background:none;border:none;color:var(--sub);font-size:var(--fs-lg);min-width:36px;min-height:36px;cursor:pointer}
+.gf-100-btn{width:100%;margin:0 0 12px}
+.s100{text-align:center}
+.s100-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.s100-n{font-size:64px;font-weight:800;line-height:1.1;margin-top:8px;font-variant-numeric:tabular-nums}
+.s100-n span{font-size:var(--fs-md);color:var(--sub);font-weight:600;margin-left:6px}
+.s100-c{font-size:var(--fs-sm);color:var(--sub);font-variant-numeric:tabular-nums}
+.s100-p{margin-top:8px;font-size:var(--fs-sm);color:var(--text)}
+.s100-trop{color:var(--amber);font-weight:700}
+.s100-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.s100-actions .btn{flex:1 1 90px;margin:0}
+.s100-note{font-size:var(--fs-2xs);color:var(--sub);margin-top:10px}

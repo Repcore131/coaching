@@ -74334,6 +74334,107 @@ async function testExercices(){
           } finally { window.historiquePlateau=sv; }
           return (/"ordonnancePlateau"\s*:/.test(String(window._RC_RULES||''))&&/htmlOrdonnanceCoach\(c\)/.test(_prodSrc()))||_echec('règle ou branchement');})());
       }
+      // ══ LOT GF1 — GARDE-FOUS D'INTENSITÉ : programme, séance, série de 100 ══
+      {
+        const _sem=(...seances)=>{ const P=DAYS.map(day=>({day,name:'',active:false,exercises:[]}));
+          seances.forEach((ex,k)=>{ P[k*2]={day:DAYS[k*2],name:'S'+k,active:true,exercises:ex}; }); return P; };
+        const _o={schemaDe:n=>({CURL:'isolation-coude',ELEV:'isolation-epaule',SQUAT:'squat',DC:'poussee-horizontale',INCONNU:null}[n]),
+          musclesDe:ex=>({CURL:['BICEPS'],ELEV:['DELT_LAT'],SQUAT:['QUADRICEPS','FESSIERS'],DC:['PECTORAUX','TRICEPS'],INCONNU:null}[ex.name])};
+        const _x=(name,o)=>Object.assign({name,series:3,reps:'10',repos:'2 min'},o||{});
+        const _r=a=>a.map(x=>x.regle+':'+x.niveau);
+        const DEB={level:'Débutant (< 1 an)'}, INT={level:'Intermédiaire (1-3 ans)'}, AV={level:'Avancé (3-5 ans)'};
+        ok('GF1 — GARDE_FOUS gelée, avec les valeurs du cahier',(()=>{
+          const G=GARDE_FOUS;
+          return (Object.isFrozen(G)&&Object.isFrozen(G.ancienneteMinTechniques)&&Object.isFrozen(G.series100)&&G.echecMaxParSeance===3
+            &&JSON.stringify(G.ancienneteMinTechniques)==='{"degressive":2,"superset":0,"restPause":2,"partielles":2,"series100":3}'
+            &&G.series100.maxParSemaine===4&&G.series100.dureeMaxSemaines===26&&G.series100.isolationSeulement&&G.series100.finDeSeance&&G.series100.unMuscleSeulement
+            &&G.repetitionsForcees==='deconseille')||_echec(JSON.stringify(G));})());
+        ok('GF1 — technique avant l’ancienneté : alerte sous la tranche, neutre à cheval, rien au-dessus ; superset libre',(()=>{
+          const P=_sem([_x('CURL',{methode:'dropset_type_1'}),_x('ELEV',{methode:'rest_in_pause'}),_x('DC',{methode:'repetition_partielle'}),_x('SQUAT',{methode:'superset'})]);
+          const d=_r(controleProgramme(P,DEB,_o));
+          if(d.join()!=='anciennete_degressive:alerte,anciennete_restPause:alerte,anciennete_partielles:alerte') return _echec('débutant : '+d.join());
+          const i=_r(controleProgramme(P,INT,_o));
+          if(i.join()!=='anciennete_degressive:neutre,anciennete_restPause:neutre,anciennete_partielles:neutre') return _echec('intermédiaire : '+i.join());
+          return controleProgramme(P,AV,_o).length===0||_echec('avancé : '+_r(controleProgramme(P,AV,_o)).join());})());
+        ok('GF1 — ancienneté inconnue : avertissement NEUTRE, jamais une alerte, et la source le dit',(()=>{
+          const a=controleProgramme(_sem([_x('CURL',{methode:'dropset_type_2'})]),{},_o);
+          if(a.length!==1||a[0].niveau!=='neutre'||!/inconnue/.test(a[0].texte)||!/non renseigné/.test(a[0].source)||!/GARDE_FOUS/.test(a[0].source)) return _echec(JSON.stringify(a));
+          const m=controleProgramme(_sem([_x('CURL',{methode:'dropset_type_2'})]),null,_o);
+          return (m.length===1&&m[0].niveau==='neutre')||_echec('modèle sans athlète');})());
+        ok('GF1 — plus de 3 séries prescrites à RIR 0 dans une séance : alerte ; 3, rien',(()=>{
+          const trois=_sem([_x('CURL',{rir:'0',series:2}),_x('ELEV',{rir:'0',series:1}),_x('DC',{rir:'1',series:4})]);
+          if(controleProgramme(trois,AV,_o).length) return _echec('3 séries');
+          const quatre=_sem([_x('CURL',{rir:'0',series:2}),_x('ELEV',{rirCible:'0',series:2})]);
+          const a=controleProgramme(quatre,AV,_o);
+          return (_r(a).join()==='rir0_seance:alerte'&&/4 séries prescrites à RIR 0/.test(a[0].texte))||_echec(JSON.stringify(a));})());
+        ok('GF1 — répétitions forcées : déconseillées, quel que soit le niveau',(()=>{
+          const a=controleProgramme(_sem([_x('CURL',{methode:'repetitions_forcees'})]),AV,_o);
+          return (_r(a).join()==='repetitions_forcees:alerte'&&/déconseillées/.test(a[0].source))||_echec(_r(a).join());})());
+        ok('GF1 — séries de 100 : isolation, un muscle, en dernier, 4 par semaine, 26 semaines, 3 ans',(()=>{
+          const s100=o=>Object.assign({serie100:true,serie100Depuis:Date.now()-7*864e5,series:1},o||{});
+          if(controleProgramme(_sem([_x('DC'),_x('CURL',s100())]),AV,_o).length) return _echec('cas propre');
+          const poly=_r(controleProgramme(_sem([_x('SQUAT',s100())]),AV,_o)).join();
+          if(poly!=='serie100_isolation:alerte,serie100_muscle:alerte') return _echec('polyarticulaire : '+poly);
+          if(_r(controleProgramme(_sem([_x('CURL',s100()),_x('ELEV')]),AV,_o)).join()!=='serie100_fin:alerte') return _echec('pas en dernier');
+          const cinq=_sem([_x('CURL',s100({series:3}))],[_x('ELEV',s100({series:2}))]);
+          if(_r(controleProgramme(cinq,AV,_o)).join()!=='serie100_semaine:alerte') return _echec('5 par semaine : '+_r(controleProgramme(cinq,AV,_o)).join());
+          if(_r(controleProgramme(_sem([_x('CURL',s100({serie100Depuis:Date.now()-27*7*864e5}))]),AV,_o)).join()!=='serie100_duree:alerte') return _echec('27 semaines');
+          if(_r(controleProgramme(_sem([_x('CURL',s100())]),INT,_o)).join()!=='anciennete_series100:alerte') return _echec('intermédiaire');
+          const inc=_r(controleProgramme(_sem([_x('INCONNU',s100())]),AV,_o)).join();
+          return inc==='serie100_isolation:neutre,serie100_muscle:neutre'||_echec('inconnu : '+inc);})());
+        ok('GF1 — en séance : la 3e série à RIR 0 alerte ; sans RIR saisi, aucune alerte inventée',(()=>{
+          const s=(rir,o)=>Object.assign({done:true,rir},o||{});
+          if(controleSeance([s('0'),s('echec')]).alerte) return _echec('2 séries');
+          const a=controleSeance([s('0'),s('2'),s('echec'),s('0')]);
+          if(!a.alerte||a.n!==3||!/garde la suivante à RIR.1.2/.test(a.texte)) return _echec(JSON.stringify(a));
+          if(controleSeance([s(''),s(null),s(undefined),s(''),s('')]).alerte) return _echec('RIR vides comptés');
+          if(controleSeance([s('0',{done:false}),s('0',{done:false}),s('0',{done:false})]).alerte) return _echec('séries non validées');
+          return !controleSeance([s('0'),s('0'),s('',{special:'series100'}),{done:true,rir:'0',special:'series100'}]).alerte||_echec('série de 100 comptée');})());
+        ok('GF1 — le bandeau de séance : une seule fois par séance',(()=>{
+          const sv=woState, z=document.getElementById('wo-gf-bande');
+          if(!z) return _echec('zone absente');
+          try{
+            woState={exercises:[],sessionData:{0:{sets:[{done:true,rir:'0',tValid:1},{done:true,rir:'0',tValid:2}]},1:{sets:[{done:true,rir:'echec',tValid:3}]}}};
+            if(_gfAlerteSeance()!==true||z.hidden||!/RIR.1.2/.test(z.textContent)) return _echec('pas affiché');
+            z.hidden=true; woState.sessionData[1].sets.push({done:true,rir:'0',tValid:4});
+            if(_gfAlerteSeance()!==false||!z.hidden) return _echec('affiché deux fois');
+          } finally { woState=sv; z.hidden=true; z.innerHTML=''; }
+          return true;})());
+        ok('GF1 — la série de 100 guidée : compteur, pauses de 1 à 5 s, une seule série spéciale',(()=>{
+          const t=1e12, ev=[{t,type:'rep',n:5},{t:t+4e3,type:'pause'},{t:t+7e3,type:'reprise'},{t:t+8e3,type:'rep',n:50},
+            {t:t+9e3,type:'pause'},{t:t+16e3,type:'reprise'},{t:t+16500,type:'pause'},{t:t+17e3,type:'rep',n:9},{t:t+17200,type:'reprise'},{t:t+18e3,type:'rep',n:60}];
+          const e=etatSerie100(ev,t+20e3);
+          if(e.reps!==100||!e.fini||e.pauses!==3||e.pauseMax!==7||e.depassements!==1||e.courtes!==1||e.duree!==20) return _echec(JSON.stringify(e));
+          const p=etatSerie100([{t,type:'rep',n:10},{t:t+1e3,type:'pause'}],t+6500);
+          if(!p.enPause||p.pauseEnCours!==5.5||p.reps!==10) return _echec('pause en cours : '+JSON.stringify(p));
+          const s=serieSerie100(e,'12',t+20e3);
+          return (s.special==='series100'&&s.done&&s.repsDone===100&&s.rir===''&&s.serie100.depassements===1&&serieSpeciale(s))||_echec(JSON.stringify(s));})());
+        ok('GF1 — pas d’e1RM sur une série de 100 : écartée de la performance, du max observé et des records',(()=>{
+          const now=Date.now(), set=(w,r,o)=>Object.assign({weight:String(w),reps:String(r),rir:'1',done:true},o||{});
+          const sess={id:'g1',date:now-864e5,data:{'CURL BARRE':{sets:[set(30,8),set(12,'100',{special:'series100',repsDone:100,rir:''})]}}};
+          const p=perfExercice(sess,'CURL BARRE',null);
+          const seul=perfExercice({id:'g2',date:now,data:{'CURL BARRE':{sets:[set(12,'100',{special:'series100'})]}}},'CURL BARRE',null);
+          if(!p||p.metrique!=='e1RM'||seul!==null) return _echec(JSON.stringify([p,seul]));
+          const src=_prodSrc();
+          return (/serieSpeciale\(se\)\) continue;[\s\S]{0,20}/.test(String(maxE1rmObserve))&&/serieSpeciale\(s\)/.test(String(recordsExercice))
+            &&/serieSpeciale\(se\)/.test(String(historiquePlateau))&&/PAS D'E1RM SUR CETTE SÉRIE/.test(src))||_echec('exclusions');})());
+        ok('GF1 — protocole : répétitions forcées déconseillées, technique avancée en neutre, l’échec compté',(()=>{
+          const a=controleProtocole({nom:'Finisher bras',etapes:['Curl, 2 répétitions forcées en fin']});
+          if(_r(a).join()!=='repetitions_forcees:alerte') return _echec(_r(a).join());
+          const b=controleProtocole({nom:'Fin de séance',etapes:['Dropset type 1 sur machine','Une série jusqu’à l’échec']});
+          if(_r(b).join()!=='anciennete_degressive:neutre,echec_protocole:neutre') return _echec(_r(b).join());
+          return controleProtocole({nom:'Retour au calme',etapes:['Marche 10 min']}).length===0||_echec('faux positif');})());
+        ok('GF1 — les pastilles : non bloquantes, la règle et sa source, branchées sur les deux éditeurs et la séance',(()=>{
+          const el=document.createElement('div');
+          el.innerHTML=htmlGardeFous(controleProgramme(_sem([_x('CURL',{methode:'dropset_type_1'})]),DEB,_o));
+          const d=el.querySelector('details.gf-pastille.gf-alerte');
+          if(!d||!/dégressive/.test(d.querySelector('summary').textContent)||!/GARDE_FOUS/.test(d.querySelector('.gf-src').textContent)) return _echec(el.innerHTML.slice(0,300));
+          if(el.querySelector('button,input')) return _echec('une pastille porte une commande');
+          if(htmlGardeFous([])!=='') return _echec('vide');
+          const src=_prodSrc();
+          return (/_gfMajEditeur\(\)/.test(String(renderProgEx))&&/controleProtocole\(p\)/.test(String(_peMajApercu))&&/_gfAlerteSeance\(\)/.test(String(toggleSet))
+            &&/_gfAlerteSeance\(\)/.test(String(_rirBandeChoisir))&&/_htmlBouton100\(ex,idx\)/.test(src)&&/id="prog-gf"/.test(src)&&/id="wo-gf-bande"/.test(src))||_echec('branchements');})());
+      }
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');
