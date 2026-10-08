@@ -16286,3 +16286,17 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 label.ta-cons,label.ta-choix{display:flex;justify-content:flex-start;width:auto;text-align:left;text-transform:none;
   letter-spacing:normal;font-weight:500;margin:6px 0 0;padding:0}
 label.ta-cons input,label.ta-choix input{flex:none;width:auto;min-height:0;margin:3px 0 0}
+/* LOT TA1 — AÉRATION SUR PETIT ÉCRAN (retour du 08/10/2026 : « en bas, quand
+   il n'y a qu'une question, tout est collé »). Chaque choix devient une ligne
+   bordée, à 44 px au moins, séparée de la suivante ; le bouton s'écarte des
+   choix ; et l'écran garde de la place sous la dernière carte, barre de
+   gestes du téléphone comprise. */
+.ta-q{margin:0 0 18px}
+.ta-q legend{margin-bottom:10px}
+label.ta-choix{min-height:44px;margin:0 0 8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-2);
+  align-items:center;box-sizing:border-box;width:100%}
+label.ta-choix input{margin:0}
+label.ta-choix:has(input:checked){border-color:var(--red)}
+.ta-form .tc-filmer{margin-top:16px}
+.tc-carte .tc-res{margin-top:14px}
+#s-tests-compat .pad{padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
