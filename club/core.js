@@ -11,7 +11,7 @@
 // Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
 const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
 CFG.assets = CFG.assets || {};
-const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.5' };
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.6' };
 // ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
 // Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
 // Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.
@@ -64,6 +64,13 @@ const ago = ts => {
   return dmy(isoOf(new Date(ts)));
 };
 const timeOf = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+// Minuit à Paris d'une date AAAA-MM-JJ, en millisecondes (heure d'été comprise), quel que soit le fuseau de l'appareil.
+function minuitParis(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(iso || '')) return null;
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number); const u = Date.UTC(y, m - 1, d, 12);
+  let off = 1; try { const t = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', timeZoneName: 'shortOffset' }).formatToParts(new Date(u)).find(p => p.type === 'timeZoneName').value; const k = /GMT([+-]\d+)/.exec(t); if (k) off = Number(k[1]); } catch (e) { /* repli : heure d'hiver */ }
+  return Date.UTC(y, m - 1, d) - off * 3600000;
+}
 const deepGet = (o, path) => path.reduce((a, k) => a == null ? a : a[k], o);
 
 // Generateur pseudo-aleatoire a graine : la demo est la meme a chaque fois.
@@ -635,8 +642,12 @@ function demoState() {
     c.end = addMonths(date.slice(0, 7), MOIS_RESTANTS[i]) + date.slice(7, 8) + pad(Math.min(28, Number(date.slice(8)) + 1));
     const id = 'r' + (i + 1); const at = ts(date, 11);
     st.resiliations[id] = { id, clubId: C, client: c.name, clientId: c.id, num: c.num, date, effective: addDays(t, eff), reason, status, saved: false, ownerId: owner, userId: owner, at, source: i % 3 ? 'resamania' : 'mail',
+      receivedAt: at, dueAt: at + 24 * 3600000, type: 'resiliation',
       log: { a: { at, by: 'u1', label: 'Demande enregistrée' }, ...(owner ? { b: { at: at + 4 * 3600000, by: owner, label: 'Message laissé', note: 'Rappeler en fin de semaine' } } : {}) } };
+    // Demandes reçues par e-mail : l'une attend une réponse, l'autre a reçu la réponse de l'accueil.
+    if (i % 3 === 0) st.resiliations[id].mail = { threadId: 'demo' + i, subject: 'Résiliation de mon abonnement', firstInAt: at, lastInAt: at, inCount: 1, outCount: i ? 1 : 0, firstReplyAt: i ? at + 5 * 3600000 : null, lastOutAt: i ? at + 5 * 3600000 : null, awaitingReply: !i, kind: 'adherent', score: 7 };
   });
+  st.clubs[C].mailSync = { at: T0 - 25 * 60000, ok: true, scanned: 12, found: 3, error: null };
   // historique : 12 mois de demandes sauvées et résiliées
   for (let i = 1; i <= 12; i++) {
     const mk = addMonths(cm, -i);

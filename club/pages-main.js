@@ -43,7 +43,11 @@ document.addEventListener('submit', e => {
   login(st.users[uid]);
   toast('1 club créé. Ajoutez votre équipe dans Membres.');
 });
-ACTIONS.loadDemo = () => { db.replace(DEMO ? seedDemo() : demoState()); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
+ACTIONS.loadDemo = () => {
+  const st = DEMO ? seedDemo() : demoState();
+  // Relève de démonstration toujours récente (hors mode capture) : pas de faux bandeau de panne le soir.
+  if (!CFG.capture) Object.values(st.clubs || {}).forEach(c => { if (c.mailSync) c.mailSync.at = Date.now() - 25 * 60000; });
+  db.replace(st); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
 
 // ── Connexion ─────────────────────────────────────────────────────────────
 // Un seul parcours, sur ordinateur comme sur telephone : e-mail + code
@@ -72,7 +76,7 @@ PAGES.login = {
           </form>
           ${MULTI ? '<p class="small" style="margin-top:12px">Nouvelle salle ? <a href="#/inscription">Créer l’espace de votre salle</a></p>' : ''}
           <details class="login-help"><summary>Code perdu ?</summary><p>Votre code personnel vous a été envoyé par e-mail (regardez aussi dans les spams). Vérifiez les tirets : FP-XXXX-XXXX-XXXX. Votre manager peut vous en générer un nouveau en un clic.</p></details>
-          ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
+          ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
           ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
           ${!DEMO ? '<a class="btn login-alt" href="?demo=1&guide=1" data-guide-link>Démo guidée, 7 minutes</a><a class="btn login-alt" href="?demo=1" data-demo-link>Voir la démo</a>' : ''}
           ${DEMO ? '' : !shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}

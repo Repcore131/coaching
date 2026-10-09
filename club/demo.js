@@ -47,6 +47,8 @@ function seedDemo() { return CFG.capture ? captureState() : demoState(); }
 function demoStart() {
   if (CFG.capture || !S || !S.meta || S.meta.demoSeed !== DEMO_GRAINE || S.meta.capture) { S = normalizeState(seedDemo()); backend.replaceAll(); }
   if (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)]) safeLS.set(SESSION_KEY, DEMO_USER);
+  // Relève de la boîte accueil : toujours récente en démonstration (heure du chargement).
+  const ms = deepGet(S, ['clubs', DEMO_CLUB.id, 'mailSync']); if (ms && !CFG.capture) ms.at = Date.now() - 25 * 60000;
 }
 
 // ── Bandeau fixe (pas en mode capture) ────────────────────────────────────

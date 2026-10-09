@@ -1,5 +1,12 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.6 (octobre 2026)
+- Résiliations : statut tiré de l'état Resamania (annulée, rejetée, acceptée, soumise) sans jamais rétrograder un dossier ; date de réception, délai de prise en charge mesuré de la réception au premier contact ; sauvetage déclaré avec offre et note, confirmé par l'import suivant (« À confirmer » après 15 jours).
+- Dossiers en trois phases (en attente de réponse, en cours, clos) avec échéance de réponse ; colonnes Resamania facultatives (canal de saisie, numéro client, date de réception, date d'effet) ; demandes faites dans l'appli signalées.
+- Réglages > Relève des résiliations : règles de détection, seuil, expéditeurs, banc d'essai, configuration à copier, secret de signature et guide d'installation en 10 étapes.
+- Fonctions `ingestResiliations` (requêtes signées HMAC), `setMailSecret` et `graphPoll` (Microsoft 365) ; heure de la dernière relève et alerte au manager après 3 h sans passage.
+- Script Google Apps Script prêt à installer (`apps-script/`).
+
 ## 2026.10.5 (octobre 2026)
 - Identité produit : thème clair par défaut (sombre par préférence ou par choix), jetons encre, graphite, gris, filet, fond, surface et signal bleu ; polices Geist et Geist Mono (repli IBM Plex) ; échelle 12 à 32 px ; logo « P pouls ».
 - Sobriété : ni italique ni capitales sur les titres, ni biais, ni dégradé, ni flou ; chaque nombre porte son unité ; projection des paliers à partir du 5 ; entonnoir proportionnel.

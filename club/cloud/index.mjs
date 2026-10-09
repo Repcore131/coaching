@@ -74,3 +74,7 @@ export const totpEtat = onCall({ region: 'europe-west1' }, appel(async c => (awa
 export const totpInscrire = onCall({ region: 'europe-west1' }, appel(async c => (await import('./lib/fitpulse-totp.mjs')).inscrire(c)));
 export const totpValider = onCall({ region: 'europe-west1' }, appel(async (c, d) => (await import('./lib/fitpulse-totp.mjs')).valider({ ...c, code: d.code,
   fixer: async claims => { const u = await c.auth.getUser(c.authUid); await c.auth.setCustomUserClaims(c.authUid, { ...(u.customClaims || {}), ...claims }); } })));
+
+// 5. Relève des résiliations (TypeScript, compilé dans lib/ts par « npm run build ») :
+//    ingestResiliations (HTTPS, signée), setMailSecret (appel de l'appli), graphPoll (Microsoft 365).
+export { ingestResiliations, setMailSecret, graphPoll } from './lib/ts/index.js';

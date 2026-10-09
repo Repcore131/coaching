@@ -57,7 +57,7 @@ function impRsm() {
   const item = ([id, filt, file], since) => {
     const d = defById(id); const ts = routine[id]; const ok = ts && ts >= since;
     return `<details class="rsm-item"><summary class="row"><span class="badge ${ok ? 'ok' : ''}" style="min-width:26px;justify-content:center">${ok ? ico('check', 'ico ico-xs') : '·'}</span><b class="spacer">${esc(d.label)}</b><span class="muted small">${ts ? 'importé le ' + dm(isoOf(new Date(ts))) : 'jamais importé'}</span></summary>
-      <div class="small" style="padding:8px 0 4px 36px;display:grid;gap:4px"><div><span class="muted">Où :</span> ${esc(d.path)}</div><div><span class="muted">Filtres :</span> ${esc(filt.replace('Entité = votre société d’exploitation', entiteTexte()))}</div><div><span class="muted">Nom à donner :</span> <code>${esc(file)}</code></div><div><span class="muted">Alimente :</span> ${esc(d.feeds)}</div></div></details>`;
+      <div class="small" style="padding:8px 0 4px 36px;display:grid;gap:4px"><div><span class="muted">Où :</span> ${esc(d.path)}</div><div><span class="muted">Filtres :</span> ${esc(filt.replace('Entité = votre société d’exploitation', entiteTexte()))}</div><div><span class="muted">Nom à donner :</span> <code>${esc(file)}</code></div><div><span class="muted">Alimente :</span> ${esc(d.feeds)}</div>${d.note ? `<div>${esc(d.note)}</div>` : ''}</div></details>`;
   };
   const cnt = (list, since) => list.filter(([id]) => (routine[id] || 0) >= since).length;
   return `${done}
@@ -317,17 +317,28 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
     for (const x of r.resil) {
       const id = 'rs' + hkey(club + '|' + x.key);
       const old = S.resiliations[id];
+      const etat = x.arb || (x.saved ? 'canceled' : 'submitted');
+      const imported = resStatutImport(etat, x.effective || (old && old.effective) || null);
+      // Rejetée dans Resamania : ignorée (aucun dossier créé ; un dossier existant garde son statut).
+      if (!imported && !old) { summary.resilIgnorees = (summary.resilIgnorees || 0) + 1; continue; }
+      const status = resStatutFusion(old && old.status, imported);
       const owner = old && old.ownerId ? old.ownerId : pick(x.seller);
-      // L'arbitrage Resamania fait foi : à arbitrer => à traiter, acceptée => départ, rejetée/annulée => historique.
-      const arbMap = { submitted: 'nouvelle', accepted: 'resiliee', rejected: 'rejetee', canceled: 'sauvee' };
-      const imported = x.arb ? arbMap[x.arb] : (x.saved ? 'sauvee' : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee');
-      // Une issue déjà tranchée dans Fit Pulse (sauvée ou résiliée) n'est jamais écrasée ; sinon l'import fait foi.
-      const status = old && (old.status === 'sauvee' || old.status === 'resiliee') ? old.status : imported;
       // Un dossier garde la liste de ses imports : annuler l'un ne cache pas ce qu'un autre porte, réimporter le fait réapparaître.
       const { hidden: _h, ...prev } = old || {}; const resImp = { ...(prev.importIds || (prev.importId ? { [prev.importId]: true } : {})), [impId]: true };
       const sameDay = prev.sameDay || (x.nature === 'option' && Object.values(S.clients).some(cc => cc.clubId === club && cc.start === x.date && tokensKey(cc.name || '') === tokensKey(x.client || '')));
-      ops.push([['resiliations', id], { ...prev, importIds: resImp, nature: prev.nature || x.nature || 'abonnement', sameDay, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
-      if (status === 'sauvee' && owner && !S.entries['sv_' + id]) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now }]);
+      // Réception légale : date de réception si l'export la donne, sinon minuit (Paris) de la date de création ; r.at reste l'heure de création du dossier.
+      const receivedAt = prev.receivedAt || minuitParis(x.received || x.date);
+      const sla = resSlaHeures(club);
+      const source = prev.source && prev.source !== 'resamania' ? prev.source : x.appli ? 'appli' : 'resamania';
+      const ferme = status === 'sauvee' || status === 'resiliee';
+      ops.push([['resiliations', id], { ...prev, importIds: resImp, nature: prev.nature || x.nature || 'abonnement', sameDay, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee',
+        ownerId: owner || null, userId: owner || null, importId: impId, source, channel: x.channel || prev.channel || null, clientNum: prev.clientNum || x.clientNum || null, receivedAt, dueAt: prev.dueAt || receivedAt + sla * 3600000,
+        rsm: { ...(prev.rsm || {}), state: etat, at: now }, at: (old && old.at) || now,
+        ...(ferme && !prev.outcome ? { outcome: status, closedAt: now, closedBy: 'resamania', closedReason: 'resamania' } : {}) }]);
+      // Sauvetage : déclaré dans Fit Pulse (« declaratif »), confirmé quand Resamania lit l'annulation (« resamania »).
+      const sv = S.entries['sv_' + id];
+      if (etat === 'canceled' && sv && sv.proof !== 'resamania') ops.push([['entries', 'sv_' + id, 'proof'], 'resamania'], [['entries', 'sv_' + id, 'proofAt'], now]);
+      if (status === 'sauvee' && owner && !sv) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now, proof: etat === 'canceled' ? 'resamania' : 'declaratif' }]);
       summary.resil++;
     }
     // Prospects nominatifs : id stable, reimport sans doublon, suivi Fit Pulse conserve.

@@ -81,5 +81,16 @@ await check('membre ne modifie pas les mentions légales', await req('PUT', 'pul
 await check('rien d’autre sous pulse_public', await req('PUT', 'pulse_public/autre', 'X', who('mgr')), false);
 await check('membre écrit son usage', await req('PUT', 'pulse/usage/mem/2026-10-09', { opens: 1 }, who('mem')), true);
 await check('membre n’écrit pas l’usage d’un autre', await req('PUT', 'pulse/usage/mgr/2026-10-09', { opens: 1 }, who('mem')), false);
+// Relève de la boîte accueil : dossiers « ml… » et battement écrits par le seul compte de service.
+await fetch(url('pulse/resiliations/ml0123456789abcdef'), { method: 'PUT', headers: owner, body: JSON.stringify({ id: 'ml0123456789abcdef', clubId: 'niort', client: 'A', status: 'nouvelle', receivedAt: 1000, mail: { threadId: 't1', lastInAt: 1000, awaitingReply: true } }) });
+await fetch(url('pulse/clubs/niort'), { method: 'PATCH', headers: owner, body: JSON.stringify({ name: 'Club', mailSync: { at: 5000, ok: true } }) });
+await check('membre ne crée pas un dossier relevé (ml)', await req('PUT', 'pulse/resiliations/mlfffffffffffffff0', { id: 'x', clubId: 'niort', status: 'nouvelle' }, who('mem')), false);
+await check('membre crée un dossier ordinaire', await req('PUT', 'pulse/resiliations/r9', { id: 'r9', clubId: 'niort', status: 'nouvelle' }, who('mem')), true);
+await check('membre prend en charge un dossier relevé', await req('PATCH', 'pulse/resiliations/ml0123456789abcdef', { status: 'traitement', ownerId: 'mem' }, who('mem')), true);
+await check('membre ne modifie pas le fil e-mail d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/mail/awaitingReply', false, who('mem')), false);
+await check('membre ne modifie pas la date de réception d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/receivedAt', 2000, who('mem')), false);
+await check('membre ne supprime pas un dossier relevé', await req('DELETE', 'pulse/resiliations/ml0123456789abcdef', undefined, who('mem')), false);
+await check('manager ne falsifie pas la dernière relève', await req('PUT', 'pulse/clubs/niort/mailSync', { at: 9999, ok: true }, who('mgr')), false);
+await check('manager règle son club sans toucher à la relève', await req('PUT', 'pulse/clubs/niort/name', 'Club Centre', who('mgr')), true);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

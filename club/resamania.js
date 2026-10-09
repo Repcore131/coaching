@@ -201,6 +201,33 @@ function recovChannel(author, clientName) {
 // ── Definitions des exports ───────────────────────────────────────────────
 // sig(has) : reconnaissance par colonnes. parse(c) : lignes -> donnees.
 const PRODUCT_EXCLUDE = ['changement d offre', 'acces employe', 'vip', 'reconduction', 'transfert'];
+// ── Résiliations Resamania : état brut et statut Fit Pulse ─────────────────
+// États documentés : submitted, accepted, rejected, canceled. Libellés français acceptés.
+function resEtat(v) {
+  const e = norm(v);
+  if (/cancel|annul/.test(e)) return 'canceled';
+  if (/reject|rejet|refus/.test(e)) return 'rejected';
+  if (/accept|valid/.test(e)) return 'accepted';
+  return 'submitted'; // submit, attente, soumis, à arbitrer, ou vide
+}
+// Canal de saisie : appli adhérents (member, appli, en ligne, web) ou accueil (club).
+const resCanalAppli = ch => /member|appli|en ligne|web/.test(norm(ch || ''));
+// Statut déduit d'un état Resamania. Acceptée : départ seulement si la date effective est passée,
+// sinon il reste du temps pour sauver (« nouvelle »). Rejetée : ignorée (null).
+function resStatutImport(etat, effective, t = today()) {
+  if (etat === 'canceled') return 'sauvee';
+  if (etat === 'rejected') return null;
+  if (etat === 'accepted') return effective && effective < t ? 'resiliee' : 'nouvelle';
+  return 'nouvelle';
+}
+// Un statut posé dans Fit Pulse n'est jamais rétrogradé par un import.
+const RES_RANG = { nouvelle: 0, traitement: 1, rejetee: 1, sauvee: 2, resiliee: 2 };
+function resStatutFusion(ancien, importe) {
+  if (!ancien) return importe;
+  if (!importe) return ancien;
+  if (RES_RANG[ancien] >= 2) return ancien; // issue tranchée : jamais modifiée par un import
+  return (RES_RANG[importe] || 0) > (RES_RANG[ancien] || 0) ? importe : ancien;
+}
 const TECH_MOTIFS = ['changement de formule', 'resiliation pack option', 'transfert', 'erreur de migration'];
 const isNutrition = (fam, code, label) => norm(fam).includes('nutrition') || /NUTRI/i.test(code || '') || /nutri/i.test(norm(label));
 const isAccessory = code => /(^|_)FPARK$/i.test(String(code || '').trim());
@@ -387,25 +414,26 @@ const RSM_DEFS = [
     id: 'resil', label: 'Résiliations', family: 'liste', feeds: 'Demandes à arbitrer (à traiter) · acceptées/rejetées/annulées (historique) · motifs techniques écartés',
     path: 'Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter', filters: 'Date de création = le mois, TOUS les statuts (À arbitrer, Acceptée, Rejetée, Annulée)', file: 'RSM_resiliations_AAAA-MM.csv',
     sig: has => has('motif') && (has('createur') || has('commercial actuel')) && (has('etat') || has('statut')),
+    note: 'Ajoutez la colonne Canal de saisie si elle est disponible : Fit Pulse distingue alors les demandes faites dans l’appli.',
     parse(c) {
       const iD = c.find(h => h === 'date creation' || h === 'date de creation') >= 0 ? c.find(h => h === 'date creation' || h === 'date de creation') : c.find(h => h === 'date' || h.startsWith('date'));
       const iE = c.find(h => h === 'etat' || h === 'statut'), iCr = c.col('createur'), iT = c.colExact('type'), iM = c.col('motif'), iCt = c.find(h => h === 'contact' || h === 'nom de l abonnement');
-      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom'), iEff = c.find(h => h === 'date resiliation' || h === 'date effective' || h === 'date de resiliation');
+      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom'), iEff = c.find(h => h === 'date resiliation' || h === 'date effective' || h === 'date de resiliation' || h === 'date d effet' || h === 'date deffet');
+      // Colonnes facultatives : canal de saisie (member = appli, club = accueil), numéro client, date de réception.
+      const iCh = c.find(h => ['canal', 'canal de saisie', 'input channel', 'inputchannel', 'origine'].includes(h));
+      const iNum = c.find(h => ['numero client', 'n client', 'no client', 'numero adherent', 'n adherent'].includes(h));
+      const iRec = c.find(h => h === 'date de reception' || h === 'date reception');
       let tech = 0;
       for (const r of c.rows) {
         const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
         const motif = r[iM] || ''; if (TECH_MOTIFS.some(t => norm(motif).includes(t))) { tech++; c.skip('motif technique (changement de formule, pack option, transfert, migration)'); continue; }
-        // Statut d'arbitrage Resamania : seules les demandes « À arbitrer » sont à traiter.
-        // Acceptée = départ validé (préavis en cours) · Rejetée/Annulée = la personne reste · tout le reste = historique.
-        const etat = norm(r[iE]);
-        const arb = /arbitr|soumis|submit|pending|attente|a traiter/.test(etat) ? 'submitted'
-          : /accept|valid/.test(etat) ? 'accepted'
-            : /rejet|reject|refus/.test(etat) ? 'rejected'
-              : /annul|cancel/.test(etat) ? 'canceled' : null;
-        const saved = arb === 'canceled';
+        // État Resamania brut (submitted, accepted, rejected, canceled) : le statut Fit Pulse en est déduit à l'enregistrement.
+        const arb = resEtat(iE >= 0 ? r[iE] : '');
         const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
         const seller = resolveSeller(r[iCr]);
-        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, arb, seller });
+        const channel = iCh >= 0 ? String(r[iCh] || '').trim().slice(0, 40) : '';
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, received: iRec >= 0 ? rsmDate(r[iRec]) || null : null,
+          effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved: arb === 'canceled', arb, seller, channel, appli: resCanalAppli(channel), clientNum: iNum >= 0 ? String(r[iNum] || '').trim().slice(0, 20) || null : null });
       }
       if (tech) c.warn(`${plur(tech, 'résiliation technique écartée', 'résiliations techniques écartées')} : elles gonfleraient le churn.`);
     },

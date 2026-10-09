@@ -1282,3 +1282,9 @@ html.capture #toasts, html.capture .toast, html.capture .step-banner { display: 
 .capture-themes iframe { width: 1280px; height: 2300px; border: 1px solid var(--line); border-radius: 8px; transform: scale(.34); transform-origin: 0 0; margin-bottom: calc(-2300px * .66); margin-right: calc(-1280px * .66); background: var(--bg); }
 .capture-themes figcaption { font-size: var(--t-13); color: var(--muted); font-weight: 500; }
 .stat b, .ck2 b, .ck b, .rc-tile b, .num-l, .palier-n, .hb b, .kpi .val, .hero .big, .rapport-chiffres b { font-variant-numeric: tabular-nums; }
+/* ── Résiliations : phase de la demande (bande à gauche) ── */
+.dossier.ph-attente { border-left: 4px solid var(--bad); }
+.dossier.ph-encours { border-left: 4px solid var(--warn); }
+.res-releve { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: -6px 0 12px; font-size: var(--t-13); color: var(--muted); }
+.guide-releve { margin: 12px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.guide-releve p { margin: 2px 0 0; color: var(--muted); font-size: var(--t-13); }

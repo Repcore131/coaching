@@ -8,11 +8,20 @@
   },
   "scripts": {
     "copier": "mkdir -p lib && mkdir -p lib/app && cp ../outils/fitpulse-*.mjs lib/ && cp ../*.js ../index.html lib/app/ && cp -r ../vendor lib/app/",
-    "predeploy": "npm run copier"
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:emul": "cd ../tests/emul && npx --yes firebase-tools@13 emulators:exec --only database --project fitpulse-test \"cd ../../cloud && npx vitest run\"",
+    "predeploy": "npm run copier && npm run build"
   },
   "dependencies": {
     "firebase-functions": "^6.1.0",
     "google-auth-library": "^9.15.0",
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^12.7.0",
+    "@google-cloud/secret-manager": "^5.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
+    "@types/node": "^22.10.0"
   }
 }

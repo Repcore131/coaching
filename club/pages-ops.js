@@ -23,7 +23,34 @@ const RES_CALLS = { noanswer: 'Pas de réponse', message: 'Message laissé', rdv
 // est parti : elle n'est plus « à traiter », on ne garde à traiter que les
 // demandes encore récupérables (échéance aujourd'hui ou à venir, ou inconnue).
 const resStatus = r => { const s = r.status || (r.saved ? 'sauvee' : 'resiliee'); return s !== 'sauvee' && r.effective && r.effective < today() ? 'resiliee' : s; };
-const resOpen = r => ['nouvelle', 'traitement'].includes(resStatus(r));
+// ── Modèle d'une demande (champs facultatifs pour les anciens dossiers) ──────
+// source 'mail' | 'appli' | 'resamania' | 'manuel' | 'accueil' ; channel (texte libre) ; type 'resiliation' | 'suspension' ;
+// clientId, clientNum, email, phone ; receivedAt (réception légale, ms) ; mail { threadId, link, subject, firstInAt,
+// lastInAt, firstReplyAt, lastOutAt, inCount, outCount, awaitingReply, kind, score } ; dueAt (receivedAt + SLA du club) ;
+// escalation { h4At, h24At, h48At } ; outcome 'sauvee' | 'resiliee' | 'suspension' | 'faux_positif' | 'doublon' ;
+// closedAt, closedBy, closedReason ('fitpulse' | 'resamania' | 'manager').
+const resSlaHeures = (clubId = CLUB && CLUB.id) => Number(deepGet(S, ['clubs', clubId, 'mailRules', 'slaHours'])) || 24;
+const resReceivedAt = r => r.receivedAt || minuitParis(r.date) || r.at || null;
+const resDueAt = r => r.dueAt || (resReceivedAt(r) ? resReceivedAt(r) + resSlaHeures(r.clubId) * 3600000 : null);
+// Contact : un appel noté (libellés de RES_CALLS) ou une réponse envoyée. « Prise en charge » et « Demande enregistrée » n'en sont pas.
+const RES_CONTACT = new RegExp('^(' + [...Object.values(RES_CALLS), 'Réponse envoyée'].map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')');
+const resContacts = r => resActions(r).filter(a => RES_CONTACT.test(a.label || ''));
+// Délai de prise en charge (jours) : de la réception au premier contact.
+function resDelai(r) { const c = resContacts(r)[0]; const rec = resReceivedAt(r); return c && rec && c.at >= rec ? (c.at - rec) / 864e5 : null; }
+// Machine d'états : 'attente' (rouge : l'adhérent attend une réponse), 'encours' (orange : réponse partie ou contact noté,
+// l'adhérent n'a pas réécrit depuis), 'close' (issue posée).
+function resPhase(r) {
+  const st = resStatus(r);
+  if (r.outcome || st === 'sauvee' || st === 'resiliee' || st === 'rejetee') return 'close';
+  const m = r.mail; const lastContact = Math.max(0, ...resContacts(r).map(a => a.at || 0));
+  if (m) {
+    const attend = m.awaitingReply === true || (m.lastInAt && (!m.lastOutAt || m.lastInAt > m.lastOutAt));
+    return attend && !(lastContact > (m.lastInAt || 0)) ? 'attente' : 'encours';
+  }
+  return lastContact ? 'encours' : 'attente';
+}
+const RES_PHASE = { attente: { label: 'En attente de réponse', cls: 'bad' }, encours: { label: 'En cours', cls: 'warn' }, close: { label: 'Close', cls: '' } };
+const resOpen = r => resPhase(r) !== 'close';
 const daysTo = d => d ? Math.round((dateOf(d) - dateOf(today())) / 86400000) : null;
 function resUrgent(r) { const n = daysTo(r.effective); return resOpen(r) && n != null && n <= 7; }
 function resList(clubId) { return Object.values(S.resiliations).filter(r => r.clubId === clubId && !r.hidden); }
@@ -38,13 +65,14 @@ PAGES.resiliations = {
     const tab = UI.resTab || 'todo';
     const all = resList(CLUB.id).filter(mesDossiersRes);
     // À traiter : échéance la plus proche d'abord (inconnue en dernier), puis valeur décroissante.
-    const open = all.filter(resOpen).sort((a, b) => (a.effective || '9999').localeCompare(b.effective || '9999') || (resValeur(b) - resValeur(a)));
+    const open = all.filter(resOpen).sort((a, b) => { const pa = resPhase(a) === 'attente' ? 0 : 1, pb = resPhase(b) === 'attente' ? 0 : 1; if (pa !== pb) return pa - pb;
+      return pa === 0 ? (resDueAt(a) || 9e15) - (resDueAt(b) || 9e15) || (resValeur(b) - resValeur(a)) : (a.effective || '9999').localeCompare(b.effective || '9999') || (resValeur(b) - resValeur(a)); });
     const mk = UI.resMonth || curMonth();
     const month = all.filter(r => r.date.slice(0, 7) === mk);
     // sauvé = date du sauvetage ; résilié = date effective (à défaut, date de la demande)
     const saved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).length;
     const lost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).length;
-    const handledTimes = month.map(r => { const a = resActions(r).find(x => x.label !== 'Demande enregistrée'); return a && r.at ? (a.at - r.at) / 86400000 : null; }).filter(x => x != null && x >= 0);
+    const handledTimes = month.map(resDelai).filter(x => x != null);
     const reasons = {}; month.forEach(r => { const k = r.reason || 'Non renseigné'; reasons[k] = (reasons[k] || 0) + 1; });
     const noOwner = open.filter(r => !r.ownerId).length, urgent = open.filter(resUrgent).length;
     const enJeu = resValeur; const vOpen = open.reduce((s, r) => s + resValeur(r), 0);
@@ -57,24 +85,41 @@ PAGES.resiliations = {
       <div class="stat" data-tuile="enjeu"><span>Valeur en jeu</span><b data-v="${vOpen}">${fmtE(vOpen)}</b><small>${plur(open.length, 'demande ouverte', 'demandes ouvertes')}</small></div>
       <div class="stat" data-tuile="sauvees"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${plur(saved, 'client', 'clients')}</b><small><b data-v="${vSaved}">${fmtE(vSaved)}</b> sauvés · taux ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
       <div class="stat"><span>Valeur perdue ce mois</span><b class="bad">${fmtE(vLost)}</b><small>résiliations effectives</small></div>
-      <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
+      <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(2).replace(/0$/, '').replace('.', ',') + ' j' : 'n.d.'}</b><small>de la réception au premier contact</small></div></div>`;
     let body;
     if (tab === 'todo') {
       body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'board', title: 'Aucune demande à arbitrer', text: 'Seules les demandes « À arbitrer » apparaissent ici. Les résiliations acceptées, rejetées ou annulées sont dans l’historique.', cta: '<a class="btn sm" href="#/imports">Ouvrir les imports</a>' })}</div>`;
     } else {
       body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}</div>${resOffersTables(month, enJeu)}
-        ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
+        ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span>${resAConfirmer(r) ? ' <span class="badge warn" data-badge="a-confirmer">À confirmer</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
     }
-    return head + (isManager() && typeof rrqBlock === 'function' ? rrqBlock() : '') + kpis + tabs('resTab', [['todo', `À arbitrer (${open.length})`], ['all', 'Historique du mois']], tab) + body;
+    return head + resReleveInfo() + (isManager() && typeof rrqBlock === 'function' ? rrqBlock() : '') + kpis + tabs('resTab', [['todo', `À arbitrer (${open.length})`], ['all', 'Historique du mois']], tab) + body;
   },
 };
+// Relève de la boîte accueil (fonction ingestResiliations) : heure du dernier passage ; au-delà de 3 h, bandeau orange au manager.
+function resReleveInfo(clubId = CLUB.id) {
+  const ms = deepGet(S, ['clubs', clubId, 'mailSync']); if (!ms || !ms.at) return '';
+  const age = Date.now() - ms.at; const min = Math.max(0, Math.round(age / 60000));
+  const quand = min < 60 ? `il y a ${plur(min, 'min', 'min')}` : min < 48 * 60 ? `il y a ${Math.floor(min / 60)} h ${pad(min % 60)}` : `le ${dmy(isoOf(new Date(ms.at)))}`;
+  const ligne = `<div class="res-releve" data-releve="${ms.at}"><span>Dernière relève : ${quand}</span>${ms.ok === false && ms.error ? '<span class="bad">dernier passage en erreur</span>' : ''}${ms.scanned != null ? `<span>${plur(ms.scanned, 'fil lu', 'fils lus')}, ${plur(ms.found || 0, 'demande trouvée', 'demandes trouvées')}</span>` : ''}</div>`;
+  const panne = age > 3 * 3600000 && isManager() ? `<div class="alert" data-releve-panne="1" style="margin-bottom:12px">${ico('alert')}<div>La relève de la boîte accueil ne répond plus depuis ${age > 20 * 3600000 ? `le ${dmy(isoOf(new Date(ms.at)))} à ` : ''}${timeOf(ms.at).replace(':', ' h ')}. Vérifiez le script Apps Script.</div></div>` : '';
+  return panne + ligne;
+}
+// Sauvetage déclaré dans Fit Pulse, pas encore lu « annulée » dans Resamania depuis plus de 15 jours.
+function resAConfirmer(r) { const sv = S.entries['sv_' + r.id]; return !!(sv && sv.proof === 'declaratif' && Date.now() - (sv.at || 0) > 15 * 864e5); }
+const resAppliAcceptee = r => r.source === 'appli' && deepGet(r, ['rsm', 'state']) === 'accepted' && r.effective && daysTo(r.effective) > 3;
 function resCard(r) {
   const n = daysTo(r.effective); const st = resStatus(r); const last = resActions(r).slice(-1)[0];
-  const mine = r.ownerId === ME.id;
-  return `<div class="card dossier ${resUrgent(r) ? 'urgent' : ''}">
-    <div class="row wrap"><div class="spacer" style="min-width:180px"><b class="t-14">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
+  const mine = r.ownerId === ME.id; const ph = resPhase(r); const due = resDueAt(r);
+  return `<div class="card dossier ph-${ph}" data-phase="${ph}">
+    <div class="row wrap"><div class="spacer" style="min-width:180px"><b class="t-14">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : r.source === 'mail' ? ' · e-mail' : ''}</div></div>
+      ${r.source === 'appli' ? '<span class="badge info" data-badge="appli">Appli</span>' : ''}${r.type === 'suspension' ? '<span class="badge">Suspension</span>' : ''}
+      ${ph !== 'close' ? `<span class="badge ${RES_PHASE[ph].cls}">${RES_PHASE[ph].label}</span>` : ''}
       ${r.effective ? `<span class="badge ${n <= 7 ? 'bad' : n <= 15 ? 'warn' : ''}">${n < 0 ? 'effective depuis ' + (-n) + ' j' : n === 0 ? 'effective aujourd’hui' : 'J-' + n}</span>` : '<span class="badge">date effective ?</span>'}
-      <span class="badge ${RES_STATUS[st].cls}">${RES_STATUS[st].label}</span></div>
+      <span class="badge ${RES_STATUS[st].cls}">${RES_STATUS[st].label}</span>${resAConfirmer(r) ? '<span class="badge warn" data-badge="a-confirmer">À confirmer</span>' : ''}</div>
+    ${resAppliAcceptee(r) ? `<div class="small bad" style="margin-top:6px" data-mention="appli">Acceptée dans Resamania, effective le ${dmy(r.effective).slice(0, 5)} : appeler avant</div>` : ''}
+    ${r.mail ? `<div class="small muted" style="margin-top:6px">${r.mail.subject ? esc(r.mail.subject) + ' · ' : ''}${plur(r.mail.inCount || 1, 'message reçu', 'messages reçus')}${r.mail.outCount ? ', ' + plur(r.mail.outCount, 'réponse', 'réponses') : ''}${r.mail.link && /^https:\/\//.test(r.mail.link) ? ` · <a href="${esc(r.mail.link)}" target="_blank" rel="noopener">Ouvrir le fil</a>` : ''}</div>` : ''}
+    ${ph === 'attente' && due ? `<div class="small" style="margin-top:6px">Réponse attendue ${due < Date.now() ? '<b class="bad">en retard depuis ' + dureeCourte(Date.now() - due) + '</b>' : 'avant le ' + dmy(isoOf(new Date(due))).slice(0, 5) + ' à ' + timeOf(due)}</div>` : ''}
     ${(() => { const v = valeurEnJeu(r); const c = v.client; const nb = c ? 0 : resCandidats(r).length;
       return `<div class="res-val" data-valeur="${resValeur(r)}"><b>En jeu : ${fmtE(resValeur(r))}</b>${v.estimee ? ' <span class="muted small">estimé</span>' : ''} <span class="muted small">· ${v.engage ? plur(v.mois, 'mois restant', 'mois restants') : 'sans engagement, 12 mois'}</span>${c ? ` <a class="small" href="#/client/${c.id}">Fiche ${esc(c.num ? 'n° ' + c.num : c.name)}</a>` : nb > 1 ? ` <button class="btn sm" data-act="resPickClient" data-id="${r.id}">Choisir la fiche (${nb})</button>` : ' <span class="muted small">aucune fiche</span>'}</div>`; })()}
     ${last ? `<div class="small" style="margin-top:8px"><span class="muted">Dernière action :</span> ${esc(last.label)}${last.note ? '<br><span class="muted">« ' + esc(last.note) + ' »</span>' : ''} <span class="muted">· ${esc(fullName(S.users[last.by]))}, ${ago(last.at)}</span></div>` : ''}
@@ -89,6 +134,8 @@ function resCard(r) {
 // Historique en ajout seul : chaque action est une cle a part (log/<id>), deux
 // commerciaux qui notent en meme temps ne s'ecrasent plus. L'ancien tableau
 // « actions » reste lu.
+// Durée lisible : « 3 h 20 », « 2 j ».
+const dureeCourte = ms => { const h = Math.floor(ms / 3600000); return h >= 48 ? Math.floor(h / 24) + ' j' : h ? h + ' h ' + pad(Math.floor(ms / 60000) % 60) : Math.max(1, Math.floor(ms / 60000)) + ' min'; };
 function resLogOp(r, label, extra = {}) { const id = newId(); return [['resiliations', r.id, 'log', id], { at: Date.now(), by: ME.id, label, ...extra }]; }
 // Offre proposée (champ structuré, ou ancien libellé « … · Offre »).
 const actOffer = a => a.offer || RES_OFFERS.find(o => o !== 'Aucune' && (a.label || '').endsWith(' · ' + o)) || null;
@@ -128,16 +175,31 @@ ACTIONS.resCallSave = () => {
   db.batch([resLogOp(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim(), out, offer: f.offer && f.offer !== 'Aucune' ? f.offer : null }), [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
   closeModal(); toast('1 appel noté');
 };
+// Sauvetage : l'offre acceptée et une note sont exigées ; le point est « déclaratif » jusqu'à ce que
+// Resamania lise l'annulation de la demande (proof passe alors à « resamania »).
 ACTIONS.resSaveIt = el => {
-  const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
-  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], valeurEnJeu(r).euros], [['resiliations', r.id, 'valeur'], valeurEnJeu(r).euros], ...(resClient(r) && !r.clientId ? [[['resiliations', r.id, 'clientId'], resClient(r).id]] : []), [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
-    [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
-  toast(`Client sauvé : ${r.client} reste au club`);
+  const r = S.resiliations[el.dataset.id];
+  openModal({ title: `Sauvetage · ${r.client}`, body: `<form id="rsf" class="grid">
+    <label class="field"><span>Offre acceptée</span><select class="input" name="offer" required><option value="">Choisir l’offre</option>${RES_OFFERS.filter(o => o !== 'Aucune').map(o => `<option>${esc(o)}</option>`).join('')}</select></label>
+    <label class="field"><span>Note</span><textarea class="input" name="note" rows="3" maxlength="300" required placeholder="Ce qui a été convenu avec l’adhérent"></textarea></label>
+    <p class="muted small" style="margin:0">Le sauvetage compte tout de suite au classement. Il passe « confirmé » quand l’import Resamania lit la demande annulée.</p></form>`,
+    foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="resSaveOk" data-id="${r.id}">Enregistrer le sauvetage</button>` });
+};
+ACTIONS.resSaveOk = el => {
+  const r = S.resiliations[el.dataset.id]; const f = formData($('#rsf'));
+  if (!f.offer || !RES_OFFERS.includes(f.offer) || f.offer === 'Aucune') { toast('Choisissez l’offre acceptée.'); return; }
+  if (!(f.note || '').trim()) { toast('Indiquez une note sur le sauvetage.'); return; }
+  const owner = r.ownerId || ME.id; const v = valeurEnJeu(r).euros; const now = Date.now();
+  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], v], [['resiliations', r.id, 'valeur'], v], [['resiliations', r.id, 'ownerId'], owner],
+    [['resiliations', r.id, 'outcome'], 'sauvee'], [['resiliations', r.id, 'closedAt'], now], [['resiliations', r.id, 'closedBy'], ME.id], [['resiliations', r.id, 'closedReason'], 'fitpulse'],
+    ...(resClient(r) && !r.clientId ? [[['resiliations', r.id, 'clientId'], resClient(r).id]] : []), resLogOp(r, 'Sauvée · ' + f.offer, { note: f.note.trim().slice(0, 300), offer: f.offer }),
+    [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: now, by: ME.id, proof: 'declaratif', offer: f.offer }]]);
+  closeModal(); toast(`Client sauvé : ${r.client} reste au club`);
 };
 ACTIONS.resLose = async el => {
   const r = S.resiliations[el.dataset.id];
   if (!await confirmDlg(`Confirmer la résiliation de ${esc(r.client)} ?`, { ok: 'Confirmer', danger: true })) return;
-  db.batch([[['resiliations', r.id, 'status'], 'resiliee'], [['resiliations', r.id, 'saved'], false], resLogOp(r, 'Résiliation confirmée'), [['entries', 'sv_' + r.id], null]]);
+  db.batch([[['resiliations', r.id, 'status'], 'resiliee'], [['resiliations', r.id, 'saved'], false], [['resiliations', r.id, 'outcome'], 'resiliee'], [['resiliations', r.id, 'closedAt'], Date.now()], [['resiliations', r.id, 'closedBy'], ME.id], [['resiliations', r.id, 'closedReason'], 'fitpulse'], resLogOp(r, 'Résiliation confirmée'), [['entries', 'sv_' + r.id], null]]);
 };
 ACTIONS.resOpen = el => {
   const r = S.resiliations[el.dataset.id]; const members = clubMembers(CLUB.id);
@@ -160,19 +222,27 @@ ACTIONS.resDetailSave = el => {
   const P = k => ['resiliations', r.id, k];
   if (f.nature === 'option' && f.sameDay && !(f.justif || '').trim()) { toast('Option résiliée le jour de la vente : la justification est obligatoire.'); return; }
   const ops = [[P('nature'), f.nature], [P('sameDay'), !!f.sameDay], [P('justif'), (f.justif || '').trim().slice(0, 300) || null], [P('status'), f.status], [P('saved'), f.status === 'sauvee'], [P('ownerId'), f.owner || null], [P('userId'), f.owner || null], [P('date'), f.date || r.date], [P('effective'), f.effective || null], [P('reason'), f.reason]];
-  if (f.status !== resStatus(r)) ops.push(resLogOp(r, 'Statut : ' + RES_STATUS[f.status].label));
+  if (f.status !== resStatus(r)) {
+    ops.push(resLogOp(r, 'Statut : ' + RES_STATUS[f.status].label));
+    const ferme = ['sauvee', 'resiliee'].includes(f.status);
+    ops.push([P('outcome'), ferme ? f.status : null], [P('closedAt'), ferme ? Date.now() : null], [P('closedBy'), ferme ? ME.id : null], [P('closedReason'), ferme ? (isManager() ? 'manager' : 'fitpulse') : null]);
+  }
   // Déjà sauvé : le point garde sa date (corriger le motif ne déplace pas le sauvetage d'un mois à l'autre).
   const svOld = S.entries['sv_' + r.id]; const keep = resStatus(r) === 'sauvee' && svOld;
-  if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { ...(keep ? svOld : {}), id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: keep ? svOld.date : today(), value: 1, source: keep ? svOld.source || 'manual' : 'manual', at: keep ? svOld.at || Date.now() : Date.now(), by: ME.id }]);
+  if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { ...(keep ? svOld : {}), id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: keep ? svOld.date : today(), value: 1, proof: keep ? svOld.proof || 'declaratif' : 'declaratif', source: keep ? svOld.source || 'manual' : 'manual', at: keep ? svOld.at || Date.now() : Date.now(), by: ME.id }]);
   if (f.status !== 'sauvee') ops.push([['entries', 'sv_' + r.id], null]);
   db.batch(ops); closeModal(); toast('1 dossier enregistré');
 };
-ACTIONS.resNew = () => openModal({ title: 'Nouvelle demande de résiliation', body: `<form id="rf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="client" required></label><label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${today()}"></label><label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${addDays(today(), 30)}"></label><label class="field full"><span>Motif</span><select class="input" name="reason">${RES_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label><label class="row full small"><input type="checkbox" name="mine" checked> Je m’en occupe</label></form>`,
+ACTIONS.resNew = () => openModal({ title: 'Nouvelle demande de résiliation', body: `<form id="rf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="client" required></label><label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${today()}"></label><label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${addDays(today(), 30)}"></label><label class="field"><span>Motif</span><select class="input" name="reason">${RES_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label><label class="field"><span>Reçue</span><select class="input" name="source"><option value="accueil">À l’accueil</option><option value="manuel">Par téléphone ou courrier</option><option value="mail">Par e-mail</option></select></label><label class="field"><span>Demande</span><select class="input" name="type"><option value="resiliation">Résiliation</option><option value="suspension">Suspension</option></select></label><label class="row full small"><input type="checkbox" name="mine" checked> Je m’en occupe</label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="resCreate">Créer le dossier</button>' });
 ACTIONS.resCreate = () => {
   const f = formData($('#rf')); if (!f.client.trim()) { toast('Indiquez le nom du client.'); return; }
   const id = newId();
-  db.set(['resiliations', id], { id, clubId: CLUB.id, client: f.client.trim(), date: f.date || today(), effective: f.effective || null, reason: f.reason, status: f.mine ? 'traitement' : 'nouvelle', saved: false, ownerId: f.mine ? ME.id : null, userId: f.mine ? ME.id : null, actions: [{ at: Date.now(), by: ME.id, label: 'Demande enregistrée' }], at: Date.now() });
+  // Réception : maintenant pour une demande du jour, sinon minuit (Paris) du jour indiqué.
+  const now = Date.now(); const date = f.date || today(); const receivedAt = date === today() ? now : minuitParis(date);
+  db.set(['resiliations', id], { id, clubId: CLUB.id, client: f.client.trim(), date, effective: f.effective || null, reason: f.reason, status: f.mine ? 'traitement' : 'nouvelle', saved: false, ownerId: f.mine ? ME.id : null, userId: f.mine ? ME.id : null,
+    source: ['accueil', 'manuel', 'mail'].includes(f.source) ? f.source : 'manuel', type: f.type === 'suspension' ? 'suspension' : 'resiliation', receivedAt, dueAt: receivedAt + resSlaHeures() * 3600000,
+    actions: [{ at: now, by: ME.id, label: 'Demande enregistrée' }], at: now });
   closeModal(); toast('1 dossier créé');
 };
 ACTIONS.resDel = async el => { if (await confirmDlg('Supprimer définitivement cette demande ?', { ok: 'Supprimer', danger: true })) { db.batch([[['resiliations', el.dataset.id], null], [['entries', 'sv_' + el.dataset.id], null]]); closeModal(); } };

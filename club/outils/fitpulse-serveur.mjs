@@ -96,7 +96,15 @@ export const REGLE = `${DEBUT}
       },
       "clients": { ".write": ${j(MEMBRE)} },
       "loyalty": { ".write": ${j(MEMBRE)} },
-      "resiliations": { ".write": ${j(MEMBRE)} },
+      // Dossiers relevés dans la boîte accueil (« ml… ») : créés et tenus à jour par le seul compte de service
+      // (fonction ingestResiliations) ; l'équipe les traite (statut, responsable, journal) sans toucher au fil e-mail.
+      "resiliations": { "$id": {
+        ".write": ${j(`${MEMBRE} && (!$id.beginsWith('ml') || (data.exists() && (newData.exists() || ${MGR})))`)},
+        "mail": { ".validate": ${j(`!$id.beginsWith('ml') || (newData.child('threadId').val() === data.child('threadId').val() && newData.child('lastInAt').val() === data.child('lastInAt').val() && newData.child('awaitingReply').val() === data.child('awaitingReply').val())`)} },
+        "receivedAt": { ".validate": ${j(`!$id.beginsWith('ml') || newData.val() === data.val()`)} }
+      } },
+      // Battement de la relève : écrit par le seul compte de service.
+      "clubs": { ".write": ${j(MGR)}, "$c": { "mailSync": { ".validate": ${j(`!newData.exists() || newData.child('at').val() === data.child('at').val()`)} } } },
       "recov": { ".write": ${j(MEMBRE)} },
       "reactions": { ".write": ${j(MEMBRE)} },
       "celebrated": { ".write": ${j(MEMBRE)} },
