@@ -22825,8 +22825,8 @@ function _viralRendre(){
 //
 // Un code (/ambassadeurs/<CODE>) donné à un créateur de contenu : ceux qui
 // arrivent par lui voient leur mois d'essai présenté comme offert grâce à
-// lui (Kevin, 28/09/2026 : un mois, pas deux — le même que le parrainage,
-// TARIFS.essai_parrainage.moisEnPlus = 0), et il touche une commission sur ce qu'ils
+// lui (Kevin, 09/10/2026 : DEUX mois, l'essai + un mois offert — le même que
+// le parrainage, TARIFS.essai_parrainage.moisEnPlus = 1), et il touche une commission sur ce qu'ils
 // paient — commissionPct (20 %), palierPct (25 %) au-delà de palierSeuil (50)
 // payants — pendant dureeMois (12) à partir de leur premier paiement. Une
 // commission n'est DUE que 30 jours après le paiement (remboursements).
@@ -22896,7 +22896,7 @@ async function ambassadeurApresInscription(u,saisi){
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
     // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
     toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
-      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', '+texteMoisOfferts()+' ⚡'):('Code '+c.code+' appliqué : '+texteMoisOfferts()+' ⚡')),'var(--green)');
     return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
@@ -23182,10 +23182,12 @@ function ambCopier(l,btn){
 }
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
-// LA RÉCOMPENSE : le filleul a son mois d'essai, présenté comme offert par
-// son parrain (un mois, pas deux : OFFRES.essai_parrainage vaut 0) ;
-// le parrain gagne 1 mois offert — ses droits prolongés — au PREMIER paiement
-// du filleul, et rien avant (anti-fraude). Au 10e filleul payant, 1 mois
+// LA RÉCOMPENSE (Kevin, 09/10/2026, DECISIONS §1 et §2) : le filleul a son
+// mois d'essai PLUS un mois offert par son parrain (essai_parrainage.moisEnPlus
+// = 1, soit moisInvite() = 2) ; le parrain gagne 1 mois offert — ses droits
+// prolongés — aux QUATRE PREMIÈRES SÉANCES du filleul ou à son PREMIER
+// PAIEMENT, le premier des deux, une seule fois par filleul (worker :
+// parrainageSeuil, parrainagePaiement). Au 10e filleul payant, 1 mois
 // d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
 //
 // OÙ VIVENT LES DONNÉES (voir database.rules.json et functions/index.js) :
@@ -23241,13 +23243,23 @@ function rcAppareilId(){
   }catch(e){ return 'sansstockage0000'; }
 }
 // ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
+// PURE. Les mois d'accès d'une personne invitée (ami ou ambassadeur
+// « essai+1mois ») : l'essai + le mois offert (tarifs.json ; Kevin, 09/10/2026).
+/** @returns {number} */
+function moisInvite(){ return (Number(TARIFS.essai.mois)||0)+(Number(TARIFS.essai_parrainage.moisEnPlus)||0); }
+// PURE. « tes 2 premiers mois » — ou « ton premier mois » si l'invité n'a que l'essai.
+/** @returns {string} */
+function offreMoisInvite(){ const n=moisInvite(); return n>1?'tes '+n+' premiers mois':'ton premier mois'; }
+// PURE. « tes 2 premiers mois sont offerts ».
+/** @returns {string} */
+function texteMoisOfferts(){ return offreMoisInvite()+(moisInvite()>1?' sont offerts':' est offert'); }
 // PURE. Le message prêt à partager. LE MOIS OFFERT GRÂCE À TOI (Kevin,
-// 28/09/2026) : jamais « au lieu de », jamais « 2 mois ».
+// 28/09/2026) : jamais « au lieu de ».
 // `lien` : ajouté à la fin ; '' (chaîne vide) quand le lien voyage à part
 // (navigator.share le porte dans `url` : l'écrire aussi dans le texte le
 // faisait apparaître deux fois) ; absent : on dit où saisir le code.
 function parrainageMessage(code,lien){
-  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', ton premier mois est offert'
+  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', '+texteMoisOfferts()
     +' : toute l’app ouverte, sans carte bancaire.'
     +(lien?' '+lien:(lien===''?'':' Le code se saisit à l’inscription.'));
 }
@@ -23309,10 +23321,10 @@ function phraseInvitationInscription(prenom,amb,avantage){
   // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
   // mois d'Ultime à moitié prix.
   if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
-  if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
+  if(amb) return 'Grâce à '+amb+', '+texteMoisOfferts();
   // Le mois offert PAR QUELQU'UN (lot C) : c'est ce « par quelqu'un » qui compte.
-  if(prenom) return prenom+' t’offre ton premier mois';
-  return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
+  if(prenom) return prenom+' t’offre '+offreMoisInvite();
+  return 'Le code d’un ami ou d’un ambassadeur t’offre '+offreMoisInvite()+'.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
 // L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
@@ -23421,7 +23433,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
+  toast(pub.prenom?(pub.prenom+' t’offre '+offreMoisInvite()+' ⚡'):'Code appliqué : '+texteMoisOfferts()+' ⚡','var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -51791,10 +51803,10 @@ const _LEGENDES=Object.freeze({
     d=>'Séances, records, tonnage : la team avance. Et toi ?'],
   // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
   // cliquer : il recopie). Sans code connu, on dit de le demander.
-  invitation:[d=>'Je t’offre ton premier mois sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+  invitation:[d=>'Je t’offre '+offreMoisInvite()+' sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' premier mois est offert, sans carte.',
-    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+'ton premier mois est offert.',
-    d=>'Toute l’app ouverte, sans carte bancaire, et ton premier mois est offert. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+texteMoisOfferts()+'.',
+    d=>'Toute l’app ouverte, sans carte bancaire, et '+texteMoisOfferts()+'. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
   saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
     d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
     d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],

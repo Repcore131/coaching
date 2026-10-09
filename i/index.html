@@ -205,16 +205,19 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // textContent partout : un prénom ne devient jamais du HTML.
   // LE MOIS OFFERT, PAR LA PERSONNE QUI INVITE (Kevin, 28/09/2026) : on dit
   // « grâce à Julie », jamais « au lieu de ».
-  // L'AMI (lot C, 29/09/2026) : « Julie t'offre ton premier mois », avant le
+  // L'AMI (lot C, 29/09/2026) : « Julie t'offre un mois de plus », avant le
   // bouton. Arrivé par un duel, le défi reste le titre (la raison de venir) et
   // le cadeau vient dessous.
   function poserNom(nom,rang,demi,ami){
     if(!nom) return;
     var t=el('titre'); if(t&&!duel) t.textContent=nom+' t\u2019invite sur RepCore';
-    // L'offre de lancement (ultime_demi) remplace le mois offert.
+    // L'offre de lancement (ultime_demi) remplace le mois offert. Le nombre de
+    // mois vient de #mois-ami (data-nb="essai.moisParraine", tarifs.json), lu
+    // AVANT que la phrase ne soit remplacée (Kevin, 09/10/2026 : 2 mois).
+    var nm=parseInt((el('mois-ami')||{}).textContent,10), duree=nm>1?nm+' mois d\u2019accès complet':'toute l\u2019app ouverte';
     var offre=demi?'Grâce à '+nom+', ton 1er mois d\u2019Ultime est à moitié prix.'
-      :ami?nom+' t\u2019offre ton premier mois\u00a0: toute l\u2019app ouverte, sans carte bancaire.'
-      :'Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
+      :ami?nom+' t\u2019offre un mois de plus\u00a0: '+duree+', sans carte bancaire.'
+      :'Grâce à '+nom+', un mois de plus t\u2019est offert\u00a0: '+duree+', sans carte bancaire.';
     var pr=el('promesse'); if(pr) pr.textContent=offre;
     var ii=el('interne-invite');
     if(ii){ ii.textContent=offre; ii.hidden=false; }

@@ -111,13 +111,13 @@ th{color:var(--gris);font-weight:600;font-size:12px}
       'Un avant / après de tes charges sur 4 semaines : les chiffres parlent, l’app les garde.',
       'Ton rang et ta série en story (« 12 semaines d’affilée ») : ce que la régularité donne.',
       'Un défi lancé à ta communauté : « 3 séances cette semaine, qui relève ? », avec ton lien.',
-      'Une FAQ en story : « C’est quoi RepCore ? » — '+(demi?'1er mois d’Ultime à moitié prix avec mon code':'mon premier mois offert avec mon code')+'.'];
+      'Une FAQ en story : « C’est quoi RepCore ? » — '+(demi?'1er mois d’Ultime à moitié prix avec mon code':'un mois offert en plus de l’essai avec mon code')+'.'];
     h+='<h2>5 idées de publications</h2><ol class="idees">'+idees.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ol>';
     // LE RAPPEL LÉGAL : loi n° 2023-451 du 9 juin 2023 (influence commerciale).
     h+='<div class="legal"><b>Obligatoire à chaque publication :</b> affiche clairement que c’est un <b>partenariat commercial</b>, avec la mention '
       +'« <b>Publicité</b> » ou « <b>Collaboration commerciale</b> » (loi n° 2023-451 du 9 juin 2023 sur l’influence commerciale). '
       +'Sur Instagram, active aussi l’étiquette « Partenariat rémunéré ». Sans cette mention, la publication est illégale, même avec un simple code.</div>';
-    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont '+(demi?'leur 1er mois d’Ultime à moitié prix':'leur premier mois offert grâce à toi')+'. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
+    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont '+(demi?'leur 1er mois d’Ultime à moitié prix':'un mois offert en plus de leur essai, grâce à toi')+'. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
       +(v.palierPct?' ('+(v.palierPct|0)+' % au-delà de '+(v.palierSeuil|0)+' payants)':'')+', pendant '+(v.dureeMois|0)+' mois à partir de leur premier paiement. '
       +'Une commission devient due 30 jours après le paiement (délai des remboursements), et se règle chaque mois.'
       +(v.maj?'<br>Mis à jour le '+esc(new Date(v.maj).toLocaleString('fr-FR'))+'.':'')+'</p>';
