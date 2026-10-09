@@ -52,10 +52,10 @@ PAGES.resiliations = {
     const vLost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(nomAffiche())} · uniquement les demandes <b>à arbitrer</b> : les résiliations déjà acceptées partent à l’historique.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
     const kpis = `<div class="stat-row">
-      <div class="stat ${open.length ? 'hot' : ''}"><span>À arbitrer</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
-      <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
+      <div class="stat ${open.length ? 'hot' : ''}"><span>À arbitrer</span><b>${plur(open.length, 'demande', 'demandes')}</b><small>${noOwner} sans responsable</small></div>
+      <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${plur(urgent, 'demande', 'demandes')}</b><small>à appeler en priorité</small></div>
       <div class="stat" data-tuile="enjeu"><span>Valeur en jeu</span><b data-v="${vOpen}">${fmtE(vOpen)}</b><small>${plur(open.length, 'demande ouverte', 'demandes ouvertes')}</small></div>
-      <div class="stat" data-tuile="sauvees"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small><b data-v="${vSaved}">${fmtE(vSaved)}</b> sauvés · taux ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
+      <div class="stat" data-tuile="sauvees"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${plur(saved, 'client', 'clients')}</b><small><b data-v="${vSaved}">${fmtE(vSaved)}</b> sauvés · taux ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
       <div class="stat"><span>Valeur perdue ce mois</span><b class="bad">${fmtE(vLost)}</b><small>résiliations effectives</small></div>
       <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
@@ -276,12 +276,12 @@ function dunTable() {
       <div class="stat"><span>Délai médian du mois</span><b>${K.medianJours == null ? 'n.d.' : plur(K.medianJours, 'jour', 'jours')}</b><small>${plur(K.nClos, 'dossier régularisé', 'dossiers régularisés')} en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</small></div>
       <div class="stat"><span>Part récupérée par l’équipe</span><b>${fmtP(K.partEquipe)}</b><small><span class="trace-n"${traceAttr({ t: 'recov', canal: 'equipe', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: K.team })}>${fmtE(K.team)}</span> sur ${fmtE(K.all)}</small></div>
       <div class="stat ${K.du30 ? 'alarm' : ''}"><span>Encore dû, plus de 30 jours</span><b>${fmtE(K.du30)}</b><small>${plur(K.n30, 'dossier', 'dossiers')}</small></div>
-      <div class="stat ${K.promessesEchues ? 'alarm' : ''}"><span>Promesses échues</span><b>${K.promessesEchues}</b><small>repassées « À relancer »</small></div></div>
+      <div class="stat ${K.promessesEchues ? 'alarm' : ''}"><span>Promesses échues</span><b>${plur(K.promessesEchues, 'dossier', 'dossiers')}</b><small>repassées « À relancer »</small></div></div>
     <div class="stat-row">
       <div class="stat hot"><span>Total dû</span><b>${fmtE(total)}</b><small>${plur(open.length, 'dossier ouvert', 'dossiers ouverts')}</small></div>
-      <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${cnt('due')}</b><small>${cnt('nobody')} sans responsable</small></div>
+      <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${plur(cnt('due'), 'dossier', 'dossiers')}</b><small>${cnt('nobody')} sans responsable</small></div>
       <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok"><span class="trace-n"${traceAttr({ t: 'recov', canal: 'all', club: CLUB.id, from: rgM.from, to: rgM.to, v: recTot })}>${fmtE(recTot)}</span></b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
-      <div class="stat"><span>Dossiers soldés ce mois</span><b>${recMonth.length}</b><small>passés en « Récupéré »</small></div></div>
+      <div class="stat"><span>Dossiers soldés ce mois</span><b>${plur(recMonth.length, 'dossier', 'dossiers')}</b><small>passés en « Récupéré »</small></div></div>
     ${open.length ? `<div class="age-tiles">${tranches.map(x => `<div class="age-tile ${x.t[3]}"><span>${x.t[2]}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')} · attendu ${fmtP(x.t[1])}</small></div>`).join('')}</div>` : ''}
     ${open.length ? `<div class="card dette-age" style="margin-bottom:12px;padding:12px 14px"><div class="row wrap"><b>Ancienneté de la dette</b><span class="muted small spacer">depuis la date du solde ; date inconnue comptée dans « plus de 60 jours »</span>${ageF != null ? `<button class="btn sm ghost" data-act="ui" data-key="dunAge" data-val="">Toutes les anciennetés</button>` : ''}</div>
       <div class="dette-bar" role="group" aria-label="Ancienneté de la dette">${anc.map(x => `<button class="dette-t t${x.i} ${ageF === x.i ? 'on' : ''}" data-act="ui" data-key="dunAge" data-val="${ageF === x.i ? '' : x.i}" data-tranche="${x.i}" data-v="${x.v}" style="flex:${Math.max(x.v, total * 0.08) || 1}" aria-pressed="${ageF === x.i}"><span>${x.label}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')}</small></button>`).join('')}</div></div>` : ''}

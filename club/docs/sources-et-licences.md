@@ -1,6 +1,6 @@
 # Fit Pulse : sources tierces et licences
 
-Tout le reste (code de l'application et des outils serveur, textes, méthodes de calcul, visuels vectoriels de `art.js`, logo de `assets/logo/`) a été écrit pour Fit Pulse : voir `LICENSE` et `docs/concepts-propres.md`.
+Tout le reste (code de l'application et des outils serveur, textes, méthodes de calcul, visuels vectoriels de `art.js`, logo de `assets/brand/`) a été écrit pour Fit Pulse : voir `LICENSE` et `docs/concepts-propres.md`.
 
 ## Bibliothèques
 
@@ -20,8 +20,8 @@ Hébergées sur le site (`fonts/`, déclarées dans `fonts.css`), aucun appel à
 
 | Police | Auteur | Licence |
 | --- | --- | --- |
-| Barlow Condensed | Jeremy Tribby | SIL Open Font License 1.1 |
-| Montserrat | Julieta Ulanovsky et contributeurs | SIL Open Font License 1.1 |
+| Geist, Geist Mono | Vercel et Basement Studio | SIL Open Font License 1.1 |
+| IBM Plex Sans, IBM Plex Mono (repli, `fontPair: 'plex'`) | IBM, Mike Abbink et Bold Monday | SIL Open Font License 1.1 |
 
 L'OFL autorise l'usage commercial et l'intégration dans un logiciel ; les polices ne peuvent pas être vendues seules.
 
@@ -29,10 +29,10 @@ L'OFL autorise l'usage commercial et l'intégration dans un logiciel ; les polic
 
 | Fichier | Origine | Droits | À vérifier |
 | --- | --- | --- | --- |
-| `assets/logo/*.svg`, `favicon.png`, `icon-*.png`, `apple-touch-icon.png`, `assets/fitpulse-logo.png` | dessinés pour Fit Pulse (tracés SVG, PNG générés depuis ces SVG) le 9 octobre 2026, commit `d189d91` | Fit Pulse | rien |
-| visuels de `art.js` (insignes de zone, paliers, trophées, illustrations des écrans vides) | dessinés en SVG dans le code | Fit Pulse | rien |
-| `assets/hero-banner.jpg`, `assets/hero-login.jpg` | images d'ambiance créées dans Canva (commit `e27d11f`, 5 octobre 2026) | licence Canva du compte qui les a créées | vérifier dans Canva que chaque élément utilisé (photo, illustration) est couvert par la licence de contenu Canva pour un usage commercial dans un logiciel vendu, sans élément « Pro » utilisé hors abonnement ; conserver la preuve (capture de l'élément et de sa licence) |
-| `assets/fitpulse-source.webp` | ancien logo, créé dans Canva (commit `fd68884`, 5 octobre 2026) | licence Canva | plus utilisé par l'application ; à garder seulement comme trace, ou à retirer |
+| `assets/brand/logo-mark.svg`, `logo-full.svg`, `logo-white.svg` et leurs PNG, `favicon.png`, `icon-*.png`, `apple-touch-icon.png` | logo « P pouls » dessiné pour Fit Pulse en SVG (lot D, octobre 2026), PNG générés depuis ces SVG | Fit Pulse | rien |
+| icônes de navigation (`ICONS` dans `core.js`), insignes de niveau, paliers et trophées (`art.js`) | redessinés en SVG dans le code d'après la planche `assets/brand/icons-sheet.png` | Fit Pulse | rien |
+| `assets/brand/icons-sheet.png`, `empty-1..8.png` (et `-a`), `level1..4.png`, `login-visual.webp` | planches et visuel fournis par le titulaire en octobre 2026 (images générées), découpés et réduits pour le site | à confirmer par le titulaire | vérifier les conditions de l'outil qui a produit ces images (usage commercial dans un logiciel vendu, absence de marque ou de personne identifiable) et en garder la preuve ; le visuel de connexion est en WebP, une photo en PNG dépassant 120 Ko |
+| `assets/logo/*.svg` | premier logo (9 octobre 2026, commit `d189d91`) | Fit Pulse | conservé comme historique, plus utilisé par l'application |
 | `assets/logo-fitness-park.svg` | logo de l'enseigne Fitness Park | marque de Fitness Park, propriété de son titulaire | plus affiché par défaut ; ne peut être affiché que par un club du réseau autorisé par l'enseigne ; à exclure de toute version vendue à d'autres salles |
 
 ## Données

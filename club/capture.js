@@ -36,7 +36,7 @@ function captureState() {
     const age = i < 4 ? 15 + (i % 3) : i < 7 ? 30 + i % 3 : 60 + Math.floor(R() * 1000);
     const start = addDays(t, -age); let end = start; while (end <= t) end = addMonths(end.slice(0, 7), 12) + end.slice(7); if (end.slice(8) > pad(daysIn(end.slice(0, 7)))) end = end.slice(0, 8) + pad(daysIn(end.slice(0, 7)));
     const c = { id, clubId: C, num: String(520000 + i), name: `${P[i % P.length]} ${N[(i * 7) % N.length]}`, phone: `06 50 00 ${pad(Math.floor(i / 10))} ${pad(i)}`, email: `client${i + 1}@example.com`, offer: of, price: prix, status: 'Client', start, end, sellerId: vendeurs[i % vendeurs.length], birth: `${pad(1 + (i * 5) % 12)}-${pad(1 + (i * 11) % 28)}` };
-    if (i >= 7 && i < 10) c.end = addDays(t, 20 + i * 2); // trois fins d'engagement dans le mois
+    if (i >= 7 && i < 10) c.end = addDays(t, 5 + (i - 7) * 5); // trois fins d'engagement dans le mois
     st.clients[id] = c; L.push(c);
   }
   // Impayés : 12 dossiers de 29 à 240 €, anciennetés étalées, deux promesses.

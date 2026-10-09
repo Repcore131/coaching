@@ -2,7 +2,7 @@
 // Fit Pulse : service worker minimal. Pages et scripts toujours pris sur le
 // réseau d'abord (une mise à jour passe au chargement suivant), icônes et
 // polices en cache. Au clic sur une alerte : ouvre la bonne page.
-const VERSION = 'fp-v3';
+const VERSION = 'fp-v4'; // v4 : nouveau logo et nouvelles polices (lot D)
 const STATIC = /\.(png|woff2?|ttf|svg|webp)$/;
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n !== VERSION).map(n => caches.delete(n)))).then(() => self.clients.claim())));

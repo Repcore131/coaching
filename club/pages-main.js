@@ -13,7 +13,7 @@ PAGES.onboarding = {
       <form id="ob" class="grid" style="margin-top:16px">
         <label class="field"><span>Nom du club</span><input class="input" name="club" required placeholder="Nom de votre club"></label>
         <div class="form-grid"><label class="field"><span>Enseigne</span><input class="input" name="brand" maxlength="60" placeholder="Facultatif"></label><label class="field"><span>Société d’exploitation</span><input class="input" name="entity" maxlength="80" placeholder="Raison sociale"></label></div>
-        <div class="form-grid"><label class="field"><span>Couleur principale</span><input class="input" type="color" name="primary" value="#12B3A8"></label><label class="field"><span>Panier moyen (€ par mois)</span><input class="input" inputmode="decimal" name="panierMoyen" placeholder="32"></label></div>
+        <div class="form-grid"><label class="field"><span>Couleur principale</span><input class="input" type="color" name="primary" value="#2B4BDB"></label><label class="field"><span>Panier moyen (€ par mois)</span><input class="input" inputmode="decimal" name="panierMoyen" placeholder="32"></label></div>
         <div class="form-grid"><label class="field"><span>Votre prénom</span><input class="input" name="first" required></label><label class="field"><span>Votre nom</span><input class="input" name="last" required></label></div>
         <label class="field"><span>E-mail</span><input class="input" type="email" name="email" placeholder="facultatif en mode local"></label>
         <button class="btn primary" type="submit">Créer mon club</button>

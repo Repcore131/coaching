@@ -234,7 +234,7 @@ function kmSyncCard() {
       : frais && sy.step === 'maj' ? '<p class="small">Récupération des exports en cours…</p>'
         : frais && sy.step === 'ok' ? '<p class="small ok">Mise à jour terminée.</p>'
           : frais && sy.step === 'erreur' ? `<p class="small bad">${esc(sy.msg || 'Échec de la mise à jour.')}</p>` : '';
-  const armeeLigne = armee ? `<p class="small" style="color:var(--warn)"><b>Mise à jour armée.</b> Le robot démarre vers <b>${creneau}</b> — restez sur cette page à ce moment et tenez le code Resamania prêt.</p>` : '';
+  const armeeLigne = armee ? `<p class="small" style="color:var(--warn)"><b>Mise à jour armée.</b> Le robot démarre vers <b>${creneau}</b> : restez sur cette page à ce moment et tenez le code Resamania prêt.</p>` : '';
   const attente = frais && sy.step === 'code';
   return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('clock')}<h3>Mise à jour depuis Resamania</h3></div>
     <p class="muted small" style="margin-top:-6px">Appuyez sur « Lancer la mise à jour » pour armer la récupération des exports du jour. Le robot démarre au créneau suivant (toutes les heures à la demi-heure, de 12 h à 23 h) : soyez présent à ce moment pour saisir le code Resamania.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>

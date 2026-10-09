@@ -90,6 +90,7 @@ function quickAdd(kpiId, value, userId = ME.id) {
 }
 function stepBanner(t) { const el = document.createElement('div'); el.className = 'step-banner'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 1600); }
 function toastUndo(msg, undo) {
+  if (CFG.capture) return;
   const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span><button>Annuler</button>`;
   el.style.pointerEvents = 'auto';
   $('button', el).addEventListener('click', () => { undo(); el.remove(); toast('1 saisie annulée'); });
@@ -161,7 +162,7 @@ function clubWeather(mk) {
 }
 PAGES.home = {
   title: 'Accueil',
-  mount() { setTimeout(() => { if (typeof tourMaybe === 'function') tourMaybe(); }, 400); },
+  mount() { if (!CFG.capture) setTimeout(() => { if (typeof tourMaybe === 'function') tourMaybe(); }, 400); },
   render() {
     const mk = curMonth(); const r = rangeOf('month', mk);
     const st = statsFor(CLUB.id, ME.id, r);
@@ -200,7 +201,7 @@ PAGES.home = {
       ${manager ? '' : primeCard()}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
-          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres}</b><span>${compteRebours().ouvres > 1 ? 'jours ouvrés restants' : 'jour ouvré restant'}</span></div>${healthChip(myHealth)}</div>
+          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres} j</b><span>${compteRebours().ouvres > 1 ? 'ouvrés restants' : 'ouvré restant'}</span></div>${healthChip(myHealth)}</div>
           ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
           ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">Classé en euros attendus</div><h3>Vos 5 actions les plus rentables aujourd’hui</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/opportunites">Tout voir</a></div>${oppHomeList(5)}</div>
@@ -267,8 +268,8 @@ function managerCockpit() {
   const lvl = (bad, warn) => bad ? 'h-alert' : warn ? 'h-watch' : 'h-good';
   const tile = (href, l, cls, label, value, sub) => `<a class="ck2 ${cls}" href="${href}"><div class="ck2-h"><span>${label}</span><i class="hdot ${cls}"></i></div><b>${value}</b><small>${sub}</small><em>${l}</em></a>`;
   return `<div class="row wrap ck-rit"><button class="btn primary sm" data-act="ritual">${ico('sun')} Brief du matin</button><a class="btn sm" href="#/journee">${ico('cal')} ${TXT.nav.journee}</a><button class="btn sm" data-act="clotureJour">${ico('check')} ${TXT.cloture.bouton}</button><a class="btn sm" href="#/team">${ico('users')} Pilotage équipe</a>${new Date().getDay() === 1 ? (() => { const rt = routineSemaine(CLUB.id); return `<a class="btn sm ${rt.recus < rt.total || rt.suspects ? 'warn-btn' : ''}" href="#/imports" data-act="ui" data-key="impTab" data-val="rsm" data-routine="${rt.recus}">Routine : ${rt.recus} sur ${rt.total} reçus${rt.suspects ? `, ${rt.suspects} à vérifier` : ''}</a>`; })() : ''}</div><div class="cockpit2">
-    ${tile('#/resiliations', 'Traiter', lvl(urgent, noOwner), 'Résiliations à traiter', res.length, `${urgent} à J-7 · ${noOwner} sans responsable`)}
-    ${(() => { const q = rrqCounts(CLUB.id); return q.open || deepGet(S, ['resRequestsMeta', CLUB.id, 'lastRunAt']) ? tile('#/resiliations', 'Ouvrir', lvl(q.late, q.open), 'Demandes reçues par e-mail', q.open, `${q.late ? `dont ${q.late} sans réponse depuis 48 h` : 'toutes ont une réponse'} · ${esc(rrqRunLabel(CLUB.id))}`) : ''; })()}
+    ${tile('#/resiliations', 'Traiter', lvl(urgent, noOwner), 'Résiliations à traiter', plur(res.length, 'demande', 'demandes'), `${urgent} à J-7 · ${noOwner} sans responsable`)}
+    ${(() => { const q = rrqCounts(CLUB.id); return q.open || deepGet(S, ['resRequestsMeta', CLUB.id, 'lastRunAt']) ? tile('#/resiliations', 'Ouvrir', lvl(q.late, q.open), 'Demandes reçues par e-mail', plur(q.open, 'demande', 'demandes'), `${q.late ? `dont ${q.late} sans réponse depuis 48 h` : 'toutes ont une réponse'} · ${esc(rrqRunLabel(CLUB.id))}`) : ''; })()}
     ${tile('#/impayes', 'Relancer', lvl(dunNobody > 2, dunNobody || dunDueN), 'Impayés en cours', fmtE(dunTot), `${dun.length} dossiers · ${dunDueN} à relancer aujourd’hui`)}
     ${(() => { const v60 = dun.filter(c => detteTranche(c) === 3).reduce((s, c) => s + Number(c.balance), 0); const rouge = dunTot > 0 && v60 > 0.2 * dunTot;
       return tile('#/impayes', 'Voir', rouge ? 'h-alert' : v60 ? 'h-watch' : 'h-good', 'Dette de plus de 60 jours', fmtE(v60), `${fmtP(dunTot ? v60 / dunTot : 0)} du total dû${rouge ? ', au-delà de 20 %' : ''}`).replace('class="ck2 ', `data-tuile="dette60" data-rouge="${rouge}" class="ck2 `); })()}

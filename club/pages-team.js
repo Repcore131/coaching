@@ -362,7 +362,7 @@ function profPerf() {
       ${months.length > 3 && !showAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="profWraps" data-val="all">Voir ${months.length - 3} mois de plus</button>` : ''}</div></div>`;
 }
 function profPersonal() {
-  const p = profilOf(ME); const th = curTheme();
+  const p = profilOf(ME);
   return `<div class="card"><h3>${TXT.mots.monEspace}</h3><p class="muted small" style="margin-top:-4px">Visible par l’équipe : poste et une phrase. Vos initiales servent de repère.</p>
     <div class="row wrap" style="gap:14px;align-items:center;margin:8px 0">${avatar(ME, 'lg')}<b>${esc(fullName(ME))}</b></div>
     <form id="ppf2" class="grid"><label class="field"><span>Poste</span><input class="input" name="poste" maxlength="60" value="${esc(p.poste || '')}" placeholder="Conseiller commercial, coach, manager…"></label>

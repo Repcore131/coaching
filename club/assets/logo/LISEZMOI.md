@@ -1,4 +1,6 @@
-# Logo Fit Pulse
+# Logo Fit Pulse (historique)
+
+Remplacé en octobre 2026 (lot D) par le logo « P pouls » de `assets/brand/` : carré arrondi plein, P en négatif dont la panse se prolonge en tracé de pouls. Ces fichiers restent comme trace datée du premier logo.
 
 Un tracé de pouls intégré au mot : la barre du T de FIT se prolonge en battement et rejoint le P de PULSE. Lettres monolignes géométriques, extrémités arrondies, dessinées en tracés (aucune police nécessaire). Ni personnage, ni haltère, ni éclair.
 

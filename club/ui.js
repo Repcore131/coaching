@@ -16,6 +16,7 @@ const setPref = (k, v) => db.set(['prefs', ME.id, k], v);
 
 // ── Toasts, modales, confirmations ────────────────────────────────────────
 function toast(msg, ms = 3200) {
+  if (CFG.capture) return; // mode capture : aucun toast
   const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
   $('#toasts').appendChild(el); setTimeout(() => el.remove(), ms);
 }
@@ -265,7 +266,7 @@ function render() {
 }
 // ?perf dans l'adresse : temps de chaque rendu affiché en bas à gauche.
 const PERF_ON = /[?&]perf\b/.test(location.search);
-function renderNow() { const t0 = performance.now(); renderNowInner(); if (PERF_ON) { const ms = performance.now() - t0; let el = $('#perf-hud'); if (!el) { el = document.createElement('div'); el.id = 'perf-hud'; el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;background:#000;color:#ffd600;font:12px monospace;padding:6px 8px;border-radius:6px'; document.body.appendChild(el); } el.textContent = `rendu ${ms.toFixed(1)} ms · ${(location.hash || '#/home').slice(2)} · ${Object.keys(S && S.entries || {}).length} saisies`; } }
+function renderNow() { const t0 = performance.now(); renderNowInner(); if (PERF_ON) { const ms = performance.now() - t0; let el = $('#perf-hud'); if (!el) { el = document.createElement('div'); el.id = 'perf-hud'; el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;background:#15171C;color:#FFFFFF;font:12px monospace;padding:6px 8px;border-radius:6px'; document.body.appendChild(el); } el.textContent = `rendu ${ms.toFixed(1)} ms · ${(location.hash || '#/home').slice(2)} · ${Object.keys(S && S.entries || {}).length} saisies`; } }
 function renderNowInner() {
   const app = $('#app'); if (!app) return;
   // Pages légales : lisibles sans être connecté

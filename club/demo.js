@@ -13,7 +13,7 @@
 // L'adresse garde ?demo=1 : recharger la page reste en demonstration.
 
 const DEMO = !!CFG.demo;
-const DEMO_KEY = 'fp_demo';
+const DEMO_KEY = CFG.capture ? 'fp_capture' : 'fp_demo';
 const DEMO_USER = 'u1'; // Directeur Démo
 
 if (DEMO) {
@@ -25,7 +25,8 @@ if (DEMO) {
   safeLS.set = (k, v) => { load()[k] = String(v); return save(); };
   safeLS.del = k => { if (k in load()) { delete mem[k]; save(); } };
   APP.tagline = TXT.app.accroche;
-  document.documentElement.classList.add('is-demo');
+  if (!CFG.capture) document.documentElement.classList.add('is-demo');
+  else try { localStorage.removeItem(DEMO_KEY); } catch (e) { /* rien */ } // capture : jeu neuf à chaque chargement
 }
 
 // Reinitialiser : la demo repart de zero (memes donnees), sans quitter le mode demo.
@@ -40,16 +41,16 @@ function demoQuit() {
 // ── Jeu de donnees fictif ─────────────────────────────────────────────────
 // La demo vendeur « Club Horizon » (demoState, core.js) : graine fixe, la meme
 // demo a chaque chargement.
-function seedDemo() { return demoState(); }
+function seedDemo() { return CFG.capture ? captureState() : demoState(); }
 
 // Demarrage en demonstration : donnees fictives si besoin, connexion d'office.
 function demoStart() {
-  if (!S || !S.meta || S.meta.demoSeed !== DEMO_GRAINE) { S = normalizeState(seedDemo()); backend.replaceAll(); }
+  if (CFG.capture || !S || !S.meta || S.meta.demoSeed !== DEMO_GRAINE || S.meta.capture) { S = normalizeState(seedDemo()); backend.replaceAll(); }
   if (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)]) safeLS.set(SESSION_KEY, DEMO_USER);
 }
 
-// ── Bandeau fixe ──────────────────────────────────────────────────────────
-if (DEMO) {
+// ── Bandeau fixe (pas en mode capture) ────────────────────────────────────
+if (DEMO && !CFG.capture) {
   const bar = document.createElement('div');
   bar.id = 'demo-bar'; bar.setAttribute('role', 'status');
   bar.innerHTML = '<b>Données fictives de démonstration</b><button type="button" class="btn sm" data-demo="reset">Réinitialiser la démo</button><button type="button" class="btn sm" data-demo="quit">Quitter la démo</button>';

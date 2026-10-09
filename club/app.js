@@ -3,6 +3,7 @@
 // ══ FIT PULSE — demarrage ════════════════════════════════════════════════
 (async function boot() {
   if (window.FITPULSE_BLOCKED) return; // copie hors adresse officielle : rien ne démarre
+  if (CFG.capture && CFG.capture.scene === 'themes') { captureThemes(); return; }
   const theme = safeLS.get('fitpulse.theme');
   if (theme) document.documentElement.dataset.theme = theme;
   try { await backend.start(); }
@@ -13,6 +14,7 @@
     return;
   }
   if (DEMO) demoStart();
+  if (CFG.capture) captureAppliquer();
   if (backend.mode === 'firebase' && backend.user && !S) { db.replace(emptyState()); }
   // Premier lancement avec des comptes declares : le club et les comptes sont
   // crees d'office, on arrive directement sur la connexion.

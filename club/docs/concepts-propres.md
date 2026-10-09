@@ -62,6 +62,7 @@ Le rythme de chaque commercial et du club est représenté par une ligne de poul
 - Tracé dans l'interface : 2026-10-09 17:20:12 UTC, commit `7f06f96824117d17a179020b18bdf777c8376ed6`
 - Logo : 2026-10-09 17:23:36 UTC, commit `d189d91043c73f85cf3e2f7b2041187564cfdced`
 - Code : `club/ui.js` (`pulseLine`), `club/assets/logo/`
+- Logo « P pouls » (lot D) : carré arrondi plein, P en négatif dont la panse se prolonge en tracé de pouls à trois pics ; `club/ui.js` (`logoMark`), `club/assets/brand/`
 
 ## Carnet du mois
 

@@ -102,7 +102,7 @@ function legalBody(tab) {
       <h3>Destinataires</h3>
       <p>Uniquement les personnes habilitées du club, selon leur rôle (un commercial voit ses relances et la vue d’équipe ; les managers voient l’ensemble du club). Aucune donnée n’est vendue, louée ni cédée. Sous-traitants techniques : <b>Google</b> (Firebase : hébergement, base de données, authentification ; Gmail : envoi des invitations), <b>GitHub</b> (Microsoft) pour le serveur automatique d’envoi des notifications et invitations. Lorsque l’utilisateur choisit d’envoyer un message, il passe par l’application téléphone, SMS ou WhatsApp de son appareil.</p>
       <h3>Transferts hors de l’Union européenne</h3>
-      <p>La base de données Firebase est opérée par Google LLC aux États-Unis. Ce transfert est encadré par le <b>Data Privacy Framework UE–États-Unis</b> (décision d’adéquation du 10 juillet 2023), auquel Google LLC est certifiée, et par les clauses contractuelles types de la Commission européenne.</p>
+      <p>La base de données Firebase est opérée par Google LLC aux États-Unis. Ce transfert est encadré par le <b>Data Privacy Framework entre l’UE et les États-Unis</b> (décision d’adéquation du 10 juillet 2023), auquel Google LLC est certifiée, et par les clauses contractuelles types de la Commission européenne.</p>
       <h3>Durées de conservation</h3>
       <ul><li>Comptes utilisateurs : le temps des fonctions, puis archivage ; saisies conservées avec l’historique du club.</li><li>Anciens adhérents : ${R.clientInactifMois / 12} ans après la fin du contrat, sauf impayé en cours.</li><li>Impayés soldés : ${R.impayeSoldeMois / 12} ans ; résiliations : ${R.resiliationMois / 12} ans.</li><li>Échanges de relance et contacts : ${R.contactsMois / 12} ans ; chat : ${R.chatMois} mois ; imports : ${R.importsMois} mois ; journaux techniques : ${R.logsJours} jours.</li><li>Dates de naissance : seuls le jour et le mois sont gardés, jamais l’année.</li></ul>
       <p>Une purge automatique applique ces durées (Données et RGPD, réservé aux managers).</p>
@@ -160,7 +160,7 @@ ACTIONS.cguRefuse = () => { const g = $('.cgu-gate'); if (g) g.remove(); logout(
 // ── Protections contre la copie ───────────────────────────────────────────
 // Avertissement dans la console des outils de développement.
 try {
-  console.log('%cFIT PULSE', 'font:900 italic 28px Impact,sans-serif;color:#12B3A8;background:#000;padding:4px 10px');
+  console.log('%cFit Pulse', 'font:600 16px system-ui,sans-serif;color:#2B4BDB');
   console.log(`%c© 2026 Fit Pulse. Tous droits réservés.\nLogiciel protégé par le Code de la propriété intellectuelle. Toute copie, reproduction, adaptation ou réutilisation, même partielle, est interdite et sera poursuivie (art. L335-2 et L335-3 CPI : 3 ans d’emprisonnement et 300 000 € d’amende).`, 'font:13px sans-serif;color:#d33');
 } catch (e) { /* console indisponible */ }
 // Fonctionnement limité aux adresses officielles : une copie hébergée ailleurs affiche un avertissement.
@@ -172,7 +172,7 @@ function legalDomainOk() {
 }
 if (!legalDomainOk()) {
   document.addEventListener('DOMContentLoaded', () => {
-    document.body.innerHTML = `<div style="font-family:sans-serif;max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#eee;background:#111;border-radius:16px"><h1 style="color:#12B3A8">Copie non autorisée</h1><p>Cette application est un logiciel protégé, utilisé ici hors de l’adresse de son déploiement. Toute copie, reproduction ou hébergement non autorisé est interdit et poursuivi (articles L335-2 et L335-3 du Code de la propriété intellectuelle).</p><p>Sa reproduction ou son hébergement en dehors de l’adresse officielle est une contrefaçon (art. L335-2 et L335-3 du Code de la propriété intellectuelle) et fera l’objet de poursuites.</p><p>Signalement : ${esc(LEGAL.email)}</p></div>`;
+    document.body.innerHTML = `<div style="font-family:sans-serif;max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#15171C;background:#F6F6F4;border:1px solid #E4E5E8;border-radius:10px"><h1 style="color:#15171C;font-weight:600">Copie non autorisée</h1><p>Cette application est un logiciel protégé, utilisé ici hors de l’adresse de son déploiement. Toute copie, reproduction ou hébergement non autorisé est interdit et poursuivi (articles L335-2 et L335-3 du Code de la propriété intellectuelle).</p><p>Sa reproduction ou son hébergement en dehors de l’adresse officielle est une contrefaçon (art. L335-2 et L335-3 du Code de la propriété intellectuelle) et fera l’objet de poursuites.</p><p>Signalement : ${esc(LEGAL.email)}</p></div>`;
   });
   window.FITPULSE_BLOCKED = true;
 }
