@@ -47,10 +47,10 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1954';
+window.RC_BUILD='1955';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
-window.RC_MAJ='2026-10-08';
+window.RC_MAJ='2026-10-09';
 // L'APPARENCE, AVANT LE PREMIER AFFICHAGE. Sombre par defaut ; « clair » ou
 // « auto » (comme le telephone) si l'utilisateur l'a choisi dans ses reglages.
 // Pose ici, et non dans rc-core, pour que l'ecran ne clignote pas en noir
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1954.css">
+<link rel="stylesheet" href="./rc-style.1955.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1954.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1955.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3619,7 +3619,7 @@ const COACH_PHOTO='icons/coach.jpg';
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
       <!-- SÉRIE 7 (lot 2) : la séance en cours, en tête (rendreRepriseTete). -->
-      <div id="clh-reprise-tete" hidden></div>
+      <div id="clh-reprise-tete" hidden></div><div id="clh-tractions" hidden></div>
       <!-- SÉRIE 6 (lot 17) : l'installation, en carte (rendreCarteInstall). -->
       <div id="clh-installer" hidden></div>
       <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:4px">
@@ -4157,6 +4157,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <button type="button" class="atp-med-lien" id="atp-trophees" onclick="ouvrirTrophees()" style="margin-bottom:14px">Trophées<span class="sub" style="font-size:var(--fs-xs);font-weight:600"> · badges, page publique, parrainage</span></button>
       <!-- LOT TC1 : LES TESTS DE COMPATIBILITÉ. Quatre mouvements filmés, lus
            sur l'appareil ; le verdict détaillé va au coach. -->
+      <!-- L'ARBRE DES TRACTIONS (build 1955) : le test guidé et les dix nœuds. -->
+      <button type="button" class="card tc-entree" onclick="ouvrirArbreTractions()">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Arbre des tractions</span>
+          <span class="tc-entree-d">Test guidé, dix nœuds de la suspension au muscle-up, programme selon ton niveau</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
       <button type="button" class="card tc-entree" onclick="ouvrirTestsCompat()">
         <span style="flex:1;min-width:0">
           <span class="tc-entree-t">Tests de compatibilité</span>
@@ -5522,6 +5530,16 @@ const COACH_PHOTO='icons/coach.jpg';
      pas. -->
 <!-- LOT TC1 : les quatre tests filmés. Les cartes sont rendues par
      renderTestsCompat (htmlTestsCompat), le résultat aussi. -->
+<div id="s-test-tractions" class="screen">
+  <!-- R21 — retour vers l'arbre, et le chrono du repos s'arrête avec (_ttArreter) : il ne doit pas tourner hors de l'écran. -->
+  <div class="topbar"><button class="back-btn" aria-label="Retour" onclick="_ttArreter();retourDe('s-test-tractions','s-arbre-tractions')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Test de tractions</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="tt-contenu"></div></div></div>
+</div>
+<div id="s-arbre-tractions" class="screen">
+  <div class="topbar"><button class="back-btn" aria-label="Retour au profil" onclick="retourDe('s-arbre-tractions','s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Arbre des tractions</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="arb-contenu"></div></div></div>
+</div>
+
 <div id="s-tests-compat" class="screen">
   <div class="topbar"><button class="back-btn" aria-label="Retour au profil" onclick="retourDe('s-tests-compat','s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Tests de compatibilité</span><span></span></div>
   <div class="scroll-area" style="flex:1">
@@ -6432,5 +6450,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1954.js"></script>
+<script src="./rc-core.1955.js"></script>
 </body></html>

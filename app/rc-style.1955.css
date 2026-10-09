@@ -13936,3 +13936,39 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .ta-form .tc-filmer{margin-top:16px}
 .tc-carte .tc-res{margin-top:14px}
 #s-tests-compat .pad{padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+/* Build 1955 — le test de tractions et l'arbre */
+.tt-carte,.tt-prog{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px}
+.tt-carte p{font-size:var(--fs-sm);line-height:1.6;color:var(--text);margin:6px 0 12px}
+.tt-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.tt-gros{font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text-strong);margin:4px 0 12px}
+.tt-niv{font-size:var(--fs-sm);color:var(--text);margin-bottom:6px}
+.tt-echec-b{display:block;margin:10px auto 0}
+.tt-seance{border-top:1px solid var(--border);padding:10px 0 4px}
+.tt-seance:first-of-type{border-top:none}
+.tt-seance-t{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;font-size:var(--fs-sm)}
+.tt-ex{font-size:var(--fs-xs);color:var(--text);line-height:1.6}
+.arb-tete{font-size:var(--fs-sm);color:var(--text);margin-bottom:8px}
+.arb-svg{width:100%;max-width:420px;display:block;margin:0 auto}
+.arb-lien{stroke:var(--border);stroke-width:2}
+.arb-lien.on{stroke:var(--red)}
+.arb-n{cursor:pointer}
+.arb-n circle:first-child{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
+.arb-n.ouvert circle:first-child{stroke:var(--text-dim)}
+.arb-n.valide circle:first-child{fill:var(--red);stroke:var(--red)}
+.arb-n text{fill:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;font-weight:700;paint-order:stroke;stroke:var(--dark);stroke-width:4px;stroke-linejoin:round}
+.arb-n.valide text,.arb-n.ouvert text{fill:var(--text)}
+.arb-certif{fill:var(--text-strong);stroke:var(--red);stroke-width:2}
+.arb-legende{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:var(--fs-xs);color:var(--sub);margin-top:8px}
+.arb-pt{display:inline-block;width:10px;height:10px;border-radius:var(--r-full);background:var(--surface-2);border:1px solid var(--border);vertical-align:middle}
+.arb-pt.valide{background:var(--red);border-color:var(--red)}
+.arb-pt.ouvert{border-color:var(--text-dim)}
+.arb-pt.certif{background:var(--text-strong);border-color:var(--red)}
+.arb-fiche p{font-size:var(--fs-sm);line-height:1.6;color:var(--text)}
+.arb-fiche-t{font-size:var(--fs-lg);font-weight:800;margin-bottom:4px}
+.arb-crit{font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:.5px}
+.arb-ex{font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px}
+.arb-fait,.arb-ferme{font-size:var(--fs-sm);color:var(--sub);margin:8px 0}
+.arb-propre{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text);text-transform:none;letter-spacing:normal;font-weight:600;margin:10px 0 0}
+.arb-propre input{width:auto;margin:2px 0 0}
+.arb-err{font-size:var(--fs-xs);color:var(--orange);margin-top:8px}
+.tt-ex .sub{font-size:inherit}

@@ -53610,7 +53610,7 @@ async function testExercices(){
       const ids=BADGES_ACQUIS.map(b=>b.id);
       if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
       if(par('assiette')!==5) return _echec(par('assiette')+' badges de l’assiette');
-      if(ids.length!==59) return _echec(ids.length+' badges au lieu de cinquante-neuf');
+      if(ids.length!==61) return _echec(ids.length+' badges au lieu de soixante et un');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -53899,7 +53899,7 @@ async function testExercices(){
       const d=document.createElement('div'); d.innerHTML=h;
       // 56 depuis le lot N4 (29/09/2026) : les cinq badges de l'assiette ;
       // 57 avec SEPT SUR SEPT (mission du jour, 01/10/2026), 59 avec PROMU et SOMMET (ligues).
-      if(h.indexOf('1/59')<0) return _echec('le compteur global ne dit pas 1/59');
+      if(h.indexOf('1/61')<0) return _echec('le compteur global ne dit pas 1/61');
       const fams=d.querySelectorAll('.bdg-fam');
       if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
       if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
@@ -53923,7 +53923,7 @@ async function testExercices(){
       if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==35) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      return v.indexOf('0/59')>=0?true:_echec('le dossier vierge ne dit pas 0/59');});
+      return v.indexOf('0/61')>=0?true:_echec('le dossier vierge ne dit pas 0/61');});
     ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',()=>{
       const sv=currentUser;
       try{
@@ -58884,7 +58884,7 @@ async function testExercices(){
       if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
       const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
       if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
-      if(BADGES_ACQUIS.length!==59) return _echec('la collection n’est plus de cinquante-neuf');
+      if(BADGES_ACQUIS.length!==61) return _echec('la collection n’est plus de soixante et un');
       const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
       return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);});
     ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',()=>{
@@ -62565,7 +62565,10 @@ async function testExercices(){
       // DIXIEME (build 1865) : apres la CORRECTION ou la SUPPRESSION d'une seance
       // passee (_apresCorrectionSeances), demandee par Kevin : les badges suivent
       // une charge corrigee, jamais un rendu.
-      if(n!==10) return _echec(n+' occurrences de majBadges( au lieu de dix');
+      // ONZIÈME (build 1955) : la VALIDATION D'UN NŒUD de l'arbre des tractions
+      // (_arbreApres), jamais un rendu : c'est le nœud qui fait gagner arbre_5
+      // et arbre_10.
+      if(n!==11) return _echec(n+' occurrences de majBadges( au lieu de onze');
       if(!/function missionOuvrirCoffre\(btn\)\{[\s\S]{0,200}?if\(!k\) return null;[\s\S]{0,600}?majBadges\(\)/.test(s)) return _echec('l’appel du coffre n’est plus gardé par son ouverture');
       if(!/function _nutGeste\(date\)\{[\s\S]{0,300}?setTimeout\(\(\)=>\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du journal n’est plus garde par l’ajout');
       if(!/if\(r\.fini\)\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du parcours n’est plus garde par sa fin');
@@ -75901,6 +75904,134 @@ async function testExercices(){
         if(!_reposInviteNotif()||z.hidden) return _echec('pas d’invitation au grand cadran');
         return true;
       }finally{ b.classList.toggle('rep-compact',cl); z.hidden=true; z.innerHTML=''; woState=svW; window.Notification=svN; currentUser=svU; window._notifSupported=svS; }
+    });
+    // ══ BUILD 1955 — L'ARBRE DES TRACTIONS ═══════════════════════════════════════
+    const _arbU=(noeuds,tests)=>({email:'arb@t',role:'athlete',sessions:[],arbreTractions:{noeuds:noeuds||{},tests:tests||[]}});
+    const _arbSaisie=(cle,valeur,extra)=>Object.assign({mode:'saisie',valeur,propre:true},extra||{});
+    ok('1955 — niveauTractions aux limites : 3 / 4, 10 / 11, 20 / 21 ; total des paliers',()=>{
+      const cas=[[0,'debutant'],[3,'debutant'],[4,'intermediaire'],[10,'intermediaire'],[11,'avance'],[20,'avance'],[21,'expert'],[100,'expert']];
+      for(const [t,n] of cas) if(niveauTractions(t)!==n) return _echec(t+' → '+niveauTractions(t));
+      if(totalTestTractions(3,2)!==8) return _echec('1+2+3 et 2 au palier 4 : '+totalTestTractions(3,2));
+      if(totalTestTractions(2,5)!==5) return _echec('au palier 3 on ne fait pas plus de 2 avant l’échec : '+totalTestTractions(2,5));
+      if(totalTestTractions(0,0)!==0) return _echec('rien');
+      const e=arbreEntreeTest(5,3,1e12);
+      if(e.total!==18||e.niveau!=='avance'||e.paliers!==5) return _echec(JSON.stringify(e));
+      return true;
+    });
+    ok('1955 — rappel à 4 semaines ; le programme suit le MEILLEUR niveau (pas de rétrogradation)',()=>{
+      const t0=Date.parse('2026-10-01T10:00:00Z');
+      const u=_arbU({},[arbreEntreeTest(5,3,t0),arbreEntreeTest(2,0,t0+864e5)]);
+      if(niveauTractionsAtteint(u)!=='avance') return _echec('niveau atteint : '+niveauTractionsAtteint(u));
+      if(programmeTractionsPour('avance').seances.map(s=>s.cle).join()!=='A,B,C') return _echec('séances A/B/C');
+      if(programmeTractionsPour('expert')!==programmeTractionsPour('avance')) return _echec('l’expert reprend l’avancé');
+      const p=prochainTestTractions(u,t0+10*864e5);
+      if(!p||p.du||p.at!==t0+864e5+28*864e5) return _echec('rappel : '+JSON.stringify(p));
+      if(!prochainTestTractions(u,t0+30*864e5).du) return _echec('rappel non dû à 29 jours');
+      if(prochainTestTractions(_arbU(),t0)!==null) return _echec('rappel sans test');
+      return true;
+    });
+    ok('1955 — ARBRE_TRACTIONS : 10 nœuds gelés, critères typés, prérequis vers des nœuds antérieurs',()=>{
+      if(ARBRE_TRACTIONS.length!==10||!Object.isFrozen(ARBRE_TRACTIONS)) return _echec('10 nœuds gelés');
+      const vus=[];
+      for(const n of ARBRE_TRACTIONS){
+        if(!Object.isFrozen(n)||!Object.isFrozen(n.critere)) return _echec(n.cle+' non gelé');
+        if(['temps','reps','lest'].indexOf(n.critere.type)<0||!(n.critere.valeur>0)||typeof n.critere.proprete!=='boolean') return _echec(n.cle+' : critère');
+        if(n.prerequis.some(p=>vus.indexOf(p)<0)) return _echec(n.cle+' : prérequis inconnu ou postérieur');
+        if(!n.consigne||!n.exercice) return _echec(n.cle+' : fiche incomplète');
+        vus.push(n.cle);
+      }
+      if(arbreNoeud('lestee10').critere.type!=='lest'||arbreNoeud('suspension').critere.valeur!==30) return _echec('critères');
+      return true;
+    });
+    ok('1955 — prérequis non remplis : refus et nœuds manquants nommés ; la règle « propre » est exigée',()=>{
+      const u=_arbU();
+      let r=arbreValider(u,'scapulaires',_arbSaisie('scapulaires',10),1e12);
+      if(r.ok||!/Suspension/.test(r.raison)) return _echec('scapulaires sans suspension : '+r.raison);
+      r=arbreValider(u,'suspension',{mode:'saisie',valeur:25},1e12);
+      if(r.ok) return _echec('25 s accepté pour 30 s');
+      if(!arbreValider(u,'suspension',{mode:'saisie',valeur:30},1e12).ok) return _echec('suspension refusée (pas de règle propre)');
+      r=arbreValider(u,'scapulaires',{mode:'saisie',valeur:10,propre:false},1e12+1);
+      if(r.ok||!/propre/.test(r.raison)) return _echec('sans « propre » : '+r.raison);
+      if(!arbreValider(u,'scapulaires',_arbSaisie('s',10),1e12+2).ok) return _echec('scapulaires');
+      // Lest : kilos ET répétitions.
+      if(arbreValider(u,'lestee10',_arbSaisie('l',10,{reps:5}),1e12+3).ok) return _echec('lestée sans traction propre');
+      return true;
+    });
+    ok('1955 — double validation refusée ; la vidéo certifie sans changer la date ; rétrogradation impossible',()=>{
+      const u=_arbU();
+      for(const k of ['suspension','scapulaires','australiennes','isometries','excentriques','assistees'])
+        if(!arbreValider(u,k,_arbSaisie(k,60),1e12).ok) return _echec(k);
+      if(!arbreValider(u,'propre5',_arbSaisie('p',5),1e12+5).ok) return _echec('propre5');
+      let r=arbreValider(u,'propre5',_arbSaisie('p',8),1e12+9);
+      if(r.ok||!/Déjà validé/.test(r.raison)) return _echec('double saisie : '+r.raison);
+      const rep=(v,comp)=>({valeur:v,vis:0.9,comp:comp||[],compVue:true});
+      // Kipping et amplitude courte : pas assez de répétitions propres.
+      r=arbreValider(u,'propre5',{mode:'video',mesures:{visibilite:0.9,reps:[rep(0.2),rep(0.2),rep(0.6),rep(0.2,['kipping']),rep(0.2)]}},1e12+10);
+      if(r.ok||!/3 répétitions propres sur 5/.test(r.raison)) return _echec('vidéo : '+r.raison);
+      r=arbreValider(u,'propre5',{mode:'video',mesures:{visibilite:0.9,reps:[rep(0.2),rep(0.1),rep(0.3),rep(0.2),rep(0.25)]}},1e12+11);
+      if(!r.ok||!r.certifie||r.nouveau) return _echec('certification : '+JSON.stringify(r));
+      const e=arbreEtat(u).propre5;
+      if(!e.certifie||e.at!==1e12+5) return _echec('date changée ou non certifié : '+JSON.stringify(e));
+      if(arbreValider(u,'propre5',_arbSaisie('p',5),1e12+12).ok||!arbreEtat(u).propre5.certifie) return _echec('rétrogradé en saisie');
+      if(arbreValider(u,'suspension',{mode:'video',mesures:{visibilite:0.9,reps:[]}},1e12).ok) return _echec('vidéo sur un temps');
+      return true;
+    });
+    ok('1955 — un nœud enregistré sans ses prérequis ne compte pas (dossier bricolé)',()=>{
+      const u=_arbU({muscleup:{at:1e12,mode:'saisie',valeur:1,certifie:false},suspension:{at:1e12,mode:'saisie',valeur:30,certifie:false}});
+      const e=arbreEtat(u);
+      if(e.muscleup.valide||!e.suspension.valide) return _echec(JSON.stringify(e.muscleup));
+      if(arbreDatesValidation(u).length!==1) return _echec('dates');
+      return true;
+    });
+    ok('1955 — Volts : 75 V par nœud, hors plafond ; badges arbre_5 et arbre_10',()=>{
+      const t0=Date.parse('2026-10-01T10:00:00Z');
+      const n={};
+      ARBRE_CLES.forEach((k,i)=>{ n[k]={at:t0+i*1000,mode:'saisie',valeur:1,certifie:false}; });
+      const u=_arbU(n);
+      const x=xpCalcul(u,t0+864e5);
+      if(x.cat.arbre!==750) return _echec('arbre : '+x.cat.arbre);
+      const f=_badgesFaits(u,t0+864e5);
+      const a5=badgeAcquisDef('arbre_5'), a10=badgeAcquisDef('arbre_10');
+      if(!a5||!a10) return _echec('badges absents');
+      if(a5.test(f)!==t0+4000||a10.test(f)!==t0+9000) return _echec('dates des badges : '+a5.test(f)+' / '+a10.test(f));
+      const u4=_arbU(Object.fromEntries(ARBRE_CLES.slice(0,4).map(k=>[k,n[k]])));
+      if(a5.test(_badgesFaits(u4,t0+864e5))) return _echec('arbre_5 à 4 nœuds');
+      return true;
+    });
+    ok('1955 — l’arbre en SVG : rouge validé, gris à venir ; la fiche nomme consigne et exercice ; carte partageable',()=>{
+      const sU=currentUser;
+      try{
+        currentUser=_arbU({suspension:{at:1e12,mode:'video',valeur:30,certifie:true}});
+        const h=svgArbreTractions(currentUser);
+        const d=document.createElement('div'); d.innerHTML=h;
+        if(d.querySelectorAll('.arb-n').length!==10) return _echec('10 nœuds');
+        if(!d.querySelector('.arb-n.valide[data-cle="suspension"]')||!d.querySelector('.arb-n.ouvert[data-cle="scapulaires"]')||!d.querySelector('.arb-n.ferme[data-cle="muscleup"]')) return _echec('états');
+        ouvrirNoeudTractions('australiennes');
+        const m=document.getElementById('modal-overlay');
+        if(!m||!/Corps gainé/.test(m.textContent)||!/rowing inverse/.test(m.textContent)||!document.getElementById('arb-propre')) return _echec('fiche');
+        closeModal();
+        const cv=_dessinerCarteNoeud('suspension','noir');
+        if(!cv||!(cv.width>0)) return _echec('carte');
+        return true;
+      }finally{ try{ closeModal(); }catch(e){} currentUser=sU; }
+    });
+    ok('1955 — l’écran du test : paliers, repos de 30 s, échec saisi, niveau et programme',()=>{
+      const sU=currentUser, svS=window.saveUserOuDire, svG=window.go;
+      try{
+        window.saveUserOuDire=()=>true; window.go=()=>{};
+        currentUser=_arbU();
+        ouvrirTestTractions(); ttCommencer();
+        if(!/Palier 1/.test(document.getElementById('tt-contenu').textContent)) return _echec('palier 1');
+        ttPalierFait();
+        if(!document.getElementById('tt-chrono')||_ttEtat.phase!=='repos'||Math.round((_ttEtat.fin-Date.now())/1000)!==TEST_TRACTIONS_REPOS_S) return _echec('repos de 30 s');
+        _ttArreter(); _ttEtat.palier=4; _ttEtat.phase='effort'; rendreTestTractions();
+        ttEchec(); document.getElementById('tt-echec').value='2'; ttValiderEchec();
+        const l=currentUser.arbreTractions.tests;
+        if(l.length!==1||l[0].total!==8||l[0].niveau!=='intermediaire') return _echec(JSON.stringify(l));
+        const txt=document.getElementById('tt-contenu').textContent;
+        if(!/Intermédiaire/.test(txt)||!/Séance A/.test(txt)||!/Séance C/.test(txt)) return _echec(txt.slice(0,200));
+        return true;
+      }finally{ _ttArreter(); currentUser=sU; window.saveUserOuDire=svS; window.go=svG; }
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

@@ -2111,14 +2111,15 @@ export function creerMetier(deps) {
       const der = Number(await _lire(k, 'lastSession')) || 0;
       if (der > (Number(etat0.derniere) || 0) + 60e3) throw new Error('séance pas encore synchronisée');
     }
-    const [alias, detail, badges, bilans, cree, pp] = await Promise.all([
+    const [alias, detail, badges, bilans, cree, pp, arbre] = await Promise.all([
       nouvelles.length ? _lire(k, 'exAlias') : null, _lire(k, 'xpDetail'), _lire(k, 'badges'),
-      db.ref('users/' + k + '/bilans').shallow(), _lire(k, 'createdAt'), _lire(k, 'pagePublique')]);
+      db.ref('users/' + k + '/bilans').shallow(), _lire(k, 'createdAt'), _lire(k, 'pagePublique'),
+      _lire(k, 'arbreTractions')]);
     const etat = nouvelles.length ? XPS.avancer(etat0, nouvelles, alias, t) : etat0;
     const premiere = nouvelles.length && Number(nouvelles[0].date) > 0 ? Number(nouvelles[0].date) : 0;
     etat.debut = Math.min(...[Number(etat0.debut) || Infinity, Number(cree) || Infinity, premiere || Infinity]);
     if (!isFinite(etat.debut)) etat.debut = t;
-    const r = XPS.totalServeur(etat, detail, { nBilans: bilans.length, badges, debut: etat.debut }, t);
+    const r = XPS.totalServeur(etat, detail, { nBilans: bilans.length, badges, debut: etat.debut, arbre }, t);
     const rg = XPS.rangDe(r.total);
     etat.maj = t;
     const maj = {

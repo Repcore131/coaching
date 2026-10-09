@@ -518,6 +518,7 @@ function loadClientHome(){
   try{ if(window._finEnAttente) setTimeout(()=>{ try{ _finLiberer(); }catch(e){} },0); }catch(e){}
   try{ rendreCarteInstall(currentUser); }catch(e){}
   try{ rendreRepriseTete(currentUser); }catch(e){}
+  try{ rendreRappelTractions(currentUser); }catch(e){}
   try{ _majRappelVerification(); }catch(e){}
   // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
   try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}

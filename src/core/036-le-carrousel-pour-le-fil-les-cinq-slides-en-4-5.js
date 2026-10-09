@@ -1683,7 +1683,11 @@ const XP_ACTIONS=Object.freeze({
   semaineAssiette:75,
   // LE RETOUR (02/10/2026) : la 1re séance après 14 jours ou plus sans séance
   // (RETOUR_COMBAT_J), une fois par période d'absence. Un jalon, hors plafond.
-  retour:50
+  retour:50,
+  // L'ARBRE DES TRACTIONS (09/10/2026) : chaque nœud validé, une fois, à sa
+  // date. Un jalon hors plafond, comme la semaine ; le Worker le borne à
+  // XP.noeud × nœuds de l'arbre (cloudflare/src/xp.js).
+  noeud:75
 });
 const XP_NUTRITION_MIN=3;
 // ══ LOT N2 : LA CIBLE TENUE ═══════════════════════════════════════════════
@@ -2531,7 +2535,7 @@ function xpRetours(ses){
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,mission:0,semaine:0,semaineAssiette:0,retour:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,mission:0,semaine:0,semaineAssiette:0,retour:0,arbre:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -2593,6 +2597,8 @@ function xpCalcul(u,maintenant){
   // LE RETOUR : +50 V à la 1re séance comptée après RETOUR_COMBAT_J jours ou
   // plus, une fois par période (chaque retour la referme).
   for(const d of xpRetours(ses)) ajoute(_xpJour(d),'retour',XP_ACTIONS.retour);
+  // L'ARBRE DES TRACTIONS : un jalon par nœud validé, à sa date.
+  try{ for(const [j,v] of arbreVoltsParJour(u,t)) ajoute(j,'arbre',v); }catch(e){}
   // LA PART HORS ENTRAÎNEMENT, sur 7 jours glissants (voir XP_HORS_PART).
   ecrete+=_xpBornerHors(parJour);
   for(const j of Object.keys(parJour)) for(const c of Object.keys(parJour[j])) cat[c]+=parJour[j][c];
@@ -2634,6 +2640,7 @@ function xpGainsSeance(u,sess,maintenant){
   if(d('parcours')>0) lignes.push({lib:'Mise sous tension',v:d('parcours')});
   if(d('mission')>0) lignes.push({lib:'Volts doublés (coffre)',v:d('mission')});
   if(d('retour')>0) lignes.push({lib:'Retour au combat',v:d('retour')});
+  if(d('arbre')>0) lignes.push({lib:'Arbre des tractions',v:d('arbre')});
   const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
   if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
   return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,

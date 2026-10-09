@@ -30,7 +30,19 @@ export const XP = { seance: 100, complete: 30, record: 50, bilan: 80, badge: 40,
   // La mission du jour (01/10/2026) : le coffre vaut 50 V au plus, une fois par jour.
   mission: 50,
   // Le retour (02/10/2026) : +50 V à la 1re séance après 14 jours sans séance.
-  retour: 50 };
+  retour: 50,
+  // L'arbre des tractions (09/10/2026) : 75 V par nœud validé, une fois.
+  noeud: 75 };
+// Les dix nœuds de l'arbre des tractions (ARBRE_TRACTIONS de l'app, dans cet
+// ordre ; un test le rappelle). Le serveur ne rejuge pas un nœud : il BORNE
+// la valeur du client au nombre de nœuds connus que le dossier porte, datés.
+export const ARBRE_CLES = ['suspension', 'scapulaires', 'australiennes', 'isometries', 'excentriques',
+  'assistees', 'propre5', 'lestee10', 'haute3', 'muscleup'];
+/** Le nombre de nœuds connus et datés dans u.arbreTractions. */
+export function noeudsArbre(arbre) {
+  const n = arbre && typeof arbre === 'object' && arbre.noeuds && typeof arbre.noeuds === 'object' ? arbre.noeuds : {};
+  return ARBRE_CLES.filter((k) => n[k] && Number(n[k].at) > 0).length;
+}
 // Le retour de l'app (RETOUR_COMBAT_J) : une absence de 14 jours au moins.
 export const RETOUR_JOURS = 14;
 export const XP_PLAFOND_JOUR = 400;
@@ -336,7 +348,7 @@ export function valeurBadges(badges, secrets) {
 }
 /**
  * LE TOTAL SERVEUR. `client` : u.xpDetail (les catégories de l'app) ;
- * `dossier` : {nBilans, badges, debut (1re trace du compte)}.
+ * `dossier` : {nBilans, badges, debut (1re trace du compte), arbre (u.arbreTractions)}.
  */
 export function totalServeur(etat, client, dossier, t) {
   const c = client && typeof client === 'object' ? client : {};
@@ -359,6 +371,8 @@ export function totalServeur(etat, client, dossier, t) {
     mission: borne('mission', jours * XP.mission),
     // Un retour demande 14 jours d'absence : au plus un par tranche de 14 jours du compte.
     retour: borne('retour', Math.floor(jours / RETOUR_JOURS) * XP.retour),
+    // L'arbre des tractions : au plus un nœud de plus par nœud que le dossier porte.
+    arbre: borne('arbre', noeudsArbre(d.arbre) * XP.noeud),
     archive: borne('archive', jours * XP.sommeil),
   });
   // La part hors entraînement, rabotée dans l'ordre de l'app (XP_HORS_RABOT).

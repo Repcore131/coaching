@@ -13757,6 +13757,11 @@ const ML_COMPAT_IMAGES=300;
 //     longueur du membre supérieur entre le bas et le sommet.
 const ML_COMPAT_EPAULES_RATIO=0.75;
 const ML_COMPAT_MENTON=0.15;
+// LE KIPPING (09/10/2026, arbre des tractions) : entre le bas et le sommet
+// d'une répétition, la hanche balaie horizontalement plus de 30 % de la
+// longueur du membre supérieur. ⚠ SEUIL DE TRAVAIL, large pour la même
+// raison que les deux autres.
+const ML_COMPAT_KIPPING=0.3;
 
 /**
  * @typedef {{tMs:number, X:number[], Y:number[], V:number[]}} EchCompat
@@ -13946,6 +13951,11 @@ function mlMesuresCompat(cle,ech,opts){
       const avance=((l[k].X[nez]-l[k].X[re])-(l[kb].X[nez]-l[kb].X[re]))*sens/membre;
       if(avance>ML_COMPAT_MENTON) comp.push('menton');
     }
+    // LE KIPPING : la hanche, vue entre le bas et le sommet, balance d'avant en arrière.
+    const rh=rg('hanche');
+    let xMin=Infinity, xMax=-Infinity;
+    for(let j=Math.max(0,kb);kb>=0&&j<=k;j++) if(vu(j,rh)){ xMin=Math.min(xMin,l[j].X[rh]); xMax=Math.max(xMax,l[j].X[rh]); }
+    if(isFinite(xMin)&&isFinite(xMax)&&(xMax-xMin)/membre>ML_COMPAT_KIPPING) comp.push('kipping');
     out.reps.push({valeur:r2(valeur),vis:r2(visMin(k,besoins))||0,comp,compVue:!!teteVue,
       aux:r1(angles(k).coude),tMs:Math.round(l[k].tMs)});
   }

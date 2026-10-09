@@ -1032,6 +1032,11 @@ const BADGES_ACQUIS=Object.freeze([
    phrase:'Vingt et un jours : c’est là que ça devient une habitude.'},
   {id:'assiette_100',nom:'CENT JOURS',famille:'assiette',palier:null,icone:'assiette_100',condition:'100 jours dans ta cible en un an.',test:f=>f.assiette.annee100},
   {id:'assiette_proteines',nom:'PROTÉINES',famille:'assiette',palier:null,icone:'assiette_proteines',condition:'Atteins tes protéines 30 jours.',test:f=>_bdgNieme(f.assiette.prot,30)},
+  // ── L'ARBRE DES TRACTIONS (09/10/2026) : nœuds validés ─────────────
+  {id:'arbre_5',nom:'MI-HAUTEUR',famille:'arbre',palier:null,icone:'arbre_5',condition:'Valide 5 nœuds de l’arbre des tractions.',test:f=>_bdgNieme(f.arbre,5),
+   phrase:'Cinq nœuds de l’arbre des tractions. La barre devient un terrain connu.'},
+  {id:'arbre_10',nom:'ARBRE COMPLET',famille:'arbre',palier:null,icone:'arbre_10',condition:'Valide les 10 nœuds de l’arbre des tractions.',test:f=>_bdgNieme(f.arbre,10),
+   phrase:'L’arbre entier, jusqu’au muscle-up.'},
   // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
   {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
   {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
@@ -1081,7 +1086,8 @@ const BADGE_REPLI=Object.freeze({
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
   phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME',
   assiette:'FULL_SESSION',assiette_premier_jour:'FULL_SESSION',assiette_7:'STREAK',assiette_21:'DISCIPLINE',
-  assiette_100:'PERFECT',assiette_proteines:'NO_FAIL'
+  assiette_100:'PERFECT',assiette_proteines:'NO_FAIL',
+  arbre:'PERSONAL_BEST',arbre_5:'PROGRESSION',arbre_10:'PERSONAL_BEST'
 });
 // L'ancien nom de la table : les cinq d'origine gardent leur médaillon.
 const BADGE_ACQUIS_IMG=Object.freeze({
@@ -1141,7 +1147,8 @@ function _badgesFaits(u,maintenant){
   const f={seances:ses.filter(seanceComptee).map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
-    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0,septSurSept:0,promu:0,sommet:0};
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0,septSurSept:0,promu:0,sommet:0,arbre:[]};
+  try{ f.arbre=arbreDatesValidation(u).filter(d=>d<=t); }catch(e){ f.arbre=[]; }
   try{ const _lf=liguesFaits(u); f.promu=_lf.promu; f.sommet=_lf.sommet; }catch(e){}
   try{ f.septSurSept=missionSeptSurSept(u); }catch(e){ f.septSurSept=0; }
   const premier=(k,v)=>{ if(!f[k]) f[k]=v; };

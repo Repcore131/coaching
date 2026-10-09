@@ -1006,6 +1006,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // et que mesuresVideo (le tronc au plus bas lu par Motion Lab), qui ne sont
   // pas classés santé non plus.
   'morpho',
+  // L'ARBRE DES TRACTIONS (build 1955) : des nœuds validés (date, saisie ou
+  // vidéo) et les totaux du test de tractions. Une performance, comme les
+  // séances, pas une donnée de santé.
+  'arbreTractions',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'

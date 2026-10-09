@@ -458,3 +458,21 @@ test('le retour (02/10/2026) : 50 V, au plus un par tranche de 14 jours du compt
   assert.match(src, /\bretour:50\b/);
   assert.match(src, new RegExp('const RETOUR_COMBAT_J=' + X.RETOUR_JOURS + ','));
 });
+
+// ══ L'ARBRE DES TRACTIONS (09/10/2026) ══════════════════════════════════════
+test('arbre des tractions : 75 V par nœud connu et daté, mêmes nœuds que l’app et les règles', async () => {
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.equal(X.XP.noeud, 75);
+  assert.match(src, /\bnoeud:75\b/);
+  const app = [...src.matchAll(/\{cle:'([a-z0-9]+)',court:'/g)].map((m) => m[1]);
+  assert.deepEqual(app, X.ARBRE_CLES);
+  const regles = fs.readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
+  assert.ok(regles.includes('$noeud.matches(/^(' + X.ARBRE_CLES.join('|') + ')$/)'), 'motif des règles');
+  const t0 = Date.now();
+  const arbre = { noeuds: { suspension: { at: t0 }, scapulaires: { at: t0 }, inconnu: { at: t0 }, australiennes: { at: 0 } } };
+  assert.equal(X.noeudsArbre(arbre), 2);
+  assert.equal(X.totalServeur(X.etatVide(), { arbre: 750 }, { debut: t0, arbre }, t0).cat.arbre, 150);
+  assert.equal(X.totalServeur(X.etatVide(), { arbre: 750 }, { debut: t0 }, t0).cat.arbre, 0);
+});

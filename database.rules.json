@@ -64,6 +64,33 @@
           "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
           "$autre": { ".validate": false }
         },
+        // L ARBRE DES TRACTIONS (09/10/2026) — le test guide et les dix
+        // noeuds. Liste blanche fermee a chaque etage, comme morpho : l app
+        // borne avant d ecrire (arbreEntreeNoeud, arbreEntreeTest). Les volts
+        // ne s y ecrivent pas : le Worker les borne a 75 V par noeud connu.
+        "arbreTractions": {
+          "noeuds": {
+            "$noeud": {
+              ".validate": "$noeud.matches(/^(suspension|scapulaires|australiennes|isometries|excentriques|assistees|propre5|lestee10|haute3|muscleup)$/) && newData.hasChildren(['at', 'mode'])",
+              "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "mode": { ".validate": "newData.isString() && newData.val().matches(/^(saisie|video)$/)" },
+              "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+              "certifie": { ".validate": "newData.isBoolean()" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "tests": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|1[0-9])$/) && newData.hasChildren(['at', 'total', 'paliers', 'niveau'])",
+              "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500 && newData.val() % 1 === 0" },
+              "paliers": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 30 && newData.val() % 1 === 0" },
+              "niveau": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|intermediaire|avance|expert)$/)" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
         // LOT TC1 — LES TESTS DE COMPATIBILITE FILMES. Une entree par test
         // (squat, developpe, traction, souleve), ecrite par l athlete apres
         // la lecture de sa video SUR SON APPAREIL : la video ne part jamais,
@@ -319,7 +346,7 @@
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|promu|sommet|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|promu|sommet|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines|arbre_5|arbre_10)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
