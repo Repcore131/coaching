@@ -28,20 +28,7 @@ addEventListener('unhandledrejection', e => logError('promise', e.reason));
 
 // ── Droit d'effacement : une fiche adhérent et tout ce qui s'y rattache ──
 const eraseHash = (club, num) => hkey(`erase|${club}|${num}`);
-ACTIONS.cliErase = async el => {
-  const c = S.clients[el.dataset.id]; if (!c || !isManager()) return;
-  if (!await confirmDlg(`Effacer définitivement ${esc(c.name || 'cet adhérent')} ? La fiche, les relances, les contacts, la résiliation et les régularisations liées sont supprimés. Les saisies de KPI restent, sans lien vers la personne.`, { ok: 'Effacer', danger: true })) return;
-  const ops = [[['clients', c.id], null]]; const t = tokensKey(c.name || ''); const num = c.num ? String(c.num) : null;
-  Object.values(S.loyalty || {}).forEach(a => { if (a.clientId === c.id) ops.push([['loyalty', a.id], null]); });
-  Object.values(S.touches || {}).forEach(a => { if (a.clientId === c.id) ops.push([['touches', a.id], null]); });
-  Object.values(S.resiliations || {}).forEach(r => { if (r.clubId === c.clubId && (r.clientId === c.id || (t && tokensKey(r.client || '') === t))) ops.push([['resiliations', r.id], null]); });
-  Object.values(S.recov || {}).forEach(x => { if (x.clubId === c.clubId && num && String(x.clientNum) === num) ops.push([['recov', x.id], null]); });
-  Object.keys(S.relances || {}).forEach(k => { if (k.includes(c.id)) ops.push([['relances', k], null]); });
-  Object.values(S.entries || {}).forEach(e => { if (e.clientId === c.id || (num && e.clubId === c.clubId && String(e.clientNum || '') === num)) { ops.push([['entries', e.id, 'clientId'], null], [['entries', e.id, 'clientNum'], null]); } });
-  Object.values(S.companies || {}).forEach(co => { if (num && (co.nums || []).includes(num)) ops.push([['companies', co.id, 'nums'], co.nums.filter(n => n !== num)]); });
-  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'erase', club: c.clubId, hash: num ? eraseHash(c.clubId, num) : hkey('erase|' + c.clubId + '|' + t) }]);
-  db.batch(ops); location.hash = '#/relances'; toast('Adhérent effacé');
-};
+// L'effacement lui-même : rgpd.js (effacementOps).
 // Un import qui ramène un numéro effacé est signalé.
 function erasedNums(club) { const H = new Set(Object.values(S.audit || {}).filter(a => a.action === 'erase' && a.club === club).map(a => a.hash)); return num => H.has(eraseHash(club, num)); }
 

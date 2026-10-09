@@ -158,6 +158,7 @@ const NAV = [
   ['sep'],
   ['imports', TXT.nav.imports, 'upload', true],
   ['controle', TXT.nav.controle, 'check', true],
+  ['confiance', TXT.nav.confiance, 'shield', true],
 ];
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
@@ -237,6 +238,7 @@ function renderNowInner() {
   else CLUB = S.clubs[CLUB.id];
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
   appliquerCouleurClub();
+  if (typeof purgeAuto === 'function') purgeAuto();
   let { r, args } = currentRoute();
   if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
   if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;
@@ -246,6 +248,7 @@ function renderNowInner() {
   const keepScroll = UI._lastRoute === r ? window.scrollY : 0;
   const active = document.activeElement; const focusKey = active && active.dataset ? active.dataset.focus : null;
   app.innerHTML = shell(r, PAGES[r].render(args));
+  if (UI._lastRoute !== r && typeof usageNote === 'function') usageNote(r);
   UI._lastRoute = r;
   if (PAGES[r].mount) PAGES[r].mount(args);
   if (typeof cguGate === 'function') cguGate();
@@ -308,7 +311,7 @@ function monthNav(key, mk) {
     <b style="min-width:130px;text-align:center">${monthLabel(mk)}</b>
     <button class="btn icon sm" data-act="ui" data-key="${key}" data-val="${addMonths(mk, 1)}" aria-label="Mois suivant">${ico('chevR')}</button></div>`;
 }
-function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (!location.hash) location.hash = '#/home'; render(); }
+function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (typeof usageNote === 'function') usageNote(null, true); if (!location.hash) location.hash = '#/home'; render(); }
 async function logout() { if (typeof pushForget === 'function' && backend.mode === 'firebase') await pushForget(); ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') { await backend.signOut(); S = null; } render(); }
 
 // CSV pour Excel : point-virgule, BOM UTF-8, et neutralisation des cellules qui

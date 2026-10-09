@@ -10,8 +10,8 @@ PAGES.members = {
     const all = clubMembers(CLUB.id, { all: true, gestion: true });
     const T = [['org', TXT.equipe.org], ['hist', TXT.equipe.hist], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['carnets', TXT.equipe.carnets], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
-    T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal'], ['primes', 'Primes']);
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, carnets: memCarnets, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes }[tab]();
+    T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal'], ['primes', 'Primes'], ['adoption', 'Adoption']);
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, carnets: memCarnets, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes, adoption: memAdoption }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${plur(all.filter(u => u.role === 'manager' && u.status === 'active').length, 'manager', 'managers')}, ${plur(all.filter(u => u.role === 'membre' && u.status === 'active').length, 'membre actif', 'membres actifs')}, ${plur(all.filter(u => u.status === 'pending').length, 'invitation', 'invitations')} en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button>${MULTI ? `<button class="btn" data-act="inviteMail">${ico('mail')} Inviter par e-mail</button>` : ''}</div>
       ${tabs('memTab', T, tab)}${body}`;
   },

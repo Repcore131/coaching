@@ -29,7 +29,7 @@ const TXT = {
     home: 'Accueil', journee: 'Ma journée', kpimatin: 'KPI du matin', dashboard: 'Mes objectifs', relances: 'Relances', leaderboard: 'Classement',
     equipeMembre: 'Équipe', recap: 'Récap du mois', rapporte: 'Ce que Fit Pulse a rapporté', team: 'Pilotage équipe', equipeManager: 'Matrice équipe',
     b2b: 'Entreprise', resiliations: 'Résiliations', impayes: 'Impayés', loyalty: 'Adhérents à garder', pouls: 'Le Pouls du club',
-    imports: 'Imports Resamania', controle: 'Contrôle des chiffres', profil: 'Mon espace', confidentialite: 'Confidentialité',
+    imports: 'Imports Resamania', controle: 'Contrôle des chiffres', confiance: 'Confiance des chiffres', profil: 'Mon espace', confidentialite: 'Confidentialité',
   },
   pages: {
     confidentialite: 'Confidentialité', donnees: 'Données personnelles', equipe: 'Équipe', controle: 'Contrôle des chiffres', kpimatin: 'KPI du matin',

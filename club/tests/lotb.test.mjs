@@ -155,3 +155,79 @@ test('un ZIP de 7 CSV lance la revue des 7 fichiers en une fois', async () => {
   run(`globalThis.__fin = (async () => { const buf = await __zip.generateAsync({ type: 'uint8array' }); const f = { name: 'semaine.zip', size: buf.length, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) }; await rsmRead([f]); return UI.rsmBatch.length; })()`);
   const n = await run('__fin'); assert.equal(n, 7);
 });
+
+test('confiance : saisie manuelle et import du même contrat le 12 = doublon probable ; sans contrôle, pas de pastille', () => {
+  const run = appli();
+  run(`S.kpis.contrats.enabled = true; S.kpis.avis.enabled = true; S.imports.im = { id: 'im', clubId: 'k', active: true, name: 'ventes.csv', at: 1 };
+    S.entries.m = { id: 'm', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-09-12', value: 1, source: 'manual', at: 1 };
+    S.entries.i = { id: 'i', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-09-12', value: 1, source: 'import', importId: 'im', at: 2 };
+    S.entries.a = { id: 'a', userId: 'v', clubId: 'k', kpiId: 'avis', date: '2026-09-12', value: 3, source: 'manual', at: 3 }; REV++;`);
+  const L = J(run, `confianceData('k', '2026-09').lignes.map(l => ({ k: l.k.id, d: l.doublons, p: l.pastille, ref: !!l.ref }))`);
+  assert.deepEqual(L.find(x => x.k === 'contrats'), { k: 'contrats', d: 2, p: null, ref: false });
+  assert.equal(L.find(x => x.k === 'avis').d, 0);
+  run(`UI.confMonth = '2026-09'`); const h = run(`PAGES.confiance.render()`);
+  assert.match(h, /pas de contrôle importé/); assert.doesNotMatch(h, /data-pastille="vert"/); assert.match(h, /data-doublons="2"/);
+  run(`S.rsm.controls = { k: { perf: { '2026-09': { v: { created: 1 } } } } }; REV++;`);
+  const c = J(run, `confianceData('k', '2026-09').lignes.find(l => l.k.id === 'contrats')`); assert.equal(c.pastille, 'vert'); assert.equal(c.fp, 1);
+});
+test('confiance : moins d’une seconde avec 50 000 saisies', () => {
+  const run = appli(); run(`toast = () => {}`); // avertissement « données locales volumineuses », sans écran ici
+  run(`for (let i = 0; i < 50000; i++) S.entries['p' + i] = { id: 'p' + i, userId: i % 2 ? 'u' : 'v', clubId: 'k', kpiId: ['contrats', 'avis', 'nutrition'][i % 3], date: '2026-09-' + String(1 + (i % 28)).padStart(2, '0'), value: 1, source: i % 5 ? 'manual' : 'import', at: i }; REV++; idx();`);
+  const ms = J(run, `(() => { UI.confMonth = '2026-09'; const t = performance.now(); PAGES.confiance.render(); return performance.now() - t; })()`);
+  assert.ok(ms < 1000, ms + ' ms');
+});
+
+test('RGPD : après effacement, plus aucune trace du nom hors S.audit (qui ne garde que l’identifiant)', () => {
+  const run = appli({ clients: { c1: { id: 'c1', clubId: 'k', name: 'Léa Martin', num: '77', email: 'lea.martin@exemple.fr', phone: '06 12 34 56 78', price: 30, balance: 12, dunning: { note: 'rappeler Léa' } } },
+    loyalty: { l1: { id: 'l1', clientId: 'c1', userId: 'v', type: 'suivi', outcome: 'ok', note: 'Léa contente', at: 1 } },
+    resiliations: { r1: { id: 'r1', clubId: 'k', client: 'MARTIN Lea', date: '2026-10-01', status: 'nouvelle', log: { a: { at: 1, by: 'v', label: 'Appel', note: 'Lea Martin hésite' } } } },
+    chat: { m1: { id: 'm1', userId: 'v', channel: 'k', text: 'J’ai eu Léa Martin au téléphone', at: 1 } },
+    entries: { e1: { id: 'e1', userId: 'v', clubId: 'k', kpiId: 'impayes', date: '2026-10-01', value: 12, source: 'manual', clientId: 'c1', clientNum: '77', at: 1 } } });
+  run(`confirmDlg = async () => true; toast = () => {};`);
+  return run(`effacerAdherent('c1')`).then(() => {
+    const json = run(`JSON.stringify({ ...S, audit: null })`);
+    for (const t of ['Léa Martin', 'MARTIN Lea', 'Lea Martin', 'lea.martin@exemple.fr', '06 12 34 56 78']) assert.ok(!json.toLowerCase().includes(t.toLowerCase()), t);
+    assert.equal(J(run, `S.resiliations.r1.client`), 'Adhérent effacé');
+    assert.equal(J(run, `S.clients.c1 || null`), null); assert.equal(J(run, `S.loyalty.l1 || null`), null);
+    const a = J(run, `Object.values(S.audit).find(x => x.action === 'erase')`); assert.equal(a.clientId, 'c1'); assert.ok(!JSON.stringify(a).toLowerCase().includes('martin'));
+    assert.equal(J(run, `S.entries.e1.value`), 12);
+  });
+});
+test('RGPD : un client sorti il y a 25 mois est purgé au chargement, pas celui sorti il y a 23 mois', () => {
+  const run = appli(); run(`toast = () => {};`);
+  run(`S.clients.old = { id: 'old', clubId: 'k', name: 'Ancien Membre', end: addDays(today(), -Math.round(25 * 30.44)) };
+    S.clients.rec = { id: 'rec', clubId: 'k', name: 'Récent Membre', end: addDays(today(), -Math.round(23 * 30.44)) }; REV++;`);
+  assert.equal(J(run, `purgeAuto()`), 1);
+  assert.equal(J(run, `[!!S.clients.old, !!S.clients.rec]`).join(), 'false,true');
+  assert.equal(J(run, `S.settings.dernierePurge.n`), 1);
+});
+test('RGPD : onglet réservé aux managers ; registre CSV', () => {
+  const run = appli(); run(`UI.clubTab = 'rgpd'`);
+  assert.match(run(`PAGES.clubs.render()`), /Ce que Fit Pulse conserve/);
+  assert.match(run(`PAGES.clubs.render()`), /Les données de ce navigateur ne sont pas partagées\. Ne l’utilisez pas sur un poste public\./);
+  const csv = run(`rgpdRegistreCsv()`); assert.equal(csv.trim().split('\r\n').length, 6); assert.match(csv, /24 mois après la fin du contrat/);
+  run(`ME = S.users.v`); assert.doesNotMatch(run(`PAGES.clubs.render()`), /Données et RGPD/);
+});
+
+test('adoption : 30 pages en une minute = une seule écriture', () => {
+  const run = appli(); run(`ME = S.users.v; globalThis.__n = 0; const s0 = db.set; db.set = (p, v) => { if (p[0] === 'usage') __n++; return s0(p, v); };`);
+  run(`for (let i = 0; i < 30; i++) usageNote('page' + (i % 7));`);
+  assert.equal(J(run, '__n'), 1);
+  run(`clearTimeout(USAGE.timer); USAGE.timer = null;`);
+});
+test('adoption : connecté lundi, mardi et samedi = 3 jours actifs, pastille orange', () => {
+  const run = appli(); const lundi = '2026-10-05';
+  run(`S.usage = { v: { '2026-10-05': { opens: 1 }, '2026-10-06': { opens: 2 }, '2026-10-10': { opens: 1 }, '2026-10-11': { opens: 1 } } }; REV++;`);
+  const w = J(run, `adoptionSemaine('k', 'v', '${lundi}')`); assert.equal(w.jours, 3); assert.equal(J(run, `niveauJours(${w.jours})`), 'orange');
+  assert.equal(J(run, `niveauJours(2)`), 'rouge'); assert.equal(J(run, `niveauJours(4)`), 'vert');
+});
+test('adoption : le parcours de démarrage disparaît à la 4e étape', () => {
+  const run = appli(); run(`ME = S.users.v; S.usage = { v: { [today()]: { opens: 1 } } }; REV++;`);
+  assert.match(run(`parcoursCard()`), /Bien démarrer : 1 sur 4/);
+  run(`S.entries.x = { id: 'x', userId: 'v', clubId: 'k', kpiId: 'avis', date: today(), value: 1, source: 'manual', at: 1 };
+    S.loyalty.l = { id: 'l', userId: 'v', clientId: 'c', type: 'suivi', outcome: 'ok', at: Date.now() }; REV++;`);
+  assert.match(run(`parcoursCard()`), /3 sur 4/);
+  run(`S.clients.c = { id: 'c', clubId: 'k', name: 'C', balance: 10, dunning: { ownerId: 'v', history: [{ at: Date.now(), by: 'v', label: 'Prise en charge' }] } }; REV++;`);
+  assert.equal(run(`parcoursCard()`), '');
+  run(`ME = S.users.u`); assert.match(run(`managerCockpit()`), /data-tuile="adoption"/);
+});

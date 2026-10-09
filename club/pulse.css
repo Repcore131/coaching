@@ -1236,3 +1236,11 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .rc-rev { margin-bottom: 6px; } .rc-tile small + small { display: block; }
 .rap-compteur { margin-bottom: 14px; } .rc-total { font-family: var(--font-title); font-size: var(--t-40); }
 .rc-lignes .row { padding: 4px 0; border-bottom: 1px solid var(--line); gap: 8px; } .rc-hyp { margin-top: 8px; } .rc-hyp ul { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; }
+/* Confiance des chiffres */
+.hdot.conf-vert { background: var(--ok); } .hdot.conf-orange { background: var(--warn); } .hdot.conf-rouge { background: var(--bad); }
+tr.conf-doublon td { background: var(--bad-soft); }
+.verif-badge { display: inline-flex; gap: 4px; margin: 0 0 10px; text-decoration: none; }
+/* Adoption et parcours de démarrage */
+.parcours { margin-bottom: 14px; } .parcours-l { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+.parcours-l li { display: flex; align-items: center; gap: 6px; font-size: var(--t-13); } .parcours-l li.fait { color: var(--ok); }
+.pc-rond { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); display: inline-block; }

@@ -412,7 +412,7 @@ PAGES.clubs = {
   render() {
     const tab = UI.clubTab || 'clubs';
     return `<div class="page-head"><div><h1>${TXT.pages.clubs}</h1><p>${TXT.clubs.sous}</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
-      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList }[tab]()}`;
+      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages'], ['rgpd', 'Données et RGPD']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList, rgpd: isManager() ? clubRgpd : clubList }[tab]()}`;
   },
 };
 function clubList() {

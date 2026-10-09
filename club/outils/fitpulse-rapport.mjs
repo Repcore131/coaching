@@ -23,7 +23,7 @@ export function chargerAppli(donnees, { libs = false } = {}) {
   const noop = () => {};
   const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, addEventListener: noop, appendChild: noop, setAttribute: noop, querySelector: () => null, querySelectorAll: () => [], dataset: {} });
   const ctx = {
-    console: { log: noop, warn: noop, error: noop, info: noop }, Date, Math, Intl, JSON, URLSearchParams, URL, setTimeout, clearTimeout, setInterval: noop, queueMicrotask, crypto: webcrypto, TextEncoder, TextDecoder,
+    console: { log: noop, warn: noop, error: noop, info: noop }, Date, Math, Intl, JSON, URLSearchParams, URL, setTimeout, clearTimeout, setInterval: noop, queueMicrotask, crypto: webcrypto, TextEncoder, TextDecoder, performance,
     navigator: { onLine: true, userAgent: 'node' }, addEventListener: noop, removeEventListener: noop, matchMedia: () => ({ matches: false, addEventListener: noop }), requestAnimationFrame: noop,
     document: { addEventListener: noop, querySelector: () => null, querySelectorAll: () => [], createElement: el, getElementById: () => null, body: el(), documentElement: el(), head: el() },
     location: { hostname: 'localhost', search: '', hash: '', href: 'http://localhost/' }, history: { replaceState: noop }, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, indexedDB: undefined,

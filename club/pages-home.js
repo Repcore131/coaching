@@ -199,6 +199,7 @@ PAGES.home = {
       ${weekDigestCard()}
       ${manager ? saisonBanner() : ''}
       ${wrapBanner()}
+      ${manager ? '' : parcoursCard()}
       ${manager ? '' : myPlanCard()}
       ${manager ? '' : primeCard()}
       <div class="g12 home-now">
@@ -210,6 +211,7 @@ PAGES.home = {
       </div>
       ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
       ${manager ? localTransferCard() : ''}
+      ${manager ? badgeVerifies(CLUB.id) : ''}
       ${manager ? briefDuJourCard() : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
@@ -274,6 +276,7 @@ function managerCockpit() {
     ${tile('#/impayes', 'Relancer', lvl(dunNobody > 2, dunNobody || dunDueN), 'Impayés en cours', fmtE(dunTot), `${dun.length} dossiers · ${dunDueN} à relancer aujourd’hui`)}
     ${(() => { const v60 = dun.filter(c => detteTranche(c) === 3).reduce((s, c) => s + Number(c.balance), 0); const rouge = dunTot > 0 && v60 > 0.2 * dunTot;
       return tile('#/impayes', 'Voir', rouge ? 'h-alert' : v60 ? 'h-watch' : 'h-good', 'Dette de plus de 60 jours', fmtE(v60), `${fmtP(dunTot ? v60 / dunTot : 0)} du total dû${rouge ? ', au-delà de 20 %' : ''}`).replace('class="ck2 ', `data-tuile="dette60" data-rouge="${rouge}" class="ck2 `); })()}
+    ${(() => { const a = tauxAdoption(CLUB.id); return a ? tile('#/members', 'Voir', a.taux >= 0.75 ? 'h-good' : a.taux >= 0.5 ? 'h-watch' : 'h-alert', 'Taux d’adoption', fmtP(a.taux), `${a.actifs} sur ${a.total} actifs au moins 4 jours sur 6 cette semaine`).replace('class="ck2 ', 'data-tuile="adoption" class="ck2 ').replace('href="#/members"', 'href="#/members" data-act="ui" data-key="memTab" data-val="adoption"') : ''; })()}
     ${tile('#/members', 'Voir', lvl(silent.length > team.length / 2 && new Date().getHours() >= 15, silent.length), 'Sans saisie aujourd’hui', `${silent.length}/${presents.length}`, silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi')}
   </div>`;
 }
