@@ -14116,3 +14116,37 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .gab-ligne{display:flex;flex-direction:column;gap:2px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin:0 0 8px}
 .gab-ligne b{font-size:var(--fs-sm);color:var(--text-strong)}
 .gab-ligne span{font-size:var(--fs-xs);color:var(--sub)}
+/* LA SENSATION ET LA MOBILITÉ (build 1961). */
+.sn-bande{border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin:8px 0;background:var(--surface-1)}
+.sn-q{font-size:var(--fs-sm);font-weight:800;color:var(--text-strong);margin-bottom:6px}
+.sn-q .sub{font-weight:600;font-size:var(--fs-xs)}
+.sn-notes{display:grid;grid-template-columns:repeat(11,1fr);gap:4px}
+.sn-n{min-height:36px;border:1px solid var(--border);border-radius:var(--r-2);background:var(--dark);color:var(--text);font-weight:800;font-size:var(--fs-sm);padding:0}
+.sn-n[aria-pressed="true"]{border-color:var(--red);color:var(--text-strong)}
+.sn-pied{display:flex;justify-content:space-between;margin-top:6px}
+.sn-dl{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:end;margin-top:8px}
+.sn-dl .btn{grid-column:1/-1;margin:0}
+.sn-3{display:flex;gap:6px}
+.sn-3 .btn{width:auto;margin:0}
+.sn-coach{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin:0 0 12px}
+.sn-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.sn-l{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding:4px 0 4px 8px;margin:6px 0}
+.sn-l b{font-size:var(--fs-sm);color:var(--text-strong)}
+.sn-l>span{font-size:var(--fs-xs);color:var(--sub)}
+.sn-l.sn-alerte{border-left-color:var(--orange)}
+.sn-l.sn-remplacer{border-left-color:var(--red)}
+.sn-act{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.sn-act .btn{width:auto;margin:0}
+.sn-act .sub{font-size:var(--fs-xs)}
+div.sn-alerte{font-size:var(--fs-xs);color:var(--orange);margin-top:4px}
+.mob-t{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text-strong)}
+.mob-pourquoi{font-size:var(--fs-xs);margin:2px 0 12px}
+.mob-etape{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center}
+.mob-n{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.mob-ex{font-size:var(--fs-lg);font-weight:800;color:var(--text-strong);margin:6px 0}
+.mob-c{font-size:var(--fs-sm);color:var(--text);line-height:1.55;margin:0 0 8px}
+.mob-chrono{font-family:var(--pile-titre);font-size:var(--fs-3xl);color:var(--text-strong);margin:6px 0 12px;font-variant-numeric:tabular-nums}
+.mob-fin{font-size:var(--fs-md);font-weight:800;color:var(--text-strong);text-align:center;padding:20px 0}
+.mob-liste{font-size:var(--fs-xs);color:var(--sub);padding-left:18px;line-height:1.7}
+.mob-liste li.fait{text-decoration:line-through}
+.mob-liste li.cours{color:var(--text-strong);font-weight:800}

@@ -76688,6 +76688,89 @@ async function testExercices(){
       if(prochaineBase(p).base!==Math.round(90*1.03*10)/10) return _echec('base suivante : '+prochaineBase(p).base);
       return true;
     });
+    // ══ BUILD 1961 — LA SENSATION, LES RÈGLES, LA MOBILITÉ ═══════════════════════
+    const _sn61=(...l)=>l.map((x,i)=>Object.assign({date:i+1},typeof x==='number'?{note:x}:x));
+    ok('1961 — regleSensation : chaque transition ; sans note, aucune décision',()=>{
+      const r=h=>regleSensation(h).regle;
+      if(r([])!==null||r(null)!==null) return _echec('sans note');
+      if(r(_sn61(9))!=='ok'||r(_sn61(8))!=='ok') return _echec('8 et plus : ok');
+      if(r(_sn61(7))!=='adapter'||r(_sn61(9,7))!=='adapter') return _echec('sous 8 une fois : adapter');
+      if(r(_sn61(7,6))!=='remplacer'||r(_sn61(9,7,5))!=='remplacer') return _echec('deux de suite : remplacer');
+      if(r(_sn61(7,9,7))!=='adapter') return _echec('pas de suite : adapter');
+      if(r(_sn61(6,9))!=='ok') return _echec('remonté : ok');
+      if(r(_sn61({note:9,douleur:4,zone:'genou'}))!=='alerte'||!/4\/10 \(genou\)/.test(regleSensation(_sn61({note:9,douleur:4,zone:'genou'})).raison)) return _echec('douleur > 3');
+      if(r(_sn61({note:9,douleur:3}))!=='ok') return _echec('douleur 3 : pas d’alerte');
+      if(r(_sn61({note:9,douleur:2,lendemain:'plus'}))!=='alerte') return _echec('plus forte le lendemain');
+      if(r(_sn61({note:9,douleur:2,lendemain:'moins'}))!=='ok') return _echec('moins forte');
+      if(r(_sn61({douleur:2,zone:'coude'}))!==null) return _echec('douleur seule sous le seuil : décision inventée');
+      if(r(_sn61(7,{douleur:2},6))!=='remplacer') return _echec('la douleur seule ne casse pas la suite des notes');
+      return true;
+    });
+    ok('1961 — l’historique se lit dans les séances ; la douleur d’hier se demande le matin, jusqu’à 14 h',()=>{
+      const t=new Date(2027,2,2,9,0).getTime(), hier=new Date(2027,2,1,18,0).getTime();
+      const u={role:'athlete',sessions:[{date:hier-864e5,data:{SQUAT:{sets:[],sensation:{note:7}}}},{date:hier,data:{'SQUAT ':{sets:[],sensation:{note:6,douleur:5,zone:'genou'}},DIPS:{sets:[]}}}]};
+      const h=historiqueSensation(u,'squat');
+      if(h.length!==2||h[1].douleur!==5||h[1].zone!=='genou') return _echec(JSON.stringify(h));
+      const q=douleurAHier(u,t);
+      if(!q||q.ex!=='SQUAT '||q.douleur!==5) return _echec('matin : '+JSON.stringify(q));
+      if(douleurAHier(u,new Date(2027,2,2,15,0).getTime())!==null) return _echec('après 14 h');
+      u.sessions[1].data['SQUAT '].sensation.lendemain='plus';
+      if(douleurAHier(u,t)!==null) return _echec('déjà répondu');
+      if(regleSensation(historiqueSensation(u,'SQUAT')).regle!=='alerte') return _echec('alerte du lendemain');
+      return true;
+    });
+    ok('1961 — coach : alertes d’abord, consigne ajoutée ou exercice remplacé dans les créneaux',()=>{
+      const c={sessions:[{date:1,data:{SQUAT:{sensation:{note:7}},DIPS:{sensation:{note:9,douleur:5}},CURL:{sensation:{note:9}}}},{date:2,data:{SQUAT:{sensation:{note:6}}}}],
+        sessions_config:[{active:true,exercises:[{name:'SQUAT',series:3},{name:'DIPS',series:3,note:'lent'}]},{active:true,exercises:[{name:'squat',series:4}]}]};
+      const l=exercicesASurveiller(c);
+      if(l.map(x=>x.nom+':'+x.regle).join()!=='DIPS:alerte,SQUAT:remplacer') return _echec(l.map(x=>x.nom+':'+x.regle).join());
+      if(sensationAppliquer(c,'dips','tempo')!==1||c.sessions_config[0].exercises[1].note!=='lent · tempo contrôlé, 3 s à la descente') return _echec('adapter');
+      if(sensationAppliquer(c,'DIPS','tempo')!==0) return _echec('consigne en double');
+      if(sensationAppliquer(c,'Squat',null,'hack squat')!==2||c.sessions_config[1].exercises[0].name!=='HACK SQUAT') return _echec('remplacer');
+      return true;
+    });
+    ok('1961 — ROUTINES_MOBILITE : huit séances gelées aux bonnes zones, format massage / rotations / tension / étirement',()=>{
+      if(ROUTINES_MOBILITE.length!==8||!Object.isFrozen(ROUTINES_MOBILITE)) return _echec('8 gelées');
+      const z=ROUTINES_MOBILITE.map(r=>r.zones.join('+')).join(',');
+      if(z!=='chevilles+genoux,hanches+lombaires,thoracique+epaules,chevilles+hanches,epaules+genoux,rachis,epaules+hanches,chevilles+thoracique') return _echec(z);
+      const F=MOBILITE_FORMAT;
+      if(F.map(f=>f.cle).join()!=='massage,rotation,tension,etirement') return _echec('format');
+      if(!(F[0].duree>=60&&F[0].duree<=120)||!(F[3].duree>=120&&F[3].duree<=180)||!/3 à 6/.test(F[1].consigne)||!/1 cycle/.test(F[2].consigne)) return _echec('durées');
+      const e=etapesRoutine(ROUTINES_MOBILITE[0]);
+      if(e.length!==8||e[0].exercice!=='Mollets au rouleau'||e[4].zone!=='genoux') return _echec('étapes');
+      return true;
+    });
+    ok('1961 — la routine du jour suit le profil fonctionnel actif',()=>{
+      const n=l=>routinesPourProfils(l).map(r=>r.n).join();
+      if(n(['P9'])!=='1,4,8') return _echec('cheville : '+n(['P9']));
+      if(n(['P10'])!=='2,4,7') return _echec('hanche : '+n(['P10']));
+      if(n(['P11'])!=='3,5,7') return _echec('épaule : '+n(['P11']));
+      if(n(['P12'])!=='2,6') return _echec('chaîne postérieure : '+n(['P12']));
+      if(n([])!=='1,2,3,4,5,6,7,8'||n(['P1'])!=='1,2,3,4,5,6,7,8') return _echec('sans profil fonctionnel');
+      const d=new Date(2027,2,1);
+      if(routineDuJour(['P9'],d)!==routineDuJour(['P9'],d)) return _echec('stable');
+      if(['1','4','8'].indexOf(String(routineDuJour(['P9'],d).n))<0) return _echec('hors profil');
+      return true;
+    });
+    ok('1961 — la question en fin d’exercice : proposée à la dernière série, facultative, notée dans la séance',()=>{
+      const svW=window.woState, svP=window.woPersist;
+      const t=document.createElement('table'); const tb=document.createElement('tbody'); tb.id='sets-body-0'; t.appendChild(tb); document.body.appendChild(t);
+      try{
+        window.woPersist=()=>{};
+        woState={exercises:[{name:'SQUAT'}],sessionData:{0:{sets:[{done:true},{done:false}]}}};
+        if(sensationProposer(0)) return _echec('proposée avant la fin');
+        woState.sessionData[0].sets[1].done=true;
+        if(!sensationProposer(0)||!document.getElementById('sn-0')) return _echec('pas proposée');
+        if(sensationProposer(0)) return _echec('proposée deux fois');
+        sensationDouleur(0);
+        document.getElementById('sn-i-0').value='2'; document.getElementById('sn-z-0').value='genou';
+        sensationDouleurOk(0);
+        const s=woState.sessionData[0].sensation;
+        if(s.douleur!==2||s.zone!=='genou'||s.note!=null) return _echec('douleur : '+JSON.stringify(s));
+        if(document.getElementById('sn-0')) return _echec('bandeau resté');
+        return true;
+      }finally{ t.remove(); document.getElementById('sn-0')?.remove(); woState=svW; window.woPersist=svP; }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

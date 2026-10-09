@@ -1286,6 +1286,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderRevueMorphoCoach(c); }catch(e){}
   try{ renderPremierProgrammeIA(c); }catch(e){}
   try{ renderGabaritsCoach(c); }catch(e){}
+  try{ renderSensationCoach(c); }catch(e){}
   try{ renderRisqueFiche(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}

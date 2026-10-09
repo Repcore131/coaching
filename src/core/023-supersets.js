@@ -2553,6 +2553,8 @@ function toggleSet(i,idx){
   if(!avant) try{ _woDefilerApresValidation(idx,i); }catch(e){}
   // Lot 4 : un ✓ de trop se défait en un geste, pendant 5 s.
   if(!avant) try{ toast('Série '+(i+1)+' validée','var(--sub)',5000,{lib:'Annuler',fn:()=>annulerValidationSerie(idx,i)}); }catch(e){}
+  // BUILD 1961 : la dernière série validée propose la sensation (facultative).
+  if(!avant) try{ sensationProposer(idx); }catch(e){}
   woPersist();
 }
 function annulerValidationSerie(idx,i){
