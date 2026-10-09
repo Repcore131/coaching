@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // LES PRIX AFFICHÉS SONT CEUX DE tarifs.json, PARTOUT.
 //
-// LA PANNE. La page de vente annonçait 9,95 € « sans engagement » et un annuel
-// à 99 € « −2 mois » pendant que l'app et PayPal encaissaient 9,50 € sur douze
-// mois (114 € en une fois). Rien ne le disait : chaque fichier était juste
-// avec lui-même.
+// LA PANNE. La page de vente a déjà annoncé un autre prix, et « sans
+// engagement », pendant que l'app et PayPal encaissaient ceux de tarifs.json
+// sur douze mois. Rien ne le disait : chaque fichier était juste avec lui-même.
 //
 // CE QUE CE CONTRÔLE REFUSE :
 //   1. un tarifs.json incohérent (annuel ≠ 12 mensualités, demi-tarif faux…) ;
@@ -15,13 +14,20 @@
 //      (sauf data-hors-tarif : un prix du marché, pas le nôtre) ;
 //   4. OFFRES et COACH_PALIERS, évalués tels quels, qui ne rendent pas les
 //      prix de tarifs.json ;
-//   5. « sans engagement » sur la page de vente ; un « N mois d'essai » qui
-//      n'est ni l'essai ni l'essai parrainé.
+//   5. « sans engagement » sur la page de vente et sur /i ; un « N mois
+//      d'essai » qui n'est ni l'essai ni l'essai parrainé (balises meta
+//      comprises) ;
+//   6. UN MONTANT EN EUROS QUI NE VAUT AUCUN PRIX DE tarifs.json, où qu'il
+//      soit dans index.html, i/, c/, app/index.html, terms.html, legal.html,
+//      aide-apk.html — texte, attribut, script, JSON-LD (« price ») —, lié ou
+//      non, sauf s'il figure dans LISTE_BLANCHE ci-dessous (un exemple, un
+//      prix du marché), qui dit pourquoi. Une entrée de la liste blanche qui
+//      ne sert plus fait aussi échouer : elle masquerait le prochain écart.
 // Et il se prouve : un prix faussé exprès, un prix ajouté en dur, doivent
 // être vus.
 //   node scripts/verif/tarifs.mjs
 import { readFileSync } from 'node:fs';
-import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences } from '../tarifs.mjs';
+import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, montantsTarifs } from '../tarifs.mjs';
 
 const T = lireTarifs();
 const erreurs = [];
@@ -35,6 +41,7 @@ for (const x of incoherences(T)) e('tarifs.json : ' + x);
 // marché : il ne doit plus y avoir un seul euro.
 function montantsLibres(html) {
   let s = html
+    .replace(/<(input|img|meta)\b[^>]*\bdata-hors-tarif\b[^>]*>/gi, ' ')
     .replace(/<([a-z0-9]+)\b[^>]*\bdata-(tarif|nb|hors-tarif)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[a-z0-9]+\b[^>]*\bdata-tarif-[ma]="[^"]*"[^>]*>/gi, (b) => b.replace(/\bdata-[ma]="[^"]*"/g, ''));
   const trouves = [];
@@ -51,7 +58,14 @@ function controlerPage(nom, html) {
   const err = [];
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
+  if (nom === 'i/index.html' && /sans engagement/i.test(html))
+    err.push('i/index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois (CGV §4)');
   if (nom === 'index.html') {
+    // Les balises meta (description, og, twitter) ne portent pas de data-nb :
+    // leur « N mois d'essai » est lu ici comme le texte visible.
+    const attributs = [...html.matchAll(/\b(?:content|alt|aria-label)="([^"]*)"/g)].map((m) => m[1]).join(' · ');
+    for (const m of attributs.replace(/&nbsp;/g, ' ').matchAll(/(\d+) mois d'essai|(\d+) mois offert/g))
+      if (Number(m[1] || m[2]) !== T.essai.mois) err.push('index.html (balise meta) : « ' + m[0] + ' » — l’essai dure ' + T.essai.mois + ' mois');
     if (/sans engagement/i.test(html)) err.push('index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
     const permis = [T.essai.mois, valeur(T, 'essai.moisParraine')];
     for (const m of texteVisible(html).matchAll(/(\d+) mois d'essai/g))
@@ -71,6 +85,64 @@ for (const p of PAGES) {
   try { html = readFileSync(RACINE + p, 'utf8'); } catch (x) { e(p + ' illisible'); continue; }
   erreurs.push(...controlerPage(p, html));
 }
+// ── 6. Chaque euro affiché vaut un prix de tarifs.json ─────────────────────
+// LA LISTE BLANCHE, EXPLICITE : fichier, montants, et pourquoi ils ne sont pas
+// les nôtres. Rien d'autre n'y entre sans une raison écrite.
+const LISTE_BLANCHE = Object.freeze([
+  Object.freeze({ fichier: 'index.html', montants: [400, 640], pourquoi: 'prix du marché : coach en salle, 2 séances par semaine (comparatif)' }),
+  Object.freeze({ fichier: 'app/index.html', montants: [50, 80, 400, 640], pourquoi: 'ancrage : un coach en salle, 50 à 80 € la séance, 400 à 640 € par mois' }),
+  Object.freeze({ fichier: 'app/index.html', montants: [49, 20], pourquoi: 'exemple dans le champ de saisie du prix d’un programme vendu par un coach (placeholder)' }),
+]);
+export const FICHIERS_MONTANTS = ['index.html', 'i/index.html', 'c/index.html', 'app/index.html', 'terms.html', 'legal.html', 'aide-apk.html'];
+const NB = '(\\d+(?:[.,]\\d+)?)', SEP = '(?:\\s|&nbsp;|\\u00a0|\\u202f)*';
+const RE_EUROS = new RegExp(NB + '(?:' + SEP + '(?:à|et)' + SEP + NB + ')?' + SEP + '(?:€|&euro;|EUR\\b)', 'g');
+const lireNb = (x) => Number(String(x).replace(',', '.'));
+// Les montants d'une page : [{montant, ligne, extrait}].
+function montantsPage(html) {
+  const l = [];
+  const ajouter = (n, i, extrait) => l.push({ montant: lireNb(n), ligne: html.slice(0, i).split('\n').length, extrait });
+  for (const m of html.matchAll(RE_EUROS)) {
+    ajouter(m[1], m.index, m[0]);
+    if (m[2]) ajouter(m[2], m.index, m[0]);
+  }
+  for (const m of html.matchAll(/"price"\s*:\s*"?(\d+(?:\.\d+)?)"?/g)) ajouter(m[1], m.index, m[0]);
+  return l;
+}
+function montantsInconnus(nom, html, T, blanche) {
+  const permis = new Set(montantsTarifs(T).map((n) => Math.round(n * 100)));
+  const err = [];
+  for (const x of montantsPage(html)) {
+    const c = Math.round(x.montant * 100);
+    if (permis.has(c)) continue;
+    const b = blanche.find((w) => w.fichier === nom && w.montants.some((n) => Math.round(n * 100) === c));
+    if (b) { b.servi = true; continue; }
+    err.push(nom + ' : ' + String(x.montant).replace('.', ',') + ' € (vers la ligne ' + x.ligne + ', « ' + x.extrait.replace(/&nbsp;/g, ' ') + ' ») ne vaut aucun prix de tarifs.json, et n’est pas dans la liste blanche');
+  }
+  return err;
+}
+{
+  // Une entrée par montant : chacune doit servir.
+  const blanche = LISTE_BLANCHE.flatMap((w) => w.montants.map((n) => ({ fichier: w.fichier, montants: [n], pourquoi: w.pourquoi, servi: false })));
+  for (const f of FICHIERS_MONTANTS) {
+    let html;
+    try { html = readFileSync(RACINE + f, 'utf8'); } catch (x) { e(f + ' illisible'); continue; }
+    erreurs.push(...montantsInconnus(f, html, T, blanche));
+  }
+  for (const w of blanche) if (!w.servi) e('liste blanche : ' + w.montants[0] + ' € dans ' + w.fichier + ' (« ' + w.pourquoi + ' ») ne sert plus — retire-le');
+  // Le contrôle se prouve : un montant faux, même rangé dans un data-hors-tarif ou
+  // dans le JSON-LD, est vu ; un prix de tarifs.json passe.
+  const html = readFileSync(RACINE + 'index.html', 'utf8');
+  const vide = () => [];
+  if (!montantsInconnus('index.html', html.replace('</body>', '<p data-hors-tarif>12,34&nbsp;€</p></body>'), T, vide()).some((x) => /12,34/.test(x)))
+    e('auto-contrôle : un montant inconnu dans un data-hors-tarif n’est pas vu');
+  if (!montantsInconnus('index.html', html.replace(/("name": "Essentielle", "price": ")[^"]*/, '$19.95'), T, vide()).some((x) => /9,95/.test(x)))
+    e('auto-contrôle : un « price » faux dans le JSON-LD n’est pas vu');
+  if (!montantsInconnus('i/index.html', '<p>puis 24,90&nbsp;€ ou 7 à 8 € par mois</p>', T, vide()).some((x) => /\b7 €/.test(x)))
+    e('auto-contrôle : le premier nombre d’une fourchette « 7 à 8 € » n’est pas vu');
+  if (montantsInconnus('i/index.html', '<p>' + valeur(T, 'ultime.mois') + ' €</p>', T, vide()).length)
+    e('auto-contrôle : un prix de tarifs.json est refusé');
+}
+
 // Les deux montants de la grille, et l'annuel, y sont bien.
 {
   const html = readFileSync(RACINE + 'index.html', 'utf8');
@@ -89,6 +161,12 @@ for (const p of PAGES) {
   const enDur = html.replace('</main>', '<p>Offre : 49&nbsp;€ par mois</p></main>');
   const enDur2 = enDur === html ? html.replace('</body>', '<p>Offre : 49&nbsp;€ par mois</p></body>') : enDur;
   if (!controlerPage('index.html', enDur2).some((x) => /49 €/.test(x))) e('auto-contrôle : un prix écrit en dur n’est pas vu');
+  // La FAQ des données structurées suit la FAQ visible : une réponse changée
+  // à l'écran et pas dans le JSON-LD est vue.
+  const k = html.lastIndexOf('ton accès reste ouvert jusque-là');   // la dernière : celle de <section id="faq">
+  const faqChangee = k < 0 ? html : html.slice(0, k) + 'ton accès reste ouvert jusqu’au bout' + html.slice(k + 'ton accès reste ouvert jusque-là'.length);
+  if (faqChangee === html) e('auto-contrôle : la réponse « Puis-je annuler ? » a changé — adapter ce contrôle');
+  else if (!controlerPage('index.html', faqChangee).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : une FAQ JSON-LD en retard sur la FAQ visible n’est pas vue');
   if (!controlerPage('index.html', html.replace('</body>', '<p>sans engagement</p></body>')).some((x) => /sans engagement/.test(x)))
     e('auto-contrôle : « sans engagement » n’est pas vu');
 }
@@ -140,4 +218,5 @@ if (erreurs.length) {
   process.exit(1);
 }
 console.log('Prix : l’app, ' + PAGES.join(', ') + ' suivent tarifs.json (Essentielle ' + T.essentielle.mois + ' / ' + T.essentielle.an
-  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Le contrôle voit un prix faussé et un prix en dur.');
+  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Chaque euro de '
+  + FICHIERS_MONTANTS.join(', ') + ' vaut un prix de tarifs.json ou figure dans la liste blanche (' + LISTE_BLANCHE.length + ' entrées). Le contrôle voit un prix faussé, un prix en dur et un montant inconnu.');

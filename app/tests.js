@@ -12270,7 +12270,9 @@ async function testExercices(){
         ok('Les cinq arguments respectent leur format',(()=>{
           const z=document.getElementById('s-subscribe');
           if(!z) return _echec('écran de souscription absent');
-          const verts=[...z.querySelectorAll('div[style*="var(--green)"] span')]
+          // Un argument = le <span> d'une ligne, enfant direct : le nombre lié
+          // à tarifs.json (<span data-nb>) qu'il contient n'en est pas un sixième.
+          const verts=[...z.querySelectorAll('div[style*="var(--green)"] > div > span')]
             .map(e=>(e.textContent||'').trim()).filter(Boolean);
           if(verts.length!==5) return _echec(verts.length+' argument(s) au lieu de 5');
           const trop=verts.filter(t=>t.split(/\s+/).length>8);
@@ -35897,7 +35899,7 @@ async function testExercices(){
               return _echec(c+' ne mène pas à Ultime');
             // LES CHIFFRES VENDENT, et ils viennent de la table des offres.
             const p=(d.querySelector('.vrr-p')||{}).textContent||'';
-            if(p.indexOf(prixMoisAnnuel('ultime'))<0||p.indexOf(prixOffre('ultime'))<0)
+            if(p.indexOf(prixDeuxFacons('ultime'))<0)
               return _echec(c+' : le prix d’Ultime ne se lit pas');
           }
           // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
@@ -37013,6 +37015,28 @@ async function testExercices(){
           if(trouves.length) fautes.push(m+' : '+trouves.slice(0,2).join(' | '));
         }
         return fautes.length?_echec(fautes.join('  ·  ')):true;})());
+
+      ok('TARIFS — prixDeuxFacons : jamais deux fois le même montant, le total en une fois quand il n’y a pas de remise',(()=>{
+        const nbsp=String.fromCharCode(160);
+        // Sans remise (prixAn = douze mensualités) : le mensuel, puis le total.
+        for(const cle of ['essentielle','ultime']){
+          const o=offre(cle), t=prixDeuxFacons(cle);
+          const remise=Math.round(o.prixAn*100)<Math.round(o.prix*TARIFS.engagementMois*100);
+          if(remise) continue;
+          if(t!==prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' en une fois') return _echec(cle+' : « '+t+' »');
+          if(t.split(prixOffre(cle)).length!==2) return _echec(cle+' : le mensuel est dit deux fois : « '+t+' »');
+        }
+        // Les montants viennent de TARIFS, et rien n'est écrit en dur.
+        if(prixDeuxFacons('ultime').indexOf(_euros(TARIFS.ultime.an))<0) return _echec('le total d’Ultime ne vient pas de TARIFS');
+        if(prixDeuxFacons('essentielle').indexOf('9,50'+nbsp+'€')<0) return _echec('Essentielle : '+prixDeuxFacons('essentielle'));
+        // Une offre sans annuel, et une offre inconnue.
+        if(prixDeuxFacons('ultime_demi')!==prixOffre('ultime_demi')+' par mois') return _echec('ultime_demi : '+prixDeuxFacons('ultime_demi'));
+        if(prixDeuxFacons('rien')!=='') return _echec('offre inconnue');
+        // Aucun écran ne refait la phrase qui répétait le même montant.
+        // Les trois écrans qui la disaient passent par prixDeuxFacons.
+        if([rcVerrouBloc,texteEssaiRestant,rendreEssaiBilan].some(f=>/prixMoisAnnuel/.test(String(f))))
+          return _echec('« … par mois en annuel, ou … au mois » est encore écrit à la main');
+        return true;})());
 
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
@@ -57458,7 +57482,7 @@ async function testExercices(){
         return _echec('le vingt-et-unième jour ne rappelle rien : « '+j21+' »');
       const j27=texteEssaiRestant(dans(26));
       if(!/Plus que 3 jours/.test(j27)) return _echec('le vingt-septième jour ne chiffre pas : « '+j27+' »');
-      if(j27.indexOf(prixOffre('ultime'))<0||j27.indexOf(prixMoisAnnuel('ultime'))<0)
+      if(j27.indexOf(prixDeuxFacons('ultime'))<0)
         return _echec('la relance finale ne dit pas le prix d’Ultime');
       // ET ELLE PARLE DE SON PROGRAMME A LUI : deux exercices posés, donc deux
       // exercices annoncés.
@@ -57499,7 +57523,7 @@ async function testExercices(){
         //   on normalise donc aussi le prix attendu, sans quoi « 24,90 € »
         //   cherche un caractere que la lecture vient de remplacer.
         const _nb=String.fromCharCode(160);
-        for(const p of [prixOffre('ultime'),prixMoisAnnuel('ultime'),prixOffre('essentielle'),prixMoisAnnuel('essentielle')])
+        for(const p of [prixOffre('ultime'),prixOffre('ultime',true),prixOffre('essentielle'),prixOffre('essentielle',true)])
           if(txt.indexOf(p.split(_nb).join(' '))<0) return _echec('le prix '+p+' ne se lit pas');
         // ET DES PORTES, PAS UN MUR : Ultime, Essentielle, le coaching, le code.
         const b=[...z.querySelectorAll('button,a')];

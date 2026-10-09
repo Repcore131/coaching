@@ -191,8 +191,8 @@ const PLANS = [
 //
 // ⚠ IL PORTE SES CYCLES, LUI AUSSI (24/09/2026). Sans eux, `--verifier` le
 //   regardait sans rien comparer et `--tarifs` le sautait : le plan d'entree,
-//   celui que presque tout le monde prendra, serait reste a 9,95 pendant que
-//   l'ecran annonce 9,50.
+//   celui que presque tout le monde prendra, serait reste a son ancien prix
+//   pendant que l'ecran annonce celui de tarifs.json.
 //
 // ⚠ ET IL RESTE HORS DE `PLANS` : la boucle de creation y reconnait un plan
 //   par son NOM, et celui-ci n'a pas le meme. L'y mettre creerait un DOUBLON
@@ -411,10 +411,10 @@ async function verifier(tok) {
 
 // ══ `--tarifs` : REMETTRE LES PLANS AU PRIX DE L'APPLICATION ════════════
 //
-// ⚠ UN PLAN PAYPAL NE SUIT PAS LA TABLE DES PRIX. Le 24/09/2026, l'abonnement
-//   est passe a 9,50 par mois et 114 l'an ; les plans, eux, facturaient encore
-//   9,95 et 99. L'application annoncait un prix, PayPal en prelevait un autre —
-//   la faute la plus chere possible, et la plus silencieuse.
+// ⚠ UN PLAN PAYPAL NE SUIT PAS LA TABLE DES PRIX. Quand tarifs.json change,
+//   les plans deja crees continuent de facturer l'ancien prix : l'application
+//   annonce un prix, PayPal en preleve un autre — la faute la plus chere
+//   possible, et la plus silencieuse.
 //
 // ⚠ CE QUE CETTE COMMANDE NE FAIT PAS : changer ce que paient les abonnes
 //   DEJA en cours. PayPal applique le nouveau tarif aux souscriptions a venir ;

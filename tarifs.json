@@ -1,5 +1,5 @@
 {
-  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : python3 scripts/tarifs.py (recopie dans l'app, index.html et terms.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
+  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : node scripts/tarifs.mjs (recopie dans l'app, les pages, les CGV et le JSON-LD de index.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
   "devise": "EUR",
   "engagementMois": 12,
   "essentielle": { "mois": 9.5, "an": 114 },

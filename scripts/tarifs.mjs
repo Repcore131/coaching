@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // ══ LES PRIX, ÉCRITS UNE SEULE FOIS : tarifs.json ═════════════════════════
 //
-// POURQUOI. La page de vente annonçait 9,95 € et 24,90 € « sans engagement »,
-// avec un annuel à 99 € et 249 € « −2 mois », pendant que l'app et PayPal
-// encaissaient 9,50 € et 24,90 € sur douze mois, et 114 € / 298,80 € en une
-// fois. Trois fichiers, trois vérités : celle qu'on ne relit pas finit fausse.
+// POURQUOI. Un prix recopié à la main dans trois fichiers finit par en dire
+// trois différents : celui qu'on ne relit pas devient faux. Un seul fichier,
+// tarifs.json, et ce script qui le recopie partout où un montant s'affiche.
 //
 // CE QUE FAIT CE SCRIPT (idempotent) :
 //   • app/rc-core.<build>.js — recopie tarifs.json entre /* TARIFS:DEBUT */ et
@@ -16,9 +15,18 @@
 //       <span data-nb="essai.moisParraine">…</span>      un nombre
 //       data-tarif-m="…" / data-tarif-a="…"             les attributs data-m / data-a
 //                                                       du même élément (bascule)
+//   • index.html, les données structurées (JSON-LD) :
+//       <script type="application/ld+json" data-tarifs-offres="Essentielle=essentielle.mois,…">
+//         recopie le « price » de chaque Offer nommée ;
+//       <script type="application/ld+json" data-faq-depuis="faq">
+//         réécrit la FAQPage à partir des <details> visibles de <section id="faq"> :
+//         les réponses que lit Google sont celles que lit le visiteur, nombres
+//         liés compris (un JSON ne peut pas porter de data-nb) ;
 //   Un montant en euros qui n'est lié à AUCUNE clé est refusé par
 //   scripts/verif/tarifs.mjs, sauf dans un élément marqué data-hors-tarif
-//   (un prix du marché, pas le nôtre).
+//   (un prix du marché, pas le nôtre) ; et tout montant, lié ou non, doit
+//   valoir un prix de tarifs.json ou figurer dans la LISTE_BLANCHE de ce
+//   contrôle, qui dit pourquoi.
 //
 //   node scripts/tarifs.mjs             applique
 //   node scripts/tarifs.mjs --verifier  ne change rien, sort en erreur si un fichier est en retard
@@ -26,7 +34,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
-export const PAGES = ['index.html', 'terms.html', 'aide-apk.html', 'i/index.html', 'c/index.html'];
+export const PAGES = ['index.html', 'terms.html', 'legal.html', 'aide-apk.html', 'i/index.html', 'c/index.html', 'app/index.html'];
 
 export function lireTarifs() { return JSON.parse(readFileSync(RACINE + 'tarifs.json', 'utf8')); }
 
@@ -51,6 +59,15 @@ export function euros(n) {
 }
 const nombre = (n) => String(n).replace('.', ',');
 
+// LES MONTANTS EN EUROS de tarifs.json (pas les durées : « mois » vaut un prix
+// sous essentielle, une durée sous coaching). Ce qu'un « … € » affiché a le
+// droit de valoir — scripts/verif/tarifs.mjs refuse tout autre montant.
+export function montantsTarifs(T) {
+  const l = [T.essentielle.mois, T.essentielle.an, T.ultime.mois, T.ultime.an, T.ultime_demi.premierMois,
+    ...Object.values(T.coach), ...Object.values(T.coaching).map((c) => c.prix), valeur(T, 'coaching.coaching_evolution.parMois')];
+  return [...new Set(l.filter((n) => typeof n === 'number'))].sort((a, b) => a - b);
+}
+
 // ── Les pages ─────────────────────────────────────────────────────────────
 // Le contenu d'un élément lié ne porte pas de balise : on le remplace entier.
 const RE_CONTENU = /(<([a-z0-9]+)\b[^>]*\bdata-(tarif|nb)="([^"]+)"[^>]*>)([^<]*)(<\/\2>)/gi;
@@ -69,7 +86,42 @@ export function appliquerPage(html, T) {
     }
     return b;
   });
-  return s;
+  return appliquerJsonLd(s, T);
+}
+
+// ── Les données structurées (JSON-LD) ─────────────────────────────────────
+const decoder = (t) => t.replace(/<[^>]+>/g, '').replace(/&nbsp;|\u00a0/g, ' ').replace(/&amp;/g, '&')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+// Les questions visibles d'une section : [{q, r}], dans l'ordre de la page.
+export function faqVisible(html, id) {
+  const i = html.indexOf('<section id="' + id + '"');
+  if (i < 0) throw new Error('<section id="' + id + '"> introuvable');
+  const j = html.indexOf('</section>', i);
+  const l = [];
+  for (const m of html.slice(i, j).matchAll(/<details\b[^>]*>\s*<summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/g))
+    l.push({ q: decoder(m[1]), r: decoder(m[2]) });
+  return l;
+}
+const RE_LD = /(<script type="application\/ld\+json"([^>]*)>)([\s\S]*?)(<\/script>)/g;
+export function appliquerJsonLd(html, T) {
+  return html.replace(RE_LD, (tout, ouvre, attrs, corps, ferme) => {
+    const offres = attrs.match(/\bdata-tarifs-offres="([^"]+)"/);
+    const faq = attrs.match(/\bdata-faq-depuis="([^"]+)"/);
+    let c = corps;
+    if (offres) for (const paire of offres[1].split(',')) {
+      const [nom, cle] = paire.split('=').map((x) => x.trim());
+      const re = new RegExp('("name":\\s*"' + nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[^{}]*?"price":\\s*")[^"]*(")');
+      if (!re.test(c)) throw new Error('JSON-LD : pas d’Offer « ' + nom + ' » avec un « price »');
+      c = c.replace(re, '$1' + valeur(T, cle).toFixed(2) + '$2');
+    }
+    if (faq) {
+      const l = faqVisible(html, faq[1]);
+      if (!l.length) throw new Error('JSON-LD : aucune question visible dans <section id="' + faq[1] + '">');
+      c = '\n' + JSON.stringify({ '@context': 'https://schema.org', '@type': 'FAQPage',
+        mainEntity: l.map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.r } })) }, null, 1) + '\n';
+    }
+    return ouvre + c + ferme;
+  });
 }
 
 // ── L'app ─────────────────────────────────────────────────────────────────

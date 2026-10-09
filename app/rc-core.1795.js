@@ -223,7 +223,8 @@ function offreRevision(){
 // la revision : reviser un plan qu'on n'a pas ne veut rien dire.
 //
 // DEUX CHEMINS, et le second existe parce que le premier ne passe pas par
-// l'application : le programme personnalise se vend hors de l'app (99 €), et
+// l'application : le programme personnalise se vend hors de l'app
+// (TARIFS.coaching.programme_perso), et
 // c'est le coach qui pose le marqueur en livrant.
 function programmePersoLivre(u){
   const x=u||currentUser;
@@ -1023,17 +1024,18 @@ const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,'')
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
-//   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
+//   Abonnement Essentielle mensuel — prix : TARIFS.essentielle.mois (tarifs.json).
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
-// Palier annuel — 99 EUR/an, soit 17 % de moins que 12 × 9,95.
+// Palier annuel Essentielle — prix : TARIFS.essentielle.an (douze mensualités).
 // VIDE TANT QUE LE PLAN N'EST PAS CRÉÉ SUR PAYPAL. Un identifiant ne s'invente
 // pas : tant que cette constante est vide, l'offre annuelle n'est PAS proposée
 // du tout, et l'écran retombe sur le seul mensuel. Mieux vaut une offre de
 // moins qu'un bouton qui échoue au moment de payer.
 // Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
-// « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
+// « RepCore Annuel » au prix de TARIFS.essentielle.an, cycle YEAR (ou
+// node scripts/paypal_plans.mjs), puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
 const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 // ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
@@ -1041,16 +1043,16 @@ const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 //   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
 //   du tout : mieux vaut une offre de moins qu'un bouton qui echoue au moment
 //   de payer.
-//     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
-//     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
+//     « RepCore Ultime mensuel »  TARIFS.ultime.mois, cycle MONTH
+//     « RepCore Ultime annuel »   TARIFS.ultime.an, cycle YEAR
 const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
 const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
-//   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
-//     PayPal → Billing Plans → « RepCore Ultime, premier mois apres pack »
-//     Cycle 1 : 12,45 EUR, TRIAL, 1 mois, 1 fois.
-//     Cycle 2 : 24,90 EUR, REGULAR, mensuel, illimite.
+//   mensuel dont le PREMIER cycle est a TARIFS.ultime_demi.premierMois et les
+//   suivants a TARIFS.ultime.mois (node scripts/paypal_plans.mjs le cree) :
+//     Cycle 1 : TRIAL, 1 mois, 1 fois.
+//     Cycle 2 : REGULAR, mensuel, illimite.
 //   TANT QUE CETTE CASE EST VIDE, L'OFFRE N'EST PAS ANNONCEE DU TOUT : la
 //   sortie de pack propose alors Ultime au prix normal. On ne promet pas un
 //   prix qu'on ne sait pas encaisser.
@@ -1081,8 +1083,7 @@ const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v===
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
 // auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
 // ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
-// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
-// encaissait 9,95.
+// arrive ici : un prix affiche ne valait plus celui que PayPal encaissait.
 //
 // CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
 //   palier   le palier ouvert (voir PALIERS_ORDRE)
@@ -1127,7 +1128,7 @@ const OFFRES=Object.freeze({
   essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
-// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure entre le nombre et « € » en fin de
 //   ligne est fautive en typographie francaise, et elle arrive sur telephone.
 function _euros(n){
   const v=Number(n)||0;
@@ -1150,6 +1151,26 @@ function prixMoisAnnuel(cle){
   const o=offre(cle);
   if(!o||!o.prixAn) return '';
   return _euros(Math.round(o.prixAn/12*100)/100);
+}
+/**
+ * PURE. Les deux façons de régler une formule, en une phrase.
+ * ⚠ « 24,90 € par mois en annuel, ou 24,90 € au mois » : depuis que l'année
+ *   vaut douze mensualités (24/09/2026), le mois de l'annuel EST le mensuel,
+ *   et la phrase répétait deux fois le même montant comme s'il y avait un
+ *   choix de prix. Sans remise, elle dit donc le mensuel et le total réglé en
+ *   une fois ; avec une remise (prixAn sous douze mensualités), elle redit
+ *   le mois de l'annuel contre le mensuel, sans qu'une ligne bouge.
+ * @param {string} cle une clé d'OFFRES
+ * @returns {string} '' pour une offre inconnue
+ */
+function prixDeuxFacons(cle){
+  const o=offre(cle);
+  if(!o) return '';
+  if(!o.prixAn) return prixOffre(cle)+' par mois';
+  const remise=Math.round(o.prixAn*100)<Math.round(o.prix*TARIFS.engagementMois*100);
+  return remise
+    ? prixMoisAnnuel(cle)+' par mois en annuel, ou '+prixOffre(cle)+' au mois'
+    : prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' en une fois';
 }
 
 // ══ CE QUE CHAQUE PALIER OUVRE ═══════════════════════════════════════════
@@ -1282,8 +1303,7 @@ function rcVerrouBloc(capacite){
   // page des formules, qui est a jour la-bas et nulle part ailleurs.
   let prix='';
   if(v.vers==='ultime'){
-    try{ prix='<div class="vrr-p">Ultime : '+prixMoisAnnuel('ultime')+' par mois en annuel, ou '
-      +prixOffre('ultime')+' au mois.</div>'; }catch(e){ prix=''; }
+    try{ prix='<div class="vrr-p">Ultime : '+prixDeuxFacons('ultime')+'.</div>'; }catch(e){ prix=''; }
   }
   const action=(v.vers==='coaching')
     ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
@@ -1603,7 +1623,7 @@ const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, 
 // ══════════ L'ESSAI ATHLETE, SYMETRIQUE DE LA PROMESSE COACH ══════════════
 //
 // Le coach a PROMESSE_COACH : gratuit pour son premier client, sans carte.
-// L'athlete sans code, lui, arrivait sur 9,95 EUR/mois, PayPal et une case de
+// L'athlete sans code, lui, arrivait sur l'ecran de paiement, PayPal et une case de
 // renonciation au droit de retractation — avant d'avoir vu une repetition.
 //
 // ── POURQUOI DES SEANCES ET NON DES JOURS ────────────────────────────────
@@ -1835,8 +1855,7 @@ function texteEssaiRestant(u){
   if(j<D-9) return '';
   if(j<D-3) return 'Il te reste '+n+' jour'+(n>1?'s':'')+' d’accès complet.';
   const quoi=essaiBilanPhrase(u);
-  const prix='tu les gardes avec Ultime à '+prixOffre('ultime')
-    +', ou '+prixMoisAnnuel('ultime')+' par mois en annuel.';
+  const prix='tu les gardes avec Ultime à '+prixDeuxFacons('ultime')+'.';
   const tete=n>0?('Plus que '+n+' jour'+(n>1?'s':'')+'.'):'Dernier jour d’accès complet.';
   return tete+(quoi?(' '+quoi.charAt(0).toUpperCase()+quoi.slice(1)+', '+prix)
                    :(' Ton accès complet, '+prix));
@@ -2868,7 +2887,7 @@ function _confirmerResiliation(){
 //   vrai, et qui est dit : l'acces court jusqu'au terme, rien ne se reconduit
 //   ensuite, et un prelevement APRES le terme se rembourse.
 const RESIL_MOYENS='Ta demande est enregistrée. Ton abonnement va jusqu\'au terme '
-  +'des douze mois : les prélèvements continuent jusque-là, et rien ne se '
+  +'des '+TARIFS.engagementMois+' mois : les prélèvements continuent jusque-là, et rien ne se '
   +'reconduit ensuite. Au terme, coupe le paiement automatique chez PayPal : '
   +'RepCore ne peut pas annuler l\'abonnement à ta place, le paiement est géré '
   +'directement entre toi et eux. Un prélèvement postérieur au terme te serait '
@@ -12270,7 +12289,7 @@ async function doRegister(){
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
-      // qui, jusqu'a ce lot, tombait sur 9,95 EUR/mois avant d'avoir vu une
+      // qui, jusqu'a ce lot, tombait sur l'ecran de paiement avant d'avoir vu une
       // repetition. Un athlete qui ARRIVE avec un code n'en a pas besoin :
       // son acces est ouvert par son coach, et lui en ouvrir un en plus
       // laisserait un essai dormant a consommer le jour ou le code expire.
@@ -18907,7 +18926,7 @@ function expliquerUrgence(c){
 
 // PURE. Le prix de l'abonnement autonome, TEL QUE LA TABLE LE PORTE.
 //
-// Trois textes l’annonçaient en dur : changer 9,95 dans SUB_PALIERS ne
+// Trois textes l’annonçaient en dur : changer le prix dans SUB_PALIERS ne
 // changeait rien à l’écran, et le produit aurait annoncé deux prix selon
 // l’endroit — celui de la table sur la carte, l’ancien dans les textes.
 function prixAutonomie(){
@@ -82343,8 +82362,7 @@ function rendreEssaiBilan(u){
       :'<p class="eb-sous">Rien n’est effacé.</p>')
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Ultime</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('ultime'))+' par mois en annuel, '
-      +'ou '+escapeHtml(prixOffre('ultime'))+' au mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('ultime'))+'</div>'
       +'<ul class="eb-c-l">'
       +ligne('Le catalogue d’exercices, filmés et illustrés')
       +ligne('La charge de ton bloc, semaine par semaine')
@@ -82355,8 +82373,7 @@ function rendreEssaiBilan(u){
     +'</div>'
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Essentielle</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('essentielle'))+' par mois en annuel, '
-      +'ou '+escapeHtml(prixOffre('essentielle'))+' au mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('essentielle'))+'</div>'
       +'<ul class="eb-c-l">'
       +ligne('Tes séances, ton historique et tes bilans')
       +ligne('Ta nutrition et ton lifestyle')
@@ -128334,7 +128351,7 @@ function lienAbonnement(){
   }catch(e){}
   return '/app/';
 }
-// ⚠ IL ANNONCAIT 9,50 PENDANT QUE PAYPAL ENCAISSAIT 9,95 (corrige au lot 1).
+// ⚠ ECRIT EN DUR, IL NE VALAIT PLUS CE QUE PAYPAL ENCAISSAIT (corrige au lot 1).
 //   Un prix ecrit en dur finit toujours par diverger de celui qu'on facture :
 //   celui-ci vient d'OFFRES, comme tous les autres.
 const PRIX_ATHLETE_MOIS=prixOffre('essentielle');
@@ -128522,9 +128539,9 @@ function loadMonetisationTab(){
   const cancelled=subs.filter(x=>x.paymentStatus==='cancelled');
   document.getElementById('pp-total-subs').textContent=active.length;
   // ⚠ LE SEUL PRIX ENCORE ECRIT EN DUR DANS TOUT LE FICHIER, trouve le
-  //   24/09/2026 : « active.length * 9.95 ». Il annoncait un revenu mensuel
-  //   calcule sur un tarif qui venait de changer, et sur le seul tarif
-  //   d'Essentielle — un abonne a Ultime comptait pour 9,95 €. Chacun compte
+  //   24/09/2026 : le nombre d'abonnes multiplie par un tarif ecrit en dur.
+  //   Il annoncait un revenu mensuel calcule sur un tarif qui venait de
+  //   changer, et sur le seul tarif d'Essentielle. Chacun compte
   //   maintenant pour ce que SA formule vaut, lue dans la table.
   document.getElementById('pp-mrr').textContent=_euros(Math.round(active.reduce((s,x)=>{
     const f=String(((x.abonnement||{}).formule)||'essentielle');

@@ -47,10 +47,10 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1794';
+window.RC_BUILD='1795';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
-window.RC_MAJ='2026-10-08';
+window.RC_MAJ='2026-10-09';
 // L'APPARENCE, AVANT LE PREMIER AFFICHAGE. Sombre par defaut ; « clair » ou
 // « auto » (comme le telephone) si l'utilisateur l'a choisi dans ses reglages.
 // Pose ici, et non dans rc-core, pour que l'ecran ne clignote pas en noir
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1794.css">
+<link rel="stylesheet" href="./rc-style.1795.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -875,7 +875,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- L'ANCRAGE. Factuel, verifiable, et il fait paraitre tout le reste
          leger. Il precede les prix : lu apres, il ne sert plus a rien. -->
-    <p class="wel-ancre">Un coach en salle, c'est 50 à 80 € la séance. Deux fois par
+    <p class="wel-ancre" data-hors-tarif>Un coach en salle, c'est 50 à 80 € la séance. Deux fois par
       semaine, on est entre 400 et 640 € par mois, sans le plan nutrition et sans
       application.</p>
 
@@ -1103,7 +1103,7 @@ const COACH_PHOTO='icons/coach.jpg';
                pose par _poserPromesseAthlete — ecrit une fois, comme
                PROMESSE_COACH. -->
           <div class="sub" style="font-size:var(--fs-xs);margin-top:4px;color:var(--green)" data-promesse-athlete></div>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Ensuite : <span data-prix-autonomie></span>, engagement 12 mois</div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Ensuite : <span data-prix-autonomie></span>, engagement <span data-nb="engagementMois">12</span> mois</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl)">›</div>
       </div>
@@ -4112,7 +4112,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <input type="checkbox" id="cpv-envente" onchange="_cpvApercu()">
       <span>Afficher ce programme sur ma vitrine</span></label>
     <label class="vn-lab" for="cpv-prix">Prix affiché</label>
-    <input id="cpv-prix" class="vn-in" maxlength="40" placeholder="49 € · 3 × 20 € · sur devis" oninput="_cpvApercu()">
+    <input id="cpv-prix" class="vn-in" data-hors-tarif maxlength="40" placeholder="49 € · 3 × 20 € · sur devis" oninput="_cpvApercu()">
     <label class="vn-lab" for="cpv-pitch">Pitch</label>
     <textarea id="cpv-pitch" class="vn-in" rows="3" maxlength="280" placeholder="Ce que ce programme apporte, en deux phrases" oninput="_cpvApercu()"></textarea>
     <div class="cpv-compte" id="cpv-reste"></div>
@@ -6022,7 +6022,7 @@ const COACH_PHOTO='icons/coach.jpg';
      (24/09/2026). L'abonnement s'engage désormais sur douze mois, réglés en
      une fois ou mois par mois : la promesse inverse, maintenue au-dessus du
      bouton de paiement, aurait été un argument de vente faux. -->
-<span style="font-size:var(--fs-sm);color:#aaa">Engagement 12 mois, en une fois ou mensuel</span></div>
+<span style="font-size:var(--fs-sm);color:#aaa">Engagement <span data-nb="engagementMois">12</span> mois, en une fois ou mensuel</span></div>
       </div>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
       <!-- Sélecteur de palier — rempli par _renderSubPaliers(). Rendu en JS et
@@ -6058,7 +6058,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </svg>
           <div style="text-align:left">
             <div style="font-size:var(--fs-xs);font-weight:700;color:#ccc;font-family:Montserrat,sans-serif;display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="#6b9fd4" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Paiement sécurisé via <span style="color:#009CDE">PayPal</span></div>
-            <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Engagement 12 mois · Résiliation en ligne, effet au terme</div>
+            <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Engagement <span data-nb="engagementMois">12</span> mois · Résiliation en ligne, effet au terme</div>
           </div>
         </div>
       </div>
@@ -6068,5 +6068,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1794.js"></script>
+<script src="./rc-core.1795.js"></script>
 </body></html>
