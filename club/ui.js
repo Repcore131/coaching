@@ -57,8 +57,7 @@ function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
 const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; else if (!(el.name in o)) o[el.name] = ''; return; } o[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return o; };
 
 // ── Avatars ───────────────────────────────────────────────────────────────
-// Mascotte du tableau de bord : 4 silhouettes, l'humeur suit le rythme.
-// Photo ou couleur choisies dans Mon profil (préférences de la personne).
+// Photo ou couleur choisies dans Mon espace (préférences de la personne).
 const PROFIL_COLORS = ['#FFD600', '#F97316', '#EF4444', '#EC4899', '#A855F7', '#3B82F6', '#06B6D4', '#22C55E', '#F5F5F3', '#6B7280'];
 const profilOf = u => (u && S && S.prefs && S.prefs[u.id] && S.prefs[u.id].profil) || {};
 function avatar(u, cls = '') {
@@ -105,40 +104,63 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
   return `<div class="bar"><i style="width:${w}%;background:${col}"></i>${ticks ? [25, 50, 75].map(t => `<span class="tick" style="left:${t}%"></span>`).join('') : ''}${pace != null ? `<span class="pace" style="left:${clamp(pace * 100, 0, 100)}%" title="Rythme attendu"></span>` : ''}</div>`;
 }
 
+// ── Couleurs : --brand (Fit Pulse, fixe) et --club (réglable par club ou par espace) ──
+// Le club choisit sa couleur dans Club et réglages ; sans réglage, --club = --brand.
+const COULEUR_OK = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+function couleurClub() { const c = (CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur) || deepGet(S || {}, ['info', 'couleur']); return COULEUR_OK(c) ? c : null; }
+// Encre lisible sur une couleur (noir ou blanc selon la luminance).
+function encreSur(hex) { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); const L = 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; return L > 0.22 ? '#0B0B0C' : '#FFFFFF'; }
+function appliquerCouleurClub() {
+  const r = document.documentElement.style; const c = couleurClub();
+  if (c) { r.setProperty('--club', c); r.setProperty('--club-ink', encreSur(c)); } else { r.removeProperty('--club'); r.removeProperty('--club-ink'); }
+}
+// Logo du club : réglage du club, sinon celui de config.js (aucun par défaut). Fichier du site uniquement.
+function clubLogo() { const l = (CLUB && CLUB.logo) || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) ? l : null; }
+
+// ── Tracé de pouls : amplitude et couleur selon le rythme (statusOf) ──────
+const POULS = { ahead: [1, 'var(--ok)'], ontime: [0.8, 'var(--ok)'], done: [1, 'var(--ok)'], late: [0.5, 'var(--warn)'], verylate: [0.25, 'var(--bad)'], wait: [0.12, 'var(--muted)'], none: [0, 'var(--muted)'] };
+function pulseLine(rythme, { w = 120, h = 32, label = '' } = {}) {
+  const key = typeof rythme === 'string' ? rythme : (rythme && rythme.key) || 'none'; const [amp, col] = POULS[key] || POULS.none;
+  const m = h / 2, a = (h / 2 - 3) * amp, x = f => Math.round(w * f * 10) / 10, y = v => Math.round((m + v) * 10) / 10;
+  const d = `M0 ${m} H${x(0.3)} L${x(0.36)} ${y(-a * 0.35)} L${x(0.42)} ${y(a * 0.3)} L${x(0.5)} ${y(-a)} L${x(0.57)} ${y(a)} L${x(0.63)} ${m} H${x(0.72)} L${x(0.76)} ${y(-a * 0.25)} L${x(0.8)} ${m} H${w}`;
+  const t = label || (rythme && rythme.label) || '';
+  return `<svg class="pulse-line pl-${key}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(t)}"${t ? '' : ' aria-hidden="true"'}><path d="${d}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 // Logo Fit Pulse (image) ; à défaut, la marque en texte
 function brandBlock(big = false) {
   const w = (window.PARKPULSE_ASSETS || {}).wordmark;
   if (w) return `<div class="brand with-logo ${big ? 'big' : ''}"><img class="brand-logo" src="${w}" alt="Fit Pulse"><div class="brand-sub">${esc(APP.tagline)}</div></div>`;
-  return `<div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
+  return `<div class="brand"><div class="brand-mark">${ico('pouls')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
 }
 
 // ── Coque ──────────────────────────────────────────────────────────────────
 // 4e champ : true = managers seulement, 'm' = commerciaux seulement (leur menu
 // tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
-  ['home', 'Accueil', 'dashboard'],
-  ['kpimatin', 'KPI du matin', 'send'],
-  ['dashboard', 'Mes objectifs', 'target'],
-  ['relances', 'Relances', 'phone'],
-  ['leaderboard', 'Classement', 'trophy'],
-  ['equipe', 'Équipe', 'users', 'm'],
-  ['recap', 'Récap du mois', 'chart', true],
-  ['rapporte', 'Ce que Fit Pulse a rapporté', 'euro', true],
-  ['team', 'Pilotage équipe', 'users', true],
-  ['equipe', 'Matrice équipe', 'chart', true],
-  ['b2b', 'Entreprise', 'briefcase'],
+  ['home', TXT.nav.home, 'dashboard'],
+  ['kpimatin', TXT.nav.kpimatin, 'send'],
+  ['dashboard', TXT.nav.dashboard, 'target'],
+  ['relances', TXT.nav.relances, 'phone'],
+  ['leaderboard', TXT.nav.leaderboard, 'trophy'],
+  ['equipe', TXT.nav.equipeMembre, 'users', 'm'],
+  ['recap', TXT.nav.recap, 'chart', true],
+  ['rapporte', TXT.nav.rapporte, 'euro', true],
+  ['team', TXT.nav.team, 'users', true],
+  ['equipe', TXT.nav.equipeManager, 'chart', true],
+  ['b2b', TXT.nav.b2b, 'briefcase'],
   ['sep'],
-  ['resiliations', 'Résiliations', 'door', true],
-  ['impayes', 'Impayés', 'euro', true],
-  ['loyalty', 'Rétention', 'heart', true],
-  ['feed', 'Fil d’équipe', 'feed', true],
+  ['resiliations', TXT.nav.resiliations, 'door', true],
+  ['impayes', TXT.nav.impayes, 'euro', true],
+  ['loyalty', TXT.nav.loyalty, 'heart', true],
+  ['pouls', TXT.nav.pouls, 'pouls', true],
   ['sep'],
-  ['imports', 'Imports Resamania', 'upload', true],
-  ['controle', 'Contrôle des chiffres', 'check', true],
+  ['imports', TXT.nav.imports, 'upload', true],
+  ['controle', TXT.nav.controle, 'check', true],
 ];
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
-function unseenFeed() {
+function unseenPouls() {
   const seen = pref('feedSeen', 0);
   const clubs = ME.clubs || [];
   return Object.values(S.entries).filter(e => e.source === 'manual' && e.at > seen && e.userId !== ME.id && clubs.includes(e.clubId)).length;
@@ -153,7 +175,7 @@ function shell(route, inner) {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr === true && !isManager()) return '';
     if (mgr === 'm' && isManager()) return '';
-    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenFeed()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
+    const n = id === 'pouls' ? unseenPouls() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenPouls()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
     const late = id === 'resiliations' ? rrqCounts(CLUB.id).late : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}${late ? `<span class="pill pill-late" title="dont ${late} sans réponse depuis 48 h" aria-label="dont ${late} sans réponse depuis 48 h">${late}</span>` : ''}</a>`;
   }).join('');
@@ -161,13 +183,13 @@ function shell(route, inner) {
   return `<div class="shell" id="shell">
     <aside class="side">
       ${brandBlock()}
-      ${(window.PARKPULSE_ASSETS || {}).logo ? `<div class="club-logo"><img src="${window.PARKPULSE_ASSETS.logo}" alt="Fitness Park"></div>` : ''}
+      ${clubLogo() ? `<div class="club-logo"><img src="${esc(clubLogo())}" alt="${esc(CLUB.name)}"></div>` : ''}
       <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : `<div class="club-name">${esc(CLUB.name)}</div>`}</div>
       <nav class="nav">${nav}</nav>
       <div class="side-foot nav">
-        <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>Mon profil</span></a>
-        <a href="#/legal" class="${route === 'legal' ? 'on' : ''}">${ico('shield')}<span>Informations légales</span></a>
-        <a href="#/confidentialite" class="${route === 'confidentialite' ? 'on' : ''}">${ico('lock')}<span>Confidentialité</span></a>
+        <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>${TXT.nav.profil}</span></a>
+        <a href="#/legal" class="${route === 'legal' ? 'on' : ''}">${ico('shield')}<span>${TXT.pages.legal}</span></a>
+        <a href="#/confidentialite" class="${route === 'confidentialite' ? 'on' : ''}">${ico('lock')}<span>${TXT.nav.confidentialite}</span></a>
         <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${roleLabel(ME.role)}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
       </div>
     </aside>
@@ -182,11 +204,9 @@ function shell(route, inner) {
 }
 function tickCountdown() {
   const el = $('#countdown'); if (!el) return;
-  const n = new Date(); const end = new Date(n.getFullYear(), n.getMonth() + 1, 1);
-  let s = Math.max(0, Math.floor((end - n) / 1000));
-  const d = Math.floor(s / 86400); s -= d * 86400; const h = Math.floor(s / 3600); s -= h * 3600; const m = Math.floor(s / 60); s -= m * 60;
-  const html = `${ico('cal')}<b>J-${d + (h || m ? 1 : 0)}</b><span>fin ${MOIS[n.getMonth()].toLowerCase()}</span>`;
-  el.title = `${d} j ${pad(h)} h ${pad(m)} min restantes en ${MOIS[n.getMonth()].toLowerCase()}`;
+  const c = compteRebours();
+  const html = `${ico('cal')}<b>${esc(c.texte)}</b>`;
+  el.title = c.titre;
   if (el.dataset.v !== html) { el.dataset.v = html; el.innerHTML = html; }
 }
 setInterval(tickCountdown, 60000);
@@ -215,6 +235,7 @@ function renderNowInner() {
   if (!CLUB || !S.clubs[CLUB.id] || !myClubs().some(c => c.id === CLUB.id)) CLUB = myClubs()[0] || null;
   else CLUB = S.clubs[CLUB.id];
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
+  appliquerCouleurClub();
   let { r, args } = currentRoute();
   if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
   if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;

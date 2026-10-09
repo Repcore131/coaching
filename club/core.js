@@ -8,7 +8,7 @@
 // Rien ne sort de nos clubs : il n'existe ni reseau, ni classement inter-
 // enseignes, ni fil partage avec l'exterieur.
 
-const APP = { name: 'Fit Pulse', tagline: 'Pilotage commercial de nos clubs Fitness Park' };
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche };
 
 // ── Outils ─────────────────────────────────────────────────────────────────
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,7 +62,7 @@ const ICONS = {
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
-  feed: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>',
+  pouls: '<path d="M2 12h4l2-5 4 10 3-7 2 2h5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
   mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
@@ -147,31 +147,24 @@ const DEFAULT_KPIS = {
   accessoires: { id: 'accessoires', label: 'Accessoires',            unit: 'eur', points: 500,  required: true,  enabled: true, order: 4, icon: 'cap' },
   impayes:     { id: 'impayes',     label: 'Impayés récupérés',      unit: 'eur', points: 750,  required: true,  enabled: true, order: 5, icon: 'coins' },
   b2b:         { id: 'b2b',         label: 'Contrat B2B',            unit: 'qty', points: 100,  required: false, enabled: true, order: 6, icon: 'briefcase' },
-  invites:     { id: 'invites',     label: 'Invités > Contrats',     unit: 'qty', points: 300,  required: false, enabled: true, order: 7, icon: 'ticket' },
+  invites:     { id: 'invites',     label: TXT.kpi.invites,        unit: 'qty', points: 300,  required: false, enabled: true, order: 7, icon: 'ticket' },
   sauvetage:   { id: 'sauvetage',   label: 'Sauvetage résiliations', unit: 'qty', points: 300,  required: false, enabled: true, order: 8, icon: 'lifebuoy' },
   prospects:   { id: 'prospects',   label: 'Prospects',              unit: 'qty', points: 0,    required: false, enabled: true, order: 9, icon: 'magnet' },
   upsell:      { id: 'upsell',      label: 'Montée en gamme',        unit: 'eur', points: 300,  required: false, enabled: true, order: 10, icon: 'sparkle' },
 };
 
 const DEFAULT_TASKS = [
-  ['Ouverture', ['Check passage du matin', 'Ouverture caisse', 'Tour du plateau', 'Vérification propreté vestiaires']],
+  ['Ouverture', [TXT.taches.passage, 'Ouverture caisse', 'Tour du plateau', 'Vérification propreté vestiaires']],
   ['Ventes', ['Appels prospects de la veille', 'Relance prospects J+3', 'Rappel des invités du week-end', 'Visites programmées', 'Relance devis B2B', 'Prospection entreprises du secteur']],
   ['Rétention', ['Appels J+15 nouveaux adhérents', 'Appels J+30 nouveaux adhérents', 'Relance adhérents sans mandat', 'Relance impayés du jour', 'Appels anniversaires', 'Appels renouvellements du mois', 'Suivi résiliations et sauvetages']],
-  ['Réputation', ['Réponse aux avis Google', 'Réponse aux avis Wizville', 'Demande d’avis aux adhérents satisfaits']],
+  ['Réputation', ['Réponse aux avis Google', TXT.taches.avis, 'Demande d’avis aux adhérents satisfaits']],
   ['Boutique', ['Mise en avant boutique nutrition', 'Inventaire accessoires', 'Réassort frigo']],
   ['Communication', ['Story Instagram', 'Post Facebook du club', 'Affichage planning cours']],
   ['Clôture', ['Validation de caisse', 'Saisie des KPI du jour dans Fit Pulse', 'Point équipe de fin de journée', 'Fermeture et alarme']],
 ];
 
-const LEVELS = [
-  { id: 'rookie', label: 'Rookie', min: 0 },
-  // Recalibre sur un mois parfait (environ 3 500 pts) : Performer des le premier
-  // mois complet a 100 %, Legende en un peu plus d'un an d'excellence.
-  { id: 'performer', label: 'Performer', min: 3000 },
-  { id: 'warrior', label: 'Warrior', min: 10000 },
-  { id: 'elite', label: 'Élite', min: 25000 },
-  { id: 'legende', label: 'Légende', min: 50000 },
-];
+// Zones : paliers individuels gagnés par mois validés (voir zoneOf dans calc.js).
+const ZONES = TXT.zones.liste;
 
 function emptyState() {
   const st = {
@@ -217,7 +210,7 @@ const localBackend = {
   mode: 'local',
   async start() { const raw = safeLS.get(LOCAL_KEY); S = raw ? normalizeState(JSON.parse(raw)) : null; },
   write(path, value) { this.flush(); },
-  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { const js = JSON.stringify(S); if (js.length > 4e6) toast('Données locales volumineuses (plus de 4 Mo) : passez en mode partagé ou exportez une sauvegarde.'); if (!safeLS.set(LOCAL_KEY, js)) toast('Stockage du navigateur plein : exportez une sauvegarde (Mes clubs > Réglages).'); }, 150); }; })(),
+  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { const js = JSON.stringify(S); if (js.length > 4e6) toast('Données locales volumineuses (plus de 4 Mo) : passez en mode partagé ou exportez une sauvegarde.'); if (!safeLS.set(LOCAL_KEY, js)) toast(TXT.clubs.stockage); }, 150); }; })(),
   replaceAll() { safeLS.set(LOCAL_KEY, JSON.stringify(S)); },
   wipe() { safeLS.del(LOCAL_KEY); },
 };
@@ -493,6 +486,10 @@ function normalizeState(st) {
   if (!st.tasks.plan) st.tasks.plan = {};
   if (!st.tasks.done) st.tasks.done = {};
   for (const k of Object.keys(DEFAULT_KPIS)) if (!st.kpis[k]) st.kpis[k] = { ...DEFAULT_KPIS[k], enabled: false };
+  // Libellés par défaut renommés (nouvelle identité) : repris par identifiant, un libellé personnalisé est gardé.
+  if (st.kpis.invites && / > /.test(st.kpis.invites.label || '')) st.kpis.invites.label = TXT.kpi.invites;
+  const lib = st.tasks.library || {}; if (lib.t1 && /^Check /.test(lib.t1.label || '')) lib.t1.label = TXT.taches.passage;
+  Object.values(lib).forEach(t => { if (t && /avis Wiz/i.test(t.label || '')) t.label = TXT.taches.avis; });
   // PSO : « membre » virtuel qui porte les ventes et prospects venus du web ou
   // de l'application, non attribués à un commercial. Jamais enregistré en base,
   // jamais invité ni doté d'un code. Recalculé à chaque chargement.
@@ -501,10 +498,10 @@ function normalizeState(st) {
   return st;
 }
 
-// Bandeau en direct : une saisie d'un collegue arrive pendant qu'on travaille.
+// Bandeau des saisies en cours : une saisie d'un collegue arrive pendant qu'on travaille.
 function detectLive(before, after) {
   if (!before || !after || !ME) return;
-  // saisies des collègues, résiliations, défis, paliers : voir notifs.js
+  // saisies des collègues, résiliations, sprints, paliers : voir notifs.js
   if (typeof notifLive === 'function') try { notifLive(before, after); } catch (e) { console.warn(e); }
 }
 
@@ -656,7 +653,7 @@ function demoState() {
 // ── Roles et codes d'acces ────────────────────────────────────────────────
 // createur : tout (clubs, KPI et points, roles, sauvegarde, remise a zero).
 // manager  : les clubs ou il est rattache (equipe, objectifs, imports, taches, defis).
-// membre   : ses saisies, son tableau de bord, classement, retention, chat, feed.
+// membre   : ses saisies, son tableau de bord, classement, retention, chat, pouls du club.
 const ROLES = {
   createur: { label: 'Créateur', rank: 3 },
   manager: { label: 'Manager', rank: 2 },

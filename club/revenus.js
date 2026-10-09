@@ -302,7 +302,7 @@ ACTIONS.minutesAppel = el => { const v = Math.max(1, Math.min(30, Number(el.valu
 ACTIONS.clubCfg = el => { const k = el.dataset.k; let v = el.value.trim(); if (k !== 'parrainReward') { const n = parseMontant(v); v = Number.isNaN(n) ? null : el.dataset.pct ? n / 100 : n; } db.set(['clubs', CLUB.id, k], v || null); toast('Enregistré'); };
 ACTIONS.dunSmsSet = el => { db.set(['clubs', CLUB.id, 'dunSms'], el.value.trim() || null); toast('Message enregistré'); };
 
-// ── Montée en gamme et anciens membres (onglets d'Action Rétention) ───────
+// ── Montée en gamme et anciens membres (onglets d'Adherents a garder) ───────
 const REV_OUT = { propose: 'Montée proposée', accepte: 'Montée acceptée', appele: 'Appelé', offre: 'Offre de retour envoyée', revenu: 'Revenu au club', refus: 'Pas intéressé' };
 const lastRev = (cid, type) => Object.values(S.loyalty || {}).filter(a => a.clientId === cid && a.type === type).sort((a, b) => b.at - a.at)[0] || null;
 function upsellTargets(clubId) {
@@ -315,7 +315,7 @@ function loyUpsell() {
   const L = upsellTargets(CLUB.id);
   return `<p class="muted small">Adhérents en Basic ou Premium depuis 60 à 400 jours, sans impayé, du plus ancien au plus récent. Gain affiché sur 12 mois.</p>
     ${L.length ? `<div class="card">${L.slice(0, 60).map(x => `<div class="row wrap opp-mini"><span class="opp-ico">${ico('sparkle')}</span><div class="spacer"><b>${esc(x.c.name || '')}</b><div class="muted small">${esc(x.c.offer || '')} depuis le ${dmy(x.c.start)} · vers ${x.vers} : +${fmtE(x.gap)} par mois, ${fmtE(x.gap * 12)} sur 12 mois${x.last ? ' · ' + REV_OUT[x.last.outcome].toLowerCase() + ' ' + ago(x.last.at) : ''}</div></div>${clientPhone(x.c) ? `<a class="btn sm icon" href="tel:${esc(clientPhone(x.c))}">${ico('phone')}</a>` : ''}<button class="btn sm" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="propose">Proposé</button><button class="btn sm primary" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="accepte">Accepté</button><button class="btn sm ghost" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="refus">Pas intéressé</button></div>`).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune cible de montée en gamme', text: 'Il faut des offres classées par gamme (Mes clubs > Réglages > Offres et prix) et l’export Vente d’abonnements.' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune cible de montée en gamme', text: TXT.clubs.offres })}</div>`}`;
 }
 const seasonWindow = (d = today()) => { const md = d.slice(5); return (md >= '12-20' || md <= '01-31') || (md >= '08-20' && md <= '09-30'); };
 function loyAnciens() {

@@ -35,7 +35,7 @@ function legalBody(tab) {
       <h3>Hébergement</h3>
       <p>Site : Firebase Hosting, <b>Google Ireland Limited</b>, Gordon House, Barrow Street, Dublin 4, Irlande.<br>Base de données et authentification : Firebase, <b>Google LLC</b>, 1600 Amphitheatre Parkway, Mountain View, CA 94043, États-Unis.</p>
       <h3>Nature du service</h3>
-      <p>Fit Pulse est un outil <b>interne et privé</b> de pilotage commercial, réservé aux personnes habilitées du club ${esc(LEGAL.club)}. Il n’est ni vendu ni ouvert au public.</p>
+      <p>Fit Pulse est un outil <b>interne et privé</b> de suivi des ventes et de la rétention, réservé aux personnes habilitées du club ${esc(LEGAL.club)}. Il n’est ni vendu ni ouvert au public.</p>
       <h3>Marques</h3>
       <p>« Fitness Park » est une marque déposée appartenant à son titulaire et utilisée dans le cadre du contrat de franchise du club. « Fit Pulse » est un outil indépendant, édité par ${esc(LEGAL.societe)} : il n’est ni édité ni approuvé par le réseau Fitness Park. « Resamania » et « WhatsApp » sont des marques de leurs titulaires respectifs.</p>`,
     propriete: `<h2>Propriété intellectuelle et copyright</h2>
@@ -56,7 +56,7 @@ function legalBody(tab) {
     cgu: `<h2>Conditions d’utilisation et charte des utilisateurs</h2>
       <p class="muted small">Version ${esc(LEGAL.version)} du ${esc(LEGAL.date)}. Acceptées par chaque utilisateur à sa première connexion.</p>
       <h3>1. Objet et accès</h3>
-      <p>Fit Pulse sert au pilotage commercial du club : saisies de ventes, objectifs, classement, relances des adhérents et prospects, impayés, résiliations, récapitulatifs. L’accès est réservé aux salariés et managers du club désignés par un manager, avec un <b>code personnel</b>. Les droits dépendent du rôle : <b>membre</b> (commercial : ses saisies, ses relances, la vue d’équipe), <b>manager</b> (pilotage de l’équipe, imports, objectifs, invitations), <b>créateur</b> (administration complète).</p>
+      <p>Fit Pulse sert au suivi commercial du club : saisies de ventes, objectifs, classement, relances des adhérents et prospects, impayés, résiliations, récapitulatifs. L’accès est réservé aux salariés et managers du club désignés par un manager, avec un <b>code personnel</b>. Les droits dépendent du rôle : <b>membre</b> (commercial : ses saisies, ses relances, la vue d’équipe), <b>manager</b> (pilotage de l’équipe, imports, objectifs, invitations), <b>créateur</b> (administration complète).</p>
       <h3>2. Compte et code personnel</h3>
       <p>Le code est strictement <b>personnel et confidentiel</b>. Il ne doit être ni communiqué, ni noté à la vue de tous, ni utilisé par un collègue. Toute action faite avec un code est réputée faite par son titulaire. En cas de perte ou de doute, prévenez immédiatement un manager, qui génère un nouveau code (l’ancien cesse aussitôt de fonctionner).</p>
       <h3>3. Usage professionnel uniquement</h3>
@@ -65,7 +65,7 @@ function legalBody(tab) {
       <h3>4. Relances des adhérents et prospects</h3>
       <p>Les appels et messages se font du lundi au samedi, entre 9 h et 20 h, avec courtoisie. Toute demande de ne plus être contacté (« STOP », refus oral) est notée aussitôt dans l’application (« Ne pas rappeler ») et respectée. Les SMS proposés contiennent la mention STOP. Un prospect n’est relancé que s’il a lui-même laissé ses coordonnées au club.</p>
       <h3>5. Suivi de l’activité commerciale (information des salariés)</h3>
-      <p>Conformément aux articles L1221-9 et L1222-4 du Code du travail, chaque utilisateur est informé que l’application enregistre ses saisies, ses résultats par rapport aux objectifs, son score et son rang, ses relances et leurs issues, ainsi que la date de ses connexions. Finalités : pilotage commercial, animation de l’équipe, accompagnement individuel, calcul indicatif des primes selon les règles fixées par l’employeur. L’application ne fait <b>aucune géolocalisation, aucun enregistrement d’appel ni surveillance continue</b>. Le classement et les estimations de prime sont des aides : ils ne remplacent ni la décision de l’employeur, ni le contrat de travail. Les données de chaque salarié sont accessibles à lui-même et aux managers du club.</p>
+      <p>Conformément aux articles L1221-9 et L1222-4 du Code du travail, chaque utilisateur est informé que l’application enregistre ses saisies, ses résultats par rapport aux objectifs, son score et son rang, ses relances et leurs issues, ainsi que la date de ses connexions. Finalités : suivi des ventes, animation de l’équipe, accompagnement individuel, calcul indicatif des primes selon les règles fixées par l’employeur. L’application ne fait <b>aucune géolocalisation, aucun enregistrement d’appel ni surveillance continue</b>. Le classement et les estimations de prime sont des aides : ils ne remplacent ni la décision de l’employeur, ni le contrat de travail. Les données de chaque salarié sont accessibles à lui-même et aux managers du club.</p>
       <h3>6. Fin des fonctions</h3>
       <p>Au départ d’un utilisateur, son accès est coupé (compte archivé) ; ses saisies restent dans l’historique du club pour la période travaillée. L’utilisateur ne conserve aucune donnée du club.</p>
       <h3>7. Manquements</h3>
@@ -152,7 +152,7 @@ ACTIONS.cguRefuse = () => { const g = $('.cgu-gate'); if (g) g.remove(); logout(
 // ── Protections contre la copie ───────────────────────────────────────────
 // Avertissement dans la console des outils de développement.
 try {
-  console.log('%cFIT PULSE', 'font:900 italic 28px Impact,sans-serif;color:#FFD600;background:#000;padding:4px 10px');
+  console.log('%cFIT PULSE', 'font:900 italic 28px Impact,sans-serif;color:#12B3A8;background:#000;padding:4px 10px');
   console.log(`%c${LEGAL_COPY}\nLogiciel protégé par le Code de la propriété intellectuelle. Toute copie, reproduction, adaptation ou réutilisation, même partielle, est interdite et sera poursuivie (art. L335-2 et L335-3 CPI : 3 ans d’emprisonnement et 300 000 € d’amende).`, 'font:13px sans-serif;color:#d33');
 } catch (e) { /* console indisponible */ }
 // Fonctionnement limité aux adresses officielles : une copie hébergée ailleurs affiche un avertissement.
@@ -163,7 +163,7 @@ function legalDomainOk() {
 }
 if (!legalDomainOk()) {
   document.addEventListener('DOMContentLoaded', () => {
-    document.body.innerHTML = `<div style="font-family:sans-serif;max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#eee;background:#111;border-radius:16px"><h1 style="color:#FFD600">Copie non autorisée</h1><p>Cette application est la propriété exclusive de ${esc(LEGAL.auteur)} et de ${esc(LEGAL.societe)} (${esc(LEGAL.club)}).</p><p>Sa reproduction ou son hébergement en dehors de l’adresse officielle est une contrefaçon (art. L335-2 et L335-3 du Code de la propriété intellectuelle) et fera l’objet de poursuites.</p><p>Signalement : ${esc(LEGAL.email)}</p></div>`;
+    document.body.innerHTML = `<div style="font-family:sans-serif;max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#eee;background:#111;border-radius:16px"><h1 style="color:#12B3A8">Copie non autorisée</h1><p>Cette application est la propriété exclusive de ${esc(LEGAL.auteur)} et de ${esc(LEGAL.societe)} (${esc(LEGAL.club)}).</p><p>Sa reproduction ou son hébergement en dehors de l’adresse officielle est une contrefaçon (art. L335-2 et L335-3 du Code de la propriété intellectuelle) et fera l’objet de poursuites.</p><p>Signalement : ${esc(LEGAL.email)}</p></div>`;
   });
   window.PARKPULSE_BLOCKED = true;
 }

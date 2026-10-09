@@ -121,6 +121,14 @@ usage unique (7 jours), double authentification TOTP obligatoire pour managers e
 serveur, imposée par les règles), base en `europe-west1`. Migration de `/pulse` avec contrôle des totaux.
 Détail et bascule : `docs/multi-salles.md`.
 
+## Identité et textes
+
+- Tous les noms de l'interface (menus, titres des pages, Zones, phrases de rythme, compte à rebours, notifications, vocabulaire propre) sont dans `txt.js` (`const TXT`), chargé avant les autres scripts. Le reste des textes de détail est encore écrit dans les pages ; il migre vers `TXT` au fil des modifications.
+- Couleurs : `--brand` (Fit Pulse, #12B3A8) et `--club`. Un manager change la couleur de son club dans Club et réglages > Nos clubs > modifier (ou `orgs/{org}/info/couleur` pour tout l'espace) ; l'encre des boutons passe en noir ou blanc selon la couleur. Aucun logo d'enseigne par défaut : le logo du club se règle au même endroit (fichier `assets/...`).
+- Zones : Zone 1 à 5 pour 0, 2, 5, 9, 14 mois validés ; un mois est validé quand le score des KPI obligatoires atteint 80 % de l'objectif.
+- Compte à rebours : `J-{jours calendaires} · {jours ouvrés} jours ouvrés`, sans dimanche ni jour férié.
+- Contrôle : `node club/outils/build-single.mjs /tmp/fitpulse.html && node club/scripts/audit-libelles.js /tmp/fitpulse.html` doit relever 0 terme interdit.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

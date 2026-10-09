@@ -13,7 +13,7 @@ const PRODUCT_STATUS = {
   derriere: { label: 'Derrière', cls: 'bad' },
 };
 const PRODUCT_FUNCS = ['Imports Resamania', 'Doublons d’import', 'Arrivée des exports', 'Demandes de résiliation en cours', 'Analyse des résiliations', 'Impayés', 'Rétention', 'Relances personnelles',
-  'Objectifs par KPI', 'Paliers collectifs', 'Mission du jour', 'Bilan du jour', 'Vue manager', 'Classement', 'Défis', 'Fil d’activité', 'Chat', 'Bilan mensuel', 'Niveaux', 'Planning de tâches',
+  'Objectifs par KPI', 'Paliers collectifs', 'Mission du jour', 'Clôture du jour', 'Vue manager', 'Classement', 'Sprints', 'Le Pouls du club', 'Chat', 'Carnet du mois', 'Zones', 'Planning de tâches',
   'Fiabilité des chiffres', 'Comparaison N et N-1', 'Valeur en euros', 'Retour sur abonnement', 'Prospects', 'Multi-clubs', 'Sécurité du compte', 'Application installable', 'Bilan hebdomadaire',
   'Langues', 'Confidentialité', 'Démo et prix public'];
 const productDefault = i => ({ id: 'p' + pad(i + 1), order: i + 1, label: PRODUCT_FUNCS[i], status: 'egalite', next: '', updatedAt: null });

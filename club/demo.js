@@ -197,7 +197,7 @@ function seedDemo() {
   // ── Vie d'equipe ──
   st.chat.m1 = { id: 'm1', channel: C, userId: 'd1', text: 'Beau mois dernier, merci à tous. Objectif du mois : garder le rythme sur les contrats.', at: now - 2 * DAY };
   st.chat.m2 = { id: 'm2', channel: C, userId: 'd3', text: 'Je prends les relances J+15 cette semaine.', at: now - DAY, parentId: 'm1' };
-  st.chat.m3 = { id: 'm3', channel: C, userId: 'd2', text: 'Défi contrats lancé, à vous de jouer.', at: now - 19 * 3600000 };
+  st.chat.m3 = { id: 'm3', channel: C, userId: 'd2', text: 'Sprint contrats lancé, à vous de jouer.', at: now - 19 * 3600000 };
   st.paliers = { [C]: { [cm]: { contrats: [{ target: 100, reward: 'Prime 50 € chacun' }, { target: 130, reward: 'Prime 100 € chacun' }], avis: [{ target: 100, reward: 'Petit-déjeuner d’équipe' }] } } };
   const libIds = Object.keys(st.tasks.library);
   st.tasks.plan[C] = {};

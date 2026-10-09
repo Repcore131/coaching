@@ -140,7 +140,7 @@ PAGES.recap = {
           <div class="table-wrap"><table class="t rc-table"><thead><tr><th>Commercial</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>
           ${rows.map(r => `<tr><td><b>${esc(fullName(r.u))}</b>${r.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</td>${cols.map(([k, , unit]) => `<td><div class="rc-cell"><b>${fmtV(r.cur[k], unit)}</b><i style="width:${r.cur[k] / maxOf(k) * 100}%"></i></div>${delta(r.cur[k], r.prev[k], { unit })}</td>`).join('')}</tr>`).join('')}
           <tr class="total"><td>Équipe</td>${cols.map(([k, , unit]) => { const c = rows.reduce((s, r) => s + r.cur[k], 0), p = rows.reduce((s, r) => s + r.prev[k], 0); return `<td><b>${fmtV(c, unit)}</b><br>${delta(c, p, { unit })}</td>`; }).join('')}</tr></tbody></table></div>` : '<p class="muted">Aucune saisie ce mois-ci.</p>'}</div>
-      <p class="muted small">Sources : saisies et imports Resamania de Fit Pulse. Impayés récupérés = liste Incidents (tous canaux) ; total dû = dernier import « Clients en incident » du mois ; taux de résiliation = résiliations effectives du mois / adhérents actifs (Mes clubs > Adhérents).</p>
+      <p class="muted small">Sources : saisies et imports Resamania de Fit Pulse. Impayés récupérés = liste Incidents (tous canaux) ; total dû = dernier import « Clients en incident » du mois ; taux de résiliation = résiliations effectives du mois / adhérents actifs (${TXT.mots.clubReglages} > Adhérents).</p>
     </div>`;
   },
 };

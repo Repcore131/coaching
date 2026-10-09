@@ -65,7 +65,7 @@ function impRsm() {
          ['Sans mandat', 'Points d’attention > Clients abonnés sans prélèvement', 'n.d.'],
          ['Anniversaires', 'Clients > Clients club (Statut = Client)', 'n.d.'],
          ['Fins de contrat', 'Clients > Abonnements (Fin d’engagement)', 'n.d.'],
-         ['Invités > Contrats', 'Pas d’export dans Resamania (liste Invitations) : saisie manuelle', 'n.d.']]
+         [TXT.kpi.invites, 'Pas d’export dans Resamania (liste Invitations) : saisie manuelle', 'n.d.']]
         .map(([k, s2, r]) => `<tr><td><b>${k}</b></td><td>${s2}</td><td class="muted">${r}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function mountRsm() {
@@ -373,7 +373,7 @@ const impayesAnalyse = {
           <div class="muted small" style="margin-top:4px">${plur(list.length, 'régularisation', 'régularisations')} · dont équipe ${fmtE(by.equipe.v)} (${fmtP(total ? by.equipe.v / total : null)})</div>
           <div style="display:flex;height:14px;border-radius:99px;overflow:hidden;margin-top:14px;background:#26262a">${Object.entries(RECOV_CHANNELS).map(([k, c]) => by[k].v ? `<i style="width:${by[k].v / total * 100}%;background:${c.color}" title="${esc(c.label)} : ${fmtE(by[k].v)}"></i>` : '').join('')}</div></div></div>
         <div class="card"><div class="muted small">Impayés en cours</div><div class="title t-32">${fmtE(enCours)}</div><div class="muted small">${plur(clients.length, 'client débiteur', 'clients débiteurs')}${balAt ? ` · photo du ${dmy(balAt)}` : ''}</div>
-          <a class="btn sm" style="margin-top:10px" href="#/loyalty" data-act="loyImpaye">Relancer dans Action Rétention ${ico('chevR')}</a></div></div>
+          <a class="btn sm" style="margin-top:10px" href="#/loyalty" data-act="loyImpaye">${TXT.garder.relancer} ${ico('chevR')}</a></div></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(200px, 100%), 1fr));margin-bottom:14px">
         ${Object.entries(RECOV_CHANNELS).map(([k, c]) => `<div class="card"><div class="row"><i style="width:10px;height:10px;border-radius:3px;background:${c.color};flex:none"></i><b class="small">${c.label}</b></div><span class="badge" style="margin-top:6px">${c.human ? 'action de l’équipe' : 'sans action du club'}</span><div class="title t-24" style="margin-top:6px">${fmtE(by[k].v)}</div><div class="muted small">${by[k].n} régul. · ${fmtP(total ? by[k].v / total : null)}</div><div class="muted small" style="margin-top:6px">${c.hint}</div></div>`).join('')}</div>
       <div class="grid" style="grid-template-columns:1fr 1fr">

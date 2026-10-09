@@ -1,6 +1,6 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
-// ══ FIT PULSE — accueil, tableau de bord, classement, feed, chat, defis ══
+// ══ FIT PULSE — accueil, tableau de bord, classement, pouls du club, chat, sprints ══
 
 // ── Premiere ouverture ────────────────────────────────────────────────────
 PAGES.onboarding = {
@@ -9,9 +9,9 @@ PAGES.onboarding = {
     return `<div class="auth"><div class="auth-card">
       ${brandBlock(true)}
       <h1 class="t-24">Bienvenue</h1>
-      <p class="muted">L’outil de pilotage commercial de <b style="color:#fff">nos</b> clubs Fitness Park : objectifs, classement, rétention, imports Resamania. Aucun autre club, aucun réseau : vos chiffres restent chez vous.</p>
+      <p class="muted">${esc(TXT.app.accueil)}</p>
       <form id="ob" class="grid" style="margin-top:16px">
-        <label class="field"><span>Nom du club</span><input class="input" name="club" required placeholder="Fitness Park …"></label>
+        <label class="field"><span>Nom du club</span><input class="input" name="club" required placeholder="Nom de votre club"></label>
         <div class="form-grid"><label class="field"><span>Votre prénom</span><input class="input" name="first" required></label><label class="field"><span>Votre nom</span><input class="input" name="last" required></label></div>
         <label class="field"><span>E-mail</span><input class="input" type="email" name="email" placeholder="facultatif en mode local"></label>
         <button class="btn primary" type="submit">Créer mon club</button>
@@ -194,16 +194,15 @@ function dashObjectives(st, r, subject, who) {
   const lagOf = x => (x.pct == null ? 9 : x.pct >= 1 ? 8 : (x.k.required ? 0 : 4) + (exp ? x.pct / exp : x.pct));
   if (order) rows.sort((a, b) => (order.indexOf(a.k.id) + 1 || 99) - (order.indexOf(b.k.id) + 1 || 99)); else rows.sort((a, b) => lagOf(a) - lagOf(b));
   const touch = matchMedia('(pointer: coarse)').matches;
-  const tips = pref('tipDrag', true) && !touch;
   return `<div class="dash-top">
     <div class="card hero">
       <div class="hero-ring">${ring(Math.min(st.progress || 0, 1), { label: fmtP(st.progress), sub: { happy: 'en avance', ok: 'dans le rythme', tired: 'à relancer' }[moodOf(st)], color: healthOf(st.progress != null && st.expected ? st.progress / st.expected : null).color, size: 120 })}</div>
       <div>
-        <div class="row"><span class="muted small">${subject ? 'Progression du mois' : 'Progression du club'}</span><span class="spacer"></span><span class="badge ${status.cls === 'status-ok' ? 'ok' : status.cls === 'status-warn' ? 'warn' : status.cls === 'status-bad' ? 'bad' : ''}">${status.label}</span></div>
+        <div class="row"><span class="muted small">${subject ? 'Progression du mois' : 'Progression du club'}</span><span class="spacer"></span>${pulseLine(status, { w: 72, h: 22 })}<span class="badge ${status.cls === 'status-ok' ? 'ok' : status.cls === 'status-warn' ? 'warn' : status.cls === 'status-bad' ? 'bad' : ''}">${status.label}</span></div>
         <div class="big">${fmtP(pctPts)}</div>
         <div><b>${fmtN(st.earned)}</b> / ${fmtN(st.max)} pts ${lag > 0 ? `· <span style="color:#ff8a7a">${fmtN(lag)} pts de retard</span> sur le rythme` : st.max ? '· <span style="color:#7be0a5">dans le rythme</span>' : ''}</div>
         <div class="tiers">${TIERS.map(t => `<span class="${pctPts >= t ? 'got' : ''}">${t * 100} %</span>`).join('')}</div>${typeof rattrapage === 'function' && r.from.slice(0, 7) === curMonth() ? rattrapage(st) : ''}
-        <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">Bilan du jour</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
+        <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">${TXT.cloture.bouton}</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
       </div>
     </div>
     <details class="dash-more" ${innerWidth > 860 ? 'open' : ''}><summary>Détails : conversion et score pondéré</summary><div class="grid">
@@ -212,11 +211,9 @@ function dashObjectives(st, r, subject, who) {
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div></details>
   </div>
-  ${tips ? `<div class="alert info" style="margin-bottom:14px">${ico('grip')}<div class="spacer">Astuce : réorganisez les cartes par glisser-déposer (poignée en haut à droite).</div><button class="btn ghost sm" data-act="closeTip">${ico('x')}</button></div>` : ''}
   ${touch ? `<div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="btn sm ghost" data-act="ui" data-key="kpiReorder" data-val="${UI.kpiReorder ? '' : '1'}">${UI.kpiReorder ? 'Terminer' : 'Réorganiser'}</button></div>` : ''}
   <div class="kpi-grid" id="kpi-grid">${rows.map(x => kpiCard({ ...x, uid: who, range: r }, exp)).join('')}</div>`;
 }
-ACTIONS.closeTip = () => setPref('tipDrag', false);
 function kpiCard(x, exp) {
   const { k, real, target, pct, earned, status } = x;
   const hl = healthOf(pct != null && exp ? pct / exp : null);
@@ -299,7 +296,7 @@ function dashAnalyses(r, who) {
     </div>
     <div class="card">
       <div class="card-head"><h3>Progression par objectif</h3><span class="spacer"></span><span class="muted small">Repère : rythme attendu au ${Math.round(exp * daysIn(mk))}/${daysIn(mk)}</span></div>
-      <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--ok)"></i>Dans le rythme</span><span><i style="background:var(--warn)"></i>En léger retard</span><span><i style="background:var(--bad)"></i>Très en retard</span></div>
+      <div class="legend" style="margin-bottom:10px">${['ok', 'warn', 'bad'].map((c, i) => `<span><i style="background:var(--${c})"></i>${TXT.classement.reperes[i]}</span>`).join('')}</div>
       ${st.rows.filter(x => x.target > 0).map(x => {
         const col = x.status.cls === 'status-ok' ? 'var(--ok)' : x.status.cls === 'status-warn' ? 'var(--warn)' : x.status.cls === 'status-bad' ? 'var(--bad)' : 'var(--muted)';
         return `<div style="display:grid;grid-template-columns:150px 1fr 60px;gap:12px;align-items:center;margin:9px 0"><span class="small"><b>${esc(x.k.label)}</b></span>
@@ -315,7 +312,7 @@ function dashAnalyses(r, who) {
 ACTIONS.anaKpi = el => { UI.anaKpi = el.value; render(); };
 ACTIONS.goManual = () => { UI.impTab = 'manual'; location.hash = '#/imports'; };
 
-// Bilan du jour : la vraie liste des saisies du jour, et un titre qui suit.
+// Clôture du jour : la vraie liste des saisies du jour, et un titre qui suit.
 ACTIONS.dayRecap = el => {
   const who = el.dataset.who || null;
   let d = today();
@@ -323,13 +320,13 @@ ACTIONS.dayRecap = el => {
     const list = Object.values(S.entries).filter(e => e.date === d && e.clubId === CLUB.id && (!who || e.userId === who) && entryCounts(e));
     const r = rangeOf('month', d.slice(0, 7)); const st = statsFor(CLUB.id, who, r);
     const byK = {}; list.forEach(e => { byK[e.kpiId] = (byK[e.kpiId] || 0) + Number(e.value); });
-    const title = !list.length ? 'Journée sans saisie' : Object.keys(byK).length >= 3 ? 'Mission accomplie' : 'Belle journée';
+    const title = !list.length ? TXT.cloture.vide : Object.keys(byK).length >= 3 ? TXT.cloture.complete : TXT.cloture.bonne;
     return `<div class="row" style="justify-content:center;gap:6px;margin-bottom:12px"><button class="btn icon sm" data-d="-1">${ico('chevL')}</button><b style="min-width:200px;text-align:center">${dayLabel(d)}</b><button class="btn icon sm" data-d="1" ${d >= today() ? 'disabled' : ''}>${ico('chevR')}</button></div>
       <div style="text-align:center"><div class="title t-28">${title}</div></div>
       ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title t-20">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
       <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.progress || 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
   };
-  const m = openModal({ title: 'Récap du jour', body: `<div id="dr">${draw()}</div>` });
+  const m = openModal({ title: TXT.cloture.bouton, body: `<div id="dr">${draw()}</div>` });
   m.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b || b.disabled) return; d = addDays(d, Number(b.dataset.d)); $('#dr', m).innerHTML = draw(); });
 };
 
@@ -415,7 +412,7 @@ PAGES.leaderboard = {
     let main;
     if (scope === 'clubs') {
       const cr = clubRanking(r);
-      main = `<div class="card"><p class="muted small" style="margin-top:0">Nos clubs uniquement. Score d’un club = moyenne des scores de ses membres actifs sur les KPI obligatoires : un grand club n’est pas avantagé.</p>
+      main = `<div class="card"><p class="muted small" style="margin-top:0">${TXT.classement.clubs}</p>
         ${cr.map(x => `<div class="rank-row ${x.c.id === CLUB.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${ico('building')}<div><b>${esc(x.c.name)}</b><div class="muted small">${plur(x.members, 'membre', 'membres')}</div></div></div><div>${progressBar(x.score)}</div><b class="num">${fmtP(x.score)}</b></div>`).join('')}</div>`;
     } else {
       const rk = ranking(CLUB.id, r, kpi || null);
@@ -437,7 +434,7 @@ PAGES.leaderboard = {
     all.sort((a, b) => atMode === 'score' ? b.pts - a.pts : b.tr - a.tr);
     const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div><div style="margin-bottom:8px">${seg('atRange', [['12', '12 derniers mois'], ['all', 'Depuis le début']], UI.atRange || '12')}</div>
       ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : plur(x.tr, 'trophée', 'trophées')}</b></div>`).join('')}
-      <p class="muted small">Points cumulés : étapes atteintes chaque mois, bonus de dépassement, points d’action des relances et 200 pts par défi flash gagné.</p></div>`;
+      <p class="muted small">Points cumulés : étapes atteintes chaque mois, bonus de dépassement, points d’action des relances et 200 pts par sprint gagné.</p></div>`;
     return `<div class="page-head"><div><h1>Classement</h1><p>${esc(scope === 'clubs' ? 'Nos clubs' : CLUB.name)} · ${r.label}</p></div></div>
       <div class="row wrap" style="margin-bottom:14px">${seg('lbPeriod', [['week', 'Hebdomadaire'], ['month', 'Mensuel'], ['quarter', 'Trimestriel']], period)}${scope === 'members' ? seg('lbView', [['rang', 'Rang'], ['progression', 'Progression']], UI.lbView || 'rang') : ''}<button class="btn ghost sm" data-act="lbHelp">${ico('info')} Comment gagner des points</button>${multi ? seg('lbScope', [['members', 'Membres'], ['clubs', 'Nos clubs']], scope) : ''}<span class="spacer"></span>${nav}</div>
       <div class="lb-layout">${main}${side}</div>`;
@@ -445,15 +442,15 @@ PAGES.leaderboard = {
 };
 ACTIONS.lbShift = el => { const r = rangeOf(UI.lbPeriod || 'month', UI.lbAnchor || today()); const n = shiftRange(r, Number(el.dataset.n)); UI.lbAnchor = n.from; render(); };
 
-// ── Feed : uniquement nos clubs ───────────────────────────────────────────
-PAGES.feed = {
-  title: 'Feed',
+// ── Le Pouls du club : les saisies de l'équipe en direct, vos clubs seulement ──
+PAGES.pouls = {
+  title: TXT.pages.pouls,
   render() {
     const multi = myClubs().length > 1;
-    const scope = multi ? (UI.feedScope || 'club') : 'club';
+    const scope = multi ? (UI.poulsScope || 'club') : 'club';
     const clubs = scope === 'club' ? [CLUB.id] : (ME.clubs || []);
     const list = Object.values(S.entries).filter(e => e.source === 'manual' && clubs.includes(e.clubId)).sort((a, b) => b.at - a.at).slice(0, 120);
-    setTimeout(() => { if (unseenFeed()) setPref('feedSeen', Date.now()); }, 600);
+    setTimeout(() => { if (unseenPouls()) setPref('feedSeen', Date.now()); }, 600);
     let lastDay = '';
     const items = list.map(e => {
       const u = S.users[e.userId], k = S.kpis[e.kpiId], c = S.clubs[e.clubId];
@@ -468,9 +465,9 @@ PAGES.feed = {
         <div class="reacts">${['🔥', '💪', '👏'].map(em => { const who = rx[em] ? Object.keys(rx[em]) : []; return `<button data-act="react" data-id="${e.id}" data-em="${em}" class="${who.includes(ME.id) ? 'on' : ''}" aria-label="${REACT_ICON[em][1]}" title="${esc([REACT_ICON[em][1], ...who.map(id => fullName(S.users[id]))].join(', '))}">${reactIco(em)} ${who.length || ''}</button>`; }).join('')}</div>
       </div></div>`;
     }).join('');
-    return `<div class="page-head"><div><h1>Feed</h1><p>Les saisies de l’équipe, en direct. Visible uniquement par les membres de nos clubs.</p></div></div>
-      ${multi ? `<div style="margin-bottom:12px">${seg('feedScope', [['club', esc(CLUB.name)], ['all', 'Tous nos clubs']], scope)}</div>` : ''}
-      <div class="feed">${items || `<div class="card">${emptyBox({ art: 'feed', title: 'Le fil démarre à la première saisie', text: 'Les ventes de l’équipe apparaissent ici en direct.', cta: '<button class="btn primary sm" data-act="tbSaisir">Saisir</button>' })}</div>`}</div>`;
+    return `<div class="page-head"><div><h1>${TXT.pages.pouls}</h1><p>${TXT.pouls.sous}</p></div></div>
+      ${multi ? `<div style="margin-bottom:12px">${seg('poulsScope', [['club', esc(CLUB.name)], ['all', TXT.pouls.tous]], scope)}</div>` : ''}
+      <div class="pouls">${items || `<div class="card">${emptyBox({ art: 'pouls', title: TXT.pouls.videTitre, text: 'Les ventes de l’équipe apparaissent ici en direct.', cta: '<button class="btn primary sm" data-act="tbSaisir">Saisir</button>' })}</div>`}</div>`;
   },
 };
 ACTIONS.react = el => { const p = ['reactions', el.dataset.id, el.dataset.em, ME.id]; db.set(p, deepGet(S, p) ? null : true); };

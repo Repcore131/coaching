@@ -424,11 +424,11 @@ PAGES.equipe = {
   render() {
     const t = 'fil';
     const strip = h => h.replace(/^<div class="page-head">[\s\S]*?<\/div>\s*(<span class="spacer"><\/span>[\s\S]*?)?<\/div>/, '');
-    const body = PAGES.feed.render();
+    const body = PAGES.pouls.render();
     return `<div class="page-head"><div><h1>Équipe</h1><p>Le fil des ventes du club.</p></div></div>
-      ${tabs('eqTab', [['fil', `Fil d’équipe${unseenFeed() ? ' · ' + unseenFeed() : ''}`]], t)}${strip(body)}`;
+      ${tabs('eqTab', [['fil', `${TXT.mots.pouls}${unseenPouls() ? ' · ' + unseenPouls() : ''}`]], t)}${strip(body)}`;
   },
-  mount() { if (PAGES.feed.mount) PAGES.feed.mount(); },
+  mount() { if (PAGES.pouls.mount) PAGES.pouls.mount(); },
 };
 
 // ── Répartir les relances non attribuées entre les membres actifs ─────────

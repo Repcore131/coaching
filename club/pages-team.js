@@ -8,10 +8,10 @@ PAGES.members = {
   render() {
     const tab = UI.memTab || 'org';
     const all = clubMembers(CLUB.id, { all: true, gestion: true });
-    const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
+    const T = [['org', TXT.equipe.org], ['hist', TXT.equipe.hist], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['carnets', TXT.equipe.carnets], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
     T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal'], ['primes', 'Primes']);
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes }[tab]();
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, carnets: memCarnets, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${plur(all.filter(u => u.role === 'manager' && u.status === 'active').length, 'manager', 'managers')}, ${plur(all.filter(u => u.role === 'membre' && u.status === 'active').length, 'membre actif', 'membres actifs')}, ${plur(all.filter(u => u.status === 'pending').length, 'invitation', 'invitations')} en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button>${MULTI ? `<button class="btn" data-act="inviteMail">${ico('mail')} Inviter par e-mail</button>` : ''}</div>
       ${tabs('memTab', T, tab)}${body}`;
   },
@@ -36,7 +36,7 @@ function memOrg() {
     <p class="muted small" style="margin-bottom:0">Une invitation en attente ne compte dans aucun total tant que la personne ne s’est pas connectée.</p></div>
   <div class="card" style="margin-top:14px"><h3>Accès et rôles</h3>
     <div class="table-wrap" style="margin-top:10px"><table class="t"><thead><tr><th>Ce que l’on peut faire</th><th>Créateur</th><th>Manager</th><th>Membre</th></tr></thead><tbody>
-    ${[['Saisir ses KPI, voir son tableau de bord, le classement, le feed, le chat', 1, 1, 1], ['Traiter les relances (Action Rétention) et les résiliations', 1, 1, 1],
+    ${[[TXT.equipe.droits[0], 1, 1, 1], [TXT.equipe.droits[1], 1, 1, 1],
        ['Vue club, saisir pour un membre, fixer les objectifs', 1, 1, 0], ['Imports CSV, planning des tâches', 1, 1, 0], ['Ajouter un membre et lui générer un code', 1, 1, 0],
        ['Nommer un manager ou un créateur, modifier un manager', 1, 0, 0], ['Créer un club, régler les KPI et les points', 1, 0, 0], ['Sauvegarde, restauration, tout effacer', 1, 0, 0], ['Classé et soumis à objectifs', 0, 1, 1]]
       .map(([l, ...v]) => `<tr><td>${l}</td>${v.map(x => `<td>${x ? `<b class="ok">${ico('check', 'ico ico-xs')}</b>` : '<span class="muted">n.d.</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -183,14 +183,14 @@ function memHistory() {
     const tot = {};
     return `<div class="row wrap" style="margin-bottom:12px">${seg('histMode', [['month', 'Mois'], ['day', 'Jour par jour']], mode)}${monthNav('histMonth', mk)}<span class="spacer"></span><input class="input sm" style="width:200px" placeholder="Rechercher un membre" data-input="histQ" data-focus="histQ" value="${esc(UI.histQ || '')}"></div>
       <div class="row" style="margin:-4px 0 8px"><span class="spacer"></span><button class="btn sm" data-act="histCsv">${ico('download')} CSV</button></div>
-      <p class="muted small">Montants TTC. Cliquez sur un membre pour éditer ses saisies jour par jour. Un point orange signale un règlement saisi depuis Action Rétention, à valider.</p>
+      <p class="muted small">Montants TTC. Cliquez sur un membre pour éditer ses saisies jour par jour. ${TXT.equipe.noteValider}</p>
       ${(() => { const perf = deepGet(S, ['rsm', 'controls', CLUB.id, 'perf', mk]); UI._perf = perf || null; const un = perf ? Object.keys(perf).filter(k => k.startsWith('x:')) : []; return un.length ? `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>Vendeurs Resamania non rattachés</b>${un.map(k => esc(k.slice(2))).join(', ')}. <a href="javascript:void 0" data-act="goAliases">Correspondances Resamania</a></div></div>` : ''; })()}
       <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num">${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'}</span></th>${k.id === 'contrats' && UI._perf ? '<th class="num">Contrats Resamania</th>' : ''}`).join('')}</tr></thead><tbody>
       ${rows.map(u => `<tr><td><a href="javascript:void 0" data-act="histUser" data-id="${u.id}"><b>${esc(fullName(u))}</b></a></td>${kpis.map(k => { const v = sumRange(CLUB.id, u.id, k.id, r.from, r.to); tot[k.id] = (tot[k.id] || 0) + v; const nChk = Object.values(S.entries).filter(e => e.userId === u.id && e.kpiId === k.id && e.date >= r.from && e.date <= r.to && e.needsCheck && !e.checkedAt && entryCounts(e)).length; const rsm = k.id === 'contrats' && UI._perf ? Number(UI._perf[u.id] || 0) : null; const bad = rsm != null && Math.abs(v - rsm) > Math.max(1, rsm * 0.05); return `<td class="num">${v ? fmtV(v, k.unit) : '<span class="muted">0</span>'}${nChk ? ` <i class="hdot h-watch" title="${plur(nChk, 'saisie à valider', 'saisies à valider')}"></i>` : ''}</td>${rsm != null ? `<td class="num ${bad ? 'to-check' : ''}" ${bad ? 'title="Écart avec Resamania : vérifier les saisies"' : ''}>${fmtN(rsm)}${bad ? `<br><small>écart ${v - rsm > 0 ? '+' : ''}${fmtN(v - rsm)}</small>` : ''}</td>` : ''}`; }).join('')}</tr>`).join('')}
       <tr class="total"><td>Total</td>${kpis.map(k => { const t = clubMonthTarget(mk, CLUB.id, k.id); return `<td class="num">${fmtV(tot[k.id] || 0, k.unit)}${t ? `<br><span class="muted small">/ ${fmtV(t, k.unit)} · ${fmtP((tot[k.id] || 0) / t)}</span>` : ''}</td>${k.id === 'contrats' && UI._perf ? `<td class="num">${fmtN(Object.values(UI._perf).reduce((s, x) => s + Number(x || 0), 0))}</td>` : ''}`; }).join('')}</tr></tbody></table></div>`;
   }
   const uid = UI.histUser && S.users[UI.histUser] ? UI.histUser : (members[0] && members[0].id);
-  if (!uid) return `<div class="card">${emptyBox({ art: 'target', title: 'Aucun membre actif', text: 'Ajoutez votre équipe dans l’organigramme.' })}</div>`;
+  if (!uid) return `<div class="card">${emptyBox({ art: 'target', title: 'Aucun membre actif', text: TXT.equipe.vide })}</div>`;
   const n = daysIn(mk);
   let html = `<div class="row wrap" style="margin-bottom:12px">${seg('histMode', [['month', 'Mois'], ['day', 'Jour par jour']], mode)}${monthNav('histMonth', mk)}
     <select class="input sm" style="width:auto" data-change="histUserSel">${members.map(u => `<option value="${u.id}" ${u.id === uid ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></div>
@@ -199,7 +199,7 @@ function memHistory() {
   for (let d = 1; d <= n; d++) {
     const date = `${mk}-${pad(d)}`;
     const future = date > today();
-    html += `<tr><td class="nowrap">${JOURS[dateOf(date).getDay()].slice(0, 3)} ${d}</td>${kpis.map(k => { const v = sumRange(CLUB.id, uid, k.id, date, date); const chk = toCheck(uid, k.id, date); return `<td class="num${chk.length ? ' to-check' : ''}"><input class="cell" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" value="${v ? Math.round(v * 100) / 100 : ''}" placeholder="0" data-change="histCell" data-u="${uid}" data-k="${k.id}" data-d="${date}" ${future ? 'disabled' : ''}>${chk.length ? `<label class="chk-v" title="Saisi depuis Action Rétention : à valider"><i class="hdot h-watch"></i><input type="checkbox" data-change="entryValid" data-ids="${chk.map(e => e.id).join(',')}"> Validé</label>` : ''}</td>`; }).join('')}</tr>`;
+    html += `<tr><td class="nowrap">${JOURS[dateOf(date).getDay()].slice(0, 3)} ${d}</td>${kpis.map(k => { const v = sumRange(CLUB.id, uid, k.id, date, date); const chk = toCheck(uid, k.id, date); return `<td class="num${chk.length ? ' to-check' : ''}"><input class="cell" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" value="${v ? Math.round(v * 100) / 100 : ''}" placeholder="0" data-change="histCell" data-u="${uid}" data-k="${k.id}" data-d="${date}" ${future ? 'disabled' : ''}>${chk.length ? `<label class="chk-v" title="${TXT.equipe.valider}"><i class="hdot h-watch"></i><input type="checkbox" data-change="entryValid" data-ids="${chk.map(e => e.id).join(',')}"> Validé</label>` : ''}</td>`; }).join('')}</tr>`;
   }
   return html + '</tbody></table></div>';
 }
@@ -212,7 +212,7 @@ ACTIONS.histUserSel = el => { UI.histUser = el.value; render(); };
 // Corriger le total d'un jour : on ajoute une saisie d'ajustement (manuelle)
 // egale a l'ecart, sans toucher aux saisies importees.
 // Correction d'une case : on ne supprime plus les saisies d'origine (elles
-// gardent leur heure, utile aux defis flash). Une seule saisie d'ajustement par
+// gardent leur heure, utile aux sprints). Une seule saisie d'ajustement par
 // case, d'id fixe : une seconde correction remplace la premiere, deux managers
 // en meme temps ne s'additionnent pas. Datee a midi du jour corrige.
 ACTIONS.histCell = el => {
@@ -244,7 +244,7 @@ function memTargets() {
     ${pso ? `<tr><td class="nowrap"><b>${esc(fullName(pso))}</b> <span class="badge">web / appli</span></td>${kpis.map(k => { const v = sumRange(CLUB.id, 'pso', k.id, r.from, r.to); return `<td class="num muted" title="Ventes web / appli, sans objectif à fixer">${v ? fmtV(v, k.unit) : '·'}</td>`; }).join('')}</tr>` : ''}
     <tr class="total"><td>Total des objectifs</td>${kpis.map(k => `<td class="num">${fmtV(members.reduce((s, u) => s + monthTarget(mk, u.id, k.id), 0), k.unit)}</td>`).join('')}</tr>
     <tr class="total"><td class="muted">dont membres actifs (objectif du club)</td>${kpis.map(k => `<td class="num muted">${fmtV(clubMonthTarget(mk, CLUB.id, k.id), k.unit)}</td>`).join('')}</tr></tbody></table></div>
-    <p class="muted small">« Total des objectifs » = somme de toutes les lignes ci-dessus. L’objectif du club pour les scores ne compte que les membres actifs ; une invitation en attente compte une fois la personne connectée. La ligne PSO (ventes web / appli) n’a pas d’objectif à fixer. Couronne = KPI obligatoire du classement global. Points et KPI se règlent dans Mes clubs > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
+    <p class="muted small">« Total des objectifs » = somme de toutes les lignes ci-dessus. L’objectif du club pour les scores ne compte que les membres actifs ; une invitation en attente compte une fois la personne connectée. La ligne PSO (ventes web / appli) n’a pas d’objectif à fixer. Couronne = KPI obligatoire du classement global. Points et KPI se règlent dans ${TXT.mots.clubReglages} > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
 }
 ACTIONS.tgCell = el => { const v = parseFloat(String(el.value).replace(',', '.')); db.set(['targets', el.dataset.mk, el.dataset.u, el.dataset.k], v > 0 ? v : null); };
 ACTIONS.copyTargets = async el => {
@@ -256,10 +256,10 @@ ACTIONS.copyTargets = async el => {
   db.batch(ops); toast('Objectifs copiés.');
 };
 
-// Recaps : le bilan mensuel de chaque membre.
-// Mois en or, argent, bronze : distinct des niveaux (Rookie a Legende).
+// Carnets du mois : le bilan mensuel de chaque membre.
+// Mois en or, argent, bronze : distinct des zones (mois valides).
 const monthTier = s => s == null ? 'EN COURS' : s >= 1 ? 'OR' : s >= 0.75 ? 'ARGENT' : s >= 0.5 ? 'BRONZE' : 'EN COURS';
-function memRecaps() {
+function memCarnets() {
   const mk = UI.recMonth || addMonths(curMonth(), -1);
   const r = rangeOf('month', mk);
   const rk = ranking(CLUB.id, r);
@@ -323,22 +323,22 @@ ACTIONS.saveTask = () => { const f = formData($('#ntf')); if (!f.label.trim()) r
 ACTIONS.resetPlan = async () => {
   if (!await confirmDlg('Remplacer le planning du club par le modèle par défaut ?', { ok: 'Réinitialiser', danger: true })) return;
   const lib = Object.values(S.tasks.library); const find = l => (lib.find(t => t.label === l) || {}).id;
-  const model = [[7, 'Check passage du matin'], [7, 'Ouverture caisse'], [9, 'Réponse aux avis Google'], [10, 'Appels prospects de la veille'], [11, 'Appels J+15 nouveaux adhérents'], [14, 'Relance adhérents sans mandat'], [15, 'Relance impayés du jour'], [17, 'Story Instagram'], [18, 'Visites programmées'], [21, 'Saisie des KPI du jour dans Fit Pulse'], [22, 'Validation de caisse']];
+  const model = [[7, TXT.taches.passage], [7, 'Ouverture caisse'], [9, 'Réponse aux avis Google'], [10, 'Appels prospects de la veille'], [11, 'Appels J+15 nouveaux adhérents'], [14, 'Relance adhérents sans mandat'], [15, 'Relance impayés du jour'], [17, 'Story Instagram'], [18, 'Visites programmées'], [21, 'Saisie des KPI du jour dans Fit Pulse'], [22, 'Validation de caisse']];
   const plan = {}; model.forEach(([h, l]) => { const t = find(l); if (t) { const id = newId(); plan[id] = { id, taskId: t, hour: h }; } });
   db.set(['tasks', 'plan', CLUB.id], plan);
 };
 
 // ── Profil ─────────────────────────────────────────────────────────────────
 PAGES.profile = {
-  title: 'Mon profil',
+  title: TXT.pages.profil,
   render() {
     const tab = UI.profTab || 'perf';
-    const pts = allTime(ME.id); const lv = levelOf(pts);
-    const head = `<div class="card" style="margin-bottom:14px"><div class="row wrap prof-head" style="gap:16px">${levelBadge(lv, 72)}${avatar(ME, 'lg')}<div class="spacer"><h1 class="h-profile">${esc(fullName(ME))}</h1>
+    const pts = allTime(ME.id); const z = zoneOf(ME.id);
+    const head = `<div class="card" style="margin-bottom:14px"><div class="row wrap prof-head" style="gap:16px">${zoneBadge(z, 72)}${avatar(ME, 'lg')}<div class="spacer"><h1 class="h-profile">${esc(fullName(ME))}</h1>
       <div class="row wrap small" style="margin-top:4px"><span class="muted">${esc(ME.email || '')}</span><span class="badge">${roleLabel(ME.role)}</span>${(ME.clubs || []).map(c => S.clubs[c] ? `<span class="badge">${esc(S.clubs[c].name)}</span>` : '').join('')}</div></div>
-      <div style="text-align:right"><div class="title t-28">${fmtN(pts)} pts</div><div class="muted small">${lv.next ? `${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}` : 'Niveau maximum'}</div></div></div>
-      <div class="lvl-row">${LEVELS.map((l, i) => { const got = pts >= l.min, nxt = lv.next && lv.next.id === l.id; const pr = nxt ? clamp((pts - LEVELS[i - 1].min) / (l.min - LEVELS[i - 1].min), 0, 1) : 0; return `<div class="lv ${nxt ? 'next' : ''}">${levelBadge(l, 40, { dim: !got && !nxt })}${nxt ? `<div class="lvl-prog"><i style="width:${Math.round(pr * 100)}%"></i></div>` : ''}<span>${fmtN(l.min)}</span></div>`; }).join('')}</div>
-      ${lv.next ? `<p class="muted small" style="margin:8px 0 0">${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}${(() => { const w = weeklyPace(ME.id); return w > 0 ? `, soit environ ${plur(Math.ceil((lv.next.min - pts) / w), 'semaine', 'semaines')} au rythme actuel` : ''; })()}.</p>` : ''}</div>`;
+      <div style="text-align:right"><div class="title t-28">${esc(z.label)}</div><div class="muted small">${TXT.zones.valides(z.mois)} · ${fmtN(pts)} pts</div></div></div>
+      <div class="lvl-row">${ZONES.map((l, i) => { const got = z.mois >= l.min, nxt = z.next && z.next.id === l.id; const pr = nxt ? clamp((z.mois - ZONES[i - 1].min) / (l.min - ZONES[i - 1].min), 0, 1) : 0; return `<div class="lv ${nxt ? 'next' : ''}">${zoneBadge({ ...l, rang: i + 1 }, 40, { dim: !got && !nxt })}${nxt ? `<div class="lvl-prog"><i style="width:${Math.round(pr * 100)}%"></i></div>` : ''}<span>${TXT.zones.seuilMois(l.min)}</span></div>`; }).join('')}</div>
+      <p class="muted small" style="margin:8px 0 0">${z.next ? TXT.zones.avant(z.next.min - z.mois, z.next.label) : TXT.zones.max}. ${TXT.zones.regle}</p></div>`;
     const pr = profilOf(ME);
     const about = pr.poste || pr.bio ? `<div class="card prof-about" style="margin-bottom:14px">${pr.poste ? `<b>${esc(pr.poste)}</b>` : ''}${pr.bio ? `<p class="muted" style="margin:4px 0 0">${esc(pr.bio)}</p>` : ''}</div>` : '';
     return head + about + `<div class="row wrap prof-quick"><button class="btn sm" data-act="theme">${ico(curTheme() === 'dark' ? 'sun' : 'moon')} Thème ${curTheme() === 'dark' ? 'clair' : 'sombre'}</button><button class="btn sm" data-act="ui" data-key="profTab" data-val="account">${ico('edit')} Personnaliser mon profil</button><span class="spacer"></span><button class="btn sm danger" data-act="logout">${ico('logout')} Se déconnecter</button></div>`
@@ -352,18 +352,18 @@ function profPerf() {
   const months = pastMonths().filter(m => m < curMonth()).reverse();
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">
-    <div class="card"><h3>Accomplissements</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px">
+    <div class="card"><h3>${TXT.profil.etapes}</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px">
       <div class="trophy"><div class="ic">${trophyArt({ kind: 'kpi', label: 'Régularité' }, 48, !acc.streak)}</div><b>Régularité : ${plur(acc.streak, 'jour', 'jours')} de suite</b><span class="muted small">${acc.streak >= 3 ? 'Série en cours, continuez !' : 'Prochain palier : trois jours de suite'}</span></div>
-      <div class="trophy"><div class="ic">${trophyArt({ kind: 'month', icon: 'trophy', label: 'Premier 100 %' }, 48, !acc.first100)}</div><b>Premier 100 %</b><span class="muted small">${acc.first100 ? 'Obtenu' : 'Un KPI à 100 % sur un mois'}</span></div>
+      <div class="trophy"><div class="ic">${trophyArt({ kind: 'month', icon: 'trophy', label: TXT.profil.premier100 }, 48, !acc.first100)}</div><b>${TXT.profil.premier100}</b><span class="muted small">${acc.first100 ? 'Obtenu' : TXT.profil.premier100Detail}</span></div>
       <div class="trophy"><div class="ic">${trophyArt({ kind: 'season', icon: 'crown', label: 'Grand chelem' }, 48, !acc.all100)}</div><b>Grand chelem</b><span class="muted small">${acc.all100 ? 'Obtenu' : 'Tous les KPI à 100 % sur un mois'}</span></div></div></div>
     <div class="card"><h3>Mes trophées (${tr.length})</h3><p class="muted small">Le même décompte que le classement.</p>
       ${groups.map(([k, l]) => { const g = tr.filter(t => t.kind === k); return `<div class="muted small" style="font-weight:700;margin:12px 0 6px">${l} · ${g.length}</div>${g.length ? `<div class="trophies">${g.slice().reverse().map(t => `<div class="trophy"><div class="ic">${trophyIcon(t)}</div><b>${esc(t.label)}</b></div>`).join('')}</div>` : '<p class="muted small">Aucun pour l’instant.</p>'}`; }).join('')}</div>
-    <div class="card"><h3>Mes bilans mensuels</h3>${months.length ? (showAll ? months : months.slice(0, 3)).map((m, i) => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none" href="#/wrap/${m}/${ME.id}">${ico('chart')}<b class="spacer">${monthLabel(m)}</b>${i === 0 ? '<span class="badge fp">Dernier bilan, à revoir</span>' : ''}${ico('chevR')}</a>`).join('') : '<p class="muted">Votre premier bilan apparaîtra à la fin du mois.</p>'}
+    <div class="card"><h3>${TXT.carnet.profil}</h3>${months.length ? (showAll ? months : months.slice(0, 3)).map((m, i) => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none" href="#/wrap/${m}/${ME.id}">${ico('chart')}<b class="spacer">${monthLabel(m)}</b>${i === 0 ? '<span class="badge fp">Dernier bilan, à revoir</span>' : ''}${ico('chevR')}</a>`).join('') : '<p class="muted">Votre premier bilan apparaîtra à la fin du mois.</p>'}
       ${months.length > 3 && !showAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="profWraps" data-val="all">Voir ${months.length - 3} mois de plus</button>` : ''}</div></div>`;
 }
 function profPersonal() {
   const p = profilOf(ME); const th = curTheme();
-  return `<div class="card"><h3>Mon profil</h3><p class="muted small" style="margin-top:-4px">Visible par l’équipe : photo ou couleur, poste, une phrase.</p>
+  return `<div class="card"><h3>${TXT.mots.monEspace}</h3><p class="muted small" style="margin-top:-4px">Visible par l’équipe : photo ou couleur, poste, une phrase.</p>
     <div class="row wrap" style="gap:14px;align-items:center;margin:8px 0">${avatar(ME, 'lg')}<div class="row wrap" style="gap:8px"><label class="btn sm">${ico('upload')} ${p.photo ? 'Changer la photo' : 'Ajouter une photo'}<input type="file" accept="image/*" hidden data-change="profPhoto"></label>${p.photo ? '<button class="btn sm ghost" data-act="profPhotoDel">Retirer la photo</button>' : ''}</div></div>
     <div class="field"><span>Ma couleur</span><div class="prof-colors">${PROFIL_COLORS.map(c => `<button class="prof-color ${p.color === c ? 'on' : ''}" style="background:${c}" data-act="profColor" data-c="${c}" aria-label="Couleur ${c}"></button>`).join('')}</div></div>
     <form id="ppf2" class="grid"><label class="field"><span>Poste</span><input class="input" name="poste" maxlength="60" value="${esc(p.poste || '')}" placeholder="Conseiller commercial, coach, manager…"></label>
@@ -416,8 +416,8 @@ function wrapActions(uid, mk) {
 PAGES.wrap = {
   render(args) {
     const [mk, uid0] = args; const uid = uid0 && S.users[uid0] ? uid0 : ME.id;
-    if (!/^\d{4}-\d{2}$/.test(mk || '')) return '<div class="auth"><div class="auth-card">Bilan introuvable. <a href="#/profile">Retour</a></div></div>';
-    if (uid !== ME.id && !isManager()) return '<div class="auth"><div class="auth-card">Ce bilan est personnel. <a href="#/profile">Retour</a></div></div>';
+    if (!/^\d{4}-\d{2}$/.test(mk || '')) return '<div class="auth"><div class="auth-card">${TXT.carnet.introuvable} <a href="#/profile">Retour</a></div></div>';
+    if (uid !== ME.id && !isManager()) return '<div class="auth"><div class="auth-card">${TXT.carnet.personnel} <a href="#/profile">Retour</a></div></div>';
     const u = S.users[uid]; const clubId = (u.clubs || []).includes(CLUB.id) ? CLUB.id : u.clubs[0];
     const r = rangeOf('month', mk); const st = statsFor(clubId, uid, r, { requiredOnly: true }); const stAll = statsFor(clubId, uid, r);
     const prev = statsFor(clubId, uid, rangeOf('month', addMonths(mk, -1)), { requiredOnly: true });
@@ -480,7 +480,7 @@ ACTIONS.wrapClose = () => { clearTimeout(wrapTimer); history.length > 1 ? histor
 async function drawWrapCard() {
   const c = $('#wrap-canvas'); if (!c) return; const x = c.getContext('2d'); const d = UI.wrapData;
   try { await document.fonts.load('800 italic 40px "Barlow Condensed"'); await document.fonts.load('600 20px Montserrat'); await document.fonts.ready; } catch (e) { /* polices systeme */ }
-  const Y = getComputedStyle(document.documentElement).getPropertyValue('--fp').trim() || '#FFD600';
+  const Y = getComputedStyle(document.documentElement).getPropertyValue('--fp').trim() || '#12B3A8';
   const T = (size) => `italic 800 ${size}px "Barlow Condensed", Impact, sans-serif`, B = (size, w = 500) => `${w} ${size}px Montserrat, system-ui, sans-serif`;
   x.fillStyle = '#0A0A0A'; x.fillRect(0, 0, 540, 760);
   x.save(); x.fillStyle = Y; x.beginPath(); x.moveTo(380, 760); x.lineTo(540, 560); x.lineTo(540, 640); x.lineTo(460, 760); x.closePath(); x.fill(); x.globalAlpha = .35; x.beginPath(); x.moveTo(300, 760); x.lineTo(540, 460); x.lineTo(540, 520); x.lineTo(350, 760); x.closePath(); x.fill(); x.restore();

@@ -1,6 +1,6 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
-// ══ FIT PULSE — classement bienveillant, bravo, défis, bilan du mois ══════
+// ══ FIT PULSE — classement bienveillant, bravo, sprints, carnet du mois ══════
 const lbPeriodLabel = p => (p === 'week' ? 'cette semaine' : p === 'quarter' ? 'ce trimestre' : 'ce mois-ci');
 // Écart au rang du dessus, dans l'unité la plus parlante (KPI où il manque le moins).
 function lbGap(me, above, k) {
@@ -20,7 +20,7 @@ function lbBanner(meRow, rk, r, period, k) {
 }
 function lbRow(x, val, mine) {
   const me = x.u.id === ME.id; const showDot = isManager() || me;
-  return `<div class="rank-row ${me ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b> ${levelBadge(levelOf(allTime(x.u.id)), 18)}<div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts">${showDot ? `<i class="hdot ${healthOf(x.score != null && x.st.expected ? x.score / Math.max(x.st.expected, 0.01) : null).cls}"></i> ` : ''}${val(x)}</b></div>`;
+  return `<div class="rank-row ${me ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b> ${zoneBadge(zoneOf(x.u.id), 18)}<div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts">${showDot ? `<i class="hdot ${healthOf(x.score != null && x.st.expected ? x.score / Math.max(x.st.expected, 0.01) : null).cls}"></i> ` : ''}${val(x)}</b></div>`;
 }
 // Membre : podium, sa ligne et ses voisins, le reste replié. Manager : liste complète.
 function lbList(rk, r, k, val) {

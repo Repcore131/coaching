@@ -9,7 +9,7 @@
 //    plafonne a 150 % (un KPI explose ne masque pas trois KPI a zero).
 //  - Rythme attendu = jours ecoules / jours de la periode. Le statut compare
 //    le % au rythme : >= 105 % du rythme en avance, >= 95 % a l'heure,
-//    >= 75 % leger retard, sinon tres en retard.
+//    >= 75 % a surveiller, sinon en retard.
 //  - Egalites au classement : score, puis points, puis ordre alphabetique.
 //  - Objectif du club = somme des objectifs des membres ACTIFS : une
 //    invitation en attente ou un membre archive ne pese pas dans le total.
@@ -231,22 +231,22 @@ function statusOf(pct, exp) {
   if (isReached(pct)) return { key: 'done', label: 'Objectif atteint', cls: 'status-ok' };
   if (exp <= 0) return { key: 'wait', label: 'Pas commencé', cls: '' };
   const ratio = pct / exp;
-  if (ratio >= 1.05) return { key: 'ahead', label: 'Dans le rythme', cls: 'status-ok' };
-  if (ratio >= 0.95) return { key: 'ontime', label: 'Dans le rythme', cls: 'status-ok' };
-  if (ratio >= 0.75) return { key: 'late', label: 'À surveiller', cls: 'status-warn' };
-  return { key: 'verylate', label: 'En retard', cls: 'status-bad' };
+  if (ratio >= 1.05) return { key: 'ahead', label: TXT.rythme.dans, cls: 'status-ok' };
+  if (ratio >= 0.95) return { key: 'ontime', label: TXT.rythme.dans, cls: 'status-ok' };
+  if (ratio >= 0.75) return { key: 'late', label: TXT.rythme.surveiller, cls: 'status-warn' };
+  return { key: 'verylate', label: TXT.rythme.retard, cls: 'status-bad' };
 }
 
 // Phrase de rythme sous chaque carte KPI.
 function paceMessage(row, exp) {
   const { k, real, target, pct } = row;
-  if (!target) return 'Pas d’objectif ce mois-ci';
-  if (isReached(pct)) return real - target > 0.004 ? `Objectif atteint, ${fmtV(real - target, k.unit)} au-delà` : 'Objectif atteint';
+  if (!target) return TXT.rythme.sansObjectif;
+  if (isReached(pct)) return real - target > 0.004 ? TXT.rythme.auDela(fmtV(real - target, k.unit)) : TXT.rythme.atteint;
   const due = target * exp - real;
-  if (due > 0.0001) return `Plus que ${fmtV(k.unit === 'qty' ? Math.ceil(due) : due, k.unit)} pour être dans le temps`;
+  if (due > 0.0001) return TXT.rythme.aRattraper(fmtV(k.unit === 'qty' ? Math.ceil(due) : due, k.unit));
   const next = TIERS.find(t => pct < t);
   const need = next * target - real;
-  return `Dans le rythme. Plus que ${fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit)} avant l’étape des ${next * 100} %`;
+  return TXT.rythme.palier(fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit), next * 100);
 }
 
 // ── Classements ────────────────────────────────────────────────────────────
@@ -322,7 +322,22 @@ function actionPoints(userId, from, to) {
 function pointsSince(userId, sinceMk) {
   return memo(`ps|${userId}|${sinceMk}`, () => { const u = S.users[userId]; if (!u) return 0; let pts = 0; for (const mk of pastMonths().filter(m => m >= sinceMk)) for (const c of u.clubs || []) { const st = statsFor(c, userId, rangeOf('month', mk)); pts += st.earned + overBonus(st); } pts += trophies(userId).filter(t => t.kind === 'flash' && (t.mk || '') >= sinceMk).length * 200; pts += actionPoints(userId, sinceMk + '-01', today()); return Math.round(pts); });
 }
-function levelOf(pts) { let l = LEVELS[0]; for (const x of LEVELS) if (pts >= x.min) l = x; const next = LEVELS[LEVELS.indexOf(l) + 1]; return { ...l, next }; }
+// ── Zones : un mois est validé quand le score des KPI obligatoires atteint 80 % ──
+// de l'objectif (dans l'un des clubs du membre). Mois clos, et mois en cours dès
+// qu'il passe le seuil. Zone 1 à 5 : 0, 2, 5, 9 et 14 mois validés.
+function moisValides(userId) {
+  return memo(`mv|${userId}`, () => { const u = S.users[userId]; if (!u) return []; return pastMonths().filter(mk => (u.clubs || []).some(c => { const st = statsFor(c, userId, rangeOf('month', mk), { requiredOnly: true }); return st.score != null && st.score >= TXT.zones.seuil - 1e-9; })); });
+}
+function zoneDe(n) { let z = ZONES[0]; for (const x of ZONES) if (n >= x.min) z = x; const i = ZONES.indexOf(z); return { ...z, rang: i + 1, mois: n, next: ZONES[i + 1] || null }; }
+const zoneOf = userId => zoneDe(moisValides(userId).length);
+
+// ── Compte à rebours de fin de mois : jours calendaires après aujourd'hui, ──
+// jours ouvrés restants aujourd'hui compris (sans dimanche ni jour férié).
+function compteRebours(iso = today()) {
+  const fin = iso.slice(0, 8) + pad(daysIn(iso.slice(0, 7)));
+  const jours = Math.round((dateOf(fin) - dateOf(iso)) / 864e5); const ouvres = joursOuvres(iso, fin);
+  return { jours, ouvres, texte: TXT.compteur.court(jours, ouvres), titre: TXT.compteur.titre(jours, ouvres, MOIS[dateOf(iso).getMonth()].toLowerCase()) };
+}
 
 function allTrophies() {
   return memo('trophies', () => {
@@ -381,11 +396,11 @@ function allTrophies() {
         team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = manualDays(u.id); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }
-    // defis flash termines
+    // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;
       const w = challengeRanking(ch)[0];
-      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `Défi flash : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
+      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `${TXT.mots.sprint} : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
     }
     return out;
   });
@@ -407,7 +422,7 @@ function accomplishments(userId) {
   return { streak, first100, all100 };
 }
 
-// ── Defis flash ────────────────────────────────────────────────────────────
+// ── Sprints ────────────────────────────────────────────────────────────
 // Classement normalise par l'objectif mensuel : 3 contrats pour un objectif de
 // 10 valent mieux que 4 pour un objectif de 20.
 function challengeRanking(ch) {

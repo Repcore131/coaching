@@ -14,7 +14,7 @@ function boot() {
     document: { addEventListener: noop, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ style: {} }), body: { appendChild: noop } },
     location: { hostname: 'localhost', search: '', hash: '' }, indexedDB: undefined };
   ctx.window = ctx; vm.createContext(ctx);
-  for (const f of ['config.js', 'core.js', 'parse.js', 'resamania.js', 'calc.js']) vm.runInContext(readFileSync(new URL(f, dir), 'utf8'), ctx, { filename: f });
+  for (const f of ['config.js', 'txt.js', 'core.js', 'parse.js', 'resamania.js', 'calc.js']) vm.runInContext(readFileSync(new URL(f, dir), 'utf8'), ctx, { filename: f });
   vm.runInContext('S = normalizeState(demoState()); REV++;', ctx);
   return (code) => vm.runInContext(code, ctx);
 }
@@ -33,8 +33,27 @@ test('bonus de dépassement : +10 % par tranche de 10 %, plafonné à 150 %', ()
   assert.equal(run("overBonus({ rows: [{ pct: 3, k: { points: 1000 } }] })"), 500);
   assert.equal(run("overBonus({ rows: [{ pct: 0.9, k: { points: 1000 } }] })"), 0);
 });
-test('niveaux recalibrés', () => {
-  assert.deepEqual(JSON.parse(run('JSON.stringify(LEVELS.map(l => l.min))')), [0, 3000, 10000, 25000, 50000]);
+test('zones : 0, 2, 5, 9, 14 mois validés', () => {
+  assert.deepEqual(JSON.parse(run('JSON.stringify(ZONES.map(z => [z.label, z.min]))')), [['Zone 1', 0], ['Zone 2', 2], ['Zone 3', 5], ['Zone 4', 9], ['Zone 5', 14]]);
+  assert.deepEqual(JSON.parse(run('JSON.stringify([0, 1, 2, 4, 5, 8, 9, 13, 14, 30].map(n => zoneDe(n).label))')), ['Zone 1', 'Zone 1', 'Zone 2', 'Zone 2', 'Zone 3', 'Zone 3', 'Zone 4', 'Zone 4', 'Zone 5', 'Zone 5']);
+});
+test('un commercial à 4 mois validés (80 % de l’objectif) est en Zone 2', () => {
+  const r = boot();
+  // Six mois : quatre au-dessus de 80 %, un juste en dessous, un sans objectif.
+  r(`(() => { const u = Object.values(S.users).find(x => x.role === 'membre' && !x.virtual); globalThis.UID = u.id; u.clubs = [u.clubs[0]];
+    const mois = [5, 4, 3, 2, 1, 0].map(n => addMonths(curMonth(), -n)); pastMonths = () => mois; const scores = [0.8, 1.2, 0.79, 0.95, null, 0.81]; globalThis.SC = Object.fromEntries(mois.map((m, i) => [m, scores[i]]));
+    statsFor = (c, uid, rg) => ({ score: SC[rg.from.slice(0, 7)] ?? null, rows: [] }); REV++; })()`);
+  assert.equal(r('moisValides(UID).length'), 4);
+  assert.equal(r('zoneOf(UID).label'), 'Zone 2');
+  assert.equal(r('zoneOf(UID).next.label'), 'Zone 3');
+});
+test('compte à rebours : jours calendaires et jours ouvrés sans dimanche ni férié', () => {
+  // 9 octobre 2026 (vendredi) : 22 jours jusqu'au 31, 23 jours aujourd'hui compris moins 3 dimanches.
+  assert.equal(run("compteRebours('2026-10-09').texte"), 'J-22 · 20 jours ouvrés');
+  // 28 octobre au 1er novembre exclu : 31 octobre est un samedi, pas de dimanche.
+  assert.equal(run("compteRebours('2026-10-28').texte"), 'J-3 · 4 jours ouvrés');
+  // Décembre 2026 : le 25 (vendredi) est férié ; du 24 au 31 : 8 jours, moins le 27 (dimanche) et le 25.
+  assert.equal(run("compteRebours('2026-12-24').texte"), 'J-7 · 6 jours ouvrés');
 });
 test('montants français', () => {
   assert.equal(run("parseMontant('1 234,50 €')"), 1234.5);

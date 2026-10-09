@@ -107,9 +107,9 @@ function startWizardTable(name, p) {
 }
 function impNew() {
   const w = UI.wiz;
-  const steps = s => `<div class="steps">${['Document', 'Matching', 'Validation'].map((l, i) => `<span class="${s >= i + 1 ? 'on' : ''}"><i>${i + 1}</i>${l}</span>`).join('')}</div>`;
+  const steps = s => `<div class="steps">${TXT.imports.etapes.map((l, i) => `<span class="${s >= i + 1 ? 'on' : ''}"><i>${i + 1}</i>${l}</span>`).join('')}</div>`;
   if (!w) {
-    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class="muted small">.csv, .tsv, .xlsx, .xls (séparateur ; , ou tabulation), tel qu’exporté de Resamania ou enregistré par Excel</div></div><input type="file" id="file" accept="${FILE_ACCEPT}" hidden>
+    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">${TXT.imports.deposer}</div><div class="muted small">.csv, .tsv, .xlsx, .xls (séparateur ; , ou tabulation), tel qu’exporté de Resamania ou enregistré par Excel</div></div><input type="file" id="file" accept="${FILE_ACCEPT}" hidden>
       <h3 style="margin:20px 0 8px">Les fichiers que vous pouvez importer</h3><p class="muted small" style="margin-top:0">Le type est reconnu automatiquement par le nom et les colonnes ; vous confirmez à l’étape suivante.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>Export Resamania</th><th>Alimente</th></tr></thead><tbody>${IMPORT_PROFILES.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.feeds)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
@@ -289,7 +289,7 @@ function impManual() {
   const data = S.monthly[CLUB.id] || {};
   const warn = [];
   for (let m = 1; m <= 12; m++) { const v = data[`${y}-${pad(m)}`]; if (v && Number(v.impayes) > 3 * (Number(v.caPack) || 0) && Number(v.caPack) > 0) warn.push(MOIS[m - 1]); }
-  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="badge ok">Enregistrement automatique</span><span class="spacer"></span><span class="muted small">${esc(CLUB.name)}</span></div>
+  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="badge ok">${TXT.imports.auto}</span><span class="spacer"></span><span class="muted small">${esc(CLUB.name)}</span></div>
     ${warn.length ? `<div class="alert" style="margin-bottom:12px"><div><b>À vérifier : ${warn.join(', ')}</b>Les impayés y dépassent largement le CA Pack : deux colonnes ont peut-être été inversées.</div></div>` : ''}
     <div class="table-wrap"><table class="t"><thead><tr><th>Mois ${y}</th>${MANUAL_FIELDS.map(f => `<th class="num">${f[1]}</th>`).join('')}</tr></thead><tbody>
     ${MOIS.map((ml, i) => { const mk = `${y}-${pad(i + 1)}`; const dis = mk >= cm; return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${MANUAL_FIELDS.map(([k, , u]) => `<td class="num"><input class="cell" type="number" step="${u === 'eur' ? '0.01' : '1'}" min="0" value="${deepGet(data, [mk, k]) ?? ''}" data-change="manCell" data-mk="${mk}" data-k="${k}" ${dis ? 'disabled title="Seuls les mois terminés sont modifiables"' : ''}></td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
@@ -303,9 +303,9 @@ ACTIONS.rsmCopyPrompt = async () => {
   catch (e) { openModal({ title: 'Prompt à copier', body: `<p class="muted small">Sélectionnez tout et copiez, puis collez dans Claude à côté de Resamania.</p><textarea class="input" rows="16" style="width:100%" onclick="this.select()">${esc(t)}</textarea>`, foot: '<button class="btn primary" data-close>Fermer</button>' }); }
 };
 
-// ── Action Retention ──────────────────────────────────────────────────────
+// ── Adhérents à garder ────────────────────────────────────────────────────
 PAGES.loyalty = {
-  title: 'Action Rétention',
+  title: TXT.pages.loyalty,
   render() {
     const tab = UI.loyTab || 'fins';
     const tasks = loyaltyTasks(CLUB.id);
@@ -319,7 +319,7 @@ PAGES.loyalty = {
     }
     const body = tab === 'fins' ? loyFins() : tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
     const prot = loyProtected(CLUB.id, curMonth());
-    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · fins d’engagement à relancer · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+    return `<div class="page-head"><div><h1>${TXT.pages.loyalty}</h1><p>${esc(CLUB.name)} · ${TXT.garder.sous} · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
       <div class="stat-row loy-head"><div class="stat"><span>Valeur protégée ce mois</span><b class="ok">${fmtE(prot.total)}</b><small>${plur(prot.n, 'tâche réussie', 'tâches réussies')} (Joint OK ou RDV)</small></div><div class="stat"><span>Euros en jeu à traiter</span><b>${fmtE(todo.filter(x => !x.nextDate).reduce((s2, x) => s2 + x.valeurEnJeu, 0))}</b><small>${plur(todo.filter(x => !x.nextDate).length, 'tâche', 'tâches')} à faire maintenant</small></div></div>
       ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
       ${tabs('loyTab', [['fins', 'Fins d’engagement'], ['tasks', `Autres tâches (${todo.length})`], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
@@ -405,13 +405,13 @@ ACTIONS.addClient = () => openModal({ title: 'Ajouter un client', body: `<form i
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveClient">Ajouter</button>' });
 ACTIONS.saveClient = () => { const f = formData($('#cf')); if (!f.name.trim()) return; const id = newId(); db.set(['clients', id], { id, clubId: CLUB.id, name: f.name.trim(), phone: f.phone, email: f.email, birth: f.birth ? String(f.birth).slice(-5) : null, start: f.start || null, end: f.end || null, balance: toNum(f.balance), balanceAt: today() }); closeModal(); toast('Client ajouté.'); };
 
-// ── Mes clubs ─────────────────────────────────────────────────────────────
+// ── Club et réglages ──────────────────────────────────────────────────────
 PAGES.clubs = {
-  title: 'Mes clubs',
+  title: TXT.pages.clubs,
   manager: true,
   render() {
     const tab = UI.clubTab || 'clubs';
-    return `<div class="page-head"><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
+    return `<div class="page-head"><div><h1>${TXT.pages.clubs}</h1><p>${TXT.clubs.sous}</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
       ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList }[tab]()}`;
   },
 };
@@ -426,15 +426,16 @@ function clubList() {
 }
 ACTIONS.clubForm = el => {
   const c = el.dataset.id ? S.clubs[el.dataset.id] : null;
-  openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : 'Fitness Park ')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label><div class="field"><span>Jours d’ouverture (rythme des objectifs)</span><div class="chips">${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, n) => `<label class="chip-radio"><input type="checkbox" name="od_${n}" ${(c && Array.isArray(c.openDays) ? c.openDays : [1, 2, 3, 4, 5, 6]).includes(n) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div></div>
-<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label></div></form>`,
+  openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : '')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label><div class="field"><span>Jours d’ouverture (rythme des objectifs)</span><div class="chips">${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, n) => `<label class="chip-radio"><input type="checkbox" name="od_${n}" ${(c && Array.isArray(c.openDays) ? c.openDays : [1, 2, 3, 4, 5, 6]).includes(n) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div></div>
+<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label></div>
+    <div class="form-grid"><label class="field"><span>${TXT.clubs.couleur}</span><input class="input" type="color" name="couleur" value="${esc(c && COULEUR_OK(c.couleur) ? c.couleur : '#12B3A8')}"><small class="muted">${TXT.clubs.couleurAide}</small><label class="chk"><input type="checkbox" name="couleurDefaut" ${c && COULEUR_OK(c.couleur) ? '' : 'checked'}> ${TXT.clubs.couleurDefaut}</label></label><label class="field"><span>${TXT.clubs.logo}</span><input class="input" name="logo" maxlength="80" value="${esc(c && c.logo || '')}" placeholder="assets/logo-club.svg"><small class="muted">${TXT.clubs.logoAide}</small></label></div></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="clubSave" data-id="${c ? c.id : ''}">Enregistrer</button>` });
 };
 ACTIONS.clubSave = el => {
   const f = formData($('#clf')); if (!f.name.trim()) return;
   let id = el.dataset.id;
   if (!id) { id = norm(f.name).replace(/ /g, '-').slice(0, 30) || newId(); if (S.clubs[id]) id += '-' + newId().slice(-4); }
-  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim() }]];
+  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), couleur: !f.couleurDefaut && COULEUR_OK(f.couleur) ? f.couleur.toUpperCase() : null, logo: /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test((f.logo || '').trim()) ? f.logo.trim() : null }]];
   if (!el.dataset.id) ops.push([['users', ME.id, 'clubs'], [...(ME.clubs || []), id]]);
   db.batch(ops); closeModal(); toast('Club enregistré.');
 };
@@ -442,8 +443,8 @@ function clubBase() {
   const y = Number(UI.baseYear || curMonth().slice(0, 4));
   const cm = curMonth(); const data = S.base[CLUB.id] || {};
   return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="muted small">${esc(CLUB.name)}</span></div>
-    <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>La base nette = clients actifs nets − sortants du mois. « Contrats à signer » = objectif de fin de mois − base nette : comparez-le à la somme des objectifs « Contrats signés » de l’équipe.</div></div>
-    <div class="table-wrap"><table class="t"><thead><tr><th>Mois</th><th class="num">Clients actifs nets</th><th class="num">Sortants</th><th class="num">Base nette</th><th class="num">Objectif fin de mois</th><th class="num">Contrats à signer</th><th class="num">Objectifs équipe</th></tr></thead><tbody>
+    <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>${TXT.base.explication} « Contrats à signer » = objectif de fin de mois moins la base de fin de mois : comparez-le à la somme des objectifs « Contrats signés » de l’équipe.</div></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Mois</th><th class="num">${TXT.base.actifs}</th><th class="num">Sortants</th><th class="num">${TXT.base.fin}</th><th class="num">Objectif fin de mois</th><th class="num">Contrats à signer</th><th class="num">Objectifs équipe</th></tr></thead><tbody>
     ${MOIS.map((ml, i) => { const mk = `${y}-${pad(i + 1)}`; const v = data[mk] || {}; const net = (Number(v.actifs) || 0) - (Number(v.sortants) || 0); const toSign = v.objectif ? Number(v.objectif) - net : null; const team = clubMonthTarget(mk, CLUB.id, 'contrats');
       return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${['actifs', 'sortants'].map(k => `<td class="num"><input class="cell" type="number" min="0" value="${v[k] ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="${k}"></td>`).join('')}<td class="num">${v.actifs ? fmtN(net) : 'n.d.'}</td><td class="num"><input class="cell" type="number" min="0" value="${v.objectif ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="objectif"></td><td class="num">${toSign != null ? `<b>${fmtN(toSign)}</b>` : 'n.d.'}</td><td class="num ${toSign != null && team && team < toSign ? 'bad' : ''}">${team ? fmtN(team) : 'n.d.'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }

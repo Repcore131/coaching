@@ -57,7 +57,7 @@ window.PARKPULSE_ASSETS = {
   icon: 'favicon.png',
   banner: 'assets/hero-banner.jpg',
   login: 'assets/hero-login.jpg',
-  logo: 'assets/logo-fitness-park.svg',
+  logo: null, // logo du club : réglé par club (Club et réglages), aucun par défaut
 };
 
 // Demonstration : ni comptes reels, ni club reel, ni logo de l'enseigne.

@@ -282,7 +282,7 @@ PAGES.relances = {
     const { res, dun, loy } = myToDo();
     return `<div class="page-head"><div><h1>Mes relances</h1><p>Les dossiers dont vous êtes responsable, et les appels du jour.</p></div></div>
       <div class="card" style="padding:6px 14px;margin-bottom:14px">${todoList(99)}</div>
-      <div class="row wrap"><a class="btn" href="#/resiliations">${ico('door')} Toutes les résiliations</a><a class="btn" href="#/impayes">${ico('euro')} Tous les impayés</a><a class="btn" href="#/loyalty">${ico('heart')} Action Rétention</a></div>
+      <div class="row wrap"><a class="btn" href="#/resiliations">${ico('door')} Toutes les résiliations</a><a class="btn" href="#/impayes">${ico('euro')} Tous les impayés</a><a class="btn" href="#/loyalty">${ico('heart')} ${TXT.nav.loyalty}</a></div>
       <p class="muted small">${plur(res.length, 'résiliation', 'résiliations')}, ${plur(dun.length, 'impayé', 'impayés')} à votre nom · ${plur(loy.length, 'appel', 'appels')} de fidélisation en attente pour le club.</p>`;
   },
 };
@@ -314,7 +314,7 @@ function tabBar(route) {
   // Accueil, Relances, [Saisir], Classement, Equipe (managers : Plus pour le menu complet).
   const t = [['home', 'Accueil', 'dashboard'], ['relances', 'Relances', 'phone'], ['saisir', 'Saisir', 'plus'], ['leaderboard', 'Classement', 'trophy'], isManager() ? ['more', 'Plus', 'menu'] : ['equipe', 'Équipe', 'users']];
   const n = relBadge();
-  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Saisir">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : id === 'equipe' && (unseenFeed() + unseenChat()) ? `<em>${Math.min(99, unseenFeed() + unseenChat())}</em>` : ''}</a>`).join('')}</nav>`;
+  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Saisir">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : id === 'equipe' && (unseenPouls() + unseenChat()) ? `<em>${Math.min(99, unseenPouls() + unseenChat())}</em>` : ''}</a>`).join('')}</nav>`;
 }
 ACTIONS.tbSaisir = () => {
   openModal({ title: 'Saisir', body: `${quickPad()}<p class="muted small" style="margin-bottom:0">Pour une autre date ou un autre membre : <a href="javascript:void 0" data-act="openSaisiesFromPad">saisie détaillée</a>.</p>` });
@@ -322,7 +322,7 @@ ACTIONS.tbSaisir = () => {
 ACTIONS.openSaisiesFromPad = () => { closeModal(); ACTIONS.openSaisies(); };
 ACTIONS.goTargets = () => { UI.memTab = 'targets'; location.hash = '#/members'; };
 
-// Bandeau du defi flash en cours : visible sans defiler, avec mon rang.
+// Bandeau du sprint en cours : visible sans defiler, avec mon rang.
 // Actions de la semaine (relances notees et issues positives).
 function weekActions(uid) {
   const from = dateOf(weekStart(today())).getTime();

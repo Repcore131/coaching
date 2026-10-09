@@ -14,7 +14,7 @@ const NOTIF_RULES = {
   alertes: { label: 'Signaux faibles de l’équipe, à 9 h', ex: '2 signaux faibles à regarder.', manager: true },
   digest: { label: 'Bilan de la semaine et brief du matin (7 h 30, managers)', ex: 'Votre bilan de la semaine est prêt.' },
   am_digest: { label: 'Votre journée, à 7 h 45', ex: '3 relances à votre nom aujourd’hui.' },
-  pm_digest: { label: 'Bilan du jour, à 19 h 30', ex: '4 saisies aujourd’hui. Équipe : 6 contrats.' },
+  pm_digest: { label: TXT.cloture.notif, ex: '4 saisies aujourd’hui. Équipe : 6 contrats.' },
   dun_promise: { label: 'Promesse de paiement non tenue', ex: 'Le paiement promis n’est pas arrivé. Relancez aujourd’hui.' },
   obj_late: { label: 'Objectif en retard (mardi et jeudi)', ex: 'Contrats signés en retard : 4 sur 12. 1 par jour pour finir.' },
   record: { label: 'Record personnel battu', ex: 'Votre meilleur mois en contrats signés : 14.' },
@@ -69,7 +69,7 @@ ACTIONS.bell = () => {
     ${L.length ? groups.filter(g => g[1].length).map(([l, g]) => `<div class="nt-g">${l}</div>${g.map(x => `<button class="nt-row ${x.readAt ? '' : 'unread'}" data-act="notifOpen" data-id="${esc(x.id)}"><span class="nt-ico">${ico(NOTIF_ICON[x.kind] || 'bell')}</span><span class="spacer"><b>${esc(x.title)}</b><span>${esc(x.body)}</span><small>${ago(x.at)}</small></span>${x.readAt ? '' : '<i class="nt-dot"></i>'}</button>`).join('')}`).join('') : emptyBox({ art: 'done', title: 'Aucune notification', text: 'Les nouveautés de l’équipe et vos rappels apparaîtront ici.' })}`,
     foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
 };
-const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: 'Bilan du jour', dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: 'Défi flash', live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
+const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: TXT.notifs.cloture, dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: TXT.mots.sprint, live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
 const NOTIF_ICON = { am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
 ACTIONS.notifOpen = el => { const L = inbox(); const x = L.find(m => m.id === el.dataset.id); if (!x) return; x.readAt = Date.now(); saveInbox(L); closeModal(); bellRefresh(); if (x.url) location.hash = x.url; };
 ACTIONS.notifAllRead = () => { const L = inbox(); L.forEach(x => { x.readAt = x.readAt || Date.now(); }); saveInbox(L); closeModal(); bellRefresh(); };
@@ -101,7 +101,7 @@ function notifLive(before, after) {
     if (e.userId === ME.id || e.by === ME.id) { byMe = true; continue; }
     if (e.source !== 'manual' || Date.now() - e.at > 60000 || !mine(e.clubId)) continue;
     const u = after.users[e.userId], k = after.kpis[e.kpiId], c = after.clubs[e.clubId];
-    if (u && k) notify('live', `${fullName(u)} : +${fmtV(e.value, k.unit)} ${k.label}${c ? ', ' + c.name : ''}`, '#/feed', { key: 'e_' + id });
+    if (u && k) notify('live', `${fullName(u)} : +${fmtV(e.value, k.unit)} ${k.label}${c ? ', ' + c.name : ''}`, '#/pouls', { key: 'e_' + id });
   }
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];
