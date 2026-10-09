@@ -27,7 +27,7 @@
 <meta name="twitter:description" content="Charge proposée à chaque série, plus de 400 exercices filmés, nutrition hors ligne. 1 mois d'essai offert.">
 <meta name="twitter:image" content="https://repcore-sync.web.app/app/img/vente/og-vente.jpg">
 <meta name="theme-color" content="#080808">
-<script type="application/ld+json">
+<script type="application/ld+json" data-tarifs-offres="Essentielle=essentielle.mois,Ultime=ultime.mois">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -40,7 +40,7 @@
   "inLanguage": "fr",
   "image": "https://repcore-sync.web.app/app/img/vente/og-vente.jpg",
   "offers": [
-    {"@type": "Offer", "name": "Essentielle", "price": "9.95", "priceCurrency": "EUR", "category": "subscription",
+    {"@type": "Offer", "name": "Essentielle", "price": "9.50", "priceCurrency": "EUR", "category": "subscription",
      "url": "https://repcore-sync.web.app/#tarifs", "availability": "https://schema.org/InStock"},
     {"@type": "Offer", "name": "Ultime", "price": "24.90", "priceCurrency": "EUR", "category": "subscription",
      "url": "https://repcore-sync.web.app/#tarifs", "availability": "https://schema.org/InStock"}
@@ -55,7 +55,7 @@
   ]
 }
 </script>
-<script type="application/ld+json">
+<script type="application/ld+json" data-faq-depuis="faq">
 {
  "@context": "https://schema.org",
  "@type": "FAQPage",
@@ -81,7 +81,7 @@
    "name": "Puis-je annuler ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Oui, quand tu veux et sans justification, depuis l'app (Réglages, Mon abonnement, Résilier). L'abonnement engage pour 12 mois : ta résiliation prend effet au bout de ces 12 mois, ton accès reste ouvert jusque-là, et rien n'est reconduit. Si tu ne résilies pas, il continue ensuite mois par mois et s'arrête quand tu veux, à la fin du mois en cours."
+    "text": "Oui, quand tu veux et sans justification, depuis l'app (Réglages, Mon abonnement, Résilier). L'abonnement est sans engagement : ta résiliation prend effet à la fin de la période payée (le mois en cours, ou l'année si tu l'as réglée en une fois), ton accès reste ouvert jusque-là, et rien n'est prélevé ensuite. Un abonnement souscrit avec un engagement de 12 mois garde le sien jusqu'à son terme."
    }
   },
   {
@@ -750,8 +750,8 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="offre">
         <h3>Essentielle</h3>
         <p class="pour">Tu t'entraînes seul et tu veux un carnet sérieux.</p>
-        <div class="montant" data-tarif-m="essentielle.mois" data-m="9,50&nbsp;€" data-tarif-a="essentielle.an" data-a="114&nbsp;€"><span data-tarif="essentielle.mois">9,50&nbsp;€</span><small> /mois</small></div>
-        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
+        <div class="montant" data-tarif-m="essentielle.mois" data-m="9,50&nbsp;€" data-tarif-a="essentielle.an" data-a="95&nbsp;€"><span data-tarif="essentielle.mois">9,50&nbsp;€</span><small> /mois</small></div>
+        <p class="facture"><span class="f-m"><span data-texte="engagement">sans engagement</span></span><span class="f-a" hidden><span data-texte="essentielle.offreAn">réglé en une fois, 2&nbsp;mois offerts</span></span></p>
         <ul class="coches" style="text-align:left">
           <li>Tu composes tes séances et tu les enchaînes</li>
           <li>Charges proposées, séries, minuteur</li>
@@ -764,8 +764,8 @@ footer a{color:var(--dim);margin:0 8px}
         <span class="ruban">Tout inclus</span>
         <h3>Ultime</h3>
         <p class="pour">Tu veux tout ce qu'un coach utilise, sans le coach.</p>
-        <div class="montant" data-tarif-m="ultime.mois" data-m="24,90&nbsp;€" data-tarif-a="ultime.an" data-a="298,80&nbsp;€"><span data-tarif="ultime.mois">24,90&nbsp;€</span><small> /mois</small></div>
-        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
+        <div class="montant" data-tarif-m="ultime.mois" data-m="24,90&nbsp;€" data-tarif-a="ultime.an" data-a="249&nbsp;€"><span data-tarif="ultime.mois">24,90&nbsp;€</span><small> /mois</small></div>
+        <p class="facture"><span class="f-m"><span data-texte="engagement">sans engagement</span></span><span class="f-a" hidden><span data-texte="ultime.offreAn">réglé en une fois, 2&nbsp;mois offerts</span></span></p>
         <ul class="coches" style="text-align:left">
           <li><strong>Tout Essentielle</strong>, plus&nbsp;:</li>
           <li>Plus de 400 exercices filmés, avec les erreurs à éviter</li>
@@ -776,7 +776,7 @@ footer a{color:var(--dim);margin:0 8px}
         <a class="cta" href="app/#install">Essayer 1&nbsp;mois gratuit</a>
       </div>
     </div>
-    <p class="essai"><strong>Engagement de <span data-nb="engagementMois">12</span>&nbsp;mois</strong>&nbsp;: tu règles chaque mois ou en une fois, pour le même total, et si tu résilies en cours de route, ton accès reste ouvert jusqu'au bout des <span data-nb="engagementMois">12</span>&nbsp;mois, sans reconduction pour une nouvelle année.<br>Paiement sécurisé par PayPal.</p>
+    <p class="essai"><strong><span data-texte="Engagement">Sans engagement</span></strong>&nbsp;: tu règles chaque mois, ou l'année en une fois (<span data-nb="essentielle.moisOfferts">2</span>&nbsp;mois offerts sur Essentielle, <span data-nb="ultime.moisOfferts">2</span> sur Ultime). Tu résilies quand tu veux&nbsp;: ton accès reste ouvert jusqu'à la fin de la période payée, et rien n'est prélevé ensuite.<br>Paiement sécurisé par PayPal.</p>
   </div>
 </section>
 
@@ -839,10 +839,10 @@ footer a{color:var(--dim);margin:0 8px}
 
     <details><summary>Puis-je annuler&nbsp;?</summary>
       <p>Oui, quand tu veux et sans justification, depuis l'app (Réglages, Mon abonnement,
-      Résilier). L'abonnement engage pour <span data-nb="engagementMois">12</span>&nbsp;mois&nbsp;: ta résiliation prend
-      effet au bout de ces <span data-nb="engagementMois">12</span>&nbsp;mois, ton accès reste ouvert jusque-là, et rien n'est
-      reconduit. Si tu ne résilies pas, il continue ensuite mois par mois et s'arrête quand tu
-      veux, à la fin du mois en cours.</p></details>
+      Résilier). L'abonnement est <span data-texte="engagement">sans engagement</span>&nbsp;: ta résiliation prend
+      effet à la fin de la période payée (le mois en cours, ou l'année si tu l'as réglée en une fois),
+      ton accès reste ouvert jusque-là, et rien n'est prélevé ensuite. Un abonnement souscrit avec
+      un engagement de <span data-nb="contrats_engages.engagementMois">12</span>&nbsp;mois garde le sien jusqu'à son terme.</p></details>
 
     <details><summary>Un ami m'a invité&nbsp;: qu'est-ce que ça change&nbsp;?</summary>
       <p>Son lien t'offre ton premier mois, toute l'app comprise, sans carte bancaire. Et le jour
@@ -901,21 +901,21 @@ footer a{color:var(--dim);margin:0 8px}
 </div>
 
 <script>
-/* Bascule « chaque mois » / « en une fois ». Les deux prix sont ECRITS dans la
-   page (data-m, data-a, recopies de tarifs.json par scripts/tarifs.mjs) : sans
-   script, le visiteur voit le mensuel, qui est vrai. Il n'y a pas de remise :
-   en une fois, c'est le meme total, et la page ne dit pas autre chose. */
+/* Bascule « chaque mois » / « en une fois ». Les deux prix et les deux lignes
+   sous le prix sont ECRITS dans la page (data-m, data-a, .f-m, .f-a, recopies
+   de tarifs.json par scripts/tarifs.mjs) : sans script, le visiteur voit le
+   mensuel, qui est vrai. Les mois offerts de l'annuel sont CALCULES par ce
+   script-la, jamais ecrits a la main. */
 (function(){
   try{
     var bs=document.querySelectorAll('.bascule button');
     function poser(p){
       bs.forEach(function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-periode')===p?'true':'false'); });
       document.querySelectorAll('.montant[data-m]').forEach(function(e){
-        e.innerHTML=(p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m'))+(p==='an'?'<small> pour 12&nbsp;mois</small>':'<small> /mois</small>');
+        e.innerHTML=(p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m'))+(p==='an'?'<small> /an</small>':'<small> /mois</small>');
       });
-      document.querySelectorAll('.facture[data-m]').forEach(function(e){
-        e.innerHTML=p==='an'?'réglé en une fois, le même total que 12 mensualités':e.getAttribute('data-m');
-      });
+      document.querySelectorAll('.facture .f-m').forEach(function(e){ e.hidden=p==='an'; });
+      document.querySelectorAll('.facture .f-a').forEach(function(e){ e.hidden=p!=='an'; });
     }
     bs.forEach(function(b){ b.addEventListener('click',function(){ poser(b.getAttribute('data-periode')); }); });
   }catch(e){}

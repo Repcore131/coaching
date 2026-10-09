@@ -38,16 +38,31 @@
 //
 //       PAYPAL_CLIENT_SECRET=...  node scripts/paypal_plans.mjs
 //
-//  5. Avec --tarifs, il remet les plans EXISTANTS au prix que la table de
-//     l'application annonce, puis verifie. A lancer apres tout changement
-//     de tarif : sans lui, l'ecran dit un prix et PayPal en preleve un
-//     autre. Il ne touche pas aux abonnements deja en cours.
+//  5. Avec --tarifs, il CREE les plans qui manquent (les annuels sans
+//     engagement du 09/10/2026, par exemple), remet les plans EXISTANTS de
+//     PLANS au prix que la table de l'application annonce, puis verifie.
+//     A lancer apres tout changement de tarif : sans lui, l'ecran dit un
+//     prix et PayPal en preleve un autre. Avec --ecrire en plus, il colle
+//     les identifiants des plans crees dans rc-core ET dans
+//     cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT).
+//     ⚠ LES ANCIENS ANNUELS (contrats engages, ANCIENS ci-dessous) NE SONT
+//     JAMAIS REMIS A PRIX : changer le prix d'un plan chez PayPal peut
+//     changer celui des abonnes qui y sont deja. Ils sont seulement verifies.
 //  6. Avec --verifier, il ne cree RIEN : il va chercher chaque plan chez
 //     PayPal et dit lequel est inactif, introuvable, ou ne facture pas le
 //     prix que l'application annonce. C'est la commande a lancer quand on
 //     se demande « est-ce que les paiements marchent ? ».
 //  7. Avec --ecrire, il colle lui-meme les identifiants dans rc-core a
 //     la place des chaines vides. Sans, il les affiche et tu les colles.
+//
+//  8. --plan-test (09/10/2026) : cree (ou retrouve) un plan de TEST a 1 EUR
+//     par mois, « RepCore TEST 1 EUR (a supprimer) », hors de PLANS, et
+//     affiche sa page de paiement PayPal : on y paie par carte, sans compte,
+//     pour verifier le parcours de bout en bout. --plan-test-off le
+//     DESACTIVE ensuite (PayPal ne supprime pas un plan). L'abonnement de test
+//     s'annule dans PayPal (Paiements automatiques) et le euro se rembourse
+//     depuis la transaction. Le worker ne connait pas ce plan : aucun acces
+//     n'est ouvert, l'evenement est range (paypal_orphelins).
 //
 //  IL NE CREE JAMAIS DEUX FOIS LE MEME PLAN : avant d'en creer un, il liste
 //  ceux qui existent et reutilise celui qui porte le meme nom. On peut donc le
@@ -63,6 +78,8 @@ const SANDBOX = ARGS.has('--sandbox');
 const ECRIRE = ARGS.has('--ecrire');
 const VERIFIER = ARGS.has('--verifier');
 const TARIFS = ARGS.has('--tarifs');
+const PLAN_TEST = ARGS.has('--plan-test');
+const PLAN_TEST_OFF = ARGS.has('--plan-test-off');
 const API = SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
 // ── LE FICHIER DE L'APPLICATION, ET SES PRIX ────────────────────────────
@@ -99,6 +116,8 @@ function lireOffres() {
   return new Function(blocTarifs() + bloc + ' return OFFRES;')();
 }
 const OFFRES = lireOffres();
+// eslint-disable-next-line no-new-func
+const TARIFS_APP = new Function(blocTarifs() + ' return TARIFS;')();
 // LES PALIERS COACH VIVENT DANS UNE AUTRE TABLE, et leurs prix aussi. Meme
 // methode : on evalue la table telle quelle, apres avoir pose les constantes
 // d'identifiants qu'elle referme dans ses accesseurs `planId`.
@@ -109,7 +128,11 @@ function lireCoachPaliers() {
   if (fin < 0) throw new Error('fin de COACH_PALIERS introuvable');
   const bloc = src.slice(i, fin + 4).replace('const COACH_PALIERS=', 'var COACH_PALIERS=');
   // eslint-disable-next-line no-new-func
+  // LES QUOTAS (09/10/2026) : COACH_PALIERS lit son quota dans QUOTAS_COACH.
+  const tranche = (debut, fin) => { const k = src.indexOf(debut); if (k < 0) throw new Error(debut + ' introuvable');
+    return src.slice(k, src.indexOf(fin, k) + fin.length).replace(/^const /, 'var '); };
   return new Function(blocTarifs() + 'var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";'
+    + tranche('const COACH_PLANS=', ';') + tranche('const QUOTAS_COACH=(function(){', '})();')
     + bloc + ' return COACH_PALIERS;')();
 }
 const COACH_PALIERS = lireCoachPaliers();
@@ -126,10 +149,14 @@ const eur = n => (Math.round(Number(n) * 100) / 100).toFixed(2);
 // dans config/plans (RTDB) pour que la Cloud Function sache quoi ouvrir.
 const PRODUIT_NOM = 'RepCore';
 const PLANS = [
+  // ⚠ LES ANNUELS SANS ENGAGEMENT (09/10/2026) : des plans NEUFS, sous un nom
+  //   neuf. Les anciens (« RepCore Essentielle, annuel », « RepCore Ultime,
+  //   annuel ») restent ceux des contrats engages, dans ANCIENS : les remettre
+  //   au nouveau prix aurait pu changer celui des abonnes en cours.
   {
-    constante: 'PAYPAL_PLAN_ID_ANNUEL',
-    nom: 'RepCore Essentielle, annuel',
-    description: 'Acces Essentielle a RepCore, facture une fois par an.',
+    constante: 'PAYPAL_PLAN_ID_ANNUEL_SE',
+    nom: 'RepCore Essentielle, annuel sans engagement',
+    description: 'Acces Essentielle a RepCore, facture une fois par an, sans engagement.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.essentielle.prixAn) }],
     config: { palier: 'essentielle', mois: 12 },
   },
@@ -141,9 +168,9 @@ const PLANS = [
     config: { palier: 'ultime', mois: 1 },
   },
   {
-    constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL',
-    nom: 'RepCore Ultime, annuel',
-    description: 'Acces Ultime a RepCore, facture une fois par an.',
+    constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE',
+    nom: 'RepCore Ultime, annuel sans engagement',
+    description: 'Acces Ultime a RepCore, facture une fois par an, sans engagement.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.ultime.prixAn) }],
     config: { palier: 'ultime', mois: 12 },
   },
@@ -191,8 +218,8 @@ const PLANS = [
 //
 // ⚠ IL PORTE SES CYCLES, LUI AUSSI (24/09/2026). Sans eux, `--verifier` le
 //   regardait sans rien comparer et `--tarifs` le sautait : le plan d'entree,
-//   celui que presque tout le monde prendra, serait reste a 9,95 pendant que
-//   l'ecran annonce 9,50.
+//   celui que presque tout le monde prendra, serait reste a son ancien prix
+//   pendant que l'ecran annonce celui de tarifs.json.
 //
 // ⚠ ET IL RESTE HORS DE `PLANS` : la boucle de creation y reconnait un plan
 //   par son NOM, et celui-ci n'a pas le meme. L'y mettre creerait un DOUBLON
@@ -202,6 +229,16 @@ const DEJA = [{
   quoi: 'Essentielle, mensuel',
   cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: eur(OFFRES.essentielle.prix) }],
 }];
+// LES ANNUELS DES CONTRATS ENGAGES (24/09 → 09/10/2026). Leurs abonnes y paient
+// encore le prix de tarifs.json → contrats_engages. --verifier les compare a CE
+// prix-la ; --tarifs N'Y TOUCHE PAS.
+const CE = TARIFS_APP.contrats_engages || {};
+const ANCIENS = [
+  { constante: 'PAYPAL_PLAN_ID_ANNUEL', quoi: 'Essentielle, annuel (contrats engages)',
+    cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur((CE.essentielle || {}).an) }] },
+  { constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL', quoi: 'Ultime, annuel (contrats engages)',
+    cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur((CE.ultime || {}).an) }] },
+];
 
 // ── L'APPEL A PAYPAL ────────────────────────────────────────────────────
 const CLIENT_ID = process.env.PAYPAL_CLIENT_ID
@@ -367,7 +404,7 @@ function prixFacture(plan) {
 }
 async function verifier(tok) {
   const attendus = PLANS.map(p => ({ constante: p.constante, nom: p.nom, ...prixAnnonce(p) }));
-  for (const d of DEJA) attendus.push({ constante: d.constante, nom: d.quoi,
+  for (const d of DEJA.concat(ANCIENS)) attendus.push({ constante: d.constante, nom: d.quoi,
     ...prixAnnonce(d) });
   let souci = 0;
   console.log('\n── L\'ETAT REEL DE CHAQUE PLAN ────────────────────────────\n');
@@ -411,10 +448,10 @@ async function verifier(tok) {
 
 // ══ `--tarifs` : REMETTRE LES PLANS AU PRIX DE L'APPLICATION ════════════
 //
-// ⚠ UN PLAN PAYPAL NE SUIT PAS LA TABLE DES PRIX. Le 24/09/2026, l'abonnement
-//   est passe a 9,50 par mois et 114 l'an ; les plans, eux, facturaient encore
-//   9,95 et 99. L'application annoncait un prix, PayPal en prelevait un autre —
-//   la faute la plus chere possible, et la plus silencieuse.
+// ⚠ UN PLAN PAYPAL NE SUIT PAS LA TABLE DES PRIX. Quand tarifs.json change,
+//   les plans deja crees continuent de facturer l'ancien prix : l'application
+//   annonce un prix, PayPal en preleve un autre — la faute la plus chere
+//   possible, et la plus silencieuse.
 //
 // ⚠ CE QUE CETTE COMMANDE NE FAIT PAS : changer ce que paient les abonnes
 //   DEJA en cours. PayPal applique le nouveau tarif aux souscriptions a venir ;
@@ -489,10 +526,46 @@ async function principal() {
   const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
   if (VERIFIER) { await verifier(tok); return; }
-  if (TARIFS) { await majTarifs(tok); await verifier(tok); return; }
+  if (PLAN_TEST || PLAN_TEST_OFF) { await planTest(tok, PLAN_TEST_OFF); return; }
+  if (TARIFS) {
+    // D'ABORD LES PLANS QUI MANQUENT (les annuels sans engagement), PUIS LES
+    // PRIX DE CEUX QUI EXISTENT : majTarifs relit les identifiants dans rc-core,
+    // qu'ecrire() vient d'y poser.
+    console.log('\n── LES PLANS QUI MANQUENT ─────────────────────────────────\n');
+    const faits = await creerPlans(tok);
+    afficherEtEcrire(faits);
+    await majTarifs(tok); await verifier(tok); return;
+  }
+  const faits = await creerPlans(tok);
+  afficherEtEcrire(faits);
+}
+
+// LE PLAN DE TEST A 1 EUR : cree ou retrouve par son nom, ou desactive.
+const NOM_PLAN_TEST = 'RepCore TEST 1 EUR (a supprimer)';
+async function planTest(tok, desactiver) {
+  const pr = await produit(tok);
+  let plan = await planExistant(tok, pr.id, NOM_PLAN_TEST);
+  if (desactiver) {
+    if (!plan) { console.log('\n  Aucun plan de test : rien a desactiver.\n'); return; }
+    if (plan.status !== 'INACTIVE') await pp(tok, 'POST', '/v1/billing/plans/' + plan.id + '/deactivate');
+    console.log('\n  Plan de test ' + plan.id + ' DESACTIVE. Pense a annuler l\'abonnement de test et a rembourser le euro.\n');
+    return;
+  }
+  if (!plan) {
+    plan = await pp(tok, 'POST', '/v1/billing/plans', corpsDuPlan(pr.id, { nom: NOM_PLAN_TEST,
+      description: 'Plan de test du paiement par carte. A desactiver apres le test.',
+      cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: '1.00' }] }));
+    console.log('\n  Plan de test cree : ' + plan.id);
+  } else console.log('\n  Plan de test deja la : ' + plan.id + ' (' + plan.status + ')');
+  console.log('  Page de paiement (carte, sans compte PayPal) :');
+  console.log('    https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=' + plan.id);
+  console.log('  Apres le test : node scripts/paypal_plans.mjs --plan-test-off\n');
+}
+
+// LES PLANS DE `PLANS`, CREES S'ILS MANQUENT (reconnus par leur NOM).
+async function creerPlans(tok) {
   const pr = await produit(tok);
   console.log('  Produit « ' + PRODUIT_NOM +' » : ' + pr.id + (pr.neuf ? ' (cree)' : ' (deja la)'));
-
   const faits = [];
   for (const p of PLANS) {
     const deja = await planExistant(tok, pr.id, p.nom);
@@ -505,10 +578,19 @@ async function principal() {
     faits.push({ ...p, id: cree.id, neuf: true });
     console.log('  ' + p.constante.padEnd(30) + cree.id + '  (cree)');
   }
+  return faits;
+}
+
+function afficherEtEcrire(faits) {
 
   // ── CE QU'IL RESTE A POSER ────────────────────────────────────────────
   console.log('\n── A COLLER DANS ' + fichierCore + ' ───────────────────────────');
   for (const f of faits) console.log("const " + f.constante + "='" + f.id + "';");
+  const pourServeur = faits.filter(f => /_SE$/.test(f.constante));
+  if (pourServeur.length) {
+    console.log('\n── ET DANS cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT, champ id) ──');
+    for (const f of pourServeur) console.log('  ' + f.constante + ' : ' + f.id);
+  }
 
   // ⚠ PLUS RIEN A DECLARER DANS config/plans (24/09/2026). Cette section
   //   servait une Cloud Function qui lisait le plan facture pour ouvrir le
@@ -543,6 +625,20 @@ async function principal() {
       console.log('  ⚠ Il reste a monter RC_BUILD et CACHE, puis :');
       console.log('      python scripts/versionner_actifs.py');
       console.log('      node scripts/verif/syntaxe.mjs\n');
+    }
+    // LE SERVEUR DOIT CONNAITRE LES MEMES PLANS (cloudflare/src/paypal.js) :
+    // sans eux, un paiement sur un plan neuf ne compterait pas comme paye.
+    const W = fileURLToPath(new URL('../cloudflare/src/paypal.js', import.meta.url));
+    let w = readFileSync(W, 'utf8');
+    let nw = 0;
+    for (const f of faits) {
+      const re = new RegExp('(' + f.constante + ": Object\\.freeze\\(\\{ id: )''");
+      if (re.test(w)) { w = w.replace(re, "$1'" + f.id + "'"); nw++; }
+    }
+    if (nw) {
+      writeFileSync(W, w);
+      console.log('  ' + nw + ' identifiant(s) ecrit(s) dans cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT).');
+      console.log('  ⚠ Il reste a redeployer le worker : cd cloudflare && npx wrangler deploy\n');
     }
   }
 }

@@ -1,17 +1,29 @@
 {
-  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : python3 scripts/tarifs.py (recopie dans l'app, index.html et terms.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
+  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : node scripts/tarifs.mjs (recopie dans l'app, les pages, les CGV et le JSON-LD de index.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
   "devise": "EUR",
-  "engagementMois": 12,
-  "essentielle": { "mois": 9.5, "an": 114 },
-  "ultime": { "mois": 24.9, "an": 298.8 },
+  "engagementMois": 0,
+  "essentielle": { "mois": 9.5, "an": 95 },
+  "ultime": { "mois": 24.9, "an": 249 },
+  "contrats_engages": {
+    "_lisezmoi": "LES ABONNEMENTS SOUSCRITS AVEC UN ENGAGEMENT DE 12 MOIS (du 24/09/2026 au passage sans engagement). Rien ne change pour eux : ils gardent leur durée (abonnement.engagementJusqu dans leur dossier) et leur prix annuel, encaissé sur les ANCIENS plans PayPal. Ne pas modifier : ce sont des contrats en cours.",
+    "engagementMois": 12,
+    "essentielle": { "mois": 9.5, "an": 114 },
+    "ultime": { "mois": 24.9, "an": 298.8 }
+  },
   "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
   "essai": { "mois": 1, "jours": 30, "carte": false },
   "essai_parrainage": { "moisEnPlus": 1 },
   "coach": { "libre": 0, "coach": 19, "pro": 39 },
+  "quotas_coach": {
+    "_lisezmoi": "CE QUE CHAQUE FORMULE COACH PERMET : athletes = nombre d'athlètes actifs qu'on peut rattacher (null = sans limite : JSON ne connaît pas Infinity, l'app le lit comme Infinity) ; moisCode = durée maximale d'un code d'accès, en mois. Recopié dans l'app (QUOTAS_COACH) ; la durée est aussi tenue par database.rules.json (rc_codes/months), que scripts/verif/tarifs.mjs compare à ces valeurs.",
+    "libre": { "athletes": 1, "moisCode": 1 },
+    "coach": { "athletes": 15, "moisCode": 6 },
+    "pro": { "athletes": null, "moisCode": 12 }
+  },
   "coaching": {
     "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi." },
     "revision_prog": { "prix": 40, "mois": 1, "lib": "Révision de programme", "comprend": "Ton programme ajusté quand tu en as besoin, sans échéance." },
-    "boutique_prog": { "prix": 14.9, "mois": 3 },
+    "boutique_prog": { "prix": 14.9, "mois": 1, "acces": "vie", "_lisezmoi": "Un programme de la boutique : le programme à vie (acces), et mois × 30 jours d'app complète (Ultime) à partir de l'achat. Ensuite, il se relit toujours ; pour l'utiliser en séance, Essentielle suffit. Le worker (cloudflare/src/paypal.js, PROGRAMME_MS) suit cette valeur : un test les compare." },
     "coaching_essentiel": { "prix": 150, "mois": 1, "lib": "Coaching Essentiel", "comprend": "Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach." },
     "coaching_transfo": { "prix": 350, "mois": 3, "lib": "Coaching Transformation", "comprend": "Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach." },
     "coaching_evolution": { "prix": 600, "mois": 6, "lib": "Coaching Évolution", "comprend": "Le suivi complet sur six mois, le temps d'une vraie transformation." }
