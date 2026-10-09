@@ -3,13 +3,16 @@
   "private": true,
   "type": "module",
   "main": "index.mjs",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "copier": "mkdir -p lib && mkdir -p lib/app && cp ../outils/fitpulse-*.mjs lib/ && cp ../*.js ../index.html lib/app/ && cp -r ../vendor lib/app/",
     "predeploy": "npm run copier"
   },
   "dependencies": {
     "firebase-functions": "^6.1.0",
-    "google-auth-library": "^9.15.0"
+    "google-auth-library": "^9.15.0",
+    "firebase-admin": "^12.7.0"
   }
 }

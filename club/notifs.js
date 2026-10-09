@@ -155,11 +155,11 @@ async function pushSubscribe() {
   if (sub && safeLS.get('fitpulse.pushKey') !== key) { await sub.unsubscribe().catch(() => null); sub = null; }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
   const j = sub.toJSON(); const h = hkey(j.endpoint);
-  await backend.fb.database().ref(`pulse_push/${ME.id}/${h}`).set({ endpoint: j.endpoint, keys: j.keys, at: Date.now(), ua: navigator.userAgent.slice(0, 120) });
+  await backend.fb.database().ref(fbPath(`pulse_push/${ME.id}/${h}`)).set({ endpoint: j.endpoint, keys: j.keys, at: Date.now(), ua: navigator.userAgent.slice(0, 120) });
   safeLS.set('fitpulse.pushKey', key); safeLS.set('fitpulse.pushId', `${ME.id}/${h}`);
   return sub;
 }
-async function pushForget() { if (INBOX_REF) { INBOX_REF.off(); INBOX_REF = null; } try { const id = safeLS.get('fitpulse.pushId'); if (id && backend.fb) await backend.fb.database().ref(`pulse_push/${id}`).remove(); safeLS.del('fitpulse.pushId'); const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (_) { /* rien */ } }
+async function pushForget() { if (INBOX_REF) { INBOX_REF.off(); INBOX_REF = null; } try { const id = safeLS.get('fitpulse.pushId'); if (id && backend.fb) await backend.fb.database().ref(fbPath(`pulse_push/${id}`)).remove(); safeLS.del('fitpulse.pushId'); const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (_) { /* rien */ } }
 // À chaque ouverture : abonnement remis à jour si les alertes sont autorisées.
 setTimeout(() => { pushSubscribe().catch(() => null); }, 6000);
 
@@ -167,14 +167,14 @@ setTimeout(() => { pushSubscribe().catch(() => null); }, 6000);
 let INBOX_REF = null;
 function inboxListen() {
   if (INBOX_REF || !ME || backend.mode !== 'firebase' || !backend.fb) return;
-  INBOX_REF = backend.fb.database().ref(`pulse_inbox/${ME.id}`).orderByChild('at').limitToLast(50);
+  INBOX_REF = backend.fb.database().ref(fbPath(`pulse_inbox/${ME.id}`)).orderByChild('at').limitToLast(50);
   INBOX_REF.on('value', snap => { const srv = snap.val() || {}; const L = inbox(); let changed = false;
     Object.entries(srv).forEach(([id, x]) => { const sid = 'srv_' + id; const cur = L.find(m => m.id === sid); if (!cur) { L.push({ id: sid, key: sid, kind: x.kind, title: x.title, body: x.body, url: x.url, at: x.at, readAt: x.readAt || null }); changed = true; } else if (x.readAt && !cur.readAt) { cur.readAt = x.readAt; changed = true; } });
     if (changed) { L.sort((a, b) => b.at - a.at); saveInbox(L); bellRefresh(); } }, () => { INBOX_REF = null; });
 }
 setInterval(inboxListen, 15000); setTimeout(inboxListen, 3000);
 const _notifOpen = ACTIONS.notifOpen;
-ACTIONS.notifOpen = el => { const id = el.dataset.id; if (id && id.startsWith('srv_') && backend.mode === 'firebase' && ME) backend.fb.database().ref(`pulse_inbox/${ME.id}/${id.slice(4)}/readAt`).set(Date.now()).catch(() => null); _notifOpen(el); };
+ACTIONS.notifOpen = el => { const id = el.dataset.id; if (id && id.startsWith('srv_') && backend.mode === 'firebase' && ME) backend.fb.database().ref(fbPath(`pulse_inbox/${ME.id}/${id.slice(4)}/readAt`)).set(Date.now()).catch(() => null); _notifOpen(el); };
 
 // ── Manager : alertes envoyées ce mois, et pause pour le club ────────────
 function alertsCard() {

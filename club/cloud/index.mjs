@@ -55,3 +55,22 @@ export const briefDuMatin = onSchedule({ ...COMMUN, schedule: '30 7 * * 1-6', se
   const tk = await jeton(); const S = await lire(tk, 'pulse.json');
   await passageBrief(api, tk, S, envoyerMail, { force: true });
 });
+
+// 4. Double authentification TOTP (multi-salles) : appelées par l'appli (totp.js).
+//    Le secret reste dans /orgs_secret ; un code juste pose mfaAt = auth_time sur le jeton.
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+const admin = async () => { const { initializeApp, getApps } = await import('firebase-admin/app'); if (!getApps().length) initializeApp({ databaseURL: DB }); const { getDatabase } = await import('firebase-admin/database'); const { getAuth } = await import('firebase-admin/auth'); return { rtdb: getDatabase(), auth: getAuth() }; };
+async function contexteTotp(req) {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
+  const m = /^fp-([0-9a-f]{40})@/.exec(req.auth.token.email || ''); if (!m) throw new HttpsError('permission-denied', 'Compte inconnu.');
+  const { rtdb, auth } = await admin(); const boot = (await rtdb.ref(`orgs_boot/${m[1]}`).get()).val();
+  if (!boot || !boot.org || !boot.uid) throw new HttpsError('permission-denied', 'Compte inconnu.');
+  const u = (await rtdb.ref(`orgs/${boot.org}/data/users/${boot.uid}`).get()).val() || {};
+  const db = { lire: async p => (await rtdb.ref(p).get()).val(), ecrire: async (p, v) => rtdb.ref(p).set(v) };
+  return { db, org: boot.org, uid: boot.uid, compte: u.email || boot.uid, auth, authUid: req.auth.uid, authTime: req.auth.token.auth_time };
+}
+const appel = fn => async req => { try { return await fn(await contexteTotp(req), req.data || {}); } catch (e) { if (e instanceof HttpsError) throw e; throw new HttpsError(e.code || 'internal', e.message); } };
+export const totpEtat = onCall({ region: 'europe-west1' }, appel(async c => (await import('./lib/fitpulse-totp.mjs')).etat(c)));
+export const totpInscrire = onCall({ region: 'europe-west1' }, appel(async c => (await import('./lib/fitpulse-totp.mjs')).inscrire(c)));
+export const totpValider = onCall({ region: 'europe-west1' }, appel(async (c, d) => (await import('./lib/fitpulse-totp.mjs')).valider({ ...c, code: d.code,
+  fixer: async claims => { const u = await c.auth.getUser(c.authUid); await c.auth.setCustomUserClaims(c.authUid, { ...(u.customClaims || {}), ...claims }); } })));

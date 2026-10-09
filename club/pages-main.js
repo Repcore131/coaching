@@ -62,10 +62,11 @@ PAGES.login = {
           <form id="lgc" class="login-form" novalidate>
             <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenom.nom@exemple.fr" value="${esc(email)}"></label>
             <label class="field"><span>Code d’accès</span><input class="input code-input" name="code" id="lg-code" required autocomplete="current-password" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="17" placeholder="FP-XXXX-XXXX-XXXX"><button type="button" class="code-eye" data-act="codeEye" aria-label="Afficher le code">Afficher</button></label>
-            <div id="lg-msg" class="login-msg" role="alert" aria-live="polite">${navigator.onLine ? '' : 'Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'}</div>
+            <div id="lg-msg" class="login-msg" role="alert" aria-live="polite">${UI.loginErr ? esc(UI.loginErr) : navigator.onLine ? '' : 'Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'}</div>
             <button class="btn primary login-btn" type="submit" id="lg-btn">Se connecter</button>
             <p class="login-keep">Vous resterez connecté sur cet appareil.</p>
           </form>
+          ${MULTI ? '<p class="small" style="margin-top:12px">Nouvelle salle ? <a href="#/inscription">Créer l’espace de votre salle</a></p>' : ''}
           <details class="login-help"><summary>Code perdu ?</summary><p>Votre code personnel vous a été envoyé par e-mail (regardez aussi dans les spams). Vérifiez les tirets : FP-XXXX-XXXX-XXXX. Votre manager peut vous en générer un nouveau en un clic.</p></details>
           ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
           ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
@@ -87,7 +88,7 @@ PAGES.login = {
   },
 };
 ACTIONS.codeEye = el => { const c = $('#lg-code'); const show = c.type !== 'text'; c.type = show ? 'text' : 'password'; el.textContent = show ? 'Masquer' : 'Afficher'; el.setAttribute('aria-label', show ? 'Masquer le code' : 'Afficher le code'); };
-function loginMsg(t, kind = 'bad') { const m = $('#lg-msg'); if (m) { m.textContent = t; m.dataset.kind = kind; } }
+function loginMsg(t, kind = 'bad') { UI.loginErr = t || null; const m = $('#lg-msg'); if (m) { m.textContent = t; m.dataset.kind = kind; } }
 addEventListener('online', () => { if ($('#lg-msg') && /internet/.test($('#lg-msg').textContent)) loginMsg(''); });
 addEventListener('offline', () => { if ($('#lg-msg')) loginMsg('Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'); });
 document.addEventListener('submit', async e => {

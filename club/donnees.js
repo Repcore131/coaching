@@ -20,7 +20,7 @@ function logError(kind, e) {
     if (LOG_N >= 20 || typeof S === 'undefined' || !S || !ME || backend.mode !== 'firebase') return; LOG_N++;
     const clean = s => String(s || '').replace(/\d{7,}/g, '#').replace(/[^\s@]+@[^\s@]+/g, '@').slice(0, 2000);
     const id = newId(); const club = (typeof CLUB !== 'undefined' && CLUB && CLUB.id) || 'x';
-    backend.fb.database().ref(`pulse/logs/${club}/${today()}/${id}`).set({ at: Date.now(), uid: ME.id, version: APP_VERSION, page: location.hash.split('/')[1] || 'home', kind, message: clean(e && e.message || e), stack: clean(e && e.stack) }).catch(() => null);
+    backend.fb.database().ref(fbPath(`pulse/logs/${club}/${today()}/${id}`)).set({ at: Date.now(), uid: ME.id, version: APP_VERSION, page: location.hash.split('/')[1] || 'home', kind, message: clean(e && e.message || e), stack: clean(e && e.stack) }).catch(() => null);
   } catch (_) { /* jamais bloquant */ }
 }
 addEventListener('error', e => logError('error', e.error || e.message));

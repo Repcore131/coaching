@@ -113,6 +113,14 @@ veille, rythme du mois en jours ouvrés (lundi au samedi hors fériés), les 5 a
 (`briefData`, même calcul que la page). E-mail aux managers, notification sans nom d'adhérent, rien pour qui a
 désactivé « Bilan de la semaine et brief du matin ».
 
+## Multi-salles
+
+Pour vendre Fit Pulse à plusieurs salles : chaque société a son espace `/orgs/{org}` (données, clubs,
+abonnement), isolé par les règles de la base ; inscription autonome (`#/inscription`), invitations par lien à
+usage unique (7 jours), double authentification TOTP obligatoire pour managers et créateurs (vérifiée par le
+serveur, imposée par les règles), base en `europe-west1`. Migration de `/pulse` avec contrôle des totaux.
+Détail et bascule : `docs/multi-salles.md`.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

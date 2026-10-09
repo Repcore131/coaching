@@ -205,6 +205,7 @@ function renderNowInner() {
   // Pages légales : lisibles sans être connecté
   if (currentRoute().r === 'legal' && ((backend.mode === 'firebase' && !backend.user) || !S || !ME)) { app.innerHTML = legalStandalone(currentRoute().args[0]); window.scrollTo(0, 0); return; }
   if (currentRoute().r === 'confidentialite' && ((backend.mode === 'firebase' && !backend.user) || !S || !ME)) { app.innerHTML = confidentialiteStandalone(); window.scrollTo(0, 0); return; }
+  if (MULTI && !backend.user && typeof multiPublic === 'function' && multiPublic(currentRoute().r, currentRoute().args)) return;
   if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   if (!S) { app.innerHTML = PAGES.onboarding.render(); return; }
   if (!ME) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }

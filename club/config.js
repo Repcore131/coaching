@@ -6,6 +6,9 @@
 // connecte avec son e-mail + son code personnel, depuis n'importe quel
 // appareil. Les regles d'acces sont posees par club/outils/fitpulse-serveur.mjs.
 //
+// MODE MULTI-SALLES (docs/multi-salles.md) : ajouter multi: true et l'adresse d'une base en
+// europe-west1 ; chaque société a son espace /orgs/{org}, la base historique /pulse n'est plus lue.
+//
 // MODE LOCAL (fichier ouvert en local, tests, ou ?demo=1) : les donnees vivent
 // dans le navigateur, chaque appareil a sa propre copie.
 (function () {
@@ -19,6 +22,11 @@
     databaseURL: 'https://repcore-sync-default-rtdb.firebaseio.com',
     projectId: 'repcore-sync',
   } : null;
+  // Essais du mode multi-salles sur le simulateur Firebase, en local seulement :
+  // http://localhost:8765/?emu=fitpulse-e2e (base et authentification simulées).
+  if (/^(localhost|127\.0\.0\.1)$/.test(h) && /^[a-z0-9-]{3,40}$/.test(q.get('emu') || '')) {
+    window.PARKPULSE_FIREBASE = { apiKey: 'demo-cle', projectId: 'demo-fitpulse', authDomain: 'localhost', databaseURL: `https://${q.get('emu')}.firebaseio.com`, multi: true, emulateurs: { db: ['127.0.0.1', 9000], auth: 'http://127.0.0.1:9099' } };
+  }
 })();
 
 // Envoi AUTOMATIQUE du bel e-mail d'invitation a la creation d'un code

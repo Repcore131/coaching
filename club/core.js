@@ -247,6 +247,22 @@ async function codeKeyOf(code) {
 // Adresse saisie : sans espaces, en minuscules, et les fautes de clavier courantes corrigées.
 const cleanEmail = e => String(e || '').replace(/\s+/g, '').toLowerCase().replace(/[,;]/g, '.').replace(/\.+$/, '').replace(/@gmail\.(fr|con|cm|om)$/, '@gmail.com');
 class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
+// ── Mode multi-salles (PARKPULSE_FIREBASE.multi) ─────────────────────────
+// Chaque société cliente a son espace : /orgs/{org}/info (abonnement, statut,
+// sécurité), /orgs/{org}/clubs/{club}, et toutes les collections sous
+// /orgs/{org}/data/… ; les clés de connexion sont dans /orgs_boot/{clé} =
+// { org, uid }. Sans ce réglage, l'appli reste sur /pulse (base historique).
+const MULTI = !!(window.PARKPULSE_FIREBASE && window.PARKPULSE_FIREBASE.multi);
+let ORG = null;
+const ROOT = () => MULTI ? `orgs/${ORG}/data` : 'pulse';
+const BOOT = MULTI ? 'orgs_boot' : 'pulse_boot';
+// Lecture REST d'un chemin public (clé de connexion, invitation), simulateur compris.
+function restUrl(chemin) {
+  const F = window.PARKPULSE_FIREBASE || {}; const e = F.emulateurs;
+  return e ? `http://${e.db[0]}:${e.db[1]}/${chemin}.json?ns=${F.databaseURL.replace(/^https:\/\//, '').split('.')[0]}` : `${F.databaseURL}/${chemin}.json`;
+}
+// Chemins annexes (push, boîte de réception, journal) : sous l'espace de la société en multi-salles.
+const fbPath = p => !MULTI ? p : p.replace(/^pulse_push\//, `orgs_push/${ORG}/`).replace(/^pulse_inbox\//, `orgs_inbox/${ORG}/`).replace(/^pulse\//, ROOT() + '/');
 const firebaseBackend = {
   mode: 'firebase', fb: null, root: null, user: null, userId: null, denied: false,
   async loadSdk() {
@@ -255,6 +271,7 @@ const firebaseBackend = {
       await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `vendor/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }
     this.fb = window.firebase; this.fb.initializeApp(window.PARKPULSE_FIREBASE);
+    const emu = window.PARKPULSE_FIREBASE.emulateurs; if (emu) { this.fb.database().useEmulator(...emu.db); this.fb.auth().useEmulator(emu.auth, { disableWarnings: true }); }
   },
   keyOfUser(u) { const m = /^fp-([0-9a-f]{40})@/.exec((u && u.email) || ''); return m ? m[1] : null; },
   async start() {
@@ -273,10 +290,12 @@ const firebaseBackend = {
   // existe avant de creer quoi que ce soit.
   async readBoot(key) {
     let r;
-    try { r = await fetch(`${window.PARKPULSE_FIREBASE.databaseURL}/pulse_boot/${key}.json`, { cache: 'no-store' }); }
+    try { r = await fetch(restUrl(`${BOOT}/${key}`), { cache: 'no-store' }); }
     catch (e) { throw new LoginError('offline', 'Pas de connexion internet.'); }
     if (!r.ok) throw new LoginError('server', 'Serveur indisponible (' + r.status + ').');
     const v = await r.json();
+    // Multi-salles : { org, uid } ; la société de la personne est fixée ici.
+    if (MULTI && v && typeof v === 'object' && v.org && v.uid) { ORG = v.org; this.privilegie = !!v.privilegie; return v.uid; }
     return typeof v === 'string' ? v : null;
   },
   async codeLogin(email, code) {
@@ -308,7 +327,13 @@ const firebaseBackend = {
   async attach() {
     if (this.root) this.root.off();
     this.denied = false;
-    this.root = this.fb.database().ref('pulse');
+    if (MULTI) {
+      if (!ORG) throw new LoginError('bad', 'Espace introuvable.');
+      // Double authentification impossible (serveur injoignable, code refusé…) : on ne reste jamais connecté sans données.
+      try { await this.mfaGate(); } catch (e) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('server', 'Double authentification : ' + (e.message || e)); }
+      await this.listenSide(false);
+    }
+    this.root = this.fb.database().ref(ROOT());
     let slow = null;
     // Démarrage hors ligne : la dernière copie connue de la base s'affiche, l'écoute reprend au retour du réseau.
     const cached = !navigator.onLine ? await idbGet('pulse').catch(() => null) : null;
@@ -326,19 +351,29 @@ const firebaseBackend = {
         if (first) { first = false; ok(); setTimeout(outboxReplay, 1000); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
       }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
     }).finally(() => clearTimeout(slow));
+    if (this.denied && MULTI && !this.privilegie) { this.privilegie = true; return this.attach(); } // promu manager depuis : double authentification
     if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
-    this.listenSide();
+    await this.listenSide(true);
   },
-  // Collections rangées hors de /pulse (lisibles par les seuls créateurs, voir SIDE_PATHS).
-  listenSide() {
-    this.sideRefs.forEach(r => r.off()); this.sideRefs = [];
-    const me = S && S.users[this.userId]; if (!me) return;
-    for (const [k, root] of Object.entries(SIDE_PATHS)) {
+  // Collections rangées hors de la racine (voir sidePaths) : écoutées à part. Les
+  // collections sans rôle requis (clubs en multi-salles) sont chargées AVANT les
+  // données, pour que le premier écran ait déjà ses clubs.
+  async listenSide(avecRole) {
+    if (!avecRole) { this.sideRefs.forEach(r => r.off()); this.sideRefs = []; }
+    const me = avecRole ? S && S.users[this.userId] : null; if (avecRole && !me) return;
+    const waits = [];
+    for (const [k, root] of Object.entries(sidePaths())) {
+      if (!!SIDE_ROLE[k] !== avecRole) continue;
       if (SIDE_ROLE[k] && me.role !== SIDE_ROLE[k]) continue;
       const ref = this.fb.database().ref(root); this.sideRefs.push(ref);
-      ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; listeners.forEach(f => f()); } }, () => null);
+      waits.push(new Promise(ok => { let first = true; ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; if (!first) listeners.forEach(f => f()); } if (first) { first = false; ok(); } }, () => { if (first) { first = false; ok(); } }); }));
     }
+    await Promise.all(waits);
   },
+  // Double authentification (multi-salles) : managers et créateurs passent le code TOTP
+  // avant d'ouvrir les données ; la vérification est faite côté serveur (club/cloud),
+  // les règles de la base refusent tout accès sinon.
+  async mfaGate() { if (typeof totpGate === 'function') await totpGate(this); },
   sideRefs: [],
   // Reserve le compte technique des la creation du code (mot de passe = code) :
   // connaitre la cle ne suffit donc jamais, il faut le code. Passe par l'API
@@ -349,13 +384,13 @@ const firebaseBackend = {
     } catch (e) { /* hors ligne : le compte sera cree a la premiere connexion */ }
   },
   // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
-  setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
-  queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
+  setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up[BOOT + '/' + k] = MULTI && typeof v === 'string' && !/^[0-9a-f]{40}$/.test(v) ? { org: ORG, uid: v, ...(S && S.users[v] && S.users[v].role !== 'membre' ? { privilegie: true } : {}) } : v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
+  queueMail(d) { return this.fb.database().ref(MULTI ? `orgs_mail/${ORG}` : 'fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
   async signOut() { if (this.root) this.root.off(); this.root = null; this.sideRefs.forEach(r => r.off()); this.sideRefs = []; for (const k of Object.keys(SIDE_CACHE)) delete SIDE_CACHE[k]; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
-  write(path, value) { if (SIDE_PATHS[path[0]]) { this.sideWrite([[path, value]]); return; } const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
-  sideWrite(ops) { const by = {}; ops.forEach(([p, v]) => { (by[p[0]] = by[p[0]] || []).push([p.slice(1), v]); }); for (const [k, list] of Object.entries(by)) { const whole = list.find(([p]) => !p.length); const ref = this.fb.database().ref(SIDE_PATHS[k]); (whole ? ref.set(fbVal(whole[1])) : ref.update(fbClean(list))).catch(e => writeFail(e)); } },
-  replaceAll() { const st = { ...S }; Object.keys(SIDE_PATHS).forEach(k => { delete st[k]; }); this.fb.database().ref('pulse').set(st); },
-  wipe() { this.fb.database().ref('pulse').set(null); },
+  write(path, value) { if (sidePaths()[path[0]]) { this.sideWrite([[path, value]]); return; } const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref(ROOT()).update(up).then(() => outboxDone(up), e => writeFail(e)); },
+  sideWrite(ops) { const by = {}; ops.forEach(([p, v]) => { (by[p[0]] = by[p[0]] || []).push([p.slice(1), v]); }); for (const [k, list] of Object.entries(by)) { const whole = list.find(([p]) => !p.length); const ref = this.fb.database().ref(sidePaths()[k]); (whole ? ref.set(fbVal(whole[1])) : ref.update(fbClean(list))).catch(e => writeFail(e)); } },
+  replaceAll() { const st = { ...S }; Object.keys(sidePaths()).forEach(k => { delete st[k]; }); this.fb.database().ref(ROOT()).set(st); if (MULTI && S && S.clubs) this.fb.database().ref(sidePaths().clubs).update(fbVal(S.clubs) || {}); },
+  wipe() { this.fb.database().ref(ROOT()).set(null); },
 };
 localBackend.setBoot = () => {};
 localBackend.precreate = async () => {};
@@ -363,10 +398,10 @@ localBackend.precreate = async () => {};
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
 // En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
 // leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
-const SIDE_PATHS = { product: 'pulse_product', benchmark: 'benchmark' };
+const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, product: `orgs_product/${ORG}`, benchmark: 'benchmark' } : { product: 'pulse_product', benchmark: 'benchmark' };
 const SIDE_ROLE = { product: 'createur' }; // lecture réservée à ce rôle (sinon : tout membre)
 const SIDE_CACHE = {};
-function sideApply(st) { if (!st) return; for (const k of Object.keys(SIDE_PATHS)) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
+function sideApply(st) { if (!st) return; for (const k of Object.keys(sidePaths())) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
 // File d'écritures gardée sur l'appareil tant que la base n'a pas confirmé : une saisie faite
 // hors ligne survit à un rechargement et repart au retour du réseau.
 // Copie locale de la base (IndexedDB) pour démarrer sans réseau.
@@ -379,7 +414,7 @@ const outboxRead = () => { try { return JSON.parse(safeLS.get(OUTBOX_KEY) || '[]
 const outboxSig = up => Object.keys(up).sort().join('|') + '#' + JSON.stringify(Object.keys(up).sort().map(k => up[k])).length;
 function outboxPush(up) { if (navigator.onLine) return; const L = outboxRead(); L.push({ sig: outboxSig(up), up, at: Date.now() }); safeLS.set(OUTBOX_KEY, JSON.stringify(L.slice(-500))); if (typeof renderOffline === 'function') renderOffline(); }
 function outboxDone(up) { const L = outboxRead(); if (!L.length) return; const sig = outboxSig(up); const i = L.findIndex(x => x.sig === sig); if (i >= 0) { L.splice(i, 1); safeLS.set(OUTBOX_KEY, JSON.stringify(L)); if (typeof renderOffline === 'function') renderOffline(); } }
-function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref('pulse').update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
+function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref(ROOT()).update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
 function writeFail(e, path) {
   WRITE_FAILS.n++; WRITE_FAILS.last = { msg: (e && e.message) || 'erreur inconnue', path: path || '', at: Date.now() };
   clearTimeout(writeFail.t); writeFail.t = setTimeout(() => { toast(`Écriture refusée${WRITE_FAILS.n > 1 ? ' (' + WRITE_FAILS.n + ' valeurs)' : ''} : ${WRITE_FAILS.last.msg}`); if (typeof render === 'function') render(); }, 300);
@@ -428,14 +463,14 @@ const db = {
     REV++;
     if (backend.mode === 'local') backend.write();
     else {
-      const side = ops.filter(([p]) => SIDE_PATHS[p[0]]); if (side.length) { backend.sideWrite(side); ops = ops.filter(([p]) => !SIDE_PATHS[p[0]]); }
+      const SP = sidePaths(); const side = ops.filter(([p]) => SP[p[0]]); if (side.length) { backend.sideWrite(side); ops = ops.filter(([p]) => !SP[p[0]]); }
       // Lots de 500 chemins au plus, envoyés l'un après l'autre (un import de 50 000 lignes passe).
       const all = fbClean(ops); const keys = Object.keys(all);
       const chunks = []; for (let i = 0; i < keys.length; i += 500) { const up = {}; keys.slice(i, i + 500).forEach(k => { up[k] = all[k]; }); chunks.push(up); }
       chunks.forEach(outboxPush);
       // Un lot refusé n'arrête plus les suivants ; il est rejoué par petits morceaux pour isoler la valeur fautive.
-      const send = up => backend.fb.database().ref('pulse').update(up).then(() => outboxDone(up));
-      const retry = (up, e) => { outboxDone(up); const ks = Object.keys(up); if (ks.length <= 1) { writeFail(e, ks[0]); return null; } const h = Math.ceil(ks.length / 2); return Promise.all([ks.slice(0, h), ks.slice(h)].map(part => { const u = {}; part.forEach(k => { u[k] = up[k]; }); return Promise.resolve().then(() => backend.fb.database().ref('pulse').update(u)).catch(e2 => retry(u, e2)); })); };
+      const send = up => backend.fb.database().ref(ROOT()).update(up).then(() => outboxDone(up));
+      const retry = (up, e) => { outboxDone(up); const ks = Object.keys(up); if (ks.length <= 1) { writeFail(e, ks[0]); return null; } const h = Math.ceil(ks.length / 2); return Promise.all([ks.slice(0, h), ks.slice(h)].map(part => { const u = {}; part.forEach(k => { u[k] = up[k]; }); return Promise.resolve().then(() => backend.fb.database().ref(ROOT()).update(u)).catch(e2 => retry(u, e2)); })); };
       chunks.reduce((pr, up) => pr.then(() => Promise.resolve().then(() => send(up)).catch(e => retry(up, e))), Promise.resolve());
     }
     listeners.forEach(f => f());

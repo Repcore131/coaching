@@ -38,7 +38,7 @@ jobs:
           java-version: '21'
       - name: Règles d'accès sur le simulateur Firebase
         working-directory: club/tests/emul
-        run: npx -y firebase-tools@13 emulators:exec --only database --project fitpulse-test "node ../regles.emul.mjs"
+        run: npx -y firebase-tools@13 emulators:exec --only database --project fitpulse-test "node ../regles.emul.mjs && node ../regles-orgs.emul.mjs && node ../migration.emul.mjs"
       - name: Parcours complet dans un navigateur
         run: |
           npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1
@@ -50,3 +50,8 @@ jobs:
         run: |
           curl -sf http://localhost:8765/ >/dev/null || { (cd club && python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 2; }
           PW="$RUNNER_TEMP/pw/node_modules/playwright" node club/tests/robot.mjs
+      - name: Multi-salles de bout en bout (simulateur base et authentification)
+        working-directory: club/tests/emul
+        run: |
+          curl -sf http://localhost:8765/ >/dev/null || { (cd ../.. && python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 2; }
+          PW="$RUNNER_TEMP/pw/node_modules/playwright" npx -y firebase-tools@13 emulators:exec --only database,auth --project demo-fitpulse "node ../multi.emul.mjs"

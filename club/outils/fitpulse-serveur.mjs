@@ -24,6 +24,7 @@ import { passageMatin } from './fitpulse-matin.mjs';
 import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
 import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
 import { passageBrief } from './fitpulse-brief.mjs';
+import { REGLE_ORGS } from './fitpulse-regles-orgs.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -163,6 +164,7 @@ export const REGLE = `${DEBUT}
         "$autre": { ".validate": false }
       }
     },
+    ${REGLE_ORGS},
     ${FIN}`;
 
 // ── Jeton Google à partir du compte de service ────────────────────────────
@@ -219,6 +221,19 @@ async function assurerComptes(tk) {
 // ── L'e-mail ──────────────────────────────────────────────────────────────
 const ROLES = { membre: 'Membre', manager: 'Manager', createur: 'Créateur' };
 const echap = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Multi-salles : invitation par lien (usage unique, 7 jours) ; le code est créé à l'ouverture du lien.
+export function emailInvitationLien(d) {
+  const role = ROLES[d.role] || 'Membre'; const fin = new Date(Number(d.expiresAt) || Date.now() + 7 * 864e5).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const objet = `${d.first}, rejoignez ${d.club} sur Fit Pulse`;
+  const texte = [`Bonjour ${d.first},`, '', `Vous êtes invité à rejoindre ${d.club} sur Fit Pulse (accès ${role}).`, `Ouvrez ce lien pour activer votre accès : ${d.lien}`, '', `Le lien sert une seule fois et reste valable jusqu'au ${fin}.`, 'Votre code personnel s’affichera à l’ouverture : notez-le.'].join('\n');
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body style="margin:0;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif;color:#111">
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center" style="padding:16px 8px"><table width="560" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;width:100%;background:#fff;border-radius:10px">
+<tr><td style="padding:20px"><div style="font-size:13px;color:#666">Fit Pulse</div><div style="font-size:20px;font-weight:bold;margin:4px 0 10px">Bonjour ${echap(d.first)},</div>
+<p style="font-size:15px;line-height:1.5">Vous êtes invité à rejoindre <b>${echap(d.club)}</b> sur Fit Pulse (accès ${echap(role)}).</p>
+<p><a href="${echap(d.lien)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Activer mon accès</a></p>
+<p style="font-size:13px;color:#555">Le lien sert une seule fois et reste valable jusqu’au ${echap(fin)}. Votre code personnel s’affichera à l’ouverture : notez-le.</p></td></tr></table></td></tr></table></body></html>`;
+  return { objet, texte, html };
+}
 export function emailInvitation(d) {
   const lien = `${SITE}/?email=${encodeURIComponent(d.email)}`;
   const role = ROLES[d.role] || 'Membre';
@@ -312,17 +327,12 @@ function message(dest, { objet, texte, html }) {
 }
 
 // ── Passage ───────────────────────────────────────────────────────────────
-async function main() {
-  if (process.argv[2] === 'apercu') { writeFileSync(process.argv[3] || 'apercu-invitation.html', emailInvitation({ email: 'alex.martin@exemple.fr', first: 'Alex', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Fitness Park Niort' }).html); console.log('aperçu écrit'); return; }
-  const tk = await jeton();
-  console.log('Règles Fit Pulse :', await assurerRegle(tk));
-  console.log('Comptes de départ :', await assurerComptes(tk));
-  if (process.argv[2] === 'regles') return;
+// Tous les passages d'un espace (la base historique ou une société) : api y voit /pulse.
+async function passagesEspace(api, tk, S) {
   // État du serveur publié pour l'appli : l'envoi automatique des invitations n'est proposé que si la messagerie est réglée.
   await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
   await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
   // Notifications push (téléphone fermé).
-  let S = {}; try { S = (await (await api(tk, 'pulse.json')).json()) || {}; } catch (e) { console.log('Lecture : échec,', e.message); }
   try { const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
   // Rapport du lundi 15 h au directeur (et « Envoyer maintenant » depuis l'appli).
   if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
@@ -334,6 +344,37 @@ async function main() {
   try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
   // Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive), chaque heure de 6 h à 22 h.
   try { const bucket = process.env.FITPULSE_BUCKET; await passageImports(api, tk, S, { sources: sourcesReelles(S), force: process.env.RELEVE_IMPORTS === 'true', stocker: bucket ? (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) : null }); } catch (e) { console.log('Imports automatiques : échec,', e.message); }
+}
+// Multi-salles : les chemins /pulse… de chaque passage sont ceux de la société.
+export const cheminOrg = (org, c) => c.replace(/^pulse\.json/, `orgs/${org}/data.json`).replace(/^pulse\/clubs\//, `orgs/${org}/clubs/`).replace(/^pulse\//, `orgs/${org}/data/`).replace(/^pulse_push/, `orgs_push/${org}`).replace(/^pulse_inbox/, `orgs_inbox/${org}`);
+export const apiOrg = (api, org) => (tk, chemin, opts) => api(tk, cheminOrg(org, chemin), opts);
+// Invitations par lien (multi-salles) : /orgs_mail/{org}, envoyées puis effacées.
+async function invitationsOrg(api, tk, org) {
+  const boite = (await (await api(tk, `orgs_mail/${org}.json`)).json()) || {};
+  for (const [id, d] of Object.entries(boite).slice(0, MAX_PAR_PASSAGE)) {
+    try { if (MDP && !DRY) await smtp(message(d.email, d.lien ? emailInvitationLien(d) : emailInvitation(d)), d.email); console.log(`✓ invitation ${org} → ${String(d.email).replace(/(.).+(@.+)/, '$1…$2')}`); }
+    catch (e) { console.log(`✗ invitation ${org} : ${e.message}`); if (Date.now() - (Number(d.at) || 0) < 864e5) continue; }
+    if (!DRY && (MDP || Date.now() - (Number(d.at) || 0) > 864e5)) await api(tk, `orgs_mail/${org}/${id}.json`, { method: 'DELETE' });
+  }
+}
+
+async function main() {
+  if (process.argv[2] === 'apercu') { writeFileSync(process.argv[3] || 'apercu-invitation.html', emailInvitation({ email: 'alex.martin@exemple.fr', first: 'Alex', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Fitness Park Niort' }).html); console.log('aperçu écrit'); return; }
+  const tk = await jeton();
+  console.log('Règles Fit Pulse :', await assurerRegle(tk));
+  console.log('Comptes de départ :', await assurerComptes(tk));
+  if (process.argv[2] === 'regles') return;
+  // Base historique (/pulse), puis chaque société en multi-salles (FITPULSE_MULTI=1).
+  let S = {}; try { S = (await (await api(tk, 'pulse.json')).json()) || {}; } catch (e) { console.log('Lecture : échec,', e.message); }
+  if (Object.keys(S).length) await passagesEspace(api, tk, S);
+  if (process.env.FITPULSE_MULTI === '1') {
+    const orgs = (await (await api(tk, 'orgs.json?shallow=true')).json()) || {};
+    for (const org of Object.keys(orgs)) {
+      const ao = apiOrg(api, org); console.log(`── espace ${org}`);
+      try { const So = (await (await ao(tk, 'pulse.json')).json()) || {}; So.clubs = (await (await api(tk, `orgs/${org}/clubs.json`)).json()) || {}; await passagesEspace(ao, tk, So); await invitationsOrg(api, tk, org); }
+      catch (e) { console.log(`espace ${org} : échec,`, e.message); }
+    }
+  }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');
