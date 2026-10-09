@@ -318,7 +318,9 @@ PAGES.loyalty = {
       if (!Object.values(S.imports).some(i => i.clubId === CLUB.id && i.type === 'soldes' && i.active !== false) && !clients.some(c => Number(c.balance) > 0)) alerts.push(['Aucun solde importé', 'Les impayés n’apparaîtront pas tant que l’export « Solde clients » n’est pas importé.']);
     }
     const body = tab === 'fins' ? loyFins() : tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
-    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · fins d’engagement à relancer · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+    const prot = loyProtected(CLUB.id, curMonth());
+    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · fins d’engagement à relancer · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+      <div class="stat-row loy-head"><div class="stat"><span>Valeur protégée ce mois</span><b class="ok">${fmtE(prot.total)}</b><small>${plur(prot.n, 'tâche réussie', 'tâches réussies')} (Joint OK ou RDV)</small></div><div class="stat"><span>Euros en jeu à traiter</span><b>${fmtE(todo.filter(x => !x.nextDate).reduce((s2, x) => s2 + x.valeurEnJeu, 0))}</b><small>${plur(todo.filter(x => !x.nextDate).length, 'tâche', 'tâches')} à faire maintenant</small></div></div>
       ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
       ${tabs('loyTab', [['fins', 'Fins d’engagement'], ['tasks', `Autres tâches (${todo.length})`], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
   },
@@ -326,17 +328,17 @@ PAGES.loyalty = {
 function loyTasks(todo) {
   const f = UI.loyType || 'all';
   const q = norm(UI.loyQ || '');
-  const sort = UI.loySort || (f === 'renouvellement' ? 'amount' : 'due');
+  const sort = UI.loySort || 'value';
   let list = todo.filter(t => (f === 'all' || t.type === f) && (!q || norm(t.client.name).includes(q)));
   const prio = { impaye: 0, mandat: 1, renouvellement: 2, suivi: 3, anniversaire: 4 };
-  list.sort((a, b) => sort === 'amount' ? (b.amount || 0) - (a.amount || 0) : sort === 'prio' ? prio[a.type] - prio[b.type] || a.due.localeCompare(b.due) : a.due.localeCompare(b.due));
+  list.sort((a, b) => sort === 'value' ? (!!a.nextDate - !!b.nextDate) || (b.valeurEnJeu - a.valeurEnJeu) || a.due.localeCompare(b.due) : sort === 'amount' ? (b.amount || 0) - (a.amount || 0) : sort === 'prio' ? prio[a.type] - prio[b.type] || a.due.localeCompare(b.due) : a.due.localeCompare(b.due));
   const cnt = t => todo.filter(x => t === 'all' || x.type === t).length;
   return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
     <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
-    <select class="input sm" style="width:auto" data-change="loySort"><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
-    ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
+    <select class="input sm" style="width:auto" data-change="loySort"><option value="value" ${sort === 'value' ? 'selected' : ''}>Tri : euros en jeu</option><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
+    ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}${t.step ? ' J+' + t.step : ''}</span> <span class="badge ok" title="Valeur en jeu">${fmtE(t.valeurEnJeu)} en jeu</span>${t.nextDate ? ` <span class="badge info">prochaine action le ${dm(t.nextDate)}</span>` : ''}${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
       <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${plur(t.client.incidents, 'incident', 'incidents')}` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
-      <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
+      <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-s="${t.step || ''}" data-v="${t.valeurEnJeu}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
       : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.' })}</div>`}`;
 }
 ACTIONS.loyQ = el => { UI.loyQ = el.value; render(); };
@@ -344,7 +346,7 @@ ACTIONS.loySort = el => { UI.loySort = el.value; render(); };
 ACTIONS.loyAct = el => {
   const { c, t, o } = el.dataset;
   const save = (note = '') => {
-    const id = newId(); const ops = [[['loyalty', id], { id, clientId: c, type: t, outcome: o, userId: ME.id, note, at: Date.now() }]];
+    const id = newId(); const ops = [[['loyalty', id], loyActRecord({ id, clientId: c, type: t, step: el.dataset.s, outcome: o, note, value: el.dataset.v })]];
     if (o === 'paid') { const cl = S.clients[c]; ops.push(...markPaidOps(cl, Number(cl.balance) || 0, 'equipe', ME.id, 'retention')); }
     if (o === 'ok' && t === 'renouvellement') ops.push([['clients', c, 'renewedAt'], today()]);
     if (o === 'maintien') ops.push([['clients', c, 'maintienAt'], today()]);
@@ -375,7 +377,7 @@ function loyFins() {
     <p class="muted small" style="margin-top:-4px">Toutes les personnes qui arrivent en fin d’engagement (CDD, CDI) ce mois-ci. Appelez-les avant leur date de fin pour faire le point et proposer le renouvellement ou le maintien 8 semaines.</p>
     ${rows.length ? `<div class="grid">${rows.map(({ c, s }) => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico('clock')}</span><div class="spacer"><b>${esc(c.name)}</b> <span class="badge ${s.cls}">${s.label}</span>
       <div class="muted small">${ico('phone')} ${esc(c.phone || 'pas de téléphone')} · fin d’engagement le <b>${dmy(c.end)}</b>${c.offer ? ' · ' + esc(c.offer) : ''}</div></div>
-      <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => k !== 'paid').map(([k, o]) => `<button class="btn sm ${s.k === 'todo' ? '' : 'ghost'}" data-act="loyAct" data-c="${c.id}" data-t="renouvellement" data-o="${k}">${o.label}</button>`).join('')}</div></div>`).join('')}</div>`
+      <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => k !== 'paid').map(([k, o]) => `<button class="btn sm ${s.k === 'todo' ? '' : 'ghost'}" data-act="loyAct" data-c="${c.id}" data-t="renouvellement" data-v="${valueAtStake({ type: 'renouvellement', client: c })}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`).join('')}</div>`
       : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune fin d’engagement ce mois-ci', text: 'Déposez l’export Abonnements (fins d’engagement) dans Imports, ou changez de mois.' })}</div>`}`;
 }
 function loyPerf() {

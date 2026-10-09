@@ -389,7 +389,7 @@ ACTIONS.relSave = el => {
   else if (rl.clientId && ['suivi15', 'suivi30', 'fincontrat', 'anniversaire', 'mandat'].includes(rl.kind)) {
     const legacy = { joint: 'ok', ok: 'ok', rdv: 'rdv', messagerie: 'message', pasreponse: 'noanswer', refus: 'lost', stop: 'lost' }[o];
     const type = { suivi15: 'suivi', suivi30: 'suivi', fincontrat: 'renouvellement' }[rl.kind] || rl.kind;
-    if (legacy) { const id = newId(); ops.push([['loyalty', id], { id, clubId: CLUB.id, clientId: rl.clientId, type, outcome: legacy, userId: ME.id, at: Date.now(), note: t.note || '' }]); }
+    if (legacy) { const id = newId(); ops.push([['loyalty', id], { id, clubId: CLUB.id, clientId: rl.clientId, type, ...(rl.kind === 'suivi15' ? { step: 15 } : rl.kind === 'suivi30' ? { step: 30 } : {}), outcome: legacy, userId: ME.id, at: Date.now(), note: t.note || '' }]); }
   }
   db.batch(ops); closeModal();
   if (o === 'sauve') celebrate('Client sauvé', `${rl.name} reste au club`, { kind: 'win' });

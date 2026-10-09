@@ -1144,3 +1144,10 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .rrq-hist { margin-top: 12px; }
 .rrq-hist summary { cursor: pointer; font-weight: 600; }
 .nav .pill-late, .pill.pill-late { background: var(--bad); color: #fff; margin-left: 4px; }
+
+/* ── Rétention : valeur protégée, session d'appels ── */
+.loy-head { margin-bottom: 14px; }
+.loy-sess h2 { font-family: var(--font-title); }
+.loy-sess-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+.loy-sess-out .btn { min-height: 48px; }
+.loy-sess-end { text-align: center; padding: 20px 0; }

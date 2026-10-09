@@ -425,6 +425,22 @@ const OUTCOMES = {
   lost: { label: 'Ne renouvelle pas', cls: 'bad', done: true, lost: true },
 };
 const MAX_ATTEMPTS = 3;
+const SUIVI_COUPURE = 22; // jours après l'inscription : avant = appel J+15, après = appel J+30
+
+// Valeur en jeu d'une tâche de rétention : montant dû pour un impayé, sinon
+// prix mensuel x mois d'engagement restants (3 mois si la fin est inconnue).
+function moisRestants(end, from = today()) {
+  if (!end || end <= from) return null;
+  const [y1, m1, d1] = from.split('-').map(Number), [y2, m2, d2] = end.split('-').map(Number);
+  return Math.max(1, (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0));
+}
+function valueAtStake(task) {
+  if (!task || !task.client) return 0;
+  if (task.type === 'impaye') return Math.round((Number(task.amount != null ? task.amount : task.client.balance) || 0) * 100) / 100;
+  const prix = typeof mensualite === 'function' ? mensualite(task.client) : Number(task.client.price) || 0;
+  const mois = moisRestants(task.client.end) || 3;
+  return Math.round(prix * mois * 100) / 100;
+}
 
 function loyaltyTasks(clubId) {
   return memo(`loy|${clubId}`, () => {
@@ -436,7 +452,9 @@ function loyaltyTasks(clubId) {
       // anciens clients, perdus, prospects : pas de relance de fidelisation
       if (c.status && /ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status))) continue;
       const cand = [];
-      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
+      // Suivi J+15 puis J+30 : deux appels distincts. Un J+15 réussi ne ferme plus le J+30 (audit 3.6) :
+      // chaque action porte son étape (step) ; les anciennes, sans étape, sont classées par leur date.
+      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age < 28) cand.push({ type: 'suivi', step: 15, due: addDays(c.start, 15), since: c.start }); else if (age >= 28 && age <= 45) cand.push({ type: 'suivi', step: 30, due: addDays(c.start, 30), since: c.start }); }
       if (c.end && c.end >= t && c.end <= addDays(t, 45)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -45), amount: typeof mensualite === 'function' ? Math.round(mensualite(c) * dureeVieMois(clubId)) : 0 });
       if (c.birth) {
         const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(-5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(-5)}`;
@@ -446,7 +464,8 @@ function loyaltyTasks(clubId) {
       if (c.noMandate) cand.push({ type: 'mandat', due: t, since: c.noMandateAt || '2000-01-01' });
       for (const x of cand) {
         const sinceTs = dateOf(x.since).getTime();
-        let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs).sort((a, b) => b.at - a.at);
+        const cut = x.step ? dateOf(addDays(c.start, SUIVI_COUPURE)).getTime() : 0;
+        let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs && (!x.step || (a.step ? a.step === x.step : x.step === 15 ? a.at < cut : a.at >= cut))).sort((a, b) => b.at - a.at);
         // « Relancer » depuis l'onglet Perdus repart de zero
         const re = acts.findIndex(a => a.outcome === 'reopen'); if (re >= 0) acts = acts.slice(0, re);
         const closed = acts.find(a => OUTCOMES[a.outcome] && OUTCOMES[a.outcome].done);
@@ -454,7 +473,11 @@ function loyaltyTasks(clubId) {
         let state = 'todo';
         if (closed) state = OUTCOMES[closed.outcome].lost ? 'lost' : 'done';
         else if (failed >= MAX_ATTEMPTS) state = 'lost';
-        out.push({ client: c, ...x, acts, failed, state, key: `${c.id}|${x.type}` });
+        // Prochaine action datée (session d'appels) : la tâche revient à cette date.
+        const nextDate = state === 'todo' && acts[0] && acts[0].next && acts[0].next > t ? acts[0].next : null;
+        const task = { client: c, ...x, acts, failed, state, nextDate, key: `${c.id}|${x.type}${x.step ? x.step : ''}` };
+        task.valeurEnJeu = valueAtStake(task);
+        out.push(task);
       }
     }
     return out;
