@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL } from '../src/paypal.js';
+import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, PLANS_ANNUELS_SANS_ENGAGEMENT } from '../src/paypal.js';
 import { fausseBase } from './fausse-base.mjs';
 
 let ok = 0;
@@ -371,9 +371,22 @@ await test('la table OFFRES du serveur suit les plans et les prix de l’app', a
   const a = (id) => OFFRES_PAYPAL[id].montants.map(Number);
   const id = (nom) => plans.find((p) => p[1] === nom)[2];
   assert.ok(a(id('PAYPAL_PLAN_ID')).includes(prix('essentielle', 'prix')), 'Essentielle mensuel');
-  assert.ok(a(id('PAYPAL_PLAN_ID_ANNUEL')).includes(prix('essentielle', 'prixAn')), 'Essentielle annuel');
+  // LES ANNUELS : les anciens plans gardent le prix des contrats engagés, les
+  // nouveaux (sans engagement) portent celui de tarifs.json — et l'app et le
+  // serveur parlent du même identifiant dès qu'il existe.
+  const ce = tarifs.contrats_engages;
+  assert.ok(a(id('PAYPAL_PLAN_ID_ANNUEL')).includes(ce.essentielle.an), 'Essentielle annuel des contrats engagés');
+  const SE = PLANS_ANNUELS_SANS_ENGAGEMENT;
+  assert.ok(SE.PAYPAL_PLAN_ID_ANNUEL_SE.montants.map(Number).includes(prix('essentielle', 'prixAn')), 'Essentielle annuel sans engagement');
+  assert.ok(SE.PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE.montants.map(Number).includes(prix('ultime', 'prixAn')), 'Ultime annuel sans engagement');
+  for (const nom of ['PAYPAL_PLAN_ID_ANNUEL_SE', 'PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE']) {
+    const dansApp = (code.match(new RegExp('const ' + nom + "='([^']*)'")) || [])[1];
+    assert.ok(dansApp !== undefined, nom + ' absent de l’app');
+    assert.equal(dansApp, SE[nom].id, nom + ' : l’app et le serveur n’ont pas le même identifiant');
+    if (SE[nom].id) assert.equal(OFFRES_PAYPAL[SE[nom].id].formule, SE[nom].formule);
+  }
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME')).includes(prix('ultime', 'prix')), 'Ultime mensuel');
-  assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_ANNUEL')).includes(prix('ultime', 'prixAn')), 'Ultime annuel');
+  assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_ANNUEL')).includes(ce.ultime.an), 'Ultime annuel des contrats engagés');
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_DEMI')).includes(tarifs.ultime_demi.premierMois), 'Ultime demi');
   assert.ok(a(id('PAYPAL_PLAN_ID_COACH')).includes(tarifs.coach.coach), 'Coach');
   assert.ok(a(id('PAYPAL_PLAN_ID_PRO')).includes(tarifs.coach.pro), 'Pro');

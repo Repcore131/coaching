@@ -100,6 +100,46 @@ celles de l'abonnement Ultime ». J'ai donc corrigé le « sans engagement » de
   `AVANTAGES_AMB` (worker) et de l'écran admin des ambassadeurs, et le bloc
   `offre-demi` de `i/index.html`.
 
+## 5. Abonnement sans engagement et annuel remisé — à confirmer AVANT de publier
+
+Préparé sur la branche le 09/10/2026, **pas encore en ligne** (rien n'est
+publié tant que la branche n'est pas fusionnée et déployée). Valeurs posées
+dans `tarifs.json` sur ta demande, à confirmer :
+
+| Clé | Avant | Après | Ce que la page en déduit |
+|---|---|---|---|
+| `engagementMois` | 12 | **0** | « sans engagement » partout (data-texte) |
+| `essentielle.an` | 114 € | **95 €** | 2 mois offerts (12 × 9,50 = 114 ; 114 − 95 = 19 = 2 × 9,50) |
+| `ultime.an` | 298,80 € | **249 €** | 2 mois offerts (12 × 24,90 = 298,80 ; − 249 = 49,80 = 2 × 24,90) |
+
+Les contrats déjà engagés sont gardés tels quels dans `tarifs.json →
+contrats_engages` (12 mois, 114 € et 298,80 €) : écrans, CGV et worker les
+lisent là.
+
+À trancher avant la mise en ligne :
+
+- **a. Les montants 95 € et 249 €** (oui / autres). S'ils changent : `tarifs.json`,
+  puis `node scripts/tarifs.mjs`, `node scripts/verif/tarifs.mjs`, et les
+  `montants` de `PLANS_ANNUELS_SANS_ENGAGEMENT` dans `cloudflare/src/paypal.js`
+  (un test vérifie qu'ils suivent `tarifs.json`).
+- **b. La date d'entrée en vigueur des CGV.** Le texte dit « avant l'entrée en
+  vigueur de la présente version » et l'en-tête « Version du 9 octobre 2026 » :
+  mets la date réelle de publication.
+- **c. L'information avant chaque renouvellement annuel (art. L215-1).** La
+  CGV §4 l'annonce (entre 3 mois et 1 mois avant la date anniversaire) parce que
+  la loi l'impose pour un contrat reconduit tacitement. **Elle n'est pas codée** :
+  il faut un envoi par le worker (push ou e-mail via Systeme.io, jamais depuis
+  l'app). Option A : je la code avant la publication. Option B : publier sans
+  l'annuel (laisser les deux plans annuels vides : l'app ne le propose pas) tant
+  qu'elle n'existe pas.
+- **d. Le renouvellement des ANCIENS annuels engagés.** Les CGV de l'époque disent
+  « à l'issue des douze mois, reconduction mois par mois », mais leur plan PayPal
+  est annuel : PayPal reprélèvera 114 € / 298,80 € pour une nouvelle année. Option
+  A : à l'échéance, basculer ces abonnés sur un plan mensuel (geste PayPal à
+  prévoir). Option B : les prévenir et rembourser sur demande la part non voulue.
+  Aucun abonné annuel engagé n'est connu à ce jour (note de `paypal_plans.mjs`,
+  24/09/2026) : à vérifier dans PayPal avant de choisir.
+
 ---
 
 *Ce fichier se vide au fur et à mesure : une fois un point tranché et

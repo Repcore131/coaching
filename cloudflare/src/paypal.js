@@ -46,7 +46,13 @@ const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.
 // ⚠ PLUSIEURS MONTANTS PAR PLAN : un prix qui a changé chez PayPal laisse des
 //   abonnés à l'ancien tarif (9,95 puis 9,50 ; 99 puis 114 ; 249 puis 298,80),
 //   et le plan « demi » facture 12,45 le premier mois puis 24,90.
-export const OFFRES_PAYPAL = Object.freeze({
+// ⚠ LES DEUX ANNUELS CI-DESSOUS (…LZWY, …LZXI) SONT CEUX DES CONTRATS ENGAGÉS
+//   (tarifs.json, contrats_engages : 114 et 298,80). Depuis le passage sans
+//   engagement (09/10/2026), les NOUVEAUX annuels (95 et 249) passent par de
+//   NOUVEAUX plans (PLANS_ANNUELS_SANS_ENGAGEMENT) : modifier le prix des
+//   anciens aurait changé celui des abonnés en cours. Les deux coexistent
+//   pendant la transition, et tant qu'un ancien abonné paie.
+const OFFRES_FIXES = {
   'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'] },
   'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'] },
   'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'] },
@@ -57,7 +63,19 @@ export const OFFRES_PAYPAL = Object.freeze({
   'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true },
   'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'] },
   'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'] },
+};
+// LES ANNUELS SANS ENGAGEMENT (tarifs.json : essentielle.an, ultime.an). Leurs
+// identifiants n'existent qu'une fois les plans créés chez PayPal :
+//   PAYPAL_CLIENT_SECRET=… node scripts/paypal_plans.mjs --tarifs --ecrire
+// les crée et colle chaque identifiant ICI (champ `id`) et dans rc-core.
+// Vide, l'entrée est ignorée — et l'app ne propose pas l'annuel (constante vide).
+export const PLANS_ANNUELS_SANS_ENGAGEMENT = Object.freeze({
+  PAYPAL_PLAN_ID_ANNUEL_SE: Object.freeze({ id: '', formule: 'essentielle', montants: Object.freeze(['95.00']) }),
+  PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE: Object.freeze({ id: '', formule: 'ultime', montants: Object.freeze(['249.00']) }),
 });
+export const OFFRES_PAYPAL = Object.freeze(Object.assign({}, OFFRES_FIXES,
+  Object.fromEntries(Object.values(PLANS_ANNUELS_SANS_ENGAGEMENT).filter((p) => /^P-[A-Z0-9]+$/.test(p.id))
+    .map((p) => [p.id, { formule: p.formule, montants: [...p.montants] }]))));
 function montantValide(plan, montant, devise, role) {
   if (!plan || String(devise || '').toUpperCase() !== 'EUR') return false;
   if ((role === 'coach') !== !!plan.coachPlan) return false;

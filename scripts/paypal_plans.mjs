@@ -38,10 +38,16 @@
 //
 //       PAYPAL_CLIENT_SECRET=...  node scripts/paypal_plans.mjs
 //
-//  5. Avec --tarifs, il remet les plans EXISTANTS au prix que la table de
-//     l'application annonce, puis verifie. A lancer apres tout changement
-//     de tarif : sans lui, l'ecran dit un prix et PayPal en preleve un
-//     autre. Il ne touche pas aux abonnements deja en cours.
+//  5. Avec --tarifs, il CREE les plans qui manquent (les annuels sans
+//     engagement du 09/10/2026, par exemple), remet les plans EXISTANTS de
+//     PLANS au prix que la table de l'application annonce, puis verifie.
+//     A lancer apres tout changement de tarif : sans lui, l'ecran dit un
+//     prix et PayPal en preleve un autre. Avec --ecrire en plus, il colle
+//     les identifiants des plans crees dans rc-core ET dans
+//     cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT).
+//     ⚠ LES ANCIENS ANNUELS (contrats engages, ANCIENS ci-dessous) NE SONT
+//     JAMAIS REMIS A PRIX : changer le prix d'un plan chez PayPal peut
+//     changer celui des abonnes qui y sont deja. Ils sont seulement verifies.
 //  6. Avec --verifier, il ne cree RIEN : il va chercher chaque plan chez
 //     PayPal et dit lequel est inactif, introuvable, ou ne facture pas le
 //     prix que l'application annonce. C'est la commande a lancer quand on
@@ -99,6 +105,8 @@ function lireOffres() {
   return new Function(blocTarifs() + bloc + ' return OFFRES;')();
 }
 const OFFRES = lireOffres();
+// eslint-disable-next-line no-new-func
+const TARIFS_APP = new Function(blocTarifs() + ' return TARIFS;')();
 // LES PALIERS COACH VIVENT DANS UNE AUTRE TABLE, et leurs prix aussi. Meme
 // methode : on evalue la table telle quelle, apres avoir pose les constantes
 // d'identifiants qu'elle referme dans ses accesseurs `planId`.
@@ -126,10 +134,14 @@ const eur = n => (Math.round(Number(n) * 100) / 100).toFixed(2);
 // dans config/plans (RTDB) pour que la Cloud Function sache quoi ouvrir.
 const PRODUIT_NOM = 'RepCore';
 const PLANS = [
+  // ⚠ LES ANNUELS SANS ENGAGEMENT (09/10/2026) : des plans NEUFS, sous un nom
+  //   neuf. Les anciens (« RepCore Essentielle, annuel », « RepCore Ultime,
+  //   annuel ») restent ceux des contrats engages, dans ANCIENS : les remettre
+  //   au nouveau prix aurait pu changer celui des abonnes en cours.
   {
-    constante: 'PAYPAL_PLAN_ID_ANNUEL',
-    nom: 'RepCore Essentielle, annuel',
-    description: 'Acces Essentielle a RepCore, facture une fois par an.',
+    constante: 'PAYPAL_PLAN_ID_ANNUEL_SE',
+    nom: 'RepCore Essentielle, annuel sans engagement',
+    description: 'Acces Essentielle a RepCore, facture une fois par an, sans engagement.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.essentielle.prixAn) }],
     config: { palier: 'essentielle', mois: 12 },
   },
@@ -141,9 +153,9 @@ const PLANS = [
     config: { palier: 'ultime', mois: 1 },
   },
   {
-    constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL',
-    nom: 'RepCore Ultime, annuel',
-    description: 'Acces Ultime a RepCore, facture une fois par an.',
+    constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE',
+    nom: 'RepCore Ultime, annuel sans engagement',
+    description: 'Acces Ultime a RepCore, facture une fois par an, sans engagement.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.ultime.prixAn) }],
     config: { palier: 'ultime', mois: 12 },
   },
@@ -202,6 +214,16 @@ const DEJA = [{
   quoi: 'Essentielle, mensuel',
   cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: eur(OFFRES.essentielle.prix) }],
 }];
+// LES ANNUELS DES CONTRATS ENGAGES (24/09 → 09/10/2026). Leurs abonnes y paient
+// encore le prix de tarifs.json → contrats_engages. --verifier les compare a CE
+// prix-la ; --tarifs N'Y TOUCHE PAS.
+const CE = TARIFS_APP.contrats_engages || {};
+const ANCIENS = [
+  { constante: 'PAYPAL_PLAN_ID_ANNUEL', quoi: 'Essentielle, annuel (contrats engages)',
+    cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur((CE.essentielle || {}).an) }] },
+  { constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL', quoi: 'Ultime, annuel (contrats engages)',
+    cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur((CE.ultime || {}).an) }] },
+];
 
 // ── L'APPEL A PAYPAL ────────────────────────────────────────────────────
 const CLIENT_ID = process.env.PAYPAL_CLIENT_ID
@@ -367,7 +389,7 @@ function prixFacture(plan) {
 }
 async function verifier(tok) {
   const attendus = PLANS.map(p => ({ constante: p.constante, nom: p.nom, ...prixAnnonce(p) }));
-  for (const d of DEJA) attendus.push({ constante: d.constante, nom: d.quoi,
+  for (const d of DEJA.concat(ANCIENS)) attendus.push({ constante: d.constante, nom: d.quoi,
     ...prixAnnonce(d) });
   let souci = 0;
   console.log('\n── L\'ETAT REEL DE CHAQUE PLAN ────────────────────────────\n');
@@ -489,10 +511,23 @@ async function principal() {
   const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
   if (VERIFIER) { await verifier(tok); return; }
-  if (TARIFS) { await majTarifs(tok); await verifier(tok); return; }
+  if (TARIFS) {
+    // D'ABORD LES PLANS QUI MANQUENT (les annuels sans engagement), PUIS LES
+    // PRIX DE CEUX QUI EXISTENT : majTarifs relit les identifiants dans rc-core,
+    // qu'ecrire() vient d'y poser.
+    console.log('\n── LES PLANS QUI MANQUENT ─────────────────────────────────\n');
+    const faits = await creerPlans(tok);
+    afficherEtEcrire(faits);
+    await majTarifs(tok); await verifier(tok); return;
+  }
+  const faits = await creerPlans(tok);
+  afficherEtEcrire(faits);
+}
+
+// LES PLANS DE `PLANS`, CREES S'ILS MANQUENT (reconnus par leur NOM).
+async function creerPlans(tok) {
   const pr = await produit(tok);
   console.log('  Produit « ' + PRODUIT_NOM +' » : ' + pr.id + (pr.neuf ? ' (cree)' : ' (deja la)'));
-
   const faits = [];
   for (const p of PLANS) {
     const deja = await planExistant(tok, pr.id, p.nom);
@@ -505,10 +540,19 @@ async function principal() {
     faits.push({ ...p, id: cree.id, neuf: true });
     console.log('  ' + p.constante.padEnd(30) + cree.id + '  (cree)');
   }
+  return faits;
+}
+
+function afficherEtEcrire(faits) {
 
   // ── CE QU'IL RESTE A POSER ────────────────────────────────────────────
   console.log('\n── A COLLER DANS ' + fichierCore + ' ───────────────────────────');
   for (const f of faits) console.log("const " + f.constante + "='" + f.id + "';");
+  const pourServeur = faits.filter(f => /_SE$/.test(f.constante));
+  if (pourServeur.length) {
+    console.log('\n── ET DANS cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT, champ id) ──');
+    for (const f of pourServeur) console.log('  ' + f.constante + ' : ' + f.id);
+  }
 
   // ⚠ PLUS RIEN A DECLARER DANS config/plans (24/09/2026). Cette section
   //   servait une Cloud Function qui lisait le plan facture pour ouvrir le
@@ -543,6 +587,20 @@ async function principal() {
       console.log('  ⚠ Il reste a monter RC_BUILD et CACHE, puis :');
       console.log('      python scripts/versionner_actifs.py');
       console.log('      node scripts/verif/syntaxe.mjs\n');
+    }
+    // LE SERVEUR DOIT CONNAITRE LES MEMES PLANS (cloudflare/src/paypal.js) :
+    // sans eux, un paiement sur un plan neuf ne compterait pas comme paye.
+    const W = fileURLToPath(new URL('../cloudflare/src/paypal.js', import.meta.url));
+    let w = readFileSync(W, 'utf8');
+    let nw = 0;
+    for (const f of faits) {
+      const re = new RegExp('(' + f.constante + ": Object\\.freeze\\(\\{ id: )''");
+      if (re.test(w)) { w = w.replace(re, "$1'" + f.id + "'"); nw++; }
+    }
+    if (nw) {
+      writeFileSync(W, w);
+      console.log('  ' + nw + ' identifiant(s) ecrit(s) dans cloudflare/src/paypal.js (PLANS_ANNUELS_SANS_ENGAGEMENT).');
+      console.log('  ⚠ Il reste a redeployer le worker : cd cloudflare && npx wrangler deploy\n');
     }
   }
 }

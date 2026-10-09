@@ -48,14 +48,14 @@
 name: Plans PayPal
 
 on:
-  # A LA DEMANDE : onglet Actions > Plans PayPal > Run workflow.
+  # A LA DEMANDE SEULEMENT : onglet Actions > Plans PayPal > Run workflow.
+  # ⚠ PLUS DE DECLENCHEMENT AU PUSH (09/10/2026). Il tournait a chaque push
+  #   touchant scripts/paypal_plans.mjs, SUR N'IMPORTE QUELLE BRANCHE : la
+  #   branche qui preparait les annuels sans engagement aurait cree les plans
+  #   chez PayPal (compte reel) avant que Kevin ait confirme les montants
+  #   (DECISIONS-A-PRENDRE.md). Creer un plan facturable est une decision, pas
+  #   un effet de bord d'un push.
   workflow_dispatch:
-  # ET A CHAQUE FOIS QUE LE SCRIPT OU CE FICHIER CHANGE : c'est le moment ou
-  # une formule neuve apparait, donc le moment ou un plan manque.
-  push:
-    paths:
-      - 'scripts/paypal_plans.mjs'
-      - '.github/workflows/plans-paypal.yml'
 
 permissions:
   contents: read

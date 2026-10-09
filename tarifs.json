@@ -1,9 +1,15 @@
 {
   "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : node scripts/tarifs.mjs (recopie dans l'app, les pages, les CGV et le JSON-LD de index.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
   "devise": "EUR",
-  "engagementMois": 12,
-  "essentielle": { "mois": 9.5, "an": 114 },
-  "ultime": { "mois": 24.9, "an": 298.8 },
+  "engagementMois": 0,
+  "essentielle": { "mois": 9.5, "an": 95 },
+  "ultime": { "mois": 24.9, "an": 249 },
+  "contrats_engages": {
+    "_lisezmoi": "LES ABONNEMENTS SOUSCRITS AVEC UN ENGAGEMENT DE 12 MOIS (du 24/09/2026 au passage sans engagement). Rien ne change pour eux : ils gardent leur durée (abonnement.engagementJusqu dans leur dossier) et leur prix annuel, encaissé sur les ANCIENS plans PayPal. Ne pas modifier : ce sont des contrats en cours.",
+    "engagementMois": 12,
+    "essentielle": { "mois": 9.5, "an": 114 },
+    "ultime": { "mois": 24.9, "an": 298.8 }
+  },
   "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
   "essai": { "mois": 1, "jours": 30, "carte": false },
   "essai_parrainage": { "moisEnPlus": 1 },

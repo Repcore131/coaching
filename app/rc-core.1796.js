@@ -1047,6 +1047,17 @@ const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 //     « RepCore Ultime annuel »   TARIFS.ultime.an, cycle YEAR
 const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
 const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
+// ⚠ LES ANNUELS SANS ENGAGEMENT (09/10/2026). PAYPAL_PLAN_ID_ANNUEL et
+//   PAYPAL_PLAN_ID_ULTIME_ANNUEL restent ceux des CONTRATS ENGAGES (tarifs.json,
+//   contrats_engages) : leurs abonnes continuent d'y payer leur prix, et en
+//   changer le montant chez PayPal aurait change le leur. Les nouveaux annuels
+//   (TARIFS.essentielle.an, TARIFS.ultime.an) passent par deux plans NEUFS :
+//     PAYPAL_CLIENT_SECRET=… node scripts/paypal_plans.mjs --tarifs --ecrire
+//   les cree et colle ici leur identifiant (et dans cloudflare/src/paypal.js).
+//   VIDES, L'ANNUEL N'EST PAS PROPOSE : l'ecran retombe sur le mensuel, plutot
+//   que d'annoncer le nouveau prix et de facturer l'ancien.
+const PAYPAL_PLAN_ID_ANNUEL_SE='';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE='';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a TARIFS.ultime_demi.premierMois et les
@@ -1061,8 +1072,10 @@ const PAYPAL_PLAN_ID_ULTIME_DEMI='P-57P40267XP026613FNK2LZXQ';
 // UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
 // tarifs et le bouton de paiement finiraient par ne plus parler du meme.
 function planIdOffre(cle,annuel){
-  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL:PAYPAL_PLAN_ID;
-  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL:PAYPAL_PLAN_ID_ULTIME;
+  // L'annuel d'aujourd'hui est SANS ENGAGEMENT : ses plans a lui (les anciens
+  // ne servent plus qu'aux contrats engages, et a formuleDuPlan).
+  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL_SE:PAYPAL_PLAN_ID;
+  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE:PAYPAL_PLAN_ID_ULTIME;
   if(cle==='ultime_demi') return PAYPAL_PLAN_ID_ULTIME_DEMI;
   return '';
 }
@@ -1076,7 +1089,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -1103,14 +1116,13 @@ const OFFRES=Object.freeze({
   coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:_TC.coaching_transfo.prix,   palier:'suivi',  mois:_TC.coaching_transfo.mois,   type:'coaching'}),
   coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:_TC.coaching_evolution.prix, palier:'suivi',  mois:_TC.coaching_evolution.mois, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
-  // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
-  //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
-  //   une fois au lieu de douze. 9,50 × 12 = 114, 24,90 × 12 = 298,80.
-  //
-  //   Ce qui suit de ce choix, et qui n'est pas ici : les écrans ne promettent
-  //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
-  //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
-  //   sous douze mensualités, sans qu'une ligne bouge.
+  // ⚠ SANS ENGAGEMENT POUR LES NOUVEAUX ABONNÉS, ET UN ANNUEL REMISÉ
+  //   (09/10/2026, demande de Kevin). TARIFS.engagementMois vaut 0 ; `prixAn`
+  //   coûte moins que douze mensualités, et la remise se CALCULE
+  //   (moisOffertsAnnuel, « 2 mois offerts ») — elle n'est écrite nulle part.
+  //   Du 24/09 au 09/10/2026, l'abonnement engageait douze mois et l'annuel
+  //   valait douze mensualités : ces contrats-là restent tels quels
+  //   (TARIFS.contrats_engages, abonnement.engagementJusqu dans le dossier).
   essentielle:        Object.freeze({lib:'Essentielle', prix:TARIFS.essentielle.mois, prixAn:TARIFS.essentielle.an, palier:'essentielle', mois:0, type:'abonnement'}),
   ultime:             Object.freeze({lib:'Ultime',      prix:TARIFS.ultime.mois,      prixAn:TARIFS.ultime.an,      palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
@@ -1153,13 +1165,61 @@ function prixMoisAnnuel(cle){
   return _euros(Math.round(o.prixAn/12*100)/100);
 }
 /**
+ * PURE. Les mois offerts par l'année réglée en une fois : ce que douze
+ * mensualités coûtent de plus que l'annuel, compté en mensualités. Un ENTIER,
+ * ou 0 (pas de remise, ou une remise qui ne tombe pas sur un mois rond : on
+ * ne dit pas « 1,4 mois offert »). Comparé en centimes entiers.
+ * ⚠ MÊME CALCUL que moisOfferts() de scripts/tarifs.mjs (la page de vente).
+ * @param {string} cle une clé d'OFFRES
+ * @returns {number}
+ */
+function moisOffertsAnnuel(cle){
+  const o=offre(cle);
+  return o?moisOffertsDe(o.prix,o.prixAn):0;
+}
+/**
+ * PURE. Le calcul de moisOffertsAnnuel, sur deux montants en euros.
+ * @param {number} prix le mensuel
+ * @param {number} prixAn l'annuel
+ * @returns {number}
+ */
+function moisOffertsDe(prix,prixAn){
+  const m=Math.round((Number(prix)||0)*100), a=Math.round((Number(prixAn)||0)*100);
+  if(!(m>0)||!(a>0)||a>=m*12) return 0;
+  const n=(m*12-a)/m;
+  return Math.abs(n-Math.round(n))*m<1?Math.round(n):0;
+}
+/**
+ * PURE. La remise de l'annuel, à afficher : « 2 mois offerts » quand elle
+ * tombe sur des mois ronds, sinon le pourcentage, sinon rien.
+ * @param {string} cle une clé d'OFFRES
+ * @returns {string}
+ */
+function texteRemiseAnnuelle(cle){
+  const o=offre(cle);
+  return o?texteRemiseDe(o.prix,o.prixAn):'';
+}
+/**
+ * PURE. Le texte de texteRemiseAnnuelle, sur deux montants en euros. Même
+ * pourcentage que _economie (centimes entiers).
+ * @param {number} prix le mensuel
+ * @param {number} prixAn l'annuel
+ * @returns {string}
+ */
+function texteRemiseDe(prix,prixAn){
+  const n=moisOffertsDe(prix,prixAn);
+  if(n) return n+' mois offert'+(n>1?'s':'');
+  const m=Math.round((Number(prix)||0)*100), a=Math.round((Number(prixAn)||0)*100);
+  if(!a||!m||a>=m*12) return '';
+  return '−'+Math.round((1-a/(m*12))*100)+' %';
+}
+/**
  * PURE. Les deux façons de régler une formule, en une phrase.
- * ⚠ « 24,90 € par mois en annuel, ou 24,90 € au mois » : depuis que l'année
- *   vaut douze mensualités (24/09/2026), le mois de l'annuel EST le mensuel,
- *   et la phrase répétait deux fois le même montant comme s'il y avait un
- *   choix de prix. Sans remise, elle dit donc le mensuel et le total réglé en
- *   une fois ; avec une remise (prixAn sous douze mensualités), elle redit
- *   le mois de l'annuel contre le mensuel, sans qu'une ligne bouge.
+ * ⚠ ELLE A DIT « 24,90 € par mois en annuel, ou 24,90 € au mois » quand
+ *   l'année valait douze mensualités : deux fois le même montant. Elle dit
+ *   donc toujours le mensuel, puis le prix de l'année, et la remise calculée
+ *   quand il y en a une (« 9,50 € par mois, ou 95 € l'année en une fois
+ *   (2 mois offerts) »).
  * @param {string} cle une clé d'OFFRES
  * @returns {string} '' pour une offre inconnue
  */
@@ -1167,10 +1227,10 @@ function prixDeuxFacons(cle){
   const o=offre(cle);
   if(!o) return '';
   if(!o.prixAn) return prixOffre(cle)+' par mois';
-  const remise=Math.round(o.prixAn*100)<Math.round(o.prix*TARIFS.engagementMois*100);
-  return remise
-    ? prixMoisAnnuel(cle)+' par mois en annuel, ou '+prixOffre(cle)+' au mois'
-    : prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' en une fois';
+  // Douze mensualités, pas TARIFS.engagementMois : c'est l'année qu'on compare.
+  const remise=texteRemiseAnnuelle(cle);
+  return prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' l’année en une fois'
+    +(remise?' ('+remise+')':'');
 }
 
 // ══ CE QUE CHAQUE PALIER OUVRE ═══════════════════════════════════════════
@@ -1350,20 +1410,20 @@ function _economie(cle){
 // Les deux paliers d'abonnement, dans l'ordre d'affichage.
 // ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
 //   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
+// ⚠ « CHAQUE MOIS » D'ABORD, ET PAR DÉFAUT (09/10/2026), comme sur la page de
+//   vente : c'est le prix que les gens comparent. L'annuel vient ensuite, avec
+//   sa remise CALCULÉE (texteRemiseAnnuelle : « 2 mois offerts »), et rien
+//   quand il n'y a rien à économiser : « Économise 0,00 € » au-dessus du
+//   bouton qui propose de payer d'avance dirait que ça ne sert à rien.
 const SUB_PALIERS=[
-  {cle:'annuel', titre:'Annuel', prix:prixOffre('essentielle',true), periode:'par an',
-   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
-   // ⚠ RIEN QUAND IL N'Y A RIEN À ÉCONOMISER. Depuis que l'année vaut douze
-   //   mensualités, « Économise 0,00 € » et « −0 % » s'affichaient tous les
-   //   deux : deux mentions qui disent que ça ne sert à rien de payer
-   //   d'avance, juste au-dessus du bouton qui le propose. Le calcul reste,
-   //   la mention revient toute seule si le prix annuel redescend.
-   econ:_economie('essentielle').texte,
-   remise:_economie('essentielle').pourcent,
-   planId:()=>PAYPAL_PLAN_ID_ANNUEL},
-  {cle:'mensuel', titre:'Mensuel', prix:prixOffre('essentielle'), periode:'par mois',
+  {cle:'mensuel', titre:'Chaque mois', prix:prixOffre('essentielle'), periode:'par mois',
    detail:_euros(Math.round(OFFRES.essentielle.prix*12*100)/100)+' sur un an', econ:'', remise:'',
-   planId:()=>PAYPAL_PLAN_ID},
+   planId:()=>planIdOffre('essentielle',false)},
+  {cle:'annuel', titre:'En une fois', prix:prixOffre('essentielle',true), periode:'par an',
+   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
+   econ:_economie('essentielle').texte,
+   remise:texteRemiseAnnuelle('essentielle'),
+   planId:()=>planIdOffre('essentielle',true)},
 ];
 // LA TABLE EMPLOYÉE PAR L’ÉCRAN D’ABONNEMENT.
 //
@@ -1403,20 +1463,21 @@ function subPaliersDe(cle){
   if(!o) return [];
   const an=Number(o.prixAn)||0, mois=Number(o.prix)||0;
   const l=[];
-  if(an) l.push({cle:'annuel',titre:'Annuel',prix:prixOffre(cle,true),periode:'par an',
-    detail:'soit '+prixMoisAnnuel(cle)+' / mois',
-    econ:_economie(cle).texte, remise:_economie(cle).pourcent,
-    planId:()=>planIdOffre(cle,true)});
   // LE DEMI-TARIF (sortie de pack, ou code ambassadeur de lancement) : le
   // mensuel d'Ultime passe par le plan « demi » — 1er mois à moitié prix.
   let demi=false;
   try{ demi=cle==='ultime'&&typeof currentUser!=='undefined'&&!!currentUser&&demiPremierMoisDispo(currentUser); }catch(e){ demi=false; }
-  if(mois&&demi) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
+  if(mois&&demi) l.push({cle:'mensuel',titre:'Chaque mois',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
     detail:'puis '+prixOffre(cle)+' par mois',econ:'1er mois à -50 %',remise:'',
     planId:()=>planIdOffre('ultime_demi')});
-  else if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
+  else if(mois) l.push({cle:'mensuel',titre:'Chaque mois',prix:prixOffre(cle),periode:'par mois',
     detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
     planId:()=>planIdOffre(cle)});
+  // L'annuel APRÈS le mensuel, comme dans SUB_PALIERS.
+  if(an) l.push({cle:'annuel',titre:'En une fois',prix:prixOffre(cle,true),periode:'par an',
+    detail:'soit '+prixMoisAnnuel(cle)+' / mois',
+    econ:_economie(cle).texte, remise:texteRemiseAnnuelle(cle),
+    planId:()=>planIdOffre(cle,true)});
   return l;
 }
 function _tablePaliers(){
@@ -2220,6 +2281,57 @@ function aUnAbonnement(user){
   // Un abonnement déjà résilié reste affichable : l'accès court jusqu'au terme.
   return !!resiliationDemandee(u)||!!u.paypalSubscriptionId;
 }
+/**
+ * PURE. Cet abonné est-il ENCORE engagé ? Les contrats souscrits du 24/09 au
+ * 09/10/2026 portent leur terme (abonnement.engagementJusqu, posé à l'achat) :
+ * rien ne change pour eux jusque-là. Passé ce terme, leur contrat se
+ * poursuit sans engagement (CGV §5) — comme celui d'un nouvel abonné.
+ * @param {any} user
+ * @param {number} [maintenant] Date.now() par défaut
+ * @returns {boolean}
+ */
+function abonneEngage(user,maintenant){
+  const u=user||{};
+  if(u.role==='coach') return false;
+  const j=abonnementDe(u).engagementJusqu;
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  return typeof j==='number'&&j>0&&j>t;
+}
+/**
+ * PURE. Le prix d'un abonnement au moment où on le souscrit, en euros.
+ * @param {string} formule 'essentielle' | 'ultime'
+ * @param {string} periode 'mensuel' | 'annuel'
+ * @returns {number} 0 pour une formule inconnue
+ */
+function prixSouscritDe(formule,periode){
+  const o=offre(formule==='ultime'?'ultime':'essentielle');
+  if(!o) return 0;
+  return Number(periode==='annuel'?o.prixAn:o.prix)||0;
+}
+/**
+ * PURE. Ce que « Mon abonnement » dit d'un abonnement EN COURS, ancien ou
+ * nouveau. ⚠ UN CONTRAT ENGAGÉ GARDE SES CONDITIONS : son annuel se lit dans
+ * TARIFS.contrats_engages (le prix qu'il paie vraiment), et non dans le tarif
+ * d'aujourd'hui ; un nouvel abonné lit le prix qu'il a souscrit (prixSouscrit),
+ * à défaut le tarif courant.
+ * @param {any} user
+ * @returns {{titre:string,prix:string,periode:string,engage:boolean,engagement:string}}
+ */
+function conditionsAbonnement(user){
+  const a=abonnementDe(user||{});
+  const annuel=a.palier==='annuel';
+  const formule=a.formule==='ultime'?'ultime':'essentielle';
+  const engage=abonneEngage(user);
+  const ce=TARIFS.contrats_engages||{};
+  // Un contrat engagé (terme posé, passé ou non) paie l'annuel de son époque.
+  const ancien=typeof a.engagementJusqu==='number'&&a.engagementJusqu>0;
+  let prix=Number(a.prixSouscrit)||0;
+  if(!prix&&ancien&&annuel&&ce[formule]) prix=Number(ce[formule].an)||0;
+  if(!prix) prix=prixSouscritDe(formule,annuel?'annuel':'mensuel');
+  return {titre:(formule==='ultime'?'Ultime':'Essentielle')+(annuel?', annuel':', mensuel'),
+    prix:_euros(prix), periode:annuel?'par an':'par mois', engage,
+    engagement:engage?('jusqu’au '+new Date(a.engagementJusqu).toLocaleDateString('fr-FR')):'Sans engagement'};
+}
 // La date de fin d'accès. L'accès reste OUVERT jusqu'au terme de la période
 // réglée : on ne coupe rien à la confirmation.
 function finAccesAbonnement(user){
@@ -2231,7 +2343,10 @@ function finAccesAbonnement(user){
   //   dossier connaisse avec certitude : elle est posee a l'achat et ne bouge
   //   plus. Sans elle, l'ecran de resiliation disait « la fin de la periode
   //   reglee » — vrai, et inutilisable.
-  if(typeof a.engagementJusqu==='number'&&a.engagementJusqu>0) return a.engagementJusqu;
+  //   ⚠ TANT QU'IL COURT (09/10/2026) : un terme echu ne dit plus rien de
+  //   la fin d'acces d'un contrat qui se poursuit sans engagement.
+  if(abonneEngage(u)) return a.engagementJusqu;
+  if(typeof a.finAccesPaypal==='number'&&a.finAccesPaypal>0) return a.finAccesPaypal;
   if(typeof a.prochaineEcheance==='number') return a.prochaineEcheance;
   return null;
 }
@@ -2833,21 +2948,24 @@ function _renderAbonnement(){
   const r=resiliationDemandee(u);
   const fin=finAccesAbonnement(u);
   const finTxt=fin?new Date(fin).toLocaleDateString('fr-FR'):'la fin de la période réglée';
-  const pal=SUB_PALIERS.find(x=>x.cle===(abonnementDe(u).palier))||SUB_PALIERS[1];
+  const c=conditionsAbonnement(u);
   const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">
     <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
-    ${l('Formule',(pal&&pal.titre)||'Mensuel')}
-    ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
+    ${l('Formule',c.titre)}
+    ${l('Prix',c.prix+' '+c.periode)}
+    ${/* ⚠ ANCIEN OU NOUVEL ABONNÉ (09/10/2026) : le contrat engagé garde sa
+          ligne et son terme ; le nouveau lit « Sans engagement ». */''}
+    ${r?'':l('Engagement',c.engagement)}
     ${/* ⚠ CE LIBELLE DISAIT « Prochaine échéance » et affichait le TERME DE
           L'ENGAGEMENT (corrigé le 24/09/2026) : quelqu'un qui paie au mois y
           lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
           changé, le mot si. */''}
-    ${fin?l(r?'Accès jusqu\'au':'Engagement jusqu\'au',finTxt):''}
+    ${(fin&&r)?l('Accès jusqu\'au',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(texteResilMoyens(u))}</div>
         <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 20px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
       :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
@@ -2886,12 +3004,27 @@ function _confirmerResiliation(){
 //   resilie, aurait coute soit de l'argent, soit la confiance. Ce qui reste
 //   vrai, et qui est dit : l'acces court jusqu'au terme, rien ne se reconduit
 //   ensuite, et un prelevement APRES le terme se rembourse.
+// ⚠ CE TEXTE-CI EST CELUI DES CONTRATS ENGAGÉS (TARIFS.contrats_engages). Un
+//   abonné sans engagement lit RESIL_MOYENS_SANS (texteResilMoyens choisit).
 const RESIL_MOYENS='Ta demande est enregistrée. Ton abonnement va jusqu\'au terme '
-  +'des '+TARIFS.engagementMois+' mois : les prélèvements continuent jusque-là, et rien ne se '
+  +'des '+((TARIFS.contrats_engages||{}).engagementMois||TARIFS.engagementMois)+' mois : les prélèvements continuent jusque-là, et rien ne se '
   +'reconduit ensuite. Au terme, coupe le paiement automatique chez PayPal : '
   +'RepCore ne peut pas annuler l\'abonnement à ta place, le paiement est géré '
   +'directement entre toi et eux. Un prélèvement postérieur au terme te serait '
   +'remboursé (CGV §5).';
+// SANS ENGAGEMENT (09/10/2026) : la résiliation prend effet à la fin de la
+// période déjà payée — le mois en cours, ou l'année réglée en une fois.
+const RESIL_MOYENS_SANS='Ta demande est enregistrée. Ton accès reste ouvert jusqu\'à la fin '
+  +'de la période déjà payée, et rien ne doit être prélevé ensuite. Coupe le paiement '
+  +'automatique chez PayPal : RepCore ne peut pas annuler l\'abonnement à ta place, le '
+  +'paiement est géré directement entre toi et eux. Un prélèvement postérieur à ta '
+  +'résiliation te serait remboursé (CGV §5).';
+/**
+ * PURE. Ce qu'on dit à quelqu'un qui vient de résilier, selon son contrat.
+ * @param {any} user
+ * @returns {string}
+ */
+function texteResilMoyens(user){ return abonneEngage(user)?RESIL_MOYENS:RESIL_MOYENS_SANS; }
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
 let _subPalier=null;
@@ -8977,7 +9110,7 @@ function _rendreConsoleAcces(){
 // ══ L'ARRIVEE : LES DEUX FORMULES, LES CHIFFRES, LES PORTES (lot 2) ══════
 // Les prix viennent d'OFFRES et de nulle part ailleurs : l'ecran d'arrivee et
 // l'ecran de paiement ne peuvent donc pas annoncer deux chiffres differents.
-let _accueilAnnuel=true;   // l'annuel est montre par defaut
+let _accueilAnnuel=false;  // « Chaque mois » par defaut, comme sur la page de vente (09/10/2026)
 function accueilVersTarifs(){
   const z=document.getElementById('wel-tarifs');
   if(z) z.scrollIntoView({behavior:'smooth',block:'start'});
@@ -8994,10 +9127,11 @@ function accueilPeriode(annuel){
   //   Il porte maintenant la remise CALCULÉE, et ne s'affiche pas quand il
   //   n'y en a pas. Le jour où le prix annuel redescendra, il reviendra tout
   //   seul, avec le bon pourcentage.
+  // La remise se lit sur l'annuel d'Essentielle, celui de la première carte.
   const b=document.getElementById('wel-badge');
   if(b){
-    const e=_economie('essentielle');
-    if(_accueilAnnuel&&e.pourcent){ b.textContent=e.pourcent+' sur l’année'; b.style.display=''; }
+    const t=texteRemiseAnnuelle('essentielle');
+    if(_accueilAnnuel&&t){ b.textContent=t; b.style.display=''; }
     else b.style.display='none';
   }
   accueilRendreTarifs();
@@ -128388,7 +128522,7 @@ function messageRelanceAcces(c,etat){
     :('Ton accès à RepCore se termine'+(d?(' le '+d):' bientôt')+'.');
   return (p?('Salut '+p+' ! '):'Salut ! ')+quand
     +' Pour continuer, ouvre l\'app et prends l\'abonnement à '+PRIX_ATHLETE_MOIS
-    +' par mois (engagement '+TARIFS.engagementMois+' mois) : '+lienAbonnement()
+    +' par mois ('+(TARIFS.engagementMois?('engagement '+TARIFS.engagementMois+' mois'):'sans engagement')+') : '+lienAbonnement()
     +'. Dis-moi si tu as le moindre souci, je m\'en occupe.';
 }
 // Ouvre WhatsApp avec le message pre-rempli. ⚠ REPCORE N'ENVOIE RIEN : il
@@ -129992,6 +130126,24 @@ function goRegisterPourSouscrire(){
 // ── Paliers d'abonnement : rendu et sélection ───────────────────────────────
 // Un seul palier disponible : on n'affiche aucun sélecteur, seulement le prix.
 // Proposer un « choix » entre une option et rien serait du décor.
+/**
+ * PURE (sauf la lecture de sessionStorage). Le palier présélectionné : le
+ * MENSUEL (« Chaque mois »), comme sur la page de vente — sauf si la personne
+ * vient de choisir « En une fois » sur l'accueil (accueilChoisir pose
+ * rc_offre_annuel), qu'on ne lui fait pas re-choisir.
+ * @param {Array<{cle:string}>} dispo les paliers payables, dans l'ordre affiché
+ * @param {string} [annuelDemande] '1' si l'annuel a été demandé ; lu dans sessionStorage sinon
+ * @returns {string} '' si rien n'est payable
+ */
+function subPalierParDefaut(dispo,annuelDemande){
+  const l=Array.isArray(dispo)?dispo:[];
+  if(!l.length) return '';
+  let a=annuelDemande;
+  if(a===undefined){ try{ a=sessionStorage.getItem('rc_offre_annuel')||''; }catch(e){ a=''; } }
+  if(a==='1'&&l.some(p=>p.cle==='annuel')) return 'annuel';
+  const m=l.find(p=>p.cle==='mensuel');
+  return (m||l[0]).cle;
+}
 function _renderSubPaliers(){
   const zone=document.getElementById('sub-paliers');
   if(!zone) return;
@@ -130004,7 +130156,7 @@ function _renderSubPaliers(){
   // vient de le choisir sur son écran, le lui redemander serait le perdre.
   const _pc=_palierCoachEnAttente();
   if(_pc&&dispo.some(p=>p.cle===_pc)) _subPalier=_pc;
-  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
+  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=subPalierParDefaut(dispo);
   if(dispo.length===1){
     const p=dispo[0];
     zone.innerHTML='<div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text);line-height:1">'
@@ -130096,8 +130248,8 @@ function formuleDuPlan(planId){
   const id=String(planId||'');
   if(!id) return '';
   if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
-     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
-  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE) return 'ultime';
+  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL||id===PAYPAL_PLAN_ID_ANNUEL_SE) return 'essentielle';
   // ET LES DEUX FORMULES DU COACH (24/09/2026). Elles n'ouvrent aucun palier
   // d'acces — un coach a le sien par son role — mais le dossier doit dire ce
   // qui a ete facture. Sans ces deux lignes, subOffreChoisie prenait le relais
@@ -130349,7 +130501,21 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
+           //   ⚠ ET SEULEMENT S'IL Y A UN ENGAGEMENT (09/10/2026) : sans
+           //     engagement (TARIFS.engagementMois = 0), aucun terme n'est
+           //     pose. La cle est OMISE, pas mise a undefined : Object.assign
+           //     recopie aussi un undefined, et effacerait le terme d'un
+           //     contrat engage deja present dans le dossier.
+           ...((!_estCoach&&TARIFS.engagementMois>0)?{engagementJusqu:moisApres(Date.now(),TARIFS.engagementMois)}:{}),
+           // LE PRIX SOUSCRIT, tel qu'il est facture : Mon abonnement le relit,
+           // et il ne bouge plus si tarifs.json change ensuite.
+           ...(_estCoach?{}:{prixSouscrit:prixSouscritDe(formuleDuPlan(_planIdChoisi())||subOffreChoisie(),_subPalier||'mensuel')})});
+        // UN TERME DEJA ECHU NE SURVIT PAS A UN NOUVEL ABONNEMENT : il ferait
+        // lire « engage » a quelqu'un qui vient de souscrire sans engagement.
+        if(!_estCoach&&TARIFS.engagementMois===0){
+          const _j=Number(currentUser.abonnement.engagementJusqu)||0;
+          if(_j&&_j<=Date.now()) delete currentUser.abonnement.engagementJusqu;
+        }
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.

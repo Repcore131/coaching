@@ -14,7 +14,9 @@
 //      (sauf data-hors-tarif : un prix du marché, pas le nôtre) ;
 //   4. OFFRES et COACH_PALIERS, évalués tels quels, qui ne rendent pas les
 //      prix de tarifs.json ;
-//   5. « sans engagement » sur la page de vente et sur /i ; un « N mois
+//   5. une phrase d'engagement contraire à tarifs.json (« sans engagement »
+//      quand il y en a un, « engagement N mois » quand il n'y en a pas) sur
+//      la page de vente, /i et l'app ; un « N mois
 //      d'essai » qui n'est ni l'essai ni l'essai parrainé (balises meta
 //      comprises) ;
 //   6. UN MONTANT EN EUROS QUI NE VAUT AUCUN PRIX DE tarifs.json, où qu'il
@@ -27,7 +29,7 @@
 // être vus.
 //   node scripts/verif/tarifs.mjs
 import { readFileSync } from 'node:fs';
-import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, montantsTarifs } from '../tarifs.mjs';
+import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, montantsTarifs, moisOfferts } from '../tarifs.mjs';
 
 const T = lireTarifs();
 const erreurs = [];
@@ -58,25 +60,38 @@ function controlerPage(nom, html) {
   const err = [];
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
-  if (nom === 'i/index.html' && /sans engagement/i.test(html))
-    err.push('i/index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois (CGV §4)');
+  // L'ENGAGEMENT SUIT tarifs.json, DANS LES DEUX SENS. Avec un engagement,
+  // « sans engagement » est une promesse fausse ; sans engagement, un
+  // « engagement N mois » l'est aussi — sauf celui des contrats déjà engagés
+  // (data-nb="contrats_engages.…"), qui restent vrais pour ceux qui les ont.
+  if (['index.html', 'i/index.html', 'app/index.html', 'terms.html'].includes(nom)) {
+    const sansAnciens = html.replace(/<span data-nb="contrats_engages\.[^"]+">[^<]*<\/span>/g, 'N');
+    const vis = texteVisible(sansAnciens.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<script\b[\s\S]*?<\/script>/gi, ' '));
+    if (T.engagementMois > 0 && /sans engagement/i.test(vis))
+      err.push(nom + ' : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois (tarifs.json)');
+    if (T.engagementMois === 0)
+      for (const m of vis.matchAll(/engag\w*\s+(?:de\s+|pour\s+|sur\s+)?(\d+)\s*mois|(\w+|\d+)\s+mois\s+d'engagement/gi))
+        err.push(nom + ' : « ' + m[0] + ' » — tarifs.json dit sans engagement (engagementMois : 0)');
+  }
   if (nom === 'index.html') {
     // Les balises meta (description, og, twitter) ne portent pas de data-nb :
     // leur « N mois d'essai » est lu ici comme le texte visible.
     const attributs = [...html.matchAll(/\b(?:content|alt|aria-label)="([^"]*)"/g)].map((m) => m[1]).join(' · ');
     for (const m of attributs.replace(/&nbsp;/g, ' ').matchAll(/(\d+) mois d'essai|(\d+) mois offert/g))
       if (Number(m[1] || m[2]) !== T.essai.mois) err.push('index.html (balise meta) : « ' + m[0] + ' » — l’essai dure ' + T.essai.mois + ' mois');
-    if (/sans engagement/i.test(html)) err.push('index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
+    // Les mois offerts de l'ANNUEL (liés à tarifs.json) ne sont pas ceux de l'essai.
+    const vis = texteVisible(html.replace(/<([a-z0-9]+)\b[^>]*\bdata-(?:nb="[a-z_]+\.moisOfferts"|texte="[a-z_]+\.offreAn")[^>]*>[^<]*<\/\1>/gi, ' '));
     const permis = [T.essai.mois, valeur(T, 'essai.moisParraine')];
-    for (const m of texteVisible(html).matchAll(/(\d+) mois d'essai/g))
+    for (const m of vis.matchAll(/(\d+) mois d'essai/g))
       if (!permis.includes(Number(m[1]))) err.push('index.html : « ' + m[0] + ' » — l’essai dure ' + permis.join(' ou ') + ' mois');
     // Les boutons disent « 1 mois » en clair (un <span> dans un bouton le coupe en colonnes).
-    for (const m of texteVisible(html).matchAll(/Essayer (?:gratuitement )?(\d+) mois|(\d+) mois offert/g))
+    for (const m of vis.matchAll(/Essayer (?:gratuitement )?(\d+) mois|(\d+) mois offert/g))
       if (Number(m[1] || m[2]) !== T.essai.mois) err.push('index.html : « ' + m[0] + ' » — l’essai dure ' + T.essai.mois + ' mois');
-    for (const m of texteVisible(html).matchAll(/(\d+) mois si un ami/g))
+    for (const m of vis.matchAll(/(\d+) mois si un ami/g))
       if (Number(m[1]) !== permis[1]) err.push('index.html : « ' + m[0] + ' » — l’essai parrainé dure ' + permis[1] + ' mois');
-    // Les phrases de la bascule et du FAQ disent « 12 mois » en toutes lettres.
-    if (T.engagementMois !== 12) err.push('index.html : l’engagement n’est plus de 12 mois — relire la bascule, le FAQ (JSON-LD compris) et la note sous la grille');
+    // La grille dit l'engagement et les mois offerts de l'annuel par tarifs.json.
+    for (const t of ['engagement', 'essentielle.offreAn', 'ultime.offreAn'])
+      if (!html.includes('data-texte="' + t + '"')) err.push('index.html : la grille ne lie plus « ' + t + ' » (data-texte)');
   }
   return err;
 }
@@ -167,8 +182,11 @@ function montantsInconnus(nom, html, T, blanche) {
   const faqChangee = k < 0 ? html : html.slice(0, k) + 'ton accès reste ouvert jusqu’au bout' + html.slice(k + 'ton accès reste ouvert jusque-là'.length);
   if (faqChangee === html) e('auto-contrôle : la réponse « Puis-je annuler ? » a changé — adapter ce contrôle');
   else if (!controlerPage('index.html', faqChangee).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : une FAQ JSON-LD en retard sur la FAQ visible n’est pas vue');
-  if (!controlerPage('index.html', html.replace('</body>', '<p>sans engagement</p></body>')).some((x) => /sans engagement/.test(x)))
-    e('auto-contrôle : « sans engagement » n’est pas vu');
+  const contraire = T.engagementMois > 0 ? '<p>sans engagement</p>' : '<p>Engagement de 12&nbsp;mois</p>';
+  if (!controlerPage('index.html', html.replace('</body>', contraire + '</body>')).some((x) => /engagement/i.test(x)))
+    e('auto-contrôle : une phrase d’engagement contraire à tarifs.json n’est pas vue');
+  if (!controlerPage('app/index.html', '<p>coûte ensuite 9,50&nbsp;€, sur douze mois d\'engagement.</p>').some((x) => /engagement/.test(x)) && T.engagementMois === 0)
+    e('auto-contrôle : « douze mois d’engagement » en toutes lettres n’est pas vu');
 }
 
 // ── 2 et 4. L'app ─────────────────────────────────────────────────────────
@@ -206,6 +224,14 @@ function montantsInconnus(nom, html, T, blanche) {
       ];
       for (const [quoi, vu, voulu] of attendu) if (vu !== voulu) e(nom + ' : ' + quoi + ' vaut ' + vu + ', tarifs.json dit ' + voulu);
     } catch (x) { e(nom + ' : OFFRES illisible (' + x.message + ')'); }
+    // LES MOIS OFFERTS DE L'ANNUEL : l'app (moisOffertsDe) et la page de vente
+    // (moisOfferts de scripts/tarifs.mjs) font le MÊME calcul.
+    try {
+      // eslint-disable-next-line no-new-func
+      const appli = new Function(bloc('function moisOffertsDe(', '\n}') + '\nreturn moisOffertsDe;')();
+      for (const [m, a] of [[9.5, 95], [24.9, 249], [24.9, 298.8], [10, 110], [10, 106], [10, 130], [10, 0], [T.essentielle.mois, T.essentielle.an], [T.ultime.mois, T.ultime.an]])
+        if (appli(m, a) !== moisOfferts(m, a)) e(nom + ' : moisOffertsDe(' + m + ', ' + a + ') = ' + appli(m, a) + ', la page de vente calcule ' + moisOfferts(m, a));
+    } catch (x) { e(nom + ' : moisOffertsDe illisible (' + x.message + ')'); }
     // Aucun prix d'abonnement en dur dans OFFRES.
     const offres = code.slice(code.indexOf('const OFFRES=Object.freeze({'), code.indexOf('\n});', code.indexOf('const OFFRES=Object.freeze({')));
     if (/\bprix(An)?:\s*[1-9][0-9.]*/.test(offres)) e(nom + ' : un prix écrit en dur dans OFFRES — il doit venir de TARIFS');

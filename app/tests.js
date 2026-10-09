@@ -13425,7 +13425,9 @@ async function testExercices(){
             const bas=txt.toLowerCase();
             if(bas.indexOf('essentielle')<0||bas.indexOf('ultime')<0)
               return _echec('les deux formules ne sont pas nommées sur l’arrivée');
-            for(const p of [prixMoisAnnuel('essentielle'),prixMoisAnnuel('ultime')])
+            // Le prix de la période affichée : « Chaque mois » par défaut (09/10/2026).
+            const _pp=k=>_accueilAnnuel?prixMoisAnnuel(k):prixOffre(k);
+            for(const p of [_pp('essentielle'),_pp('ultime')])
               if(txt.indexOf(p.replace(nbsp,' '))<0&&txt.indexOf(p)<0)
                 return _echec('le prix '+p+' ne se lit pas sur l’arrivée');
             const champs=w.querySelectorAll('input[type="email"],input[type="password"],input[type="text"]');
@@ -35638,7 +35640,7 @@ async function testExercices(){
         return /bonne\s*charge/.test(titre)&&/série\./.test(titre)
           ?true:_echec('l’accroche a changé : '+titre);})());
 
-      ok('LOT 2 — LES DEUX FORMULES, L’ANNUEL PAR DÉFAUT, LE PRIX AU MOIS EN GROS',(()=>{
+      ok('LOT 2 — LES DEUX FORMULES, LE PRIX AU MOIS EN GROS, LA REMISE DE L’ANNUEL CALCULÉE',(()=>{
         const sauve=_accueilAnnuel;
         try{
           accueilPeriode(true);
@@ -35678,7 +35680,8 @@ async function testExercices(){
           const badge=document.getElementById('wel-badge');
           if(badge&&badge.style.display!=='none') return _echec('le bandeau reste affiché en mensuel');
           accueilPeriode(true);
-          const _rem=_economie('essentielle').pourcent;
+          // La remise de l'annuel : « 2 mois offerts », calculée (09/10/2026).
+          const _rem=texteRemiseAnnuelle('essentielle');
           const b2=document.getElementById('wel-badge');
           if(b2){
             const vu=b2.style.display!=='none';
@@ -35696,7 +35699,7 @@ async function testExercices(){
         const txt=w.textContent.replace(/\s+/g,' ');
         // L'ANCRAGE PRECEDE LES PRIX : lu apres, il ne sert plus a rien.
         const iAncre=txt.indexOf('50 à 80 € la séance');
-        const iPrix=txt.indexOf('Annuel');
+        const iPrix=txt.indexOf('Chaque mois');
         if(iAncre<0) return _echec('la phrase d’ancrage a disparu');
         if(!(iAncre<iPrix)) return _echec('l’ancrage est passé après les prix');
         if(txt.indexOf('Ton premier mois est offert, sans carte bancaire')<0)
@@ -36944,10 +36947,9 @@ async function testExercices(){
           programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
           boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
           coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
-          // ⚠ 9,50 ET NON 9,95 DEPUIS LE 24/09/2026 : l'abonnement s'engage sur
-          //   douze mois, et l'annee payee d'un coup vaut douze mensualites.
-          //   C'est LE test qui empeche un tarif de bouger en silence : les
-          //   chiffres y sont ecrits a la main, et c'est voulu.
+          // ⚠ C'est LE test qui empeche un tarif de bouger en silence : les
+          //   chiffres y sont ecrits a la main, et c'est voulu. 9,50 et 24,90
+          //   au mois ; l'annuel, sans engagement et remise, plus bas.
           essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
           // PARRAINAGE : UN MOIS EN PLUS, SCIEMMENT (lot C, 29/09/2026). Le
           // filleul a le mois de tout le monde PLUS le mois offert par son
@@ -36966,32 +36968,34 @@ async function testExercices(){
           if(o.palier!==a[1]) return _echec(k+' ouvre '+o.palier+' au lieu de '+a[1]);
           if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
         }
-        // LES DEUX TARIFS ANNUELS, et les deux seuls.
-        if(OFFRES.essentielle.prixAn!==114||OFFRES.ultime.prixAn!==298.80)
+        // LES DEUX TARIFS ANNUELS, et les deux seuls (09/10/2026, sans
+        // engagement : 95 et 249, deux mois offerts chacun). Écrits à la main.
+        if(OFFRES.essentielle.prixAn!==95||OFFRES.ultime.prixAn!==249)
           return _echec('les tarifs annuels ont changé');
-        // ⚠ ET L'ANNEE VAUT EXACTEMENT DOUZE MENSUALITES. C'est le coeur du
-        //   choix du 24/09/2026 : payer d'avance ne coute ni plus ni moins.
-        //   En centimes entiers — 24,90 × 12 vaut 298,80000000000005 en
-        //   virgule flottante, et la comparaison directe echouerait.
+        // ⚠ ET L'ANNEE COUTE MOINS QUE DOUZE MENSUALITES, sinon « payer
+        //   d'avance » n'a pas de sens. En centimes entiers — 24,90 × 12 vaut
+        //   298,80000000000005 en virgule flottante.
         for(const k of ['essentielle','ultime']){
           const o=OFFRES[k];
-          if(Math.round(o.prixAn*100)!==Math.round(o.prix*100)*12)
-            return _echec(k+' : l’année ('+o.prixAn+') ne fait pas douze fois '+o.prix);
+          if(!(Math.round(o.prixAn*100)<Math.round(o.prix*100)*12))
+            return _echec(k+' : l’année ('+o.prixAn+') ne coûte pas moins que douze fois '+o.prix);
         }
-        // DONC AUCUNE REMISE A ANNONCER, et rien ne doit en annoncer une.
-        if(_economie('essentielle').texte||_economie('ultime').texte)
-          return _echec('une économie est annoncée alors que l’année vaut douze mois');
+        if(moisOffertsAnnuel('essentielle')!==2||moisOffertsAnnuel('ultime')!==2)
+          return _echec('mois offerts : '+moisOffertsAnnuel('essentielle')+' / '+moisOffertsAnnuel('ultime'));
+        // LES CONTRATS ENGAGÉS GARDENT LEURS PRIX : écrits à la main eux aussi.
+        if(TARIFS.contrats_engages.essentielle.an!==114||TARIFS.contrats_engages.ultime.an!==298.8||TARIFS.contrats_engages.engagementMois!==12)
+          return _echec('les prix des contrats engagés ont bougé');
+        if(TARIFS.engagementMois!==0) return _echec('engagementMois : '+TARIFS.engagementMois);
         // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
         // espace insecable avant le symbole.
         const nbsp=String.fromCharCode(160);
         if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
         if(prixOffre('essentielle')!=='9,50'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
         if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
-        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE EST LE MEME QUE LE MENSUEL,
-        // maintenant qu'il n'y a plus de remise. Les deux lignes le verifient
-        // plutot que de recopier un chiffre qui redeviendrait faux.
-        if(prixMoisAnnuel('ultime')!==prixOffre('ultime')) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
-        if(prixMoisAnnuel('essentielle')!==prixOffre('essentielle')) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE est l'annuel divise par douze,
+        // calcule sur TARIFS plutot que recopie (il redeviendrait faux).
+        if(prixMoisAnnuel('ultime')!==_euros(Math.round(TARIFS.ultime.an/12*100)/100)) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
+        if(prixMoisAnnuel('essentielle')!==_euros(Math.round(TARIFS.essentielle.an/12*100)/100)) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
         // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
         // l'offre, il ne doit pas survivre dans un identifiant oublie.
         const src=_prodSrc();
@@ -37016,26 +37020,113 @@ async function testExercices(){
         }
         return fautes.length?_echec(fautes.join('  ·  ')):true;})());
 
-      ok('TARIFS — prixDeuxFacons : jamais deux fois le même montant, le total en une fois quand il n’y a pas de remise',(()=>{
-        const nbsp=String.fromCharCode(160);
-        // Sans remise (prixAn = douze mensualités) : le mensuel, puis le total.
+      ok('TARIFS — prixDeuxFacons : le mensuel, puis l’année en une fois et sa remise calculée, jamais deux fois le même montant',(()=>{
         for(const cle of ['essentielle','ultime']){
-          const o=offre(cle), t=prixDeuxFacons(cle);
-          const remise=Math.round(o.prixAn*100)<Math.round(o.prix*TARIFS.engagementMois*100);
-          if(remise) continue;
-          if(t!==prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' en une fois') return _echec(cle+' : « '+t+' »');
+          const t=prixDeuxFacons(cle), rem=texteRemiseAnnuelle(cle);
+          const attendu=prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' l’année en une fois'+(rem?' ('+rem+')':'');
+          if(t!==attendu) return _echec(cle+' : « '+t+' »');
           if(t.split(prixOffre(cle)).length!==2) return _echec(cle+' : le mensuel est dit deux fois : « '+t+' »');
         }
         // Les montants viennent de TARIFS, et rien n'est écrit en dur.
         if(prixDeuxFacons('ultime').indexOf(_euros(TARIFS.ultime.an))<0) return _echec('le total d’Ultime ne vient pas de TARIFS');
-        if(prixDeuxFacons('essentielle').indexOf('9,50'+nbsp+'€')<0) return _echec('Essentielle : '+prixDeuxFacons('essentielle'));
+        if(prixDeuxFacons('essentielle').indexOf(_euros(TARIFS.essentielle.mois))!==0) return _echec('Essentielle : '+prixDeuxFacons('essentielle'));
         // Une offre sans annuel, et une offre inconnue.
         if(prixDeuxFacons('ultime_demi')!==prixOffre('ultime_demi')+' par mois') return _echec('ultime_demi : '+prixDeuxFacons('ultime_demi'));
         if(prixDeuxFacons('rien')!=='') return _echec('offre inconnue');
-        // Aucun écran ne refait la phrase qui répétait le même montant.
         // Les trois écrans qui la disaient passent par prixDeuxFacons.
         if([rcVerrouBloc,texteEssaiRestant,rendreEssaiBilan].some(f=>/prixMoisAnnuel/.test(String(f))))
           return _echec('« … par mois en annuel, ou … au mois » est encore écrit à la main');
+        return true;})());
+
+      // ══ SANS ENGAGEMENT, ANNUEL REMISÉ (09/10/2026) ══════════════════════
+      ok('TARIFS — la remise de l’annuel se CALCULE : mois offerts entiers, sinon le pourcentage, sinon rien',(()=>{
+        // Le calcul lui-même, sur deux montants.
+        const M=moisOffertsDe, X=texteRemiseDe;
+        if(M(9.5,95)!==2) return _echec('9,50 / 95 : '+M(9.5,95));
+        if(M(24.9,249)!==2) return _echec('24,90 / 249 : '+M(24.9,249));
+        // 24,90 × 12 = 298,80 : en flottant, 298,80000000000005 — aucune remise.
+        if(M(24.9,298.8)!==0||X(24.9,298.8)!=='') return _echec('douze mensualités pleines : '+M(24.9,298.8)+' / '+X(24.9,298.8));
+        if(M(10,110)!==1||X(10,110)!=='1 mois offert') return _echec('un mois : '+X(10,110));
+        if(X(9.5,95)!=='2 mois offerts') return _echec('pluriel : '+X(9.5,95));
+        // Une remise qui ne tombe pas sur un mois rond : pas de « 1,4 mois », le pourcentage.
+        if(M(10,106)!==0||!/%/.test(X(10,106))) return _echec('remise non ronde : '+X(10,106));
+        if(M(10,130)!==0||X(10,130)!=='') return _echec('annuel plus cher : '+X(10,130));
+        if(M(10,0)!==0||X(10,0)!=='') return _echec('sans annuel');
+        if(moisOffertsAnnuel('rien')!==0||texteRemiseAnnuelle('rien')!=='') return _echec('offre inconnue');
+        // Et sur les vrais tarifs : douze mensualités moins l'annuel, en mensualités.
+        for(const k of ['essentielle','ultime']){
+          const n=Math.round((TARIFS[k].mois*12-TARIFS[k].an)/TARIFS[k].mois);
+          const rond=Math.abs((TARIFS[k].mois*12-TARIFS[k].an)/TARIFS[k].mois-n)<0.001&&n>0;
+          if(moisOffertsAnnuel(k)!==(rond?n:0)) return _echec(k+' : '+moisOffertsAnnuel(k)+' mois offerts');
+          if(rond&&texteRemiseAnnuelle(k)!==n+' mois offert'+(n>1?'s':'')) return _echec(k+' : « '+texteRemiseAnnuelle(k)+' »');
+        }
+        // La carte annuelle de l'écran d'abonnement porte cette remise, et rien d'écrit à la main.
+        const an=SUB_PALIERS.find(p=>p.cle==='annuel');
+        if(!an||an.remise!==texteRemiseAnnuelle('essentielle')) return _echec('carte annuelle : '+(an&&an.remise));
+        if(/mois offerts?'/.test(String(accueilPeriode))) return _echec('« mois offerts » écrit à la main dans le bandeau');
+        return true;})());
+
+      ok('TARIFS — « Chaque mois » d’abord et par défaut, l’annuel seulement sur son plan sans engagement',(()=>{
+        if(SUB_PALIERS[0].cle!=='mensuel'||SUB_PALIERS[0].titre!=='Chaque mois') return _echec('premier palier : '+SUB_PALIERS[0].cle);
+        if(SUB_PALIERS[1].titre!=='En une fois') return _echec('second palier : '+SUB_PALIERS[1].titre);
+        const u=subPaliersDe('ultime').map(p=>p.cle).join(',');
+        if(u.indexOf('mensuel')!==0) return _echec('Ultime : '+u);
+        const d=[{cle:'mensuel'},{cle:'annuel'}];
+        if(subPalierParDefaut(d,'')!=='mensuel') return _echec('défaut : '+subPalierParDefaut(d,''));
+        if(subPalierParDefaut(d,'1')!=='annuel') return _echec('annuel demandé sur l’accueil : '+subPalierParDefaut(d,'1'));
+        if(subPalierParDefaut([{cle:'mensuel'}],'1')!=='mensuel') return _echec('annuel demandé mais indisponible');
+        if(subPalierParDefaut([],'')!=='') return _echec('rien de payable');
+        // La valeur initiale se lit dans la source : un test précédent a pu cliquer.
+        if(!/let _accueilAnnuel=false;/.test(_prodSrc())) return _echec('l’accueil ne montre plus « Chaque mois » par défaut');
+        // L'ANNUEL DES NOUVEAUX PASSE PAR SES PLANS NEUFS : jamais par celui des contrats engagés.
+        if(planIdOffre('essentielle',true)!==PAYPAL_PLAN_ID_ANNUEL_SE) return _echec('Essentielle annuel : '+planIdOffre('essentielle',true));
+        if(planIdOffre('ultime',true)!==PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE) return _echec('Ultime annuel : '+planIdOffre('ultime',true));
+        // Plan vide : l'annuel n'est pas proposé (plutôt qu'annoncer 95 et facturer 114).
+        if(!PAYPAL_PLAN_ID_ANNUEL_SE&&SUB_PALIERS.find(p=>p.cle==='annuel').planId()) return _echec('annuel proposé sans plan');
+        // Les anciens plans restent reconnus : un ancien abonné garde sa formule.
+        if(formuleDuPlan(PAYPAL_PLAN_ID_ANNUEL)!=='essentielle'||formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('anciens plans non reconnus');
+        return true;})());
+
+      ok('TARIFS — abonné engagé ou non : ses conditions, sa ligne d’engagement, son texte de résiliation',(()=>{
+        const t=Date.now(), J=864e5;
+        const ancien={id:'a1',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'essentielle',engagementJusqu:t+200*J}};
+        const echu={id:'a2',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'ultime',engagementJusqu:t-J}};
+        const nouveau={id:'n1',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'essentielle',prixSouscrit:TARIFS.essentielle.an}};
+        const mensuel={id:'n2',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'mensuel',formule:'ultime'}};
+        if(!abonneEngage(ancien)||abonneEngage(echu)||abonneEngage(nouveau)||abonneEngage({role:'coach',abonnement:{engagementJusqu:t+J}}))
+          return _echec('abonneEngage');
+        if(abonneEngage(ancien,t+201*J)) return _echec('le terme passé, il n’est plus engagé');
+        // L'ANCIEN GARDE SON PRIX (contrats_engages), PAS CELUI D'AUJOURD'HUI.
+        const ca=conditionsAbonnement(ancien);
+        if(ca.prix!==_euros(TARIFS.contrats_engages.essentielle.an)||!ca.engage||!/^jusqu’au /.test(ca.engagement)) return _echec('ancien : '+JSON.stringify(ca));
+        if(conditionsAbonnement(echu).prix!==_euros(TARIFS.contrats_engages.ultime.an)) return _echec('ancien échu : '+conditionsAbonnement(echu).prix);
+        if(conditionsAbonnement(echu).engagement!=='Sans engagement') return _echec('ancien échu : '+conditionsAbonnement(echu).engagement);
+        const cn=conditionsAbonnement(nouveau);
+        if(cn.prix!==_euros(TARIFS.essentielle.an)||cn.engage||cn.engagement!=='Sans engagement'||cn.periode!=='par an') return _echec('nouveau : '+JSON.stringify(cn));
+        if(conditionsAbonnement(mensuel).prix!==_euros(TARIFS.ultime.mois)||conditionsAbonnement(mensuel).titre!=='Ultime, mensuel') return _echec('mensuel : '+JSON.stringify(conditionsAbonnement(mensuel)));
+        // Résiliation : le terme pour l'engagé, la fin de la période payée pour les autres.
+        if(texteResilMoyens(ancien)!==RESIL_MOYENS||texteResilMoyens(nouveau)!==RESIL_MOYENS_SANS) return _echec('textes de résiliation');
+        if(/terme des/.test(RESIL_MOYENS_SANS)||!/fin de la période/.test(RESIL_MOYENS_SANS)) return _echec('RESIL_MOYENS_SANS : '+RESIL_MOYENS_SANS);
+        // finAccesAbonnement : le terme seulement tant qu'il court.
+        if(finAccesAbonnement(ancien)!==ancien.abonnement.engagementJusqu) return _echec('fin d’accès de l’engagé');
+        if(finAccesAbonnement(echu)===echu.abonnement.engagementJusqu) return _echec('un terme échu sert encore de fin d’accès');
+        if(prixSouscritDe('ultime','annuel')!==TARIFS.ultime.an||prixSouscritDe('essentielle','mensuel')!==TARIFS.essentielle.mois) return _echec('prixSouscritDe');
+        // L'ÉCRAN « MON ABONNEMENT » : « Sans engagement » pour le nouveau, le terme pour l'ancien.
+        const z=document.getElementById('cr-abo'), sv=currentUser;
+        if(!z) return _echec('#cr-abo absent');
+        try{
+          currentUser=nouveau; _renderAbonnement();
+          const tn=z.textContent.replace(/\s+/g,' ');
+          if(!/Engagement\s*Sans engagement/.test(tn)) return _echec('nouveau, écran : '+tn.slice(0,200));
+          if(/Engagement jusqu/.test(tn)) return _echec('nouveau : un terme affiché');
+          currentUser=ancien; _renderAbonnement();
+          const ta=z.textContent.replace(/\s+/g,' ');
+          if(!/Engagement\s*jusqu’au/.test(ta)||/Sans engagement/.test(ta)) return _echec('ancien, écran : '+ta.slice(0,200));
+          if(ta.indexOf(_euros(TARIFS.contrats_engages.essentielle.an).replace(String.fromCharCode(160),' '))<0&&ta.indexOf(_euros(TARIFS.contrats_engages.essentielle.an))<0) return _echec('ancien : son prix ne se lit pas');
+        } finally { currentUser=sv; try{ _renderAbonnement(); }catch(e){} }
+        // L'ACTIVATION NE POSE PLUS DE TERME sans engagement, et garde celui d'un contrat engagé.
+        const src=String(_prodSrc());
+        if(!/TARIFS\.engagementMois>0\)\?\{engagementJusqu:moisApres\(Date\.now\(\),TARIFS\.engagementMois\)\}:\{\}/.test(src)) return _echec('l’activation pose un terme sans condition');
         return true;})());
 
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
@@ -54398,7 +54489,7 @@ async function testExercices(){
       if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
       if(!/text:parrainageMessage\(c,l\?'':undefined\),url:l/.test(String(parrainagePartager))) return _echec('le partage répète le lien dans le texte');
       const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
-      if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
+      if(/ : [^ ]+ : /.test(r)||!(TARIFS.engagementMois?new RegExp('engagement '+TARIFS.engagementMois+' mois'):/sans engagement/).test(r)) return _echec(r);
       return true;})());
     ok('Records (28/09/2026) : plus de partage ni de choix image/vidéo, une phrase par record',(()=>{
       const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
