@@ -181,11 +181,33 @@ const DUN_STATUS = {
   perdu: { label: 'Huissier / perdu', cls: 'bad' },
 };
 const dunOf = c => c.dunning || {};
-const dunStatus = c => Number(c.balance) > 0 ? (dunOf(c).status && !['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : 'arelancer') : (['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : null);
+const dunStatus = c => dunPromiseLate(c) ? 'arelancer' : Number(c.balance) > 0 ? (dunOf(c).status && !['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : 'arelancer') : (['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : null);
 function dunRows(clubId) {
   return Object.values(S.clients).filter(c => c.clubId === clubId && (Number(c.balance) > 0 || ['recupere', 'a_verifier'].includes(dunOf(c).status)));
 }
-function dunDue(c) { const n = dunOf(c).next; return Number(c.balance) > 0 && (!n || n <= today()); }
+function dunDue(c) { const n = dunOf(c).next; return Number(c.balance) > 0 && (dunPromiseLate(c) || !n || n <= today()); }
+// Jours d'ouverture d'un dossier : date de régularisation (ou aujourd'hui) moins date d'apparition de l'impayé.
+function joursOuvert(c, t = today()) {
+  const d = dunOf(c); const start = c.oldestIncident || c.balanceAt || d.since; if (!start) return null;
+  const end = ['recupere', 'a_verifier'].includes(d.status) && d.recoveredAt ? d.recoveredAt : t;
+  return Math.max(0, Math.round((dateOf(end) - dateOf(start)) / 864e5));
+}
+// Promesse échue : date promise passée (le lendemain), solde toujours dû. Le dossier repasse « À relancer ».
+const dunPromiseDate = c => dunOf(c).promiseDate || dunOf(c).next || null;
+function dunPromiseLate(c, t = today()) { const d = dunOf(c); if (d.status !== 'promesse' || !(Number(c.balance) > 0)) return false; const p = dunPromiseDate(c); return !!p && p < t; }
+const medianOf = a => { const b = a.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); if (!b.length) return null; const m = Math.floor(b.length / 2); return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+// En-tête de la page Impayés.
+function dunStats(clubId, mk, t = today()) {
+  const rows = dunRows(clubId); const open = rows.filter(c => Number(c.balance) > 0);
+  const closed = rows.filter(c => ['recupere', 'a_verifier'].includes(dunOf(c).status) && (dunOf(c).recoveredAt || '').slice(0, 7) === mk);
+  const rg = { from: mk + '-01', to: `${mk}-${daysIn(mk)}` }; const all = recoveredFor(clubId, rg), team = recoveredFor(clubId, rg, 'equipe');
+  return {
+    medianJours: medianOf(closed.map(c => joursOuvert(c, t))), nClos: closed.length,
+    partEquipe: all ? team / all : null, team, all,
+    du30: Math.round(open.filter(c => (joursOuvert(c, t) || 0) > 30).reduce((s, c) => s + Number(c.balance), 0) * 100) / 100, n30: open.filter(c => (joursOuvert(c, t) || 0) > 30).length,
+    promessesEchues: open.filter(c => dunPromiseLate(c, t)).length,
+  };
+}
 
 PAGES.impayes = {
   title: 'Impayés',
@@ -202,8 +224,7 @@ function dunTable() {
   const mk = curMonth();
   const recMonth = rows.filter(c => dunOf(c).status === 'recupere' && (dunOf(c).recoveredAt || '').slice(0, 7) === mk);
   const total = open.reduce((s, c) => s + Number(c.balance), 0);
-  const recov = typeof recovList === 'function' ? recovList(CLUB.id, mk + '-01', `${mk}-${daysIn(mk)}`) : [];
-  const recTot = recov.reduce((s, x) => s + x.amount, 0), recTeam = recov.filter(x => x.canal === 'equipe').reduce((s, x) => s + x.amount, 0);
+  const rgM = { from: mk + '-01', to: `${mk}-${daysIn(mk)}` }; const recTot = recoveredFor(CLUB.id, rgM), recTeam = recoveredFor(CLUB.id, rgM, 'equipe');
   const pick = {
     todo: c => Number(c.balance) > 0 && dunStatus(c) !== 'perdu',
     due: c => dunDue(c) && dunStatus(c) !== 'perdu',
@@ -221,7 +242,13 @@ function dunTable() {
   const members = clubMembers(CLUB.id);
   const cnt = k => rows.filter(pick[k]).length;
   const empty = !rows.length;
-  return `<div class="stat-row">
+  const K = dunStats(CLUB.id, mk);
+  return `<div class="stat-row dun-head">
+      <div class="stat"><span>Délai médian du mois</span><b>${K.medianJours == null ? 'n.d.' : plur(K.medianJours, 'jour', 'jours')}</b><small>${plur(K.nClos, 'dossier régularisé', 'dossiers régularisés')} en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</small></div>
+      <div class="stat"><span>Part récupérée par l’équipe</span><b>${fmtP(K.partEquipe)}</b><small>${fmtE(K.team)} sur ${fmtE(K.all)}</small></div>
+      <div class="stat ${K.du30 ? 'alarm' : ''}"><span>Encore dû, plus de 30 jours</span><b>${fmtE(K.du30)}</b><small>${plur(K.n30, 'dossier', 'dossiers')}</small></div>
+      <div class="stat ${K.promessesEchues ? 'alarm' : ''}"><span>Promesses échues</span><b>${K.promessesEchues}</b><small>repassées « À relancer »</small></div></div>
+    <div class="stat-row">
       <div class="stat hot"><span>Total dû</span><b>${fmtE(total)}</b><small>${plur(open.length, 'dossier ouvert', 'dossiers ouverts')}</small></div>
       <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${cnt('due')}</b><small>${cnt('nobody')} sans responsable</small></div>
       <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${fmtE(recTot)}</b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
@@ -230,11 +257,11 @@ function dunTable() {
     ${late30.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>${plur(late30.length, 'dossier a passé', 'dossiers ont passé')} 30 jours sans responsable</b>${late30.slice(0, 4).map(c => esc(c.name || '')).join(', ')}. Chaque semaine perdue fait baisser la chance de récupérer.</div></div>` : ''}
     ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucun impayé pour l’instant</b>Dans Imports Resamania, déposez « Clients en incident » (Points d’attention) et la liste Incidents : chaque client débiteur devient une ligne ici.</div></div>` : ''}
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
-    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Âge</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Ouvert depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.slice(0, Number(UI.dunMax || 100)).map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
       return `<tr class="${dunDue(c) ? 'due' : ''}"><td><a href="#/client/${esc(c.id)}"><b>${esc(c.name || 'Sans nom')}</b></a><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
-        <td class="small nowrap">${rec ? 'soldé le ' + dm(d.recoveredAt) : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${plur(dunAge(c), 'jour', 'jours')}</span>`}</td>
+        <td class="small nowrap">${rec ? `soldé le ${dm(d.recoveredAt)}${joursOuvert(c) != null ? ' · ' + plur(joursOuvert(c), 'jour', 'jours') : ''}` : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${joursOuvert(c) == null ? 'n.d.' : plur(joursOuvert(c), 'jour', 'jours')}</span>`}${dunPromiseLate(c) ? `<div class="bad">promesse du ${dm(dunPromiseDate(c))} non tenue</div>` : ''}</td>
         <td class="num">${rec ? '' : fmtE(dunAttendu(c))}</td>
         <td>${rec ? `<span class="badge ok">Récupéré${d.canal && RECOV_CHANNELS[d.canal] ? ' · ' + RECOV_CHANNELS[d.canal].label.toLowerCase() : ''}</span>${d.by ? `<div class="muted small">par ${esc(fullName(S.users[d.by]))}</div>` : ''}` : `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="status">${Object.entries(DUN_STATUS).filter(([k]) => k !== 'recupere').map(([k, v]) => `<option value="${k}" ${st === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>`}</td>
         <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>

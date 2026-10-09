@@ -22,8 +22,7 @@ function monthFigures(clubId, mk) {
   const sauvees = res.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).length;
   const base = deepGet(S, ['base', clubId, mk]) || {};
   const evo = deepGet(S, ['rsm', 'controls', clubId, 'evo', mk]) || {};
-  const rec = typeof recovList === 'function' ? recovList(clubId, from, to) : [];
-  const recBy = {}; rec.forEach(x => { recBy[x.canal] = (recBy[x.canal] || 0) + x.amount; });
+  const recBy = recoveredParts(clubId, { from, to });
   const actifs = Number(base.actifs) || null;
   return {
     mk,
@@ -36,8 +35,8 @@ function monthFigures(clubId, mk) {
     tauxSauvetage: resiliees + sauvees ? sauvees / (resiliees + sauvees) : null,
     actifs,
     du: duAt(clubId, mk),
-    recupere: rec.reduce((s, x) => s + x.amount, 0),
-    recEquipe: recBy.equipe || 0, recBy,
+    recupere: recoveredFor(clubId, { from, to }),
+    recEquipe: recoveredFor(clubId, { from, to }, 'equipe'), recBy,
     // Impayes recuperes PAR L'EQUIPE : la meme valeur que le KPI du tableau de bord
     // et du classement (saisies + import canal equipe, sans double compte).
     impayesEquipe: sum('impayes'),

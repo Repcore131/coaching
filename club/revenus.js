@@ -254,7 +254,7 @@ function dunSpeed(mk) {
   const curve = [7, 15, 30, 60].map(j => ({ j, p: tot6 ? six.filter(x => dayDiff(x.incidentDate, x.date) <= j).reduce((s, x) => s + x.amount, 0) / tot6 : null }));
   const mins = Number((S.clubs[CLUB.id] || {}).minutesAppel) || 4;
   const relances = clubClients(CLUB.id).reduce((n, c) => n + ((dunOf(c).history || []).filter(h => h.at >= dateOf(r.from).getTime() && h.at < dateOf(r.to).getTime() + 864e5 && !/^Statut|^Responsable|^Prise en charge/.test(h.label || '')).length), 0);
-  const team = recovList(CLUB.id, r.from, r.to).filter(x => x.canal === 'equipe').reduce((s, x) => s + x.amount, 0);
+  const team = recoveredFor(CLUB.id, r, 'equipe');
   const heures = relances * mins / 60;
   return `<div class="card" style="margin-top:14px"><h3>Vitesse de récupération</h3>
     ${L.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Canal</th><th class="num">Régularisations</th><th class="num">Délai médian</th></tr></thead><tbody>${Object.entries(byC).map(([k, d]) => `<tr><td>${esc((RECOV_CHANNELS[k] || {}).label || k)}</td><td class="num">${d.length}</td><td class="num">${plur(Math.round(median(d.map(x => x || 0.5)) || 0), 'jour', 'jours')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Délai inconnu : réimportez la liste Incidents (la date de l’incident est maintenant gardée).</p>'}

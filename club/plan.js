@@ -71,7 +71,7 @@ function churnStats(club = CLUB.id) {
     const neuf = dettes.filter(c => c.balanceAt && dayDiff(c.balanceAt, today()) >= 0 && dayDiff(c.balanceAt, today()) <= 30);
     const sla = neuf.map(c => { const lim = dateOf(c.balanceAt).getTime() + (P.targets.impayeH + 24) * 3600000; const t = (T.get(c.id) || []).filter(x => x.at <= lim); return { c, ok: t.some(x => x.channel === 'call' || x.checks) && t.some(x => x.channel === 'sms' || (x.checks && x.checks.sms)), retard: Date.now() > lim }; });
     const vieux = dettes.filter(c => (c.oldestIncident || c.balanceAt) && dayDiff(c.oldestIncident || c.balanceAt, today()) >= 180);
-    const weeks = []; for (let w = weekStart(P.from); w <= end; w = addDays(w, 7)) { const we = addDays(w, 6); weeks.push({ w, v: (typeof recovList === 'function' ? recovList(club, w, we) : []).reduce((s, x) => s + x.amount, 0) }); }
+    const weeks = []; for (let w = weekStart(P.from); w <= end; w = addDays(w, 7)) { const we = addDays(w, 6); weeks.push({ w, v: recoveredFor(club, { from: w, to: we }) }); }
     return { in21, in21Contact, resAbo, resOpt, jourJ, jourJsans, sla, slaOk: sla.filter(x => x.ok).length, slaRetard: sla.filter(x => !x.ok && x.retard).length, vieux, vieuxTotal: vieux.reduce((s, c) => s + Number(c.balance), 0), weeks };
   });
 }
@@ -216,7 +216,7 @@ function planPrimes() {
 function planRapport() {
   const P = planOf(); const wEnd = addDays(weekStart(today()), -1), wStart = addDays(wEnd, -6); const st = planStats(); const ch = churnStats(); const tr = transfoStats();
   const vs = sumRange(CLUB.id, null, 'contrats', wStart, wEnd); const res = Object.values(S.resiliations || {}).filter(r => r && r.clubId === CLUB.id && !r.hidden && r.date >= wStart && r.date <= wEnd);
-  const fins = finsCampagne(CLUB.id, curMonth()); const btq = htBoutique(CLUB.id, wStart, wEnd); const rec = (typeof recovList === 'function' ? recovList(CLUB.id, wStart, wEnd) : []).reduce((s, x) => s + x.amount, 0);
+  const fins = finsCampagne(CLUB.id, curMonth()); const btq = htBoutique(CLUB.id, wStart, wEnd); const rec = recoveredFor(CLUB.id, { from: wStart, to: wEnd });
   const sent = deepGet(S, ['serveur', 'rapport']) || {};
   return `<div class="card"><div class="card-head">${ico('mail')}<h3>Rapport du lundi</h3></div>
     <p class="muted small" style="margin-top:-6px">Envoyé automatiquement chaque ${esc(P.rapport)} à ${esc(P.directeur)}${P.copie ? ` (copie ${esc(P.copie)})` : ''}, avec graphiques. Pensez à déposer les exports Resamania le lundi matin.${sent.at ? ` Dernier envoi : ${dmy(isoOf(new Date(sent.at)))} ${new Date(sent.at).toTimeString().slice(0, 5)}.` : ''}</p>

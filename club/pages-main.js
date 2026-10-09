@@ -207,7 +207,7 @@ function dashObjectives(st, r, subject, who) {
     </div>
     <details class="dash-more" ${innerWidth > 860 ? 'open' : ''}><summary>Détails : conversion et score pondéré</summary><div class="grid">
       <div class="card"><div class="muted small">Taux de conversion</div><div class="title t-32">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
-      ${!who && typeof recovList === 'function' && recovList(CLUB.id, r.from, r.to).length ? (() => { const L = recovList(CLUB.id, r.from, r.to); const t = L.reduce((a, x) => a + x.amount, 0); const e = L.filter(x => x.canal === 'equipe').reduce((a, x) => a + x.amount, 0); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
+      ${!who && recoveredFor(CLUB.id, r) ? (() => { const t = recoveredFor(CLUB.id, r); const e = recoveredFor(CLUB.id, r, 'equipe'); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div></details>
   </div>

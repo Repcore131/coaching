@@ -161,6 +161,7 @@ function resolveSeller(raw, code) {
 // ── Classement des regularisations d'impayes par canal ────────────────────
 const RECOV_CHANNELS = {
   equipe: { label: 'Équipe du club', hint: 'Encaissé à l’accueil, lien de paiement ou CB à distance par un membre de l’équipe', color: 'var(--d-1)', human: true },
+  equipe_na: { label: 'Équipe, commercial non reconnu', hint: 'Régularisation faite par l’équipe dont l’auteur n’est pas encore rattaché à un membre (Correspondances Resamania)', color: 'var(--d-1)', human: true },
   client: { label: 'Client en ligne', hint: 'Payé par le client lui-même depuis son espace adhérent', color: 'var(--d-2)', human: false },
   auto: { label: 'Prélèvement automatique', hint: '« Traitement automatique » : nouveau prélèvement ou re-présentation', color: 'var(--d-3)', human: false },
   automatismes: { label: 'Automatismes', hint: 'Règle système « Automatismes » (prélèvement CB ou clôture automatique)', color: 'var(--d-4)', human: false },

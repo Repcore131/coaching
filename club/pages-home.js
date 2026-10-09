@@ -188,7 +188,7 @@ PAGES.home = {
     const bigKpis = palierKeys.slice(0, 2).map(k => { const s = palierState(CLUB.id, mk, k); if (!s) return ''; return `<div class="bk"><span>${esc(S.kpis[k].label)} · équipe</span><b>${fmtN(s.real)}</b><small>${s.next ? `P${s.reached + 1} à ${fmtN(s.next.target)} · encore ${fmtN(Math.ceil(s.next.target - s.real))}` : 'tous les paliers atteints'}</small></div>`; }).join('');
     const top5 = rk.filter(x => x.score != null).slice(0, 5);
     const manager = isManager();
-    const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const L = recovList(CLUB.id, m + '-01', `${m}-${daysIn(m)}`); const parts = {}; L.forEach(x => { parts[x.canal] = (parts[x.canal] || 0) + x.amount; }); out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: L.reduce((a, x) => a + x.amount, 0) }); } return out; })() : [];
+    const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; const parts = recoveredParts(CLUB.id, rg); if (parts.equipe_na) { parts.equipe += parts.equipe_na; delete parts.equipe_na; } out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: recoveredFor(CLUB.id, rg) }); } return out; })() : [];
     return `<div class="home2">
       <section class="banner" ${banner ? `style="--banner:url('${banner}')"` : ''}><div class="banner-stripe"></div>
         <div class="banner-in"><div class="eyebrow light">${esc(CLUB.name)} · ${monthLabel(mk)}</div>

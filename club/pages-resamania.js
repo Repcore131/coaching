@@ -353,8 +353,9 @@ const impayesAnalyse = {
     const mk = UI.impMonth || curMonth();
     const r = rangeOf('month', mk);
     const list = recovList(CLUB.id, r.from, r.to);
-    const total = list.reduce((s, x) => s + x.amount, 0);
-    const by = {}; Object.keys(RECOV_CHANNELS).forEach(k => { by[k] = { v: 0, n: 0 }; }); list.forEach(x => { const b = by[x.canal] || by.tiers; b.v += x.amount; b.n++; });
+    // Montants : le calcul unique recoveredFor (Réglé à la main compris) ; nombres : régularisations importées.
+    const total = recoveredFor(CLUB.id, r); const parts = recoveredParts(CLUB.id, r);
+    const by = {}; Object.keys(RECOV_CHANNELS).forEach(k => { by[k] = { v: parts[k] || 0, n: 0 }; }); list.forEach(x => { const b = by[x.canal === 'equipe' && !x.userId ? 'equipe_na' : x.canal] || by.tiers; b.n++; });
     const team = {}; list.filter(x => x.canal === 'equipe').forEach(x => { const k = x.userId || '_'; const t = team[k] = team[k] || { v: 0, n: 0 }; t.v += x.amount; t.n++; });
     const clients = Object.values(S.clients).filter(c => c.clubId === CLUB.id && Number(c.balance) > 0).sort((a, b) => b.balance - a.balance);
     const enCours = clients.reduce((s, c) => s + Number(c.balance), 0);
@@ -362,7 +363,7 @@ const impayesAnalyse = {
     const web = Object.entries(ctrl().web || {}).filter(([d]) => d >= r.from && d <= r.to).reduce((s, [, v]) => s + Number(v), 0);
     // 6 derniers mois, barres empilees par canal
     const months = []; for (let i = 5; i >= 0; i--) months.push(addMonths(mk, -i));
-    const mt = months.map(m => { const L = recovList(CLUB.id, m + '-01', `${m}-${daysIn(m)}`); const o = {}; L.forEach(x => { o[x.canal] = (o[x.canal] || 0) + x.amount; }); return { m, o, t: L.reduce((s, x) => s + x.amount, 0) }; });
+    const mt = months.map(m => { const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; return { m, o: recoveredParts(CLUB.id, rg), t: recoveredFor(CLUB.id, rg) }; });
     const max = Math.max(1, ...mt.map(x => x.t));
     const empty = !Object.keys(S.recov || {}).some(id => S.recov[id].clubId === CLUB.id);
     return `<div class="row wrap" style="margin-bottom:14px"><p class="muted spacer" style="margin:0">Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). ${esc(CLUB.name)}</p>${monthNav('impMonth', mk)}</div>

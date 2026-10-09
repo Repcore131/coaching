@@ -70,6 +70,25 @@ function idx() {
 }
 function memo(key, fn) { const I = idx(); if (I.memo.has(key)) return I.memo.get(key); const v = fn(); I.memo.set(key, v); return v; }
 
+// ── Impayés récupérés : UN seul calcul ────────────────────────────────────
+// Utilisé par l'accueil, le tableau de bord, le classement, le récap et la page Impayés.
+//  equipe : saisies du KPI « Impayés récupérés » (Réglé à la main + régularisations
+//           importées au canal équipe) : la valeur des primes et du classement ;
+//  autres canaux (client en ligne, prélèvement, automatismes, tiers) : régularisations
+//           importées ; equipe_na : régularisation de l'équipe sans commercial reconnu ;
+//  all    : la somme de tout cela, sans double compte.
+function recoveredParts(clubId, range) {
+  const { from, to } = range; const parts = { equipe: sumRange(clubId, null, 'impayes', from, to) };
+  const rec = typeof recovList === 'function' ? recovList(clubId, from, to) : [];
+  for (const x of rec) { const k = x.canal === 'equipe' ? (x.userId ? null : 'equipe_na') : x.canal || 'autre'; if (k) parts[k] = (parts[k] || 0) + Number(x.amount || 0); }
+  for (const k of Object.keys(parts)) parts[k] = Math.round(parts[k] * 100) / 100;
+  return parts;
+}
+function recoveredFor(clubId, range, canal = 'all', userId = null) {
+  if (userId || canal === 'equipe') return Math.round(sumRange(clubId, userId, 'impayes', range.from, range.to) * 100) / 100;
+  const p = recoveredParts(clubId, range);
+  return canal === 'all' ? Math.round(Object.values(p).reduce((s, v) => s + v, 0) * 100) / 100 : p[canal] || 0;
+}
 function sumRange(clubId, userId, kpiId, from, to) {
   const m = idx().day.get(`${clubId}|${userId || '*'}|${kpiId}`);
   if (!m) return 0;
