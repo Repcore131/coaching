@@ -5307,6 +5307,9 @@ const CLOUD={
           throw refus;
         }
       }
+      // FORTE AFFLUENCE : on ne frappe pas à une porte fermée. L'envoi part en
+      // file (erreur rejouable) et AFFLUENCE.fin() la videra au retour.
+      if(AFFLUENCE.actif()) throw new Error('Forte affluence : envoi gardé sur cet appareil, il partira dès que la base répond.');
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
       // ══ LE PUT CONDITIONNEL (if-match), ET SA REPRISE SUR 412 ════════════
       // 412 : un autre appareil a ecrit depuis notre lecture. La reponse porte
@@ -5341,6 +5344,7 @@ const CLOUD={
       opts.signal=_arret.signal;
       try{ r=await fetch(url+'?auth='+token,opts); }
       finally{ clearTimeout(_minuteur); }
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
       // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
       // renvoie l'objet écrit — d'où le doublement du coût par envoi.
       try{ _quotaCompter('out',corps.length);
@@ -5830,6 +5834,7 @@ const CLOUD={
       const url=token?base+'?auth='+token:base;
       const r=await fetch(url,avecEtag?{signal:ctrl.signal,headers:{'X-Firebase-ETag':'true'}}:{signal:ctrl.signal});
       this._lectures[email]=r.status;
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
       if(r.ok){
         // .text() puis JSON.parse plutôt que .json() : c'est le seul moyen
         // de connaître la taille reçue quand content-length manque, ce qui
@@ -5842,6 +5847,40 @@ const CLOUD={
       }
     }catch{ this._lectures[email]='réseau'; }
     return avecEtag?{doc:null,etag:null}:null;
+  },
+  // ── LA SONDE DE LA FORTE AFFLUENCE (09/10/2026) ──────────────────────────
+  // La plus petite lecture possible : les clés de premier niveau de son propre
+  // dossier (shallow), quelques dizaines d'octets. Rend le statut HTTP, 0 sans
+  // réseau. AFFLUENCE.reessayer() s'en sert pour savoir si la base répond.
+  async sonder(){
+    if(!currentUser||!currentUser.email) return 0;
+    const key=String(currentUser.email).replace(/\./g,',');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return 0;
+      const r=await fetch(this._fbUrl.replace('users.json','users/'+key+'.json')+'?shallow=true&auth='+token,{signal:ctrl.signal});
+      return r.status;
+    }catch(e){ return 0; }
+  },
+  // ── LA PRÉSENCE (09/10/2026) ─────────────────────────────────────────────
+  // « Cet appareil est ouvert » : /presence/<clé> = {t: heure serveur, f: le
+  // flux temps réel du coach est-il ouvert}. Le serveur léger compte chaque
+  // minute les présences de moins de PRESENCE_FENETRE_MS et alerte Kevin à 70
+  // (cloudflare/src/affluence.js). Envoyée par la synchro périodique (5 min),
+  // jamais app cachée, jamais en forte affluence : une requête REST de 40
+  // octets, qui ne compte pas parmi les connexions simultanées.
+  async presence(){
+    if(!currentUser||!currentUser.email||document.hidden||AFFLUENCE.actif()) return false;
+    const key=String(currentUser.email).replace(/\./g,',');
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._fbUrl.replace('users.json','presence/'+key+'.json')+'?auth='+token,{method:'PUT',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({t:{'.sv':'timestamp'},f:BOITE_COACH.ouvert()?1:0})});
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
+      return r.ok;
+    }catch(e){ return false; }
   },
   // ── Profil coach visible par ses athlètes ────────────────────────────────
   // La règle de /users ne va que dans un sens : un coach lit ses athlètes,
@@ -8370,6 +8409,11 @@ window.onload=()=>{
         // app hors ligne a la même horloge, et sa date doit suivre minuit.
         try{ _repeindreSiJourChange(); }catch(e){}
         if(!CLOUD.ok()||!currentUser) return;
+        // APP CACHÉE OU FORTE AFFLUENCE (09/10/2026) : pas de descente. Un
+        // onglet oublié n'a rien à relire ; une base saturée, rien à recevoir
+        // de plus. Le retour au premier plan redescend (_descenteAuRetour).
+        if(!syncPeriodiqueUtile(document.hidden,AFFLUENCE.actif())) return;
+        CLOUD.presence().catch(()=>{});
         // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
         // suffit pas, car la synchro elle-meme remplace currentUser sous les
         // doigts de l'utilisateur. Tant qu'un champ a le focus, on ne touche
@@ -124593,6 +124637,148 @@ function _planifierRepeint(email){
     },400);
   }catch(e){}
 }
+// ══ LA FORTE AFFLUENCE (09/10/2026) ═══════════════════════════════════════
+// Plan Spark : 100 connexions temps réel simultanées, et une base qui peut
+// répondre « trop de monde » (429, 503) ou « quota dépassé » (402). Ce jour-là,
+// l'app ne casse pas et ne martèle pas :
+//   · un BANDEAU (pas un écran bloquant) dit ce qui se passe et quand on
+//     réessaie ; la séance en cours continue — elle s'enregistre sur le
+//     téléphone comme hors ligne, et la file d'envoi (CLOUD.viderFile) part au
+//     retour ;
+//   · plus de descente périodique, plus de flux du coach, plus d'envoi : une
+//     seule SONDE (CLOUD.sonder, quelques dizaines d'octets) à délai croissant,
+//     30 s → 5 min, AVEC UN ALÉA de ± 20 % pour que mille téléphones ne
+//     reviennent pas frapper à la même seconde ;
+//   · la première réponse 2xx (sonde, lecture ou envoi) referme le bandeau,
+//     vide la file et rouvre le flux du coach.
+// Voir docs/BASCULE-BLAZE.md : ce que Kevin fait le jour où l'alerte sonne.
+const AFFLUENCE_STATUTS=Object.freeze([402,429,503]);
+const AFFLUENCE_DELAI_MIN=30000, AFFLUENCE_DELAI_MAX=300000;
+/**
+ * PURE. Cette réponse de la base veut-elle dire « trop de monde / limite atteinte » ?
+ * @param {number} statut statut HTTP
+ * @returns {boolean}
+ */
+function estRefusAffluence(statut){ return AFFLUENCE_STATUTS.indexOf(Number(statut))>=0; }
+/**
+ * PURE. Le délai avant le réessai n° n (0, 1, 2…) : 30 s, 60 s, 120 s, 240 s,
+ * puis 5 min, chacun à ± 20 % selon `alea` (0 à 1).
+ * @param {number} n
+ * @param {number} alea
+ * @returns {number} millisecondes
+ */
+function delaiReessaiAffluence(n,alea){
+  const base=Math.min(AFFLUENCE_DELAI_MAX,AFFLUENCE_DELAI_MIN*Math.pow(2,Math.max(0,Math.floor(Number(n)||0))));
+  const a=Math.min(1,Math.max(0,Number(alea)||0));
+  return Math.round(base*(0.8+0.4*a));
+}
+/**
+ * PURE. La synchro périodique a-t-elle une raison de partir ?
+ * @param {boolean} cache l'app est-elle cachée (document.hidden)
+ * @param {boolean} affluence le mode forte affluence est-il actif
+ * @returns {boolean}
+ */
+function syncPeriodiqueUtile(cache,affluence){ return !cache&&!affluence; }
+/**
+ * PURE. Le texte du bandeau.
+ * @param {number} resteMs temps avant le prochain essai
+ * @returns {{titre:string, texte:string}}
+ */
+function texteAffluence(resteMs){
+  const s=Math.max(0,Math.ceil((Number(resteMs)||0)/1000));
+  const quand=s<=0?'Nouvel essai en cours…':(s<60?'Nouvel essai dans '+s+' s.':'Nouvel essai dans '+Math.ceil(s/60)+' min.');
+  return {titre:'Forte affluence',
+    texte:'Beaucoup de monde en même temps sur RepCore. Ta séance continue : tout est gardé sur ce téléphone et partira tout seul. '+quand};
+}
+const AFFLUENCE={
+  _actif:false,_essais:0,_minuteur:null,_prochain:0,_tic:null,_enCours:false,
+  actif(){ return this._actif; },
+  // Toute réponse de la base passe ici : un refus allume, un succès éteint.
+  observer(statut){
+    const st=Number(statut)||0;
+    if(estRefusAffluence(st)) this.signaler();
+    else if(st>=200&&st<300&&this._actif) this.fin();
+  },
+  signaler(){
+    if(this._actif) return false;
+    this._actif=true; this._essais=0;
+    try{ BOITE_COACH._fermerFlux(); }catch(e){}
+    this._planifier();
+    this._peindre();
+    return true;
+  },
+  _planifier(){
+    clearTimeout(this._minuteur);
+    const d=delaiReessaiAffluence(this._essais,Math.random());
+    this._essais++;
+    this._prochain=Date.now()+d;
+    this._minuteur=setTimeout(()=>{ this.reessayer(); },d);
+  },
+  async reessayer(){
+    clearTimeout(this._minuteur); this._minuteur=null;
+    if(!this._actif) return true;
+    if(this._enCours) return false;
+    this._enCours=true; this._prochain=0; this._peindre();
+    let st=0; try{ st=await CLOUD.sonder(); }catch(e){ st=0; }
+    this._enCours=false;
+    if(!this._actif) return true;
+    if(st>=200&&st<300){ this.fin(); return true; }
+    this._planifier(); this._peindre();
+    return false;
+  },
+  fin(){
+    if(!this._actif) return false;
+    this._actif=false; this._essais=0;
+    clearTimeout(this._minuteur); this._minuteur=null;
+    this._peindre();
+    try{ Promise.resolve(CLOUD.viderFile()).catch(()=>{}); }catch(e){}
+    try{ if(BOITE_COACH._voulu) BOITE_COACH.ouvrir(); }catch(e){}
+    try{ toast('La base répond de nouveau : tes données se synchronisent.','var(--green)'); }catch(e){}
+    return true;
+  },
+  _peindre(){
+    try{
+      let b=document.getElementById('affluence-bandeau');
+      clearInterval(this._tic); this._tic=null;
+      if(!this._actif){ if(b) b.remove(); return; }
+      if(!b){
+        b=document.createElement('div');
+        b.id='affluence-bandeau';
+        b.setAttribute('role','status');
+        b.setAttribute('aria-live','polite');
+        b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:99990;'
+          +'background:#1b1407;border:1px solid var(--orange,#f59e0b);border-radius:14px;padding:12px 14px;'
+          +'color:#fff;font-size:14px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.45);text-transform:none;letter-spacing:0';
+        b.innerHTML='<strong data-aff-titre style="display:block;color:var(--orange,#f59e0b);margin-bottom:4px"></strong>'
+          +'<span data-aff-texte></span>'
+          +'<button type="button" data-aff-reessayer style="display:block;margin-top:8px;background:transparent;border:1px solid rgba(255,255,255,.35);'
+          +'color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;text-transform:none;letter-spacing:0">Réessayer maintenant</button>';
+        b.querySelector('[data-aff-reessayer]').addEventListener('click',()=>{ AFFLUENCE.reessayer(); });
+        document.body.appendChild(b);
+      }
+      const maj=()=>{
+        const x=texteAffluence(this._enCours?0:Math.max(0,this._prochain-Date.now()));
+        const t=b.querySelector('[data-aff-titre]'), z=b.querySelector('[data-aff-texte]');
+        if(t) t.textContent=x.titre;
+        if(z) z.textContent=x.texte;
+      };
+      maj();
+      this._tic=setInterval(()=>{ if(!this._actif||!b.isConnected){ clearInterval(this._tic); this._tic=null; return; } if(!document.hidden) maj(); },1000);
+    }catch(e){}
+  },
+};
+// LE FLUX DU COACH S'ENDORT après FLUX_SOMMEIL_MS sans un geste : une tablette
+// posée sur le comptoir de la salle, accueil du coach ouvert toute la journée,
+// tenait une des 100 connexions pour rien. Le premier toucher le réveille ; la
+// relève de 5 minutes reste le filet pendant le sommeil.
+const FLUX_SOMMEIL_MS=10*60000;
+/**
+ * PURE. Le flux doit-il dormir ?
+ * @param {number} derniereActivite horodatage du dernier geste
+ * @param {number} maintenant
+ * @returns {boolean}
+ */
+function fluxDoitDormir(derniereActivite,maintenant){ return (Number(maintenant)||0)-(Number(derniereActivite)||0)>=FLUX_SOMMEIL_MS; }
 // ══ LE FLUX DE LA BOITE DU COACH (30/09/2026) ═════════════════════════════
 // Voir CLOUD._signalerCoach. UN EventSource (streaming REST de Firebase) sur
 // /boite_coach/<maClé>, ouvert a l'arrivee sur s-coach-home et garde tant que
@@ -124609,7 +124795,7 @@ function _planifierRepeint(email){
 // rouvre. Toute autre coupure : reconnexion a delai croissant, plafonne.
 // LA RELEVE DE CINQ MINUTES RESTE LE FILET : si le flux tombe, rien n'est perdu.
 const BOITE_COACH={
-  _es:null,_cle:null,_voulu:false,_gen:0,_essais:0,_minuteur:null,_revoque:0,
+  _es:null,_cle:null,_voulu:false,_gen:0,_essais:0,_minuteur:null,_revoque:0,_geste:Date.now(),_dort:false,
   _enCours:new Set(),
   _DELAI_MIN:1000,_DELAI_MAX:300000,
   _maCle(){
@@ -124625,6 +124811,8 @@ const BOITE_COACH={
     if(!cle){ this.fermer(); return false; }
     this._voulu=true;
     if(typeof EventSource!=='function'||document.hidden) return false;
+    if(AFFLUENCE.actif()) return false;
+    this._geste=Date.now(); this._dort=false;
     // Un autre compte : l'ancien flux lisait la boite de quelqu'un d'autre.
     if(this._cle!==cle){ this._fermerFlux(); this._essais=0; }
     this._cle=cle;
@@ -124641,7 +124829,7 @@ const BOITE_COACH={
     this._es=null;
   },
   _replanifier(){
-    if(!this._voulu||document.hidden) return;
+    if(!this._voulu||document.hidden||AFFLUENCE.actif()||this._dort) return;
     const d=Math.min(this._DELAI_MAX,this._DELAI_MIN*Math.pow(2,this._essais));
     this._essais++;
     clearTimeout(this._minuteur);
@@ -124650,7 +124838,7 @@ const BOITE_COACH={
   async _connecter(rafraichir){
     this._fermerFlux();
     const gen=this._gen, cle=this._cle;
-    if(!this._voulu||!cle||document.hidden) return false;
+    if(!this._voulu||!cle||document.hidden||AFFLUENCE.actif()||this._dort) return false;
     // Jeton expire cote serveur : on force le rafraichissement.
     if(rafraichir){ CLOUD._idToken=null; CLOUD._tokenExpiry=0; }
     let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
@@ -124688,6 +124876,18 @@ const BOITE_COACH={
   },
   // {path, data} de Firebase : « / » porte la boite entiere (put) ou une
   // partie (patch) ; « /<athleteKey> » une seule entree.
+  // Un geste de l'utilisateur : le flux endormi se réveille.
+  geste(t){
+    this._geste=Number(t)||Date.now();
+    if(this._dort&&this._voulu){ this._dort=false; this.ouvrir(); }
+  },
+  // Appelé chaque minute : endort le flux après FLUX_SOMMEIL_MS sans geste.
+  veiller(t){
+    if(this._voulu&&!this._dort&&(this._es||this._minuteur)&&fluxDoitDormir(this._geste,Number(t)||Date.now())){
+      this._dort=true; this._fermerFlux(); return true;
+    }
+    return false;
+  },
   _recevoir(m){
     if(!m||typeof m!=='object') return [];
     const p=String(m.path||'/');
@@ -124719,8 +124919,12 @@ document.addEventListener('visibilitychange',()=>{
     else if(BOITE_COACH._voulu) BOITE_COACH.ouvrir();
   }catch(e){}
 });
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{ try{ BOITE_COACH.geste(Date.now()); }catch(e){} },{capture:true,passive:true}));
+setInterval(()=>{ try{ BOITE_COACH.veiller(Date.now()); }catch(e){} },60000);
 async function _descenteAuRetour(){
   if(!CLOUD.ok()||!currentUser) return false;
+  if(AFFLUENCE.actif()) return false;
+  CLOUD.presence().catch(()=>{});
   // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
   // évènements rapprochés, qui feraient repartir autant de requêtes.
   const _now=Date.now();
@@ -124742,6 +124946,8 @@ function toastSync(localOk,promesse,succes,perdu){
       // la seule information utile. Uniquement si l'écriture locale a réussi,
       // sinon leur texte (« enregistrée sur cet appareil ») serait faux.
       const detail=(localOk&&e&&e._actionnable)?e.message:null;
+      // FORTE AFFLUENCE : le bandeau le dit déjà, et l'envoi partira seul.
+      if(localOk&&!detail&&AFFLUENCE.actif()) return false;
       toast(detail||(localOk
         ?'Enregistré sur cet appareil : synchronisation en échec'
         :'Échec : ni enregistré sur cet appareil, ni synchronisé. Recommence.'),
@@ -129486,6 +129692,10 @@ async function requestAccountDeletion(){
     // 1 ter. Le résumé d'activité (statistiques de rétention) : hors de users/.
     try{
       await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    }catch(e){}
+    // 1 ter. La présence (comptage des connexions, 09/10/2026).
+    try{
+      await fetch(CLOUD._fbUrl.replace('users.json','presence/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
     // 1 ter. La santé synchronisée : voir _supprimerSanteSync.

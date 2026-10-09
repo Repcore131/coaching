@@ -168,6 +168,7 @@ jobs:
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DEPLOYER_FONCTIONS: ${{ vars.DEPLOYER_FONCTIONS }}
         run: |
           set -e
           if [ -z "$CLE" ]; then
@@ -194,13 +195,21 @@ jobs:
           else
             echo "::warning::REGLES NON DEPLOYEES. droits/ reste inaccessible et l application retombe sur l ancien modele : bash deploie.sh depuis un poste autorise."
           fi
-          # LES FONCTIONS demandent le plan Blaze. Tant que le projet est en
-          # Spark, ce deploiement echoue : on le tente, on le DIT, et on ne fait
-          # pas tomber la livraison du site pour autant.
-          if firebase deploy --only functions --project repcore-sync --non-interactive; then
-            echo "Fonctions deployees."
+          # LES FONCTIONS demandent le plan Blaze, et le travail serveur passe
+          # par le worker Cloudflare (cloudflare/src/). ⚠ DEPUIS LE 09/10/2026
+          # ELLES NE PARTENT PLUS QUE SUR DEMANDE EXPLICITE : passer en Blaze
+          # le jour d'un pic (docs/BASCULE-BLAZE.md) aurait sinon deploye les
+          # fonctions au push suivant, en doublon du worker (webhooks PayPal
+          # traites deux fois). Pour les deployer : Settings > Secrets and
+          # variables > Actions > Variables > DEPLOYER_FONCTIONS = oui.
+          if [ "$DEPLOYER_FONCTIONS" = "oui" ]; then
+            if firebase deploy --only functions --project repcore-sync --non-interactive; then
+              echo "Fonctions deployees."
+            else
+              echo "::warning::Fonctions NON deployees (plan Blaze requis)."
+            fi
           else
-            echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
+            echo "Fonctions non deployees : le worker Cloudflare fait ce travail (variable DEPLOYER_FONCTIONS absente)."
           fi
           rm -f "$RUNNER_TEMP/cle.json"
 

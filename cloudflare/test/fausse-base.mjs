@@ -74,6 +74,15 @@ export function fausseBase(initial) {
         const o = {}; for (const k of ks.slice(0, n)) o[k] = v[k];
         v = o;
       }
+      if (ob && ob !== '"$key"' && u.searchParams.has('startAt')) {
+        // orderBy "<champ>" + startAt : les enfants dont le champ vaut au moins `startAt`.
+        const champ = JSON.parse(ob), de = JSON.parse(u.searchParams.get('startAt'));
+        const n = Number(u.searchParams.get('limitToFirst')) || Infinity;
+        const val = (k) => (v[k] && typeof v[k] === 'object' && v[k][champ] != null ? v[k][champ] : null);
+        const ks = Object.keys(v || {}).filter((k) => val(k) !== null && val(k) >= de).sort((a, b) => val(a) - val(b) || (a < b ? -1 : 1));
+        const o = {}; for (const k of ks.slice(0, n)) o[k] = v[k];
+        v = o;
+      }
       return reponse(200, v, h['X-Firebase-ETag'] ? { ETag: etag(lire(p)) } : {});
     }
     const corps = init.body ? JSON.parse(init.body) : null;

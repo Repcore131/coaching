@@ -37409,6 +37409,81 @@ async function testExercices(){
           return signalerAbonnementColle()===false&&!currentUser.paypalSubscriptionId?true:_echec('numéro mal formé accepté');
         } finally { z.remove(); currentUser=sv; window.saveUser=sSave; window.abonnementSignaler=sSig; }})());
 
+      ok('AFFLUENCE — PURE : les refus reconnus, le délai croissant et borné avec son aléa, la synchro coupée app cachée',(()=>{
+        if(!estRefusAffluence(429)||!estRefusAffluence(503)||!estRefusAffluence(402)) return _echec('un refus de la base n’est pas reconnu');
+        if(estRefusAffluence(200)||estRefusAffluence(401)||estRefusAffluence(404)||estRefusAffluence(500)||estRefusAffluence(0)) return _echec('un autre statut passe pour un refus');
+        if(delaiReessaiAffluence(0,0.5)!==30000||delaiReessaiAffluence(1,0.5)!==60000||delaiReessaiAffluence(2,0.5)!==120000) return _echec('paliers : '+[0,1,2].map(n=>delaiReessaiAffluence(n,0.5)));
+        if(delaiReessaiAffluence(9,0.5)!==300000) return _echec('plafond : '+delaiReessaiAffluence(9,0.5));
+        if(delaiReessaiAffluence(0,0)!==24000||delaiReessaiAffluence(0,1)!==36000) return _echec('aléa ± 20 % : '+delaiReessaiAffluence(0,0)+' / '+delaiReessaiAffluence(0,1));
+        if(syncPeriodiqueUtile(true,false)||syncPeriodiqueUtile(false,true)||!syncPeriodiqueUtile(false,false)) return _echec('synchro périodique');
+        const x=texteAffluence(45000);
+        if(x.titre!=='Forte affluence'||!/Ta séance continue/.test(x.texte)||!/Nouvel essai dans 45 s\./.test(x.texte)) return _echec(JSON.stringify(x));
+        if(!/dans 3 min\./.test(texteAffluence(150000).texte)||!/en cours/.test(texteAffluence(0).texte)) return _echec('minutes / en cours');
+        if(fluxDoitDormir(0,FLUX_SOMMEIL_MS-1)||!fluxDoitDormir(0,FLUX_SOMMEIL_MS)) return _echec('sommeil du flux');
+        return true;})());
+      okA('AFFLUENCE — refus simulé (503) : bandeau, plus d’envoi ni de flux, réessai à la sonde ; un 503 de plus le garde, un 200 le referme et vide la file',async()=>{
+        const sv={fetch:window.fetch,tok:CLOUD._getToken,sonder:CLOUD.sonder,vider:CLOUD.viderFile,user:currentUser,ouvrir:BOITE_COACH.ouvrir,voulu:BOITE_COACH._voulu};
+        const urls=[]; let statut=503, vides=0, ouverts=0;
+        try{
+          clearTimeout(AFFLUENCE._minuteur); AFFLUENCE._actif=false;
+          currentUser={id:'af',email:'af@t.fr',role:'coach',status:'FREE'};
+          CLOUD._getToken=async()=>'tok';
+          window.fetch=async(u)=>{ urls.push(String(u)); return {ok:statut<300,status:statut,headers:{get:()=>null},text:async()=>'null',json:async()=>null}; };
+          // 1. Une lecture ordinaire tombe sur « trop de monde ».
+          await CLOUD.pullUser('af@t.fr');
+          if(!AFFLUENCE.actif()) return _echec('le 503 n’a pas allumé la forte affluence');
+          const b=document.getElementById('affluence-bandeau');
+          if(!b||!/Forte affluence/.test(b.textContent)||!/Ta séance continue/.test(b.textContent)) return _echec('bandeau : '+(b?b.textContent:'absent'));
+          if(!(AFFLUENCE._prochain>Date.now()+20000)) return _echec('pas de réessai planifié');
+          // 2. Plus rien ne part : ni présence, ni flux du coach.
+          const n0=urls.length;
+          if(await CLOUD.presence()) return _echec('la présence part en affluence');
+          BOITE_COACH._voulu=true;
+          if(BOITE_COACH.ouvrir()!==false) return _echec('le flux du coach s’ouvre en affluence');
+          if(urls.length!==n0) return _echec('une requête est partie : '+urls.slice(n0).join(' | '));
+          // 3. Réessai : la base refuse encore → on attend plus longtemps.
+          CLOUD.sonder=async()=>503;
+          CLOUD.viderFile=async()=>{ vides++; return 0; };
+          BOITE_COACH.ouvrir=function(){ ouverts++; return true; };
+          const e1=AFFLUENCE._essais;
+          if(await AFFLUENCE.reessayer()) return _echec('reprise annoncée sur un 503');
+          if(!AFFLUENCE.actif()||AFFLUENCE._essais!==e1+1) return _echec('le palier n’a pas avancé');
+          // 4. La base répond : bandeau fermé, file vidée, flux rouvert.
+          CLOUD.sonder=async()=>200;
+          if(!(await AFFLUENCE.reessayer())) return _echec('la reprise n’est pas vue');
+          if(AFFLUENCE.actif()||document.getElementById('affluence-bandeau')) return _echec('le bandeau reste');
+          if(vides!==1||ouverts!==1) return _echec('file vidée '+vides+' fois, flux rouvert '+ouverts+' fois');
+          // 5. Un succès ordinaire suffit aussi à refermer.
+          AFFLUENCE.signaler(); statut=200;
+          await CLOUD.pullUser('af@t.fr');
+          if(AFFLUENCE.actif()) return _echec('un 200 en lecture ne referme pas');
+          return true;
+        }finally{
+          clearTimeout(AFFLUENCE._minuteur); AFFLUENCE._actif=false; AFFLUENCE._essais=0; AFFLUENCE._peindre();
+          window.fetch=sv.fetch; CLOUD._getToken=sv.tok; CLOUD.sonder=sv.sonder; CLOUD.viderFile=sv.vider; currentUser=sv.user;
+          BOITE_COACH.ouvrir=sv.ouvrir; BOITE_COACH._voulu=sv.voulu; BOITE_COACH._fermerFlux();
+        }
+      });
+      ok('AFFLUENCE — un envoi pendant la forte affluence part en file (erreur rejouable), le toast d’échec se tait',(()=>{
+        const src=String(CLOUD._doPushOne);
+        if(src.indexOf('if(AFFLUENCE.actif()) throw new Error(')<0) return _echec('_doPushOne envoie en affluence');
+        if(String(toastSync).indexOf('AFFLUENCE.actif()')<0) return _echec('toastSync ne se tait pas');
+        if(String(_descenteAuRetour).indexOf('AFFLUENCE.actif()')<0) return _echec('le retour au premier plan redescend en affluence');
+        return true;})());
+      ok('FLUX DU COACH — endormi après 10 min sans geste, réveillé au premier toucher',(()=>{
+        const sv={es:BOITE_COACH._es,voulu:BOITE_COACH._voulu,ouvrir:BOITE_COACH.ouvrir,geste:BOITE_COACH._geste,dort:BOITE_COACH._dort};
+        let ouverts=0;
+        try{
+          BOITE_COACH._voulu=true; BOITE_COACH._dort=false; BOITE_COACH._geste=1000;
+          BOITE_COACH._es={close(){}};
+          if(BOITE_COACH.veiller(1000+FLUX_SOMMEIL_MS-1)) return _echec('endormi trop tôt');
+          if(!BOITE_COACH.veiller(1000+FLUX_SOMMEIL_MS)||BOITE_COACH._es||!BOITE_COACH._dort) return _echec('pas endormi');
+          BOITE_COACH.ouvrir=function(){ ouverts++; this._dort=false; return true; };
+          BOITE_COACH.geste(Date.now());
+          if(ouverts!==1||BOITE_COACH._dort) return _echec('pas réveillé');
+          return true;
+        }finally{ BOITE_COACH._es=sv.es; BOITE_COACH._voulu=sv.voulu; BOITE_COACH.ouvrir=sv.ouvrir; BOITE_COACH._geste=sv.geste; BOITE_COACH._dort=sv.dort; BOITE_COACH._fermerFlux(); }
+      })());
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{
