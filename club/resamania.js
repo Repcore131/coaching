@@ -20,6 +20,8 @@ const LIBS = {
 };
 const libLoaded = {};
 function loadLib(k) {
+  // déjà présente (serveur : bibliothèques chargées d'avance dans le contexte)
+  if ((k === 'jszip' && typeof JSZip !== 'undefined') || (k === 'xlsx' && typeof XLSX !== 'undefined')) return Promise.resolve();
   if (!libLoaded[k]) libLoaded[k] = new Promise((ok, ko) => { const s = document.createElement('script'); s.src = LIBS[k]; s.onload = ok; s.onerror = () => ko(new Error('Bibliothèque indisponible : ' + k)); document.head.appendChild(s); });
   return libLoaded[k];
 }
@@ -537,7 +539,7 @@ function analyzeTable(t, { clubId, month }) {
     count: k => { res.counts[k] = (res.counts[k] || 0) + 1; },
   };
   def.parse(c);
-  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
+  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Fichier probablement tronqué : exactement 2 000 lignes, plafond des listes Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
   if (t.encoding === 'ISO-8859-15' || t.encoding === 'Windows-1252') res.warnings.push(`Encodage ${t.encoding} : accents et « € » corrigés automatiquement.`);
   if (def.monthly) res.month = (t.name.match(/(\d{4})-(\d{2})(?!-\d)/) || [])[0] || month;
   return res;

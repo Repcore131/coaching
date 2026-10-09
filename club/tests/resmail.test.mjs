@@ -1,5 +1,5 @@
 // Relève des demandes de résiliation : logique serveur sans réseau (Gmail simulé).
-//   node club/tests/resmail.unit.mjs
+//   node club/tests/resmail.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';

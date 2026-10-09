@@ -14,12 +14,12 @@ import { webcrypto } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 process.env.TZ = 'Europe/Paris';
-const DIR = new URL('..', import.meta.url);
+const DIR = new URL(process.env.FITPULSE_APP_DIR || '..', import.meta.url); // dossier de l'appli (club/), ou lib/app/ dans club/cloud
 const HEURE = 15; // lundi 15 h
 const ATTENTE_MAX = Number(process.env.RAPPORT_ATTENTE_MIN || 4) * 60000; // avant 15 h, on attend l'heure pile
 
 // ── L'appli, sans navigateur ──────────────────────────────────────────────
-export function chargerAppli(donnees) {
+export function chargerAppli(donnees, { libs = false } = {}) {
   const noop = () => {};
   const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, addEventListener: noop, appendChild: noop, setAttribute: noop, querySelector: () => null, querySelectorAll: () => [], dataset: {} });
   const ctx = {
@@ -29,11 +29,14 @@ export function chargerAppli(donnees) {
     location: { hostname: 'localhost', search: '', hash: '', href: 'http://localhost/' }, history: { replaceState: noop }, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, indexedDB: undefined,
   };
   ctx.window = ctx; vm.createContext(ctx);
+  // Lecture des ZIP et XLSX (imports automatiques) : mêmes bibliothèques que le site.
+  if (libs) for (const f of ['vendor/jszip.min.js', 'vendor/xlsx.full.min.js']) vm.runInContext(readFileSync(new URL(f, DIR), 'utf8'), ctx, { filename: f });
   const fichiers = readFileSync(new URL('index.html', DIR), 'utf8').match(/src="[a-z0-9-]+\.js"/g).map(s => s.slice(5, -1)).filter(f => f !== 'app.js');
   for (const f of fichiers) vm.runInContext(readFileSync(new URL(f, DIR), 'utf8'), ctx, { filename: f });
   ctx.__DONNEES = donnees;
   vm.runInContext(donnees === 'demo' ? 'S = normalizeState(demoState()); REV++;' : 'S = normalizeState(__DONNEES || {}); REV++;', ctx);
-  return code => vm.runInContext(code, ctx);
+  const run = code => vm.runInContext(code, ctx); run.ctx = ctx;
+  return run;
 }
 
 // Les chiffres du rapport, calculés par le code de l'appli.

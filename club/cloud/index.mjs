@@ -9,6 +9,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleAuth } from 'google-auth-library';
 
+process.env.FITPULSE_APP_DIR = './app/'; // code de l'appli copié par « npm run copier »
+process.env.TZ = 'Europe/Paris';
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const GMAIL_CLIENT_ID = defineSecret('GMAIL_CLIENT_ID');
 const GMAIL_CLIENT_SECRET = defineSecret('GMAIL_CLIENT_SECRET');
@@ -31,4 +33,14 @@ export const releveResiliations = onSchedule({ ...COMMUN, schedule: 'every 60 mi
   const tk = await jeton(); const S = await lire(tk, 'pulse.json');
   const comptes = comptesGmail(S, { GMAIL_CLIENT_ID: GMAIL_CLIENT_ID.value(), GMAIL_CLIENT_SECRET: GMAIL_CLIENT_SECRET.value(), GMAIL_TOKENS: GMAIL_TOKENS.value() });
   await passageResiliations(api, tk, S, { gmailPour: gmailReel, comptes, force: true });
+});
+
+// 2. Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive) : chaque heure de 6 h à 22 h.
+//    Les fichiers sont déposés dans Cloud Storage /imports/{clubId}/{date}/ (bucket par défaut du projet).
+export const importsAutomatiques = onSchedule({ ...COMMUN, schedule: 'every 1 hours from 06:00 to 22:00', memory: '1GiB', secrets: [GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_TOKENS] }, async () => {
+  const { passageImports, sourcesReelles, stockerGcs } = await import('./lib/fitpulse-autoimport.mjs');
+  const tk = await jeton(); const S = await lire(tk, 'pulse.json');
+  const env = { GMAIL_CLIENT_ID: GMAIL_CLIENT_ID.value(), GMAIL_CLIENT_SECRET: GMAIL_CLIENT_SECRET.value(), GMAIL_TOKENS: GMAIL_TOKENS.value() };
+  const bucket = process.env.FITPULSE_BUCKET || `${process.env.GCLOUD_PROJECT}.appspot.com`;
+  await passageImports(api, tk, S, { sources: sourcesReelles(S, env), force: true, stocker: (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) });
 });

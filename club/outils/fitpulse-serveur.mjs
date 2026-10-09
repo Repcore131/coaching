@@ -22,6 +22,7 @@ import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
 import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
+import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -157,7 +158,7 @@ async function jeton() {
   const b64u = b => Buffer.from(b).toString('base64url');
   const iat = Math.floor(Date.now() / 1000);
   const tete = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const corps = b64u(JSON.stringify({ iss: c.client_email, scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 }));
+  const corps = b64u(JSON.stringify({ iss: c.client_email, scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/devstorage.read_write', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 }));
   const sig = crypto.createSign('RSA-SHA256').update(`${tete}.${corps}`).sign(c.private_key, 'base64url');
   const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${tete}.${corps}.${sig}` });
   const j = await r.json(); if (!j.access_token) throw new Error('jeton refusé : ' + JSON.stringify(j));
@@ -313,6 +314,8 @@ async function main() {
   if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
   // Relève horaire des demandes de résiliation dans la boîte de l'accueil (API Gmail).
   try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
+  // Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive), chaque heure de 6 h à 22 h.
+  try { const bucket = process.env.FITPULSE_BUCKET; await passageImports(api, tk, S, { sources: sourcesReelles(S), force: process.env.RELEVE_IMPORTS === 'true', stocker: bucket ? (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) : null }); } catch (e) { console.log('Imports automatiques : échec,', e.message); }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');

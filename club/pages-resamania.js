@@ -140,8 +140,10 @@ ACTIONS.rsmCancel = () => { UI.rsmBatch = null; render(); };
 ACTIONS.rsmFree = el => { const t = UI.rsmTables[Number(el.dataset.i)]; UI.rsmBatch = null; startWizardTable(t.name, { headers: t.headers, rows: t.rows }); };
 
 // ── Enregistrement ────────────────────────────────────────────────────────
-ACTIONS.rsmCommit = () => {
-  const B = UI.rsmBatch, choices = UI.rsmChoices || {}, club = CLUB.id, ops = [], now = Date.now();
+// Plan d'écriture d'un dépôt Resamania (fonction pure : même code dans l'appli et sur le serveur,
+// voir outils/fitpulse-autoimport.mjs). B = analyses (analyzeTable), choices = correspondances choisies.
+function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
+  const ops = [];
   const unk = unknownSellers(B);
   // 1. memoriser les correspondances choisies
   unk.forEach(u => { const ch = choices[u.key]; if (ch) u.keys.forEach(k => ops.push([['rsm', 'aliases', safeKey(k)], ch])); });
@@ -157,7 +159,7 @@ ACTIONS.rsmCommit = () => {
     summary.files++;
     const impId = 'rsm_' + newId();
     const type = r.def.id === 'resil' ? 'resil' : r.entries.length ? 'kpi' : (r.balances || r.noMandate || Object.keys(r.clients).length || r.clientsByName.length) ? 'clients' : 'control';
-    ops.push([['imports', impId], { id: impId, name: r.name, type, defId: r.def.id, source: 'resamania', clubId: club, at: now, rows: r.rowsCount, count: r.entries.length + r.recov.length + r.resil.length, from: r.from, to: r.to, active: true, by: ME.id }]);
+    ops.push([['imports', impId], { id: impId, name: r.name, type, defId: r.def.id, source: 'resamania', clubId: club, at: now, rows: r.rowsCount, count: r.entries.length + r.recov.length + r.resil.length, from: r.from, to: r.to, active: true, by: by }]);
     ops.push([['rsm', 'routine', club, r.def.id], now]);
     // KPI : identifiant derive de la cle de ligne -> reimport sans doublon
     for (const e of r.entries) {
@@ -306,6 +308,10 @@ ACTIONS.rsmCommit = () => {
     Object.entries(agg).forEach(([k, v]) => ops.push([['rsm', 'controls', club, ...k.split('|')], Math.round(v * 100) / 100]));
   }
   Object.values(pendingClients).forEach(c => ops.push([['clients', c.id], c]));
+  return { ops, summary };
+}
+ACTIONS.rsmCommit = () => {
+  const { ops, summary } = rsmCommitPlan(UI.rsmBatch, { club: CLUB.id, choices: UI.rsmChoices || {}, by: ME.id });
   db.batch(ops);
   UI.rsmBatch = null; UI.rsmDone = summary; render();
   toast(`Import Resamania terminé : ${plur(summary.files, 'fichier', 'fichiers')}`);

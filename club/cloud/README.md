@@ -9,6 +9,7 @@ Secret Manager, région `europe-west1`, fuseau `Europe/Paris`.
 | Fonction | Planning | Module |
 |---|---|---|
 | `releveResiliations` | toutes les heures | `fitpulse-resmail.mjs` |
+| `importsAutomatiques` | chaque heure de 6 h à 22 h | `fitpulse-autoimport.mjs` (code de l'appli copié dans `lib/app`) |
 
 Mise en place :
 

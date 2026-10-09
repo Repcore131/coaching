@@ -5,7 +5,7 @@
   "main": "index.mjs",
   "engines": { "node": "22" },
   "scripts": {
-    "copier": "mkdir -p lib && cp ../outils/fitpulse-resmail.mjs ../outils/fitpulse-autoimport.mjs ../outils/fitpulse-brief.mjs lib/ 2>/dev/null; true",
+    "copier": "mkdir -p lib && mkdir -p lib/app && cp ../outils/fitpulse-*.mjs lib/ && cp ../*.js ../index.html lib/app/ && cp -r ../vendor lib/app/",
     "predeploy": "npm run copier"
   },
   "dependencies": {

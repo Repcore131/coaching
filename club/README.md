@@ -88,6 +88,16 @@ Réglages : Résiliations > Demandes reçues > Réglages (boîte relevée, expé
 uniquement : `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_TOKENS` (`{"niort":"<refresh token>"}`), jeton OAuth
 du compte accueil avec la portée `gmail.readonly`. Extrait de 200 caractères, purgé 90 jours après traitement.
 
+## Imports Resamania automatiques
+
+Chaque heure de 6 h à 22 h, `outils/fitpulse-autoimport.mjs` relève les pièces jointes CSV, XLSX ou ZIP de la boîte
+dédiée (`imports+{club}@domaine` ou libellé Gmail « Resamania ») et les fichiers d'un dossier Drive partagé
+(Imports > Arrivées automatiques > Réglages). Chaque fichier est déposé dans Cloud Storage `/imports/{club}/{date}/`
+(si `FITPULSE_BUCKET`), puis lu par le vrai code de l'appli (`readAnyFile`, `analyzeTable`, `rsmCommitPlan`) : même
+détection, même clé stable, aucun doublon (un contenu déjà reçu n'est jamais relu). Journal dans
+`/pulse/rsm/autoLog/{club}`, alerte si un export du lundi manque depuis plus de 8 jours, « Fichier probablement
+tronqué » pour une liste de 2 000 lignes exactes.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

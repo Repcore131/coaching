@@ -69,12 +69,13 @@ PAGES.imports = {
   manager: true,
   render() {
     const tab = UI.impTab || 'rsm';
-    const body = { rsm: impRsm, new: impNew, history: impHistory, manual: impManual }[tab]();
+    const body = { rsm: impRsm, auto: rsmAutoTab, new: impNew, history: impHistory, manual: impManual }[tab]();
     return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div><span class="spacer"></span><button class="btn" data-act="rsmCopyPrompt" title="Copier un prompt pour Claude dans Chrome : il récupère tous les exports Resamania d’un coup">${ico('copy')} Copier le prompt</button></div>
-      ${tabs('impTab', [['rsm', 'Resamania'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
+      ${tabs('impTab', [['rsm', 'Resamania'], ['auto', `Arrivées automatiques${rsmMissing(CLUB.id).length ? ' (' + rsmMissing(CLUB.id).length + ' en retard)' : ''}`], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
     if ((UI.impTab || 'rsm') === 'rsm') { mountRsm(); return; }
+    if (UI.impTab === 'auto') return;
     const drop = $('#drop'); if (!drop) return;
     const input = $('#file');
     drop.addEventListener('click', () => input.click());
