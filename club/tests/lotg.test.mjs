@@ -84,7 +84,7 @@ test('point 6 : « Pas de réponse » noté dans Rétention apparaît côté Imp
   assert.equal(run(`S.clients.c1.dunning.status`), 'relance'); assert.ok(run(`S.clients.c1.dunning.next`));
   const t = J(run, `loyaltyTasks('k').find(x => x.type === 'impaye' && x.client.id === 'c1').acts[0].outcome`); assert.equal(t, 'pasreponse');
   run(`UI.loyTab = 'today'`); const html = run(`PAGES.loyalty.render()`);
-  assert.doesNotMatch(html, /data-o="ok"|Joint, renouvelle|RDV pris|Joint, OK/); assert.match(html, /data-act="dunSheet" data-id="c2"/); run(`UI.loyTab = 'avenir'`); assert.match(run(`PAGES.loyalty.render()`), /data-act="dunSheet" data-id="c1"/);
+  assert.doesNotMatch(html, /data-o="ok"|Joint, renouvelle|RDV pris|Joint, OK/); assert.match(html, /data-act="dunSheet" data-id="c2"/); run(`UI.loyTab = 'avenir'`); assert.match(html + run(`PAGES.loyalty.render()`), /data-act="dunSheet" data-id="c1"/);
   assert.equal(run(`loyaltyTasks('k').filter(t => t.type === 'impaye' && t.state === 'todo').length`), run(`dunRows('k').filter(c => Number(c.balance) > 0 && dunStatus(c) !== 'perdu').length`));
   assert.match(run(`(() => { UI.dunFilter = 'todo'; return dunTable(); })()`), /data-act="dunHistOpen"/);
   assert.equal(J(run, `Object.keys(DUN_OUTCOMES).filter(k => /joint|rdv/i.test(k) && DUN_OUT_ORDRE.includes(k))`).length, 0);
@@ -139,4 +139,39 @@ test('point 2 : page Rétention, onglets, tri par euros en jeu (240 € avant 3 
   const build = ['pages-data.js', 'retention.js', 'calc.js', 'relances.js'].map(f => readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
   for (const x of ['Rien à traiter sur cette vue pour le moment', 'le classement démarre au premier appel', 'Les dernières actions réalisées par le club']) assert.ok(!build.toLowerCase().includes(x.toLowerCase()), x);
   assert.match(run(`PAGES.loyalty.render.call(PAGES.loyalty) && (() => { S.clients = {}; REV++; return PAGES.loyalty.render(); })()`), /Importez Résumé clients/);
+});
+test('point 8 : carte impayé de l’accueil (Appeler tel:+33, SMS, sans Récupéré) ; promesse vendredi : relance samedi', () => {
+  const run = appli({ clients: { c1: client({ dunning: { ownerId: 'u' }, firstIncidentAt: '2026-09-01' }), c2: client({ id: 'c2', num: '5002', phone: '', dunning: { ownerId: 'u' } }) } });
+  run(`S.relances = {}; REV++`);
+  const h = run(`todoList(10)`);
+  assert.match(h, /href="tel:\+33611223344" data-act="retAppel" data-id="c1" data-t="impaye"/); assert.match(h, /href="sms:\+33611223344\?&body=/);
+  assert.doesNotMatch(h, /Récupéré/); assert.match(h, /relance n° 1/); assert.match(h, /Numéro manquant/);
+  // Promesse vendredi : prochaine relance le samedi ; si le solde n'a pas baissé, elle repasse en tête.
+  const t = run('today()'); const ven = run(`addDays(today(), ((5 - dateOf(today()).getDay() + 7) % 7) || 7)`);
+  run(`db.batch(dunIssueOps(S.clients.c1, 'promesse', { date: '${ven}' }))`);
+  assert.equal(run(`S.clients.c1.dunning.next`), run(`addDays('${ven}', 1)`));
+  assert.equal(run(`new Date(S.relances[dunRelKey(S.clients.c1)].nextAt).getDay()`), 6);
+  run(`S.clients.c1.dunning.promiseDate = addDays(today(), -1); REV++`);
+  assert.equal(run(`relQueue('k', 'mine').now[0].top.clientId`), 'c1'); assert.equal(run(`relQueue('k', 'mine').now[0].list.some(x => x.broken)`), true);
+  assert.ok(t);
+});
+test('point 9 : fin de contrat dans 12 jours en 3 taps ; À rappeler demain 18 h ; badge Relances', () => {
+  const run = appli({ clients: { f1: { id: 'f1', clubId: 'k', name: 'Fanny Exemple', offer: 'Confort', phone: '0600000002', sellerId: 'u', start: '2025-01-01' } } });
+  run(`S.clients.f1.end = addDays(today(), 12); S.tarifs = { k: { [tarifCle('Confort')]: { mensuel: 30 } } }; REV++`);
+  assert.ok(run(`relBadge()`) >= 1, 'badge inclut l’appel de rétention du jour');
+  const h = run(`todoList(10)`); assert.match(h, /data-act="retAppel" data-id="f1" data-t="renouvellement"/);
+  // tap 1 : Appeler (retour : feuille) ; tap 2 : À rappeler ; tap 3 : Demain 18 h
+  run(`globalThis.OUV = null; openModal = o => { globalThis.OUV = o; }; retSheet('f1', 'renouvellement', '')`);
+  assert.match(run('OUV.body'), /Renouvelle[\s\S]*RDV[\s\S]*À rappeler[\s\S]*Pas de réponse[\s\S]*Part/);
+  const demain18 = run(`new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 18).getTime()`);
+  run(`retEnregistrer('f1', 'renouvellement', '', 'rappel', { nextAt: ${demain18} })`);
+  assert.equal(run(`relQueue('k', 'all').now.some(r => r.top.clientId === 'f1')`), false);
+  assert.equal(run(`relancesFor('k').find(r => r.clientId === 'f1').nextAt`), demain18);
+  // Renouvelle : saisie sauvetage, valeur mensualité x 12
+  run(`retEnregistrer('f1', 'renouvellement', '', 'renouvelle')`);
+  const e = J(run, `Object.values(S.entries).find(e => e.kpiId === 'sauvetage')`); assert.equal(e.value, 1); assert.equal(e.saved_eur, 360);
+  for (const k of ['suivi15', 'renouvellement', 'anniversaire']) assert.ok(J(run, `retIssues('${k}').length`) >= 1);
+  assert.deepEqual(J(run, `retIssues('suivi15').map(x => x[1])`), ['Tout va bien', 'RDV coach', 'À rappeler', 'Pas de réponse', 'Insatisfait']);
+  assert.deepEqual(J(run, `retIssues('anniversaire').map(x => x[1])`), ['Message envoyé']);
+  run(`retEnregistrer('f1', 'renouvellement', '', 'part', { motif: 'Prix' })`); assert.equal(run(`Object.values(S.transferts)[0].motif`), 'Prix');
 });

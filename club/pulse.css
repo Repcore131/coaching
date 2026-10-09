@@ -1355,3 +1355,12 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .ret-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ret-actions .btn { min-height: 44px; }
 .ret-call { flex: 1 1 140px; justify-content: center; }
+/* Cartes d'appel (accueil, Mes relances) : zones tactiles de 44 px au moins */
+.carte-appel { display: grid; gap: 8px; }
+.carte-l1 { display: flex; align-items: center; gap: 10px; }
+.carte-montant { font-size: var(--t-20, 20px); }
+.carte-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.carte-actions .btn { min-height: 48px; justify-content: center; }
+.carte-tel { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.carte-tel .small { grid-column: 1 / -1; }
+.carte-tel .input, .carte-tel .btn { min-height: 44px; }

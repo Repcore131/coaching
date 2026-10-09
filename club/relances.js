@@ -263,6 +263,8 @@ PAGES.relances = {
   },
 };
 function relRow(r) {
+  // Impayé et rétention : la même carte que l'accueil (Appeler, SMS, feuille de résultat en 3 taps).
+  if (r.top && !r.list.some(x => x.claimedBy && x.claimedBy !== ME.id && (x.claimedUntil || 0) > Date.now()) && typeof carteAppel === 'function') { const c = carteAppel(r.top); if (c) return c; }
   const rl = r.top; const kinds = [...new Set(r.list.map(x => x.kind))];
   const lock = r.list.find(x => x.claimedBy && x.claimedBy !== ME.id && (x.claimedUntil || 0) > Date.now());
   const owner = rl.ownerId && S.users[rl.ownerId] ? S.users[rl.ownerId].first : null;

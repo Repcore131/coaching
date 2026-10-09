@@ -236,3 +236,28 @@ function retRetour() {
   setTimeout(() => (p.kind === 'impaye' ? dunSheet(p.clientId) : retSheet(p.clientId, p.kind, p.step)), 150);
 }
 document.addEventListener('visibilitychange', retRetour);
+
+// ── Cartes de l'accueil et de Mes relances : impayé et rétention en 3 taps ──
+// Appeler (tel: au format +33), retour dans l'appli : feuille de résultat ; l'issue choisie, la carte
+// suivante de la file s'affiche. Sans numéro : « Numéro manquant » et un champ enregistré sur la fiche.
+const KIND_VERS_TYPE = { impaye: 'impaye', fincontrat: 'renouvellement', suivi15: 'suivi15', suivi30: 'suivi30', anniversaire: 'anniversaire', mandat: 'mandat' };
+function carteAppel(rl) {
+  const type = KIND_VERS_TYPE[rl.kind]; if (!type || !rl.client || !rl.clientId) return null;
+  const c = rl.client; const tel = clientPhone(c); const imp = type === 'impaye';
+  const n = imp ? dunTentatives(c).length + 1 : (rl.attempts || 0) + 1; const anc = imp ? incidentDepuis(c) : null;
+  const sms = imp ? fillTemplate(tplFor('impaye', 'sms'), { prenom: String(c.name || '').split(' ')[0], club: nomAffiche(), commercial: ME.first || '', montant: fmtE(Number(c.balance)) }).text : retTexteSms(c, type);
+  const smsBtn = tel && !c.optOutSms ? `<a class="btn ${type === 'anniversaire' ? 'primary' : ''} carte-sms" href="sms:${esc(tel)}?&body=${encodeURIComponent(sms)}" data-act="carteSms" data-id="${esc(c.id)}" data-t="${type}">${ico('chat')} SMS</a>` : '';
+  const callBtn = tel ? `<a class="btn ${type === 'anniversaire' ? '' : 'primary'} carte-call" href="tel:${esc(tel)}" data-act="retAppel" data-id="${esc(c.id)}" data-t="${type}" data-s="${rl.kind === 'suivi15' ? 15 : rl.kind === 'suivi30' ? 30 : ''}">${ico('phone')} Appeler</a>` : '';
+  return `<div class="todo carte-appel ${imp ? 'hot' : ''}" data-carte="${esc(c.id)}" data-kind="${rl.kind}">
+    <div class="carte-l1"><span class="todo-i">${ico(REL_KINDS[rl.kind].icon)}</span><div class="spacer"><a href="#" data-act="${imp ? 'dunHistOpen' : 'retHist'}" data-id="${esc(c.id)}"><b>${esc(c.name || rl.name)}</b></a><div class="muted small">${imp ? `${anc != null ? `depuis ${anc} j · ` : ''}relance n° ${n}` : `${REL_KINDS[rl.kind].label} · ${esc(rl.reason || '')}`}</div></div>${imp ? `<b class="num carte-montant">${fmtE(Number(c.balance))}</b>` : ''}</div>
+    ${tel ? `<div class="carte-actions">${type === 'anniversaire' ? smsBtn + callBtn : callBtn + smsBtn}</div>`
+      : `<form class="carte-tel" data-id="${esc(c.id)}"><span class="small warn">Numéro manquant</span><input class="input" name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" aria-label="Numéro de ${esc(c.name || '')}"><button class="btn" data-act="carteTel" data-id="${esc(c.id)}">Enregistrer</button></form>`}</div>`;
+}
+ACTIONS.carteTel = el => { const f = el.closest('form'); const p = phoneE164(f && f.querySelector('input').value); if (!p) { toast('Numéro invalide.'); return; } db.batch([[['clients', el.dataset.id, 'phone'], p], [['clients', el.dataset.id, 'phoneSrc'], 'manual'], [['clients', el.dataset.id, 'phoneBad'], null]]); toast(`Numéro enregistré pour ${S.clients[el.dataset.id].name}`); };
+// SMS depuis la carte : ouvre l'application, garde la trace (impayé : historique du dossier ; rétention : action).
+ACTIONS.carteSms = el => {
+  const { id, t } = el.dataset; const c = S.clients[id]; const href = el.getAttribute('href');
+  if (t === 'impaye') db.batch([dunPatch(c, {}, 'SMS envoyé', { outcome: 'envoye' })]);
+  else if (t === 'anniversaire') retEnregistrer(id, t, null, 'envoye');
+  const a = document.createElement('a'); a.href = href; a.style.display = 'none'; document.body.appendChild(a); try { a.click(); } catch (e) { /* pas d'appli SMS */ } a.remove();
+};
