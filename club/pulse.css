@@ -1327,3 +1327,8 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
   .res-actions .btn.icon { grid-column: 1 / -1; min-height: 36px; }
   .res-menu { left: 8px; right: 8px; bottom: 100px; }
 }
+
+/* Impayés : ancienneté depuis le plus ancien incident ouvert */
+.depuis { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.depuis.warn { color: var(--warn); font-weight: 600; }
+.depuis.bad { color: var(--bad); font-weight: 700; }

@@ -305,7 +305,7 @@ function dunRows(clubId) {
 function dunDue(c) { const n = dunOf(c).next; return Number(c.balance) > 0 && (dunPromiseLate(c) || !n || n <= today()); }
 // Jours d'ouverture d'un dossier : date de régularisation (ou aujourd'hui) moins date d'apparition de l'impayé.
 function joursOuvert(c, t = today()) {
-  const d = dunOf(c); const start = c.oldestIncident || c.balanceAt || d.since; if (!start) return null;
+  const d = dunOf(c); const start = c.firstIncidentAt || c.oldestIncident || c.balanceAt || d.since; if (!start) return null;
   const end = ['recupere', 'a_verifier'].includes(d.status) && d.recoveredAt ? d.recoveredAt : t;
   return Math.max(0, Math.round((dateOf(end) - dateOf(start)) / 864e5));
 }
@@ -313,6 +313,17 @@ function joursOuvert(c, t = today()) {
 const dunPromiseDate = c => dunOf(c).promiseDate || dunOf(c).next || null;
 function dunPromiseLate(c, t = today()) { const d = dunOf(c); if (d.status !== 'promesse' || !(Number(c.balance) > 0)) return false; const p = dunPromiseDate(c); return !!p && p < t; }
 const medianOf = a => { const b = a.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); if (!b.length) return null; const m = Math.floor(b.length / 2); return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+// « Depuis » : jours depuis le plus ancien incident encore ouvert (firstIncidentAt). balanceAt reste la
+// date de la dernière variation du solde et n'est plus montré comme « Depuis ».
+function incidentDepuis(c, t = today()) { const f = c.firstIncidentAt || c.oldestIncident; return f ? Math.max(0, Math.round((dateOf(t) - dateOf(String(f).slice(0, 10))) / 864e5)) : null; }
+// Délai de récupération (canal équipe) : médiane en jours entre la date de l'incident et la régularisation,
+// sur les régularisations du mois ; null sous 3 régularisations datées.
+function recoveryDelay(clubId, mk) {
+  const from = mk + '-01', to = `${mk}-${daysIn(mk)}`;
+  const L = Object.values(S.recov || {}).filter(x => x && x.clubId === clubId && x.canal === 'equipe' && x.incidentDate && x.date >= from && x.date <= to && (!x.importIds || Object.keys(x.importIds).some(impActive)))
+    .map(x => Math.round((dateOf(x.date) - dateOf(x.incidentDate)) / 864e5)).filter(n => n >= 0);
+  return L.length >= 3 ? medianOf(L) : null;
+}
 // En-tête de la page Impayés.
 function dunStats(clubId, mk, t = today()) {
   const rows = dunRows(clubId); const open = rows.filter(c => Number(c.balance) > 0);
@@ -393,12 +404,12 @@ function dunTable() {
     ${late30.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>${plur(late30.length, 'dossier a passé', 'dossiers ont passé')} 30 jours sans responsable</b>${late30.slice(0, 4).map(c => esc(c.name || '')).join(', ')}. Chaque semaine perdue fait baisser la chance de récupérer.</div></div>` : ''}
     ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucun impayé pour l’instant</b>Dans Imports Resamania, déposez « Clients en incident » (Points d’attention) et la liste Incidents : chaque client débiteur devient une ligne ici.</div></div>` : ''}
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
-    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th class="num sortable" data-act="ui" data-key="dunSort" data-val="${UI.dunSort === 'age' ? 'age-' : 'age'}" aria-sort="${UI.dunSort === 'age' ? 'descending' : UI.dunSort === 'age-' ? 'ascending' : 'none'}">Âge${UI.dunSort === 'age' ? ' ▼' : UI.dunSort === 'age-' ? ' ▲' : ''}</th><th>Ouvert depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th class="num sortable" data-act="ui" data-key="dunSort" data-val="${UI.dunSort === 'age' ? 'age-' : 'age'}" aria-sort="${UI.dunSort === 'age' ? 'descending' : UI.dunSort === 'age-' ? 'ascending' : 'none'}">Âge${UI.dunSort === 'age' ? ' ▼' : UI.dunSort === 'age-' ? ' ▲' : ''}</th><th title="Jours depuis le plus ancien incident encore ouvert">Depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.slice(0, Number(UI.dunMax || 100)).map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
       return `<tr class="${dunDue(c) ? 'due' : ''}"><td><a href="#/client/${esc(c.id)}"><b>${esc(c.name || 'Sans nom')}</b></a>${st === 'partiel' ? ` <span class="badge info" data-badge="acompte">Acompte reçu</span>` : ''}<div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
         <td class="num nowrap" data-age="${detteAge(c) ?? ''}">${rec ? '' : detteAge(c) == null ? '<span class="muted small">date inconnue</span>' : plur(detteAge(c), 'jour', 'jours')}</td>
-        <td class="small nowrap">${rec ? `soldé le ${dm(d.recoveredAt)}${joursOuvert(c) != null ? ' · ' + plur(joursOuvert(c), 'jour', 'jours') : ''}` : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${joursOuvert(c) == null ? 'n.d.' : plur(joursOuvert(c), 'jour', 'jours')}</span>`}${dunPromiseLate(c) ? `<div class="bad">promesse du ${dm(dunPromiseDate(c))} non tenue</div>` : ''}</td>
+        <td class="small nowrap">${rec ? `soldé le ${dm(d.recoveredAt)}${joursOuvert(c) != null ? ' · ' + plur(joursOuvert(c), 'jour', 'jours') : ''}` : (j => j == null ? '<span class="muted small">n.d.</span>' : `<span class="depuis ${j >= 45 ? 'bad' : j >= 15 ? 'warn' : ''}" data-depuis="${j}">${j} j</span>`)(incidentDepuis(c))}${dunPromiseLate(c) ? `<div class="bad">promesse du ${dm(dunPromiseDate(c))} non tenue</div>` : ''}</td>
         <td class="num">${rec ? '' : fmtE(dunAttendu(c))}</td>
         <td>${rec ? `<span class="badge ok">Récupéré${d.canal && RECOV_CHANNELS[d.canal] ? ' · ' + RECOV_CHANNELS[d.canal].label.toLowerCase() : ''}</span>${d.by ? `<div class="muted small">par ${esc(fullName(S.users[d.by]))}</div>` : ''}` : `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="status">${Object.entries(DUN_STATUS).filter(([k]) => k !== 'recupere').map(([k, v]) => `<option value="${k}" ${st === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>`}</td>
         <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>
@@ -467,7 +478,7 @@ function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = ''
   const reste = arr2(Math.max(0, solde - montant)); const d = dunOf(c); const cumul = arr2((Number(d.paid) || 0) + Math.min(montant, solde));
   const ops = reste > 0
     ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtEc(montant)}, reste ${fmtEc(reste)}`)]
-    : [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
+    : [[['clients', c.id, 'balance'], 0], [['clients', c.id, 'firstIncidentAt'], null], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
   if (canal === 'equipe') ops.push(entree());
   return ops;
 }

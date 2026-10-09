@@ -56,3 +56,21 @@ test('point 4 : deux acomptes de 30 € le même jour : deux saisies distinctes'
   const E = J(run, `Object.values(S.entries).filter(e => e.kpiId === 'impayes').map(e => e.id).sort()`);
   assert.equal(E.length, 2); assert.notEqual(E[0], E[1]); assert.match(E[0], /^dn_c1_\d{4}-\d{2}-\d{2}_0$/); assert.equal(run(`S.clients.c1.balance`), 60);
 });
+const INC = 'Date de l\'incident;Type d\'incident;Prénom;Nom;Num client;Moyen de paiement;Numéro du paiement;Montant du paiement;Statut;Date de régularisation;Auteur de la régularisation';
+const fr = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+const importInc = (run, csv) => run(`(() => { const B = [analyzeTable({ name: 'RSM_incidents.csv', ...parseCSV(${JSON.stringify(csv)}) }, { clubId: 'k', month: curMonth() })]; if (!B[0].def || B[0].def.id !== 'incidents') throw new Error('non reconnu ' + (B[0].def && B[0].def.id)); db.batch(rsmCommitPlan(B, { club: 'k', by: 'u' }).ops); REV++; })()`);
+test('point 5 : incident depuis 69 jours, acompte : « 69 j », firstIncidentAt inchangé ; réimport identique', () => {
+  const run = appli({}); const t = run('today()'); const d0 = run(`addDays(today(), -69)`); const d1 = run(`addDays(today(), -20)`); const mk = t.slice(0, 7);
+  const r1 = run(`addDays(curMonth() + '-01', 0)`);
+  const csv = `${INC}\n${fr(d0)};Rejet;Paul;EXEMPLE;5001;Prélèvement;P1;70,00;En cours;;\n${fr(d1)};Rejet;Paul;EXEMPLE;5001;Prélèvement;P2;50,00;En cours;;\n`
+    + [1, 2, 3].map(i => `${fr(run(`addDays('${r1}', -${10 * i})`))};Rejet;Ana;N${i};600${i};Prélèvement;R${i};${20 * i},00;Régularisé;${fr(r1)};Léa B`).join('\n') + '\n';
+  importInc(run, csv); const id = run(`Object.values(S.clients).find(c => c.num === '5001').id`);
+  assert.equal(run(`S.clients['${id}'].firstIncidentAt`), d0); assert.equal(run(`S.clients['${id}'].balance`), 120);
+  run(`db.batch(markPaid(S.clients['${id}'], 50, { author: 'u' }))`);
+  assert.equal(run(`S.clients['${id}'].firstIncidentAt`), d0); assert.equal(run(`incidentDepuis(S.clients['${id}'])`), 69);
+  run(`UI.dunFilter = 'todo'`); assert.match(run(`dunTable()`), /data-depuis="69">69 j</);
+  assert.equal(run(`incidentDepuis({ firstIncidentAt: '2026-08-01' }, '2026-10-09')`), 69);
+  const del = run(`recoveryDelay('k', '${r1.slice(0, 7)}')`); assert.equal(del, 20);
+  importInc(run, csv); assert.equal(run(`S.clients['${id}'].firstIncidentAt`), d0); assert.equal(run(`recoveryDelay('k', '${r1.slice(0, 7)}')`), del);
+  assert.equal(run(`recoveryDelay('k', '1999-01')`), null);
+});
