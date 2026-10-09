@@ -136,30 +136,51 @@ const hasShop = c => !!c.num && (shopIndex()[String(c.num)] || []).some(d => d >
 const OPP_TYPES = {
   resiliation: { label: 'Résiliation', icon: 'door' }, impaye: { label: 'Impayé', icon: 'coins' }, prospect: { label: 'Prospect chaud', icon: 'magnet' }, invite: { label: 'Invité', icon: 'ticket' },
   fin: { label: 'Fin d’engagement', icon: 'calcheck' }, upsell: { label: 'Montée en gamme', icon: 'sparkle' }, nutrition: { label: 'Boutique J+15', icon: 'cup' }, ancien: { label: 'Ancien membre', icon: 'repeat' },
-  mandat: { label: 'Sans mandat', icon: 'bank' }, parrainage: { label: 'Parrainage', icon: 'users' },
+  mandat: { label: 'Sans mandat', icon: 'bank' }, parrainage: { label: 'Parrainage', icon: 'users' }, retention: { label: 'Rétention', icon: 'heart' },
 };
+// Probabilités par type (euros attendus = valeur x probabilité). Valeurs par défaut documentées ;
+// un manager peut les régler par club (S.clubs[id].oppProba, Opportunités > Probabilités).
+// « auto » : calculée sur les données du club (taux de sauvetage des 3 derniers mois, x 1,5 à
+// J-7 ; taux de transformation du commercial ; impayé selon l'âge 70, 50, 30, 10 %).
+const OPP_PROBA = {
+  resiliation: { auto: true, defaut: 0.25, note: 'taux de sauvetage des 3 derniers mois (25 % sans historique), x 1,5 à 7 jours de l’échéance' },
+  impaye: { auto: true, defaut: 0.5, note: 'selon l’âge : 70 % (7 j), 50 % (30 j), 30 % (60 j), 10 % au delà' },
+  prospect: { auto: true, defaut: 0.3, note: 'taux de transformation du commercial (30 % par défaut), divisé par 2 après 10 jours' },
+  invite: { defaut: 0.35 }, fin: { defaut: 0.15 }, retention: { defaut: 0.10, note: 'appels J+15 et J+30' }, upsell: { defaut: 0.05 }, nutrition: { defaut: 0.2 }, ancien: { defaut: 0.04 }, mandat: { defaut: 0.5 }, parrainage: { defaut: 0.03 },
+};
+// Probabilité d'un type : réglage du club s'il existe, sinon la valeur calculée (auto) ou par défaut.
+function oppProba(clubId, type, auto = null) {
+  const v = Number(deepGet(S, ['clubs', clubId, 'oppProba', type]));
+  if (Number.isFinite(v) && v >= 0 && v <= 1 && deepGet(S, ['clubs', clubId, 'oppProba', type]) != null) return v;
+  return auto != null ? auto : (OPP_PROBA[type] || {}).defaut || 0;
+}
 function opportunites(clubId) {
   return memo(`opp|${clubId}|${today()}`, () => {
     const out = []; const t = today(); const dvm = dureeVieMois(clubId), pm = prixMoyen(clubId);
     const add = o => { o.eurosAttendus = Math.round(o.eurosPotentiels * Math.min(1, o.probabilite)); if (o.eurosAttendus > 0) out.push(o); };
     const ts = tauxSauvetage(clubId);
     resToHandle(clubId).forEach(r => { const v = valeurEnJeu(r); const urg = resUrgent(r); const c = clubClients(clubId).find(x => tokensKey(x.name || '') === tokensKey(r.client || ''));
-      add({ key: 'res_' + r.id, type: 'resiliation', titre: urg ? `Résiliation à J-${Math.max(0, daysTo(r.effective))}` : 'Demande de résiliation', client: r.client, clientId: c ? c.id : null, phone: c ? clientPhone(c) : null, eurosPotentiels: v.euros, probabilite: ts * (urg ? 1.5 : 1), echeance: r.effective, ownerId: r.ownerId || null, href: '#/resiliations', sous: `${r.reason || 'Motif non précisé'} · en jeu ${fmtE(v.euros)}${v.estimee ? ' (estimé)' : ''}` }); });
+      add({ key: 'res_' + r.id, type: 'resiliation', titre: urg ? `Résiliation à J-${Math.max(0, daysTo(r.effective))}` : 'Demande de résiliation', client: r.client, clientId: c ? c.id : null, phone: c ? clientPhone(c) : null, eurosPotentiels: v.euros, probabilite: oppProba(clubId, 'resiliation', ts) * (urg ? 1.5 : 1), echeance: r.effective, ownerId: r.ownerId || null, href: '#/resiliations', sous: `${r.reason || 'Motif non précisé'} · en jeu ${fmtE(v.euros)}${v.estimee ? ' (estimé)' : ''}` }); });
     dunRows(clubId).filter(c => Number(c.balance) > 0).forEach(c => { const tr = DUN_AGE[dunTranche(c)];
-      add({ key: 'dun_' + c.id, type: 'impaye', titre: `Impayé de ${fmtE(Number(c.balance))}`, client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: Number(c.balance), probabilite: tr[1], echeance: dunOf(c).next || t, ownerId: dunOf(c).ownerId || null, href: '#/impayes', sous: `âge ${plur(dunAge(c), 'jour', 'jours')}` }); });
+      add({ key: 'dun_' + c.id, type: 'impaye', titre: `Impayé de ${fmtE(Number(c.balance))}`, client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: Number(c.balance), probabilite: oppProba(clubId, 'impaye', tr[1]), echeance: dunOf(c).next || t, ownerId: dunOf(c).ownerId || null, href: '#/impayes', sous: `âge ${plur(dunAge(c), 'jour', 'jours')}` }); });
     prospectsOf(clubId).forEach(p => { const a = ageDays(p.creeLe); if (a < 2 || a > 21 || prospectConv(p)) return; const tx = tauxCohorte(clubId, p.commercialId) ?? 0.3;
-      add({ key: 'pro_' + p.id, type: 'prospect', titre: 'Prospect à convertir', client: pName(p), phone: p.phone || null, prospectId: p.id, eurosPotentiels: pm * dvm, probabilite: a > 10 ? tx / 2 : tx, echeance: addDays(p.creeLe, 21), ownerId: p.commercialId || null, href: '#/opportunites', sous: `créé il y a ${plur(a, 'jour', 'jours')}${p.statut ? ' · ' + p.statut : ''}` }); });
+      add({ key: 'pro_' + p.id, type: 'prospect', titre: 'Prospect à convertir', client: pName(p), phone: p.phone || null, prospectId: p.id, eurosPotentiels: pm * dvm, probabilite: oppProba(clubId, 'prospect', tx) / (a > 10 ? 2 : 1), echeance: addDays(p.creeLe, 21), ownerId: p.commercialId || null, href: '#/opportunites', sous: `créé il y a ${plur(a, 'jour', 'jours')}${p.statut ? ' · ' + p.statut : ''}` }); });
     guestsOf(clubId).forEach(g => { const a = ageDays(g.date); if (a > 10 || guestConv(g)) return;
-      add({ key: 'gst_' + g.id, type: 'invite', titre: 'Invité à rappeler', client: g.nom, phone: g.phone, eurosPotentiels: pm * dvm, probabilite: 0.35, echeance: addDays(g.date, 10), ownerId: g.by || null, href: '#/opportunites', sous: `passé le ${dm(g.date)}` }); });
+      add({ key: 'gst_' + g.id, type: 'invite', titre: 'Invité à rappeler', client: g.nom, phone: g.phone, eurosPotentiels: pm * dvm, probabilite: oppProba(clubId, 'invite'), echeance: addDays(g.date, 10), ownerId: g.by || null, href: '#/opportunites', sous: `passé le ${dm(g.date)}` }); });
     activeClients(clubId).forEach(c => {
       const bal = Number(c.balance) > 0; const since = c.start ? ageDays(c.start) : null;
-      if (c.end && c.end >= t && c.end <= addDays(t, 45)) add({ key: 'fin_' + c.id + '_' + c.end, type: 'fin', titre: `Fin d’engagement le ${dm(c.end)}`, client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: mensualite(c) * dvm, probabilite: 0.15, echeance: c.end, ownerId: c.sellerId || null, href: '#/loyalty', sous: c.offer || '' });
-      if (!bal && gammeOf(c.offer) === 'basic' && since >= 60 && since <= 400) { const up = prixGamme(clubId, 'premium'); const gap = up ? up - mensualite(c) : 0; if (gap > 0) add({ key: 'up_' + c.id, type: 'upsell', titre: 'Proposer Premium', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: gap * 12, probabilite: 0.05, echeance: null, ownerId: c.sellerId || null, href: '#/loyalty', sous: `+${fmtE(gap)} par mois` }); }
-      if (since >= 12 && since <= 20 && !hasShop(c)) add({ key: 'nut_' + c.id, type: 'nutrition', titre: 'Aucun achat boutique depuis l’inscription', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: panierNutrition(clubId), probabilite: 0.2, echeance: addDays(c.start, 20), ownerId: c.sellerId || null, href: '#/loyalty', sous: `inscrit le ${dm(c.start)}` });
-      if (c.noMandate) add({ key: 'man_' + c.id, type: 'mandat', titre: 'Abonné sans prélèvement', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: mensualite(c) * 2, probabilite: 0.5, echeance: null, ownerId: c.sellerId || null, href: '#/loyalty', sous: c.offer || '' });
+      if (c.end && c.end >= t && c.end <= addDays(t, 45)) add({ key: 'fin_' + c.id + '_' + c.end, type: 'fin', titre: `Fin d’engagement le ${dm(c.end)}`, client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: mensualite(c) * dvm, probabilite: oppProba(clubId, 'fin'), echeance: c.end, ownerId: c.sellerId || null, href: '#/loyalty', sous: c.offer || '' });
+      if (!bal && gammeOf(c.offer) === 'basic' && since >= 60 && since <= 400) { const up = prixGamme(clubId, 'premium'); const gap = up ? up - mensualite(c) : 0; if (gap > 0) add({ key: 'up_' + c.id, type: 'upsell', titre: 'Proposer Premium', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: gap * 12, probabilite: oppProba(clubId, 'upsell'), echeance: null, ownerId: c.sellerId || null, href: '#/loyalty', sous: `+${fmtE(gap)} par mois` }); }
+      if (since >= 12 && since <= 20 && !hasShop(c)) add({ key: 'nut_' + c.id, type: 'nutrition', titre: 'Aucun achat boutique depuis l’inscription', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: panierNutrition(clubId), probabilite: oppProba(clubId, 'nutrition'), echeance: addDays(c.start, 20), ownerId: c.sellerId || null, href: '#/loyalty', sous: `inscrit le ${dm(c.start)}` });
+      if (c.noMandate) add({ key: 'man_' + c.id, type: 'mandat', titre: 'Abonné sans prélèvement', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: mensualite(c) * 2, probabilite: oppProba(clubId, 'mandat'), echeance: null, ownerId: c.sellerId || null, href: '#/loyalty', sous: c.offer || '' });
     });
-    reactivables(clubId).slice(0, 15).forEach(x => add({ key: 'anc_' + x.c.id, type: 'ancien', titre: 'Ancien membre à réactiver', client: x.c.name, clientId: x.c.id, phone: clientPhone(x.c), eurosPotentiels: pm * 6, probabilite: 0.04, echeance: null, ownerId: null, href: '#/loyalty', sous: `sorti il y a ${plur(x.mois, 'mois', 'mois')}` }));
-    parrainCandidats(clubId).forEach(c => add({ key: 'par_' + c.id + '_' + t.slice(0, 7), type: 'parrainage', titre: 'Solliciter un parrainage', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: pm * dvm, probabilite: 0.03, echeance: null, ownerId: c.sellerId || null, href: '#/opportunites', sous: `adhérent depuis ${plur(Math.round(ageDays(c.start) / 30.44), 'mois', 'mois')}` }));
+    // Rétention : appels J+15 / J+30 à faire (valeur en jeu de la tâche).
+    loyaltyTasks(clubId).filter(x => x.type === 'suivi' && x.state === 'todo' && !x.nextDate).forEach(x => add({ key: `ret_${x.client.id}_${x.step}`, type: 'retention', titre: `Appel de suivi J+${x.step}`, client: x.client.name, clientId: x.client.id, phone: clientPhone(x.client), eurosPotentiels: x.valeurEnJeu, probabilite: oppProba(clubId, 'retention'), echeance: x.due, ownerId: x.client.sellerId || null, href: '#/loyalty', sous: `inscrit le ${dm(x.client.start)}` }));
+    // Demandes de résiliation reçues par e-mail, pas encore traitées.
+    if (typeof rrqAll === 'function') rrqAll(clubId).filter(rrqOpen).forEach(r => { const c = r.clientId && S.clients[r.clientId]; const v = c ? valueAtStake({ type: 'resiliation', client: c }) : pm * 3;
+      add({ key: 'rrq_' + r.id, type: 'resiliation', titre: 'Demande de résiliation reçue', client: c ? c.name : rrqName(r), clientId: c ? c.id : null, phone: c ? clientPhone(c) : null, eurosPotentiels: v, probabilite: oppProba(clubId, 'resiliation', ts), echeance: null, ownerId: r.ownerId || null, href: '#/resiliations', sous: `reçue le ${dm(isoOf(new Date(r.receivedAt || Date.now())))}` }); });
+    reactivables(clubId).slice(0, 15).forEach(x => add({ key: 'anc_' + x.c.id, type: 'ancien', titre: 'Ancien membre à réactiver', client: x.c.name, clientId: x.c.id, phone: clientPhone(x.c), eurosPotentiels: pm * 6, probabilite: oppProba(clubId, 'ancien'), echeance: null, ownerId: null, href: '#/loyalty', sous: `sorti il y a ${plur(x.mois, 'mois', 'mois')}` }));
+    parrainCandidats(clubId).forEach(c => add({ key: 'par_' + c.id + '_' + t.slice(0, 7), type: 'parrainage', titre: 'Solliciter un parrainage', client: c.name, clientId: c.id, phone: clientPhone(c), eurosPotentiels: pm * dvm, probabilite: oppProba(clubId, 'parrainage'), echeance: null, ownerId: c.sellerId || null, href: '#/opportunites', sous: `adhérent depuis ${plur(Math.round(ageDays(c.start) / 30.44), 'mois', 'mois')}` }));
     return out.sort((a, b) => b.eurosAttendus - a.eurosAttendus);
   });
 }
@@ -201,18 +222,18 @@ PAGES.opportunites = {
   render() {
     const mgr = isManager(); const scope = mgr ? (UI.oppScope || 'all') : 'mine';
     const all = oppsFor(CLUB.id, scope); const f = UI.oppType || 'all'; const L = all.filter(o => f === 'all' || o.type === f);
-    const top = L.slice(0, 12); const tot = top.reduce((s, o) => s + o.eurosAttendus, 0);
+    const top5 = oppTop(CLUB.id, scope, 5); const tot5 = oppSum(top5);
     const done = oppsDoneToday(CLUB.id, mgr && scope === 'all' ? null : ME.id); const doneE = done.reduce((s, x) => s + (Number(x.euros) || 0), 0);
     const counts = {}; all.forEach(o => { counts[o.type] = (counts[o.type] || 0) + 1; });
     const hasData = clubClients(CLUB.id).length || prospectsOf(CLUB.id).length;
     if (!hasData) return `<div class="page-head"><div><h1>Opportunités</h1></div></div><div class="card">${emptyBox({ art: 'target', title: 'Rien à classer pour l’instant', text: 'Déposez dans Imports > Resamania : Vente d’abonnements, Clients club, Clients en incident, Prospects, Résiliations et Évolution clients. Les actions les plus rentables apparaîtront ici, classées en euros.' })}</div>`;
     return `<div class="page-head"><div><h1>Opportunités</h1><p>Les actions qui rapportent le plus, classées par euros attendus.</p></div><span class="spacer"></span><button class="btn" data-act="guestNew">${ico('plus')} Invité</button></div>
-      <div class="opp-hero"><b>Aujourd’hui, ${fmtE(tot)} attendus si vous traitez ces ${plur(top.length, 'action', 'actions')}.</b>${palierManque()}</div>
+      <div class="opp-hero"><b>Vos 5 actions les plus rentables aujourd’hui : <span data-brief-total>${fmtE(tot5)}</span> attendus.</b>${palierManque()}</div>
       <div class="row wrap" style="gap:8px;margin:12px 0">${mgr ? seg('oppScope', [['all', 'Tout le club'], ['mine', 'Les miennes']], scope) : ''}<select class="input sm" style="width:auto" data-change="oppType"><option value="all">Tous les types · ${all.length}</option>${Object.entries(OPP_TYPES).filter(([k]) => counts[k]).map(([k, T]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${T.label} · ${counts[k]}</option>`).join('')}</select></div>
       <div class="card opp-list">${L.length ? L.slice(0, UI.oppAll ? 200 : 25).map(o => oppRow(o, mgr)).join('') : emptyBox({ art: 'done', title: 'Tout est traité', text: 'Aucune opportunité ouverte pour ce filtre.' })}
       ${L.length > 25 && !UI.oppAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="oppAll" data-val="1">Voir les ${L.length - 25} suivantes</button>` : ''}</div>
       <p class="opp-foot">Réalisé aujourd’hui : <b>${plur(done.length, 'action', 'actions')}</b>, <b>${fmtE(doneE)}</b> sécurisés.</p>
-      <p class="muted small">Probabilités : résiliation au taux de sauvetage des 3 derniers mois (${fmtP(tauxSauvetage(CLUB.id))}), impayé selon l’âge (70 %, 50 %, 30 %, 10 %), prospect au taux de transformation du commercial, invité 35 %, fin d’engagement 15 %, montée en gamme 5 %, boutique 20 %, ancien membre 4 %, sans mandat 50 %.</p>`;
+      <p class="muted small">Euros attendus = valeur x probabilité. ${oppProbaTexte(CLUB.id)}${mgr ? ' <a href="#/opportunites" data-act="oppProbaCfg">Régler les probabilités</a>' : ''}</p>`;
   },
 };
 ACTIONS.oppType = el => { UI.oppType = el.value; UI.oppAll = null; render(); };
@@ -222,7 +243,8 @@ ACTIONS.oppTake = el => oppClaim(el.dataset.key, ME.id);
 ACTIONS.oppAssign = el => oppClaim(el.dataset.key, el.value || null);
 function oppClaim(key, uid) {
   const o = oppFind(key); if (!o) return;
-  if (o.type === 'resiliation') db.set(['resiliations', key.slice(4), 'ownerId'], uid);
+  if (key.startsWith('rrq_')) db.set(['resRequests', CLUB.id, key.slice(4), 'ownerId'], uid);
+  else if (o.type === 'resiliation') db.set(['resiliations', key.slice(4), 'ownerId'], uid);
   else if (o.type === 'impaye') db.set(['clients', key.slice(4), 'dunning', 'ownerId'], uid);
   else db.batch([[[...oppPath(key), 'ownerId'], uid], [[...oppPath(key), 'clubId'], CLUB.id]]);
   toast(uid === ME.id ? 'C’est noté, à vous de jouer' : 'Attribué');
@@ -233,12 +255,26 @@ ACTIONS.oppDone = el => {
   db.batch(ops); celebrate('Action faite', `${fmtE(o.eurosAttendus)} sécurisés`, { kind: 'win' });
 };
 ACTIONS.oppLater = el => { const k = el.dataset.key; db.batch([[[...oppPath(k), 'snoozeUntil'], Date.now() + 3 * 864e5], [[...oppPath(k), 'clubId'], CLUB.id]]); toast('Masquée 3 jours'); };
-// Accueil : les 5 premières opportunités de l'utilisateur.
+// Accueil : « Vos 5 actions les plus rentables aujourd'hui » (vue club pour un manager, comme la page).
 function oppHomeList(n = 5) {
-  const L = oppsFor(CLUB.id, 'mine').slice(0, n);
+  const L = oppTop(CLUB.id, isManager() ? 'all' : 'mine', n);
   if (!L.length) return todoList(3);
-  return `<div class="opp-home">${L.map(o => `<a class="row opp-mini" href="#/opportunites"><span class="opp-ico">${ico(OPP_TYPES[o.type].icon)}</span><span class="spacer"><b>${esc(o.titre)}</b><span class="muted small">${esc(o.client || '')}</span></span><b>${fmtE(o.eurosAttendus)}</b></a>`).join('')}</div>`;
+  return `<div class="opp-home">${L.map(o => `<a class="row opp-mini" href="#/opportunites"><span class="opp-ico">${ico(OPP_TYPES[o.type].icon)}</span><span class="spacer"><b>${esc(o.titre)}</b><span class="muted small">${esc(o.client || '')}</span></span><b>${fmtE(o.eurosAttendus)}</b></a>`).join('')}<div class="row opp-mini-tot"><span class="spacer muted small">Total attendu</span><b>${fmtE(oppSum(L))}</b></div></div>`;
 }
+// Probabilités en clair (pied de page) et réglage par club.
+function oppProbaTexte(clubId) {
+  return 'Probabilités : ' + Object.entries(OPP_PROBA).map(([k, d]) => { const set = deepGet(S, ['clubs', clubId, 'oppProba', k]); return `${OPP_TYPES[k].label.toLowerCase()} ${set != null ? fmtP(Number(set)) + ' (réglé)' : d.auto ? (k === 'resiliation' ? fmtP(tauxSauvetage(clubId)) + ', ' : '') + d.note : fmtP(d.defaut)}`; }).join(' ; ') + '.';
+}
+ACTIONS.oppProbaCfg = () => {
+  const cur = deepGet(S, ['clubs', CLUB.id, 'oppProba']) || {};
+  openModal({ title: 'Probabilités des opportunités', body: `<form id="oppf" class="form-grid"><p class="full muted small">En pourcentage. Laissez vide pour la valeur par défaut (indiquée en gris).</p>${Object.entries(OPP_PROBA).map(([k, d]) => `<label class="field"><span>${esc(OPP_TYPES[k].label)}</span><input class="input" name="${k}" inputmode="decimal" value="${cur[k] != null ? Math.round(cur[k] * 1000) / 10 : ''}" placeholder="${d.auto ? 'calculée' : Math.round(d.defaut * 100)}"></label>`).join('')}</form>`,
+    foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="oppProbaOk">Enregistrer</button>' });
+};
+ACTIONS.oppProbaOk = () => {
+  const f = formData($('#oppf')); const out = {};
+  Object.keys(OPP_PROBA).forEach(k => { const v = parseFloat(String(f[k] || '').replace(',', '.')); if (Number.isFinite(v) && v >= 0 && v <= 100) out[k] = Math.round(v * 10) / 1000; });
+  db.set(['clubs', CLUB.id, 'oppProba'], Object.keys(out).length ? out : null); closeModal(); toast('Probabilités enregistrées');
+};
 // « Il manque X pour le prochain palier » (repris de la prévision).
 function palierManque() {
   const mk = curMonth(); const k = Object.keys(paliersFor(CLUB.id, mk))[0]; if (!k) return '';

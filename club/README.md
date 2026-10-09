@@ -98,6 +98,21 @@ détection, même clé stable, aucun doublon (un contenu déjà reçu n'est jama
 `/pulse/rsm/autoLog/{club}`, alerte si un export du lundi manque depuis plus de 8 jours, « Fichier probablement
 tronqué » pour une liste de 2 000 lignes exactes.
 
+## Opportunités et brief du matin
+
+Page Opportunités : une liste unique des actions du jour (résiliations à sauver, demandes reçues par e-mail,
+impayés, rétention J+15 / J+30, prospects chauds, invités, fins de contrat…), chacune avec ses euros attendus
+= valeur x probabilité. Probabilités par défaut (`OPP_PROBA`, `revenus.js`), réglables par club par un manager :
+résiliation au taux de sauvetage des 3 derniers mois (25 % sans historique, x 1,5 à J-7), impayé selon l'âge
+(70, 50, 30, 10 %), prospect au taux de transformation du commercial (30 % par défaut, divisé par 2 après
+10 jours), invité 35 %, fin d'engagement 15 %, rétention 10 %, montée en gamme 5 %, boutique 20 %, ancien membre
+4 %, sans mandat 50 %, parrainage 3 %. Accueil : « Vos 5 actions les plus rentables aujourd'hui ».
+
+Brief du matin (`outils/fitpulse-brief.mjs`) : 7 h 30 heure de Paris, du lundi au samedi. Par club, KPI de la
+veille, rythme du mois en jours ouvrés (lundi au samedi hors fériés), les 5 actions les plus rentables
+(`briefData`, même calcul que la page). E-mail aux managers, notification sans nom d'adhérent, rien pour qui a
+désactivé « Bilan de la semaine et brief du matin ».
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

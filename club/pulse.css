@@ -1151,3 +1151,4 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .loy-sess-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
 .loy-sess-out .btn { min-height: 48px; }
 .loy-sess-end { text-align: center; padding: 20px 0; }
+.opp-mini-tot { padding: 8px 4px 0; border-top: 1px solid var(--line); margin-top: 4px; }

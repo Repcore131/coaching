@@ -12,7 +12,7 @@ const NOTIF_RULES = {
   palier: { label: 'Palier d’équipe franchi', ex: 'Palier 2 atteint en Contrats signés pour l’équipe.' },
   live: { label: 'Saisies des collègues en direct', ex: 'Hugo Lefèvre : +1 Contrats signés, Fitness Park Niort' },
   alertes: { label: 'Signaux faibles de l’équipe, à 9 h', ex: '2 signaux faibles à regarder.', manager: true },
-  digest: { label: 'Bilan de la semaine, le lundi', ex: 'Votre bilan de la semaine est prêt.' },
+  digest: { label: 'Bilan de la semaine et brief du matin (7 h 30, managers)', ex: 'Votre bilan de la semaine est prêt.' },
   am_digest: { label: 'Votre journée, à 7 h 45', ex: '3 relances à votre nom aujourd’hui.' },
   pm_digest: { label: 'Bilan du jour, à 19 h 30', ex: '4 saisies aujourd’hui. Équipe : 6 contrats.' },
   dun_promise: { label: 'Promesse de paiement non tenue', ex: 'Le paiement promis n’est pas arrivé. Relancez aujourd’hui.' },

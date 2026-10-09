@@ -44,3 +44,14 @@ export const importsAutomatiques = onSchedule({ ...COMMUN, schedule: 'every 1 ho
   const bucket = process.env.FITPULSE_BUCKET || `${process.env.GCLOUD_PROJECT}.appspot.com`;
   await passageImports(api, tk, S, { sources: sourcesReelles(S, env), force: true, stocker: (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) });
 });
+
+// 3. Brief du matin : 7 h 30 heure de Paris, du lundi au samedi (changement d'heure géré par le fuseau).
+//    L'envoi d'e-mail passe par la même messagerie que le serveur (secrets MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE).
+const MAIL_UTILISATEUR = defineSecret('MAIL_UTILISATEUR');
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
+export const briefDuMatin = onSchedule({ ...COMMUN, schedule: '30 7 * * 1-6', secrets: [MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE] }, async () => {
+  process.env.MAIL_UTILISATEUR = MAIL_UTILISATEUR.value(); process.env.MAIL_MOT_DE_PASSE = MAIL_MOT_DE_PASSE.value();
+  const { passageBrief } = await import('./lib/fitpulse-brief.mjs'); const { envoyerMail } = await import('./lib/fitpulse-serveur.mjs');
+  const tk = await jeton(); const S = await lire(tk, 'pulse.json');
+  await passageBrief(api, tk, S, envoyerMail, { force: true });
+});

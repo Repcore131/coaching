@@ -70,6 +70,16 @@ function idx() {
 }
 function memo(key, fn) { const I = idx(); if (I.memo.has(key)) return I.memo.get(key); const v = fn(); I.memo.set(key, v); return v; }
 
+// ── Jours ouvrés : du lundi au samedi, hors jours fériés (France métropolitaine) ──
+function paquesDe(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return `${y}-${pad(mo)}-${pad(da)}`; }
+const FERIES = new Map();
+const feriesDe = y => { if (!FERIES.has(y)) { const p = paquesDe(y); FERIES.set(y, new Set([`${y}-01-01`, addDays(p, 1), `${y}-05-01`, `${y}-05-08`, addDays(p, 39), addDays(p, 50), `${y}-07-14`, `${y}-08-15`, `${y}-11-01`, `${y}-11-11`, `${y}-12-25`])); } return FERIES.get(y); };
+const estFerie = iso => feriesDe(Number(iso.slice(0, 4))).has(iso);
+const estOuvre = iso => dateOf(iso).getDay() !== 0 && !estFerie(iso);
+function joursOuvres(from, to) { let n = 0; for (let d = from; d <= to; d = addDays(d, 1)) if (estOuvre(d)) n++; return n; }
+// Dernier jour ouvré avant une date (la « veille » d'un lundi est le samedi).
+function veilleOuvree(iso = today()) { let d = addDays(iso, -1); while (!estOuvre(d)) d = addDays(d, -1); return d; }
+
 // ── Impayés récupérés : UN seul calcul ────────────────────────────────────
 // Utilisé par l'accueil, le tableau de bord, le classement, le récap et la page Impayés.
 //  equipe : saisies du KPI « Impayés récupérés » (Réglé à la main + régularisations

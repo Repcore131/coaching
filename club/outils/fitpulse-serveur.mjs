@@ -23,6 +23,7 @@ import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
 import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
 import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
+import { passageBrief } from './fitpulse-brief.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -283,6 +284,8 @@ function smtp(lignesMessage, dest) {
     s.on('error', ko);
   });
 }
+// Envoi d'un e-mail (utilisé aussi par les fonctions planifiées de club/cloud).
+export const envoyerMail = (dest, m) => smtp(message(dest, m), dest);
 function message(dest, { objet, texte, html }) {
   const b64 = s => Buffer.from(s, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
   const fr = 'fp' + crypto.randomBytes(8).toString('hex');
@@ -312,6 +315,8 @@ async function main() {
   if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
   // KPI du matin, 8 h 45 : e-mail à l'accueil avec le bouton « Envoyer sur WhatsApp ».
   if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
+  // Brief du matin, 7 h 30 du lundi au samedi : e-mail aux managers (et notification sans nom d'adhérent).
+  if (MDP || DRY) { try { await passageBrief(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) brief → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); }, { force: process.env.APERCU_BRIEF === 'true' }); } catch (e) { console.log('Brief du matin : échec,', e.message); } }
   // Relève horaire des demandes de résiliation dans la boîte de l'accueil (API Gmail).
   try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
   // Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive), chaque heure de 6 h à 22 h.
