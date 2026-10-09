@@ -129,6 +129,8 @@ function confidentialiteBody(connecte) {
     ${mgr ? `<h3>Supprimer un adhérent</h3><div class="row wrap" style="gap:8px"><input class="input" style="max-width:320px" placeholder="Nom ou numéro de l’adhérent" data-input="confQ" data-focus="confQ" value="${esc(UI.confQ || '')}"></div>
       ${(() => { const q = norm(UI.confQ || ''); if (q.length < 2) return ''; const L = clubClients(CLUB.id).filter(c => norm(c.name || '').includes(q) || String(c.num || '').includes(q)).slice(0, 8);
         return L.length ? `<div class="conf-res">${L.map(c => `<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer"><b>${esc(c.name || 'Sans nom')}</b> <span class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}</span></span><button class="btn sm danger" data-act="cliErase" data-id="${esc(c.id)}">Supprimer</button></div>`).join('')}</div>` : '<p class="muted small">Aucun adhérent trouvé.</p>'; })()}` : ''}
+    <h2>${TXT.propriete.titre}</h2>
+    <p>${TXT.propriete.texte}</p><p class="muted small">${TXT.propriete.version}</p>
     <h2>Comparaison anonyme entre clubs</h2>
     <p>Désactivée par défaut. Si un manager l’active, Fit Pulse envoie chaque mois des agrégats sans aucun nom (taux de réalisation par indicateur, délai médian de récupération des impayés, taux de sauvetage) sous une empreinte du club qui ne permet pas de le retrouver. En retour, le club voit sa position par quart, jamais le nom ni les chiffres d’un autre club ou d’un commercial. Désactiver retire aussi les agrégats déjà envoyés.</p>
     ${mgr ? `<label class="row" style="gap:8px"><input type="checkbox" data-change="benchToggle" ${benchOn() ? 'checked' : ''}> <b>Comparer mon club anonymement</b></label>

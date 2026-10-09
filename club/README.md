@@ -129,6 +129,14 @@ Détail et bascule : `docs/multi-salles.md`.
 - Compte à rebours : `J-{jours calendaires} · {jours ouvrés} jours ouvrés`, sans dimanche ni jour férié.
 - Contrôle : `node club/outils/build-single.mjs /tmp/fitpulse.html && node club/scripts/audit-libelles.js /tmp/fitpulse.html` doit relever 0 terme interdit.
 
+## Antériorité et propriété
+
+- `LICENSE` : licence propriétaire, tous droits réservés (titulaire à compléter ; les en-têtes citent Kévin GUELLEC et FPN Gestion). Mention aussi dans la page Confidentialité.
+- `docs/concepts-propres.md` : les concepts originaux, avec date et commit de première implémentation.
+- `docs/sources-et-licences.md` : bibliothèques (JSZip, SheetJS, Firebase), polices, images (Canva : droits à vérifier).
+- `bash club/scripts/paquet-esoleau.sh [sortie]` : archive datée pour e-Soleau (HTML unique, docs et captures, code des outils, historique git, `SHA256SUMS.txt`), refusée au-delà de 10 Mo.
+- `bash club/scripts/creer-depot-fit-pulse.sh ../fit-pulse [url-privée]` : crée le dépôt « fit-pulse » (fitpulse.html, assets/, scripts/, docs/), premier commit daté, étiquette `v0.1-2026-10` ; avec une URL de dépôt privé existant, le pousse.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

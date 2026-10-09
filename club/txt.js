@@ -131,4 +131,9 @@ const TXT = {
     sous: 'fins d’engagement à relancer',
   },
   notifs: { cloture: 'Clôture du jour' },
+  propriete: {
+    titre: 'Propriété du logiciel',
+    texte: 'Fit Pulse (code, interfaces, textes, méthodes de calcul, nom et logo) est un logiciel propriétaire : tous droits réservés. Son historique est versionné et daté ; les concepts propres à Fit Pulse sont décrits dans docs/concepts-propres.md. Toute reproduction, même partielle, est interdite sans autorisation écrite.',
+    version: 'Version v0.1-2026-10',
+  },
 };
