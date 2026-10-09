@@ -247,7 +247,7 @@ export function emailInvitation(d) {
     `3. Installez l'appli : iPhone → Safari > Partager > « Sur l'écran d'accueil » ; Android → Chrome > ⋮ > « Installer l'application »`, '',
     `Votre code est personnel : ne le partagez avec personne.`, '', `À très vite sur le plateau !`, `L'équipe ${d.club}`,
   ].join('\n');
-  const Y = '#FFD600';
+  const Y = '#12B3A8'; // couleur Fit Pulse (--brand)
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>${echap(objet)}</title></head>
 <body style="margin:0;padding:0;background:#0a0a0a;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Votre code personnel et l'application à installer en une minute.</div>

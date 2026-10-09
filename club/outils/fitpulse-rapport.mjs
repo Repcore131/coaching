@@ -75,7 +75,7 @@ const N = v => (v == null ? 'n.d.' : nf.format(Math.round(v)).replace(/ | /g,
 const EUR = v => (v == null ? 'n.d.' : N(v) + ' €');
 const PCT = v => (v == null ? 'n.d.' : Math.round(v) + ' %');
 const DM = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
-const JAUNE = '#FFD600', NOIR = '#0B0B0C', VERT = '#16A34A', ORANGE = '#D97706', ROUGE = '#DC2626', GRIS = '#6B6B70', FOND = '#F3F3F0', LIGNE = '#E4E4DE';
+const MARQUE = '#12B3A8', NOIR = '#0B0B0C', VERT = '#16A34A', ORANGE = '#D97706', ROUGE = '#DC2626', GRIS = '#6B6B70', FOND = '#F3F3F0', LIGNE = '#E4E4DE';
 const couleur = (pct, rythme = 1) => (pct == null ? GRIS : pct >= rythme * 0.98 ? VERT : pct >= rythme * 0.85 ? ORANGE : ROUGE);
 
 function tuile(label, valeur, sous = '', c = NOIR) {
@@ -96,10 +96,10 @@ function jauge({ label, reel, cible, fmt = N, rythme = null, n1 = null, note = '
 function histo(items, { fmt = N, h = 110, cible = null, c2 = null } = {}) {
   const max = Math.max(1, cible || 0, ...items.flatMap(i => [i.v || 0, i.v2 || 0]));
   const col = (v, c) => { const px = Math.round(((v || 0) / max) * h); return `<td valign="bottom" align="center" style="padding:0 2px"><div style="font-size:10px;color:${NOIR};font-weight:700;white-space:nowrap">${v == null ? '' : fmt(v)}</div><div style="background:${c};height:${Math.max(px, v ? 2 : 0)}px;width:22px;border-radius:3px 3px 0 0;font-size:0;line-height:0">&nbsp;</div></td>`; };
-  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:6px auto 0"><tr>${items.map(i => `<td valign="bottom" style="padding:0 6px"><table cellpadding="0" cellspacing="0" role="presentation"><tr>${col(i.v, i.c || JAUNE)}${c2 ? col(i.v2, c2) : ''}</tr></table></td>`).join('')}</tr>
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:6px auto 0"><tr>${items.map(i => `<td valign="bottom" style="padding:0 6px"><table cellpadding="0" cellspacing="0" role="presentation"><tr>${col(i.v, i.c || MARQUE)}${c2 ? col(i.v2, c2) : ''}</tr></table></td>`).join('')}</tr>
     <tr>${items.map(i => `<td align="center" style="font-size:11px;color:${GRIS};padding-top:4px;border-top:1px solid ${LIGNE}">${E(i.l)}</td>`).join('')}</tr></table>`;
 }
-const bloc = (titre, corps) => `<tr><td style="padding:14px 18px 4px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:.5px;text-transform:uppercase;color:${NOIR};border-left:5px solid ${JAUNE};padding-left:8px">${E(titre)}</div></td></tr><tr><td style="padding:4px 18px 10px">${corps}</td></tr>`;
+const bloc = (titre, corps) => `<tr><td style="padding:14px 18px 4px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:.5px;text-transform:uppercase;color:${NOIR};border-left:5px solid ${MARQUE};padding-left:8px">${E(titre)}</div></td></tr><tr><td style="padding:4px 18px 10px">${corps}</td></tr>`;
 const tableau = (tetes, lignes) => `<table width="100%" cellpadding="6" cellspacing="0" role="presentation" style="border-collapse:collapse;font-size:13px"><tr>${tetes.map((t, i) => `<th align="${i ? 'right' : 'left'}" style="border-bottom:2px solid ${NOIR};font-size:12px">${E(t)}</th>`).join('')}</tr>${lignes.map(l => `<tr>${l.map((v, i) => `<td align="${i ? 'right' : 'left'}" style="border-bottom:1px solid ${LIGNE}">${v}</td>`).join('')}</tr>`).join('')}</table>`;
 
 export function emailRapport(D, { mensuel = false } = {}) {
@@ -111,7 +111,7 @@ export function emailRapport(D, { mensuel = false } = {}) {
 <body style="margin:0;background:${FOND};font-family:Arial,Helvetica,sans-serif;color:${NOIR}">
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${FOND}"><tr><td align="center" style="padding:16px 8px">
 <table width="640" cellpadding="0" cellspacing="0" role="presentation" style="max-width:640px;width:100%;background:#fff;border-radius:14px;overflow:hidden">
-<tr><td style="background:${NOIR};padding:18px 18px 14px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;color:${JAUNE};letter-spacing:1px">FIT PULSE</div>
+<tr><td style="background:${NOIR};padding:18px 18px 14px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;color:${MARQUE};letter-spacing:1px">FIT PULSE</div>
   <div style="color:#fff;font-size:15px;margin-top:2px"><b>${E(D.club)}</b> · rapport hebdomadaire du ${DM(D.today)}</div>
   <div style="color:#BDBDBD;font-size:12px;margin-top:4px">Semaine du ${DM(D.wStart)} au ${DM(D.wEnd)} · Plan ${E(P.label)} : ${Math.round(rythme * 100)} % du trimestre écoulé</div></td></tr>
 ${bloc('La semaine', tuiles([

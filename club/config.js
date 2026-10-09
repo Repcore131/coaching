@@ -53,7 +53,7 @@ window.PARKPULSE_ACCOUNTS = [
 // définition : exporter les images depuis Canva et remplacer les fichiers de
 // club/assets/ sous le même nom. logo : null pour n'afficher que Fit Pulse.
 window.PARKPULSE_ASSETS = {
-  wordmark: 'assets/fitpulse-logo.png',
+  wordmark: 'assets/logo/fitpulse-horizontal-fond-sombre.svg',
   icon: 'favicon.png',
   banner: 'assets/hero-banner.jpg',
   login: 'assets/hero-login.jpg',
