@@ -7761,6 +7761,20 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
   text-align:center;margin-top:10px}
 @media(max-width:360px){ .bq-dev{max-height:300px} }
 
+/* ══ LA LECTURE D'UN PROGRAMME ACHETÉ (09/10/2026) ═══════════════════════
+   À vie, sans abonnement : une liste sobre, séance par séance. */
+.lp-t{font-weight:900;font-size:var(--fs-lg);color:var(--text);margin-bottom:4px}
+.lp-f{font-size:var(--fs-xs);color:var(--sub);margin-bottom:14px}
+.lp-vide{font-size:var(--fs-sm);color:var(--sub);line-height:1.6}
+.lp-s{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
+  padding:12px 14px;margin-bottom:10px}
+.lp-s-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;
+  color:var(--red-text);margin-bottom:8px}
+.lp-l{margin:0;padding-left:20px}
+.lp-l li{font-size:var(--fs-sm);color:var(--text);line-height:1.55;margin-bottom:6px}
+.lp-n{display:block;font-weight:700}
+.lp-d{display:block;font-size:var(--fs-xs);color:var(--sub)}
+
 /* ══ LA FICHE DE VENTE DE LA BOUTIQUE ════════════════════════════════════ */
 .vn-lab{display:block;font-size:var(--fs-2xs);letter-spacing:1.6px;text-transform:uppercase;
   font-weight:800;color:var(--sub);margin:14px 0 6px}

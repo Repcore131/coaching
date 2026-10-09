@@ -17,7 +17,7 @@
   "coaching": {
     "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi." },
     "revision_prog": { "prix": 40, "mois": 1, "lib": "Révision de programme", "comprend": "Ton programme ajusté quand tu en as besoin, sans échéance." },
-    "boutique_prog": { "prix": 14.9, "mois": 3 },
+    "boutique_prog": { "prix": 14.9, "mois": 1, "acces": "vie", "_lisezmoi": "Un programme de la boutique : le programme à vie (acces), et mois × 30 jours d'app complète (Ultime) à partir de l'achat. Ensuite, il se relit toujours ; pour l'utiliser en séance, Essentielle suffit. Le worker (cloudflare/src/paypal.js, PROGRAMME_MS) suit cette valeur : un test les compare." },
     "coaching_essentiel": { "prix": 150, "mois": 1, "lib": "Coaching Essentiel", "comprend": "Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach." },
     "coaching_transfo": { "prix": 350, "mois": 3, "lib": "Coaching Transformation", "comprend": "Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach." },
     "coaching_evolution": { "prix": 600, "mois": 6, "lib": "Coaching Évolution", "comprend": "Le suivi complet sur six mois, le temps d'une vraie transformation." }

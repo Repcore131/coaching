@@ -441,7 +441,172 @@ function programmeAcquis(u,id){
   if(p&&!p.prixCts) return true;          // un programme a zero euro est libre
   const a=u&&u.programmesAchetes;
   if(!a||typeof a!=='object'||typeof id!=='string') return false;
-  return Object.prototype.hasOwnProperty.call(a,id)&&!!a[id];
+  if(!Object.prototype.hasOwnProperty.call(a,id)||!a[id]) return false;
+  // ⚠ ACQUIS À VIE, SAUF REMBOURSÉ (09/10/2026). L'accès au programme ne
+  //   dépend plus d'aucun abonnement ni d'aucune échéance : seul un
+  //   remboursement (rembourseLe, posé par le worker) le retire.
+  const x=a[id];
+  return !(x&&typeof x==='object'&&Number(x.rembourseLe)>0);
+}
+// ══ UN PROGRAMME DE LA BOUTIQUE : À VIE, ET 30 JOURS D'APP (09/10/2026) ══
+//
+// Kevin : « un programme boutique = accès au programme à vie + 30 jours d'app,
+// puis lecture du programme incluse dans Essentielle ». Trois choses, et
+// chacune a sa règle :
+//   · LE PROGRAMME, À VIE : programmeAcquis, sans échéance. Il se RELIT
+//     toujours (ouvrirLectureProgramme), même sans abonnement, même quand
+//     l'app est fermée par ailleurs — l'écran de fin d'essai y mène ;
+//   · L'APP COMPLÈTE (Ultime), 30 JOURS À PARTIR DE L'ACHAT : ouvertJusqu dans
+//     le dossier, ultimeJusqu dans droits/ (posé par le worker) ;
+//   · ENSUITE, le suivre EN SÉANCE demande un abonnement, et Essentielle
+//     suffit (composer et enchaîner ses séances en fait partie). Les fonctions
+//     Ultime (bibliothèque, charge du bloc, diète) restent à Ultime.
+// Les achats faits avant (trois mois) gardent leur échéance : rien ne la relit.
+/**
+ * PURE. Les jours d'app complète qu'ouvre un programme de la boutique
+ * (TARIFS.coaching.boutique_prog.mois × 30, comme le worker les compte).
+ * @returns {number}
+ */
+function joursAppProgramme(){
+  return Math.round((Number((offre('boutique_prog')||{}).mois)||0)*30);
+}
+/**
+ * PURE. La fiche d'un achat, telle qu'elle s'écrit dans programmesAchetes.
+ * @param {{prixCts:number}} p le programme
+ * @param {string} ordre l'identifiant de la commande PayPal ('offert' pour un cadeau du coach)
+ * @param {number} t la date de l'achat (ms)
+ * @param {string} [source] 'paypal' (défaut) | 'offert'
+ * @returns {{date:number,prixCts:number,source:string,ordre:string,ouvertJusqu:number}}
+ */
+function ficheAchatProgramme(p,ordre,t,source){
+  const src=source==='offert'?'offert':'paypal';
+  return {date:t,prixCts:src==='offert'?0:(Number(p&&p.prixCts)||0),source:src,
+    ordre:String(ordre||'').slice(0,64),
+    // Un programme offert par le coach n'ouvre pas l'app : il ne s'est rien payé.
+    ouvertJusqu:src==='offert'?0:t+joursAppProgramme()*86400000};
+}
+/**
+ * PURE. Les programmes acquis (à vie, non remboursés) qui existent dans la
+ * boutique et se lisent — pas les services (la révision).
+ * @param {any} u
+ * @returns {string[]}
+ */
+function programmesAcquisDe(u){
+  const a=u&&u.programmesAchetes;
+  if(!a||typeof a!=='object') return [];
+  return Object.keys(a).filter(id=>{
+    if(!programmeAcquis(u,id)) return false;
+    const p=programmeDuCatalogue(id);
+    return !!(p&&!p.service);
+  });
+}
+/**
+ * PURE. Ce que l'achat donne, écrit AVANT de payer.
+ * @returns {string}
+ */
+function texteAchatProgramme(){
+  const j=joursAppProgramme();
+  return 'Le programme est à toi, à vie : tu le relis quand tu veux, même sans abonnement. '
+    +(j?'L’achat ouvre aussi toute l’application (Ultime) pendant '+j+' jours. ':'')
+    +'Ensuite, pour le suivre en séance dans l’app, l’abonnement Essentielle suffit.';
+}
+/**
+ * PURE. Le programme à lire : ses séances et leurs exercices, tels qu'ils sont
+ * écrits. Rien n'est résumé ni deviné : ce qui n'est pas dans le programme
+ * n'apparaît pas.
+ * @param {any} p le programme (programmeDuCatalogue)
+ * @param {string} genre 'H' | 'F'
+ * @returns {string} du HTML échappé
+ */
+function htmlLectureProgramme(p,genre){
+  if(!p) return '';
+  const faits=faitsProgramme(p);
+  const jours=_seancesProgramme(p,genre).filter(j=>j&&j.active!==false
+    &&Array.isArray(j.exercises)&&j.exercises.some(e=>e&&String(e.name||'').trim()));
+  let h='<div class="lp"><div class="lp-t">'+escapeHtml(p.nom||'Programme')+'</div>'
+    +(faits.length?'<div class="lp-f">'+faits.map(escapeHtml).join(' · ')+'</div>':'');
+  if(!jours.length) return h+'<p class="lp-vide">Ce programme n’a pas encore de séances.</p></div>';
+  for(const j of jours){
+    const titre=[String(j.day||'').trim(),String(j.name||'').trim()].filter(Boolean).join(' · ');
+    h+='<div class="lp-s">'+(titre?'<div class="lp-s-t">'+escapeHtml(titre)+'</div>':'')+'<ol class="lp-l">';
+    for(const e of j.exercises){
+      const n=String((e&&e.name)||'').trim();
+      if(!n) continue;
+      const detail=[(Number(e.series)>0&&String(e.reps||'').trim())?(Number(e.series)+' × '+String(e.reps).trim()):'',
+        String(e.repos||'').trim()?('repos '+String(e.repos).trim()):''].filter(Boolean).join(', ');
+      h+='<li><span class="lp-n">'+escapeHtml(n)+'</span>'+(detail?'<span class="lp-d">'+escapeHtml(detail)+'</span>':'')+'</li>';
+    }
+    h+='</ol></div>';
+  }
+  return h+'</div>';
+}
+// LA LECTURE, EN FEUILLE. Elle ne demande AUCUN accès à l'app : seulement
+// d'avoir le programme. C'est ce qui la rend atteignable depuis l'écran de
+// fin d'essai, où tout le reste est fermé.
+function ouvrirLectureProgramme(id){
+  const u=currentUser;
+  const p=programmeDuCatalogue(id);
+  if(!p||!programmeAcquis(u,id)){ toast('Ce programme n’est pas dans tes achats.','var(--orange)'); return false; }
+  let g='H'; try{ g=_genreProgramme(u)||'H'; }catch(e){ g='H'; }
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" id="lecture-programme" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +htmlLectureProgramme(p,g)
+    +'<button class="btn btn-outline" style="width:100%;margin-top:14px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// PLUSIEURS PROGRAMMES : la liste d'abord ; un seul : il s'ouvre.
+function ouvrirMesProgrammesAchetes(){
+  const l=programmesAcquisDe(currentUser);
+  if(!l.length){ toast('Aucun programme acheté.','var(--sub)'); return false; }
+  if(l.length===1) return ouvrirLectureProgramme(l[0]);
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px">'
+    +'<h2 style="margin-bottom:12px;font-size:var(--fs-lg)">Mes programmes</h2>'
+    +l.map(id=>{ const p=programmeDuCatalogue(id);
+      return '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="ouvrirLectureProgramme(\''
+        +escapeHtml(id)+'\')">'+escapeHtml((p&&p.nom)||id)+'</button>'; }).join('')
+    +'<button class="btn btn-outline" style="width:100%" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// ══ LES FICHES À REMPLIR (09/10/2026) ════════════════════════════════════
+// Ce que Kevin écrit pour qu'un emplacement de RC_PROGRAMMES s'ouvre à la
+// vente. Les libellés sont les siens (nom, promesse, durée, séances) ; la
+// colonne de droite est le champ du catalogue qui les porte.
+const FICHE_PROGRAMME=Object.freeze([
+  Object.freeze({champ:'nom',            lib:'nom'}),
+  Object.freeze({champ:'accroche',       lib:'promesse'}),
+  Object.freeze({champ:'description',    lib:'description'}),
+  Object.freeze({champ:'semaines',       lib:'durée (semaines)'}),
+  Object.freeze({champ:'seancesSemaine', lib:'séances par semaine'}),
+  Object.freeze({champ:'seances',        lib:'séances (le contenu)'}),
+  Object.freeze({champ:'prixCts',        lib:'prix'}),
+]);
+/**
+ * PURE. Ce qui manque à la fiche d'un programme pour se vendre, en libellés.
+ * Une liste vide veut dire que la fiche est complète (programmeVendable dit
+ * le reste : `aCompleter` retiré).
+ * @param {any} p
+ * @returns {string[]}
+ */
+function ficheACompleter(p){
+  if(!p) return FICHE_PROGRAMME.map(f=>f.lib);
+  return FICHE_PROGRAMME.filter(f=>{
+    const v=p[f.champ];
+    if(f.champ==='seances') return !_seancesProgramme(p,'H').length&&!_seancesProgramme(p,'F').length;
+    if(f.champ==='prixCts'||f.champ==='seancesSemaine') return !(Number(v)>0);
+    return !String(v||'').trim();
+  }).map(f=>f.lib);
 }
 // Le lien de contact. Vide s'il n'y a pas de numero : voir RC_WHATSAPP.
 function lienWhatsApp(texte){
@@ -1089,7 +1254,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -46768,7 +46933,10 @@ function _htmlActionProgramme(p){
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
-    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
+    // LIRE, TOUJOURS : le programme est à vie, abonnement ou pas.
+    h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
+      +'onclick="ouvrirLectureProgramme(\''+id+'\')">Lire le programme</button>';
+    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis, à vie.</div>';
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
@@ -46805,7 +46973,10 @@ function ouvrirAchatProgramme(id){
     //   c'est la phrase qui evite la soiree d'allers-retours : elle dit ce que
     //   l'ajustement fait, ET ce qu'il n'est pas.
     +(p.description?'<p class="bq-desc" style="margin-top:8px;line-height:1.6">'
-      +escapeHtml(p.description)+'</p>':'');
+      +escapeHtml(p.description)+'</p>':'')
+    // CE QUE L'ACHAT DONNE, AVANT DE PAYER (09/10/2026) : à vie, et 30 jours d'app.
+    +(p.service?'':'<p class="bq-note" data-achat-donne style="margin-top:8px;line-height:1.6">'
+      +escapeHtml(texteAchatProgramme())+'</p>');
   const b=document.getElementById('ach-paypal');
   if(b) b.innerHTML='<div class="skeleton fx-loop" style="height:55px;border-radius:var(--r-2)"></div>';
   const c=document.getElementById('ach-cgv');
@@ -46967,10 +47138,11 @@ function _enregistrerAchat(id,ordre){
   //   le repli tant que les fonctions ne tournent pas, et elle vaut ce que
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  //   ⚠ 30 JOURS, PLUS TROIS MOIS (09/10/2026), et le programme À VIE : voir
+  //   « UN PROGRAMME DE LA BOUTIQUE » près de programmeAcquis. Le worker écrit
+  //   la même fiche de son côté (champ par champ, sans effacer celle-ci).
   paiementRecentNoter(currentUser,'programme');
-  currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
-    ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};
+  currentUser.programmesAchetes[p.id]=ficheAchatProgramme(p,ordre,t,'paypal');
   saveUser();
   // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
   // a la premiere lecture de droits/.
@@ -47004,7 +47176,7 @@ function _enregistrerAchat(id,ordre){
 function ouvrirMerciAchat(id){
   const p=programmeDuCatalogue(id);
   if(!p) return false;
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  const jours=joursAppProgramme();
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
@@ -47012,8 +47184,9 @@ function ouvrirMerciAchat(id){
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:14px">'
-    +'Il est installé dans tes séances. Et pendant '+mois+' mois, tu as aussi le catalogue '
-    +'d’exercices, la charge de ton bloc et ta diète calculée.</p>'
+    +'Il est installé dans tes séances, et il reste à toi : tu pourras toujours le relire. '
+    +'Pendant '+jours+' jours, tu as aussi le catalogue d’exercices, la charge de ton bloc '
+    +'et ta diète calculée.</p>'
     +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65">'
@@ -47039,7 +47212,7 @@ async function offrirProgramme(id){
   if(!p) return false;
   if(!currentUser.programmesAchetes||typeof currentUser.programmesAchetes!=='object')
     currentUser.programmesAchetes={};
-  currentUser.programmesAchetes[p.id]={le:Date.now(),prixCts:0,ordre:'offert'};
+  currentUser.programmesAchetes[p.id]=ficheAchatProgramme(p,'offert',Date.now(),'offert');
   saveUser();
   _rendreBoutique();
   return appliquerProgramme(p.id);
@@ -82521,6 +82694,11 @@ function rendreEssaiBilan(u){
       +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +'Voir les formules de coaching</a>'
       +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
+      // SES PROGRAMMES ACHETÉS RESTENT LISIBLES (09/10/2026) : ils sont à vie,
+      // et cet écran est celui où tout le reste est fermé.
+      +((()=>{ const n=programmesAcquisDe(x).length;
+        return n?'<button type="button" class="eb-lien" data-eb-programmes onclick="ouvrirMesProgrammesAchetes()">'
+          +(n>1?'Lire mes '+n+' programmes':'Lire mon programme')+'</button>':''; })())
     +'</div>';
   return true;
 }

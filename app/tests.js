@@ -37129,6 +37129,110 @@ async function testExercices(){
         if(!/TARIFS\.engagementMois>0\)\?\{engagementJusqu:moisApres\(Date\.now\(\),TARIFS\.engagementMois\)\}:\{\}/.test(src)) return _echec('l’activation pose un terme sans condition');
         return true;})());
 
+      // ══ BOUTIQUE : LE PROGRAMME À VIE, 30 JOURS D'APP (09/10/2026) ══════
+      ok('BOUTIQUE — achat : le programme à vie, 30 jours d’Ultime à partir de l’achat',(()=>{
+        const J=864e5, t=Date.UTC(2026,9,10,10);
+        if(joursAppProgramme()!==TARIFS.coaching.boutique_prog.mois*30||joursAppProgramme()!==30) return _echec('jours : '+joursAppProgramme());
+        if(TARIFS.coaching.boutique_prog.acces!=='vie') return _echec('acces : '+TARIFS.coaching.boutique_prog.acces);
+        const f=ficheAchatProgramme({prixCts:1490},'ORDX',t);
+        if(f.date!==t||f.prixCts!==1490||f.source!=='paypal'||f.ordre!=='ORDX'||f.ouvertJusqu!==t+30*J) return _echec('fiche : '+JSON.stringify(f));
+        const o=ficheAchatProgramme({prixCts:1490},'offert',t,'offert');
+        if(o.source!=='offert'||o.prixCts!==0||o.ouvertJusqu!==0) return _echec('offert : '+JSON.stringify(o));
+        const u={id:'b1',email:'b1@t.fr',role:'athlete',status:'FREE',programmesAchetes:{fondations:f}};
+        // PENDANT 30 JOURS : Ultime ouvert (repli du dossier) ; APRÈS : plus d'Ultime…
+        if(!programmeOuvreUltime(u,t+29*J)) return _echec('29e jour : Ultime fermé');
+        if(programmeOuvreUltime(u,t+31*J)) return _echec('31e jour : Ultime encore ouvert');
+        // …MAIS LE PROGRAMME RESTE ACQUIS, sans échéance.
+        if(!programmeAcquis(u,'fondations')) return _echec('le programme n’est pas acquis');
+        if(programmesAcquisDe(u).join()!=='fondations') return _echec('programmesAcquisDe : '+programmesAcquisDe(u).join());
+        // Un achat d'avant (`le`, trois mois) reste acquis, et garde son échéance.
+        const vieux={programmesAchetes:{fondations:{le:t-10*J,prixCts:1490,ordre:'O',ouvertJusqu:t+80*J}}};
+        if(!programmeAcquis(vieux,'fondations')||!programmeOuvreUltime(vieux,t+79*J)) return _echec('un achat d’avant a perdu ses droits');
+        // Remboursé : plus acquis.
+        const remb={programmesAchetes:{fondations:Object.assign({},f,{rembourseLe:t+2*J})}};
+        if(programmeAcquis(remb,'fondations')||programmesAcquisDe(remb).length) return _echec('un programme remboursé reste acquis');
+        // Ce que l'achat donne est écrit avant de payer, avec la durée de TARIFS.
+        const ta=texteAchatProgramme();
+        if(!/à vie/.test(ta)||ta.indexOf(joursAppProgramme()+' jours')<0||!/Essentielle/.test(ta)) return _echec('texte : '+ta);
+        if(/3 mois|trois mois/.test(String(ouvrirMerciAchat))) return _echec('le remerciement parle encore de trois mois');
+        return true;})());
+
+      ok('BOUTIQUE — fin des 30 jours : sans abonnement, le programme se lit (écran de fin d’essai compris)',(()=>{
+        const J=864e5, t=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE), sv=currentUser;
+        const u={id:'b2',email:'b2@t.fr',fname:'A',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t-90*J,finit:t-60*J},sessions:[],sessions_config:[],
+          programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDY',t-40*J)}};
+        try{
+          // Le serveur a parlé : rien de payé en cours, l'Ultime du programme est échu.
+          localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:{palier:'aucun',echeance:0,ultimeJusqu:t-10*J,maj:t},vide:false,lu:t}}));
+          if(palierDe(u)!=='aucun') return _echec('palier : '+palierDe(u));
+          if(peut(u,'bibliothequeExercices')) return _echec('la bibliothèque reste ouverte après 30 jours');
+          // Le programme, lui, se lit : ses séances et leurs exercices.
+          const p=programmeDuCatalogue('fondations');
+          const html=htmlLectureProgramme(p,'H');
+          const ex=((_seancesProgramme(p,'H').find(j=>j&&j.active!==false&&(j.exercises||[]).length)||{}).exercises||[])[0];
+          if(!ex||html.indexOf(escapeHtml(ex.name))<0) return _echec('la lecture ne montre pas les exercices');
+          currentUser=u;
+          if(!ouvrirLectureProgramme('fondations')) return _echec('la lecture refuse un programme acquis');
+          const m=document.getElementById('lecture-programme');
+          if(!m||m.textContent.indexOf(ex.name)<0) return _echec('la feuille de lecture est vide');
+          closeModal();
+          // L'écran de fin d'essai y mène.
+          if(!rendreEssaiBilan(u)) return _echec('écran de fin d’essai');
+          const porte=document.querySelector('#eb-corps [data-eb-programmes]');
+          if(!porte) return _echec('l’écran de fin d’essai ne mène pas au programme');
+          // Sans achat : pas de porte, et pas de lecture.
+          const sans=Object.assign({},u,{programmesAchetes:{}});
+          currentUser=sans; rendreEssaiBilan(sans);
+          if(document.querySelector('#eb-corps [data-eb-programmes]')) return _echec('une porte sans programme acheté');
+          if(ouvrirLectureProgramme('fondations')) return _echec('lecture sans achat');
+          return true;
+        } finally {
+          try{ closeModal(); }catch(e){}
+          currentUser=sv;
+          if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('BOUTIQUE — pendant les 30 jours puis avec un abonnement Ultime : tout ouvert ; Essentielle : le programme en séance',(()=>{
+        const J=864e5, t=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE);
+        const u={id:'b3',email:'b3@t.fr',role:'athlete',status:'FREE',
+          programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDZ',t-5*J)}};
+        const poser=d=>localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:Object.assign({echeance:0,maj:t},d),vide:false,lu:t}}));
+        const ULT=['bibliothequeExercices','planification','dieteCalculee','volume'];
+        try{
+          // Pendant les 30 jours (ultimeJusqu posé par le worker) : Ultime.
+          poser({palier:'aucun',ultimeJusqu:t+25*J});
+          if(palierDe(u)!=='ultime') return _echec('pendant les 30 jours : '+palierDe(u));
+          for(const c of ULT) if(!peut(u,c)) return _echec('pendant les 30 jours, '+c+' fermé');
+          // Abonnement Ultime, l'achat échu : tout ouvert.
+          poser({palier:'ultime',ultimeJusqu:t-J});
+          for(const c of ULT.concat(['composerSeances','seance'])) if(!peut(u,c)) return _echec('Ultime : '+c+' fermé');
+          // Essentielle, l'achat échu : le programme se suit en séance, les fonctions Ultime restent fermées.
+          poser({palier:'essentielle',ultimeJusqu:t-J});
+          if(!peut(u,'composerSeances')||!peut(u,'seance')) return _echec('Essentielle : séances fermées');
+          if(peut(u,'bibliothequeExercices')) return _echec('Essentielle ouvre la bibliothèque');
+          if(!programmeAcquis(u,'fondations')) return _echec('Essentielle : le programme n’est plus acquis');
+          return true;
+        } finally { if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve); }})());
+
+      ok('BOUTIQUE — les quatre emplacements attendent leur fiche : aucun contenu inventé, aucun ne se vend',(()=>{
+        const vides=RC_PROGRAMMES.filter(p=>p.aCompleter);
+        if(vides.length!==4) return _echec(vides.length+' emplacements');
+        for(const p of vides){
+          if(p.seances!==null||p.description||p.accroche||(p.tags&&p.tags.length)||p.prixCts) return _echec(p.id+' porte un contenu : '+JSON.stringify(p));
+          if(programmeVendable(programmeDuCatalogue(p.id)||p)&&!_programmePublie(p.id)) return _echec(p.id+' se vend vide');
+          const manque=ficheACompleter(p);
+          for(const lib of ['promesse','durée (semaines)','séances (le contenu)','prix'])
+            if(manque.indexOf(lib)<0) return _echec(p.id+' : « '+lib+' » non signalé à remplir ('+manque.join(', ')+')');
+          if(manque.indexOf('nom')>=0) return _echec(p.id+' : le nom est déjà posé');
+        }
+        // Fondations, complète, ne manque de rien.
+        const f=ficheACompleter(RC_PROGRAMMES.find(p=>p.id==='fondations'));
+        if(f.length&&!(f.length===1&&f[0]==='prix')) return _echec('Fondations : '+f.join(', '));
+        return true;})());
+
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{

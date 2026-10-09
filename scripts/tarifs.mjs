@@ -59,6 +59,9 @@ const DERIVES = {
   'coaching.coaching_evolution.parMois': (T) => T.coaching.coaching_evolution.prix / T.coaching.coaching_evolution.mois,
   'essentielle.moisOfferts': (T) => moisOfferts(T.essentielle.mois, T.essentielle.an),
   'ultime.moisOfferts': (T) => moisOfferts(T.ultime.mois, T.ultime.an),
+  // Les jours d'app complète qu'ouvre un programme de la boutique (mois × 30,
+  // comme l'app et le worker les comptent).
+  'coaching.boutique_prog.jours': (T) => T.coaching.boutique_prog.mois * 30,
 };
 // LES PHRASES QUI DÉPENDENT D'UN NOMBRE (data-texte) : un « 0 mois » ne se lit
 // pas, et « engagement 0 mois » dirait le contraire de ce qu'il veut dire.

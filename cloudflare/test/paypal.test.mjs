@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, PLANS_ANNUELS_SANS_ENGAGEMENT } from '../src/paypal.js';
+import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, PLANS_ANNUELS_SANS_ENGAGEMENT, PROGRAMME_MS } from '../src/paypal.js';
 import { fausseBase } from './fausse-base.mjs';
 
 let ok = 0;
@@ -342,6 +342,32 @@ await test('achat d’un programme : compte lu dans la commande relue chez PayPa
   assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', capture('ORD00000003')))).texte, 'premier_paiement');
   assert.equal(w.F.lire('users/jul@t,fr/abonnement'), null, 'aucun abonnement inventé');
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/filleuls/f1/statut'), 'payant');
+  // 30 JOURS D'ULTIME À PARTIR DE L'ACHAT, ET L'ACHAT À VIE DANS LE DOSSIER.
+  const t3 = w.F.lire('paypal_transactions/' + 'C' + n + '/le') || null;
+  const ach = w.F.lire('users/jul@t,fr/programmesAchetes/p1');
+  assert.ok(ach && ach.source === 'paypal' && ach.prixCts === 1490 && ach.ordre === 'ORD00000003' && ach.date > 0, JSON.stringify(ach));
+  const uj = w.F.lire('droits/jul@t,fr/ultimeJusqu');
+  assert.equal(uj - ach.date, 30 * 864e5, '30 jours d’Ultime, pas trois mois');
+  assert.equal(ach.ouvertJusqu, uj);
+  void t3;
+});
+
+await test('programme : la durée du worker suit tarifs.json, et un achat d’avant garde ses droits', async () => {
+  const tarifs = JSON.parse(readFileSync(new URL('../../tarifs.json', import.meta.url), 'utf8'));
+  assert.equal(PROGRAMME_MS, tarifs.coaching.boutique_prog.mois * 30 * 864e5, 'PROGRAMME_MS ≠ boutique_prog.mois × 30 jours');
+  assert.equal(tarifs.coaching.boutique_prog.acces, 'vie');
+  // Un achat fait avant (trois mois, date `le` posée par l'app) : un second achat
+  // ne raccourcit pas son échéance et ne réécrit pas sa date.
+  const loin = Date.now() + 80 * 864e5;
+  const w = monde({ users: { 'jul@t,fr': { role: 'athlete', programmesAchetes: { p1: { le: 1000, prixCts: 1490, ouvertJusqu: loin } } } },
+    droits: { 'jul@t,fr': { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: loin } }, boutique: { p1: { prixCts: 1490 } } },
+  { commandes: { ORD00000009: { status: 'COMPLETED', purchase_units: [{ custom_id: 'jul@t,fr|p1', amount: { currency_code: 'EUR', value: '14.90' } }] } } });
+  await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', { id: 'CX9', amount: { value: '14.90', currency_code: 'EUR' }, supplementary_data: { related_ids: { order_id: 'ORD00000009' } } }));
+  const ach = w.F.lire('users/jul@t,fr/programmesAchetes/p1');
+  assert.equal(ach.le, 1000, 'la date d’origine reste');
+  assert.equal(ach.date, undefined, 'pas de seconde date');
+  assert.equal(ach.ouvertJusqu, loin, 'l’échéance plus lointaine n’est pas raccourcie');
+  assert.equal(w.F.lire('droits/jul@t,fr/ultimeJusqu'), loin);
 });
 
 await test('le jeton OAuth est gardé : un seul par série de webhooks', async () => {

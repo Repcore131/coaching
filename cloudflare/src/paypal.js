@@ -33,7 +33,12 @@ import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
 const EN_COURS_MAX_MS = 10 * 60 * 1000;
-const PROGRAMME_MS = 3 * MOIS_MS;          // OFFRES.boutique_prog.mois de l'app
+// UN PROGRAMME DE LA BOUTIQUE (09/10/2026) : le programme À VIE (users/<clé>/
+// programmesAchetes/<id>), et 30 jours d'Ultime à partir de l'achat
+// (tarifs.json : coaching.boutique_prog.mois × 30 jours ; un test les compare).
+// Jusqu'au 09/10/2026 c'étaient trois mois : les achats faits avant gardent
+// leur échéance, rien ne la raccourcit.
+export const PROGRAMME_MS = 1 * MOIS_MS;
 const cleEmail = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 const net = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
@@ -330,12 +335,23 @@ export function creerPaypal(ctx) {
       && devise(pu.amount) === 'EUR' && devise(ress.amount) === 'EUR'
       && centimes(pu.amount.value) === Number(prixCts) && centimes(ress.amount.value) === Number(prixCts);
     const premier = valide ? await premierPaiement(cle, null, ress) : false;
-    // LE PROGRAMME OUVRE ULTIME TROIS MOIS, par-dessus le palier de
-    // l'abonnement (ultimeJusqu), sans le remplacer.
+    // LE PROGRAMME OUVRE ULTIME 30 JOURS À PARTIR DE L'ACHAT, par-dessus le
+    // palier de l'abonnement (ultimeJusqu), sans le remplacer ni raccourcir une
+    // échéance déjà plus lointaine (un achat d'avant, un mois de parrainage).
+    // ET L'ACHAT EST ENREGISTRÉ À VIE dans le dossier, champ par champ : la
+    // date du premier enregistrement (celui de l'app, s'il est passé avant)
+    // n'est pas réécrite, et rien de ce que l'app y a mis n'est effacé.
     if (valide) {
       const t = now();
+      const fin = t + PROGRAMME_MS;
       await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
-        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
+        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, fin) }));
+      const b = 'users/' + cle + '/programmesAchetes/' + prog + '/';
+      const deja = await lire('users/' + cle + '/programmesAchetes/' + prog);
+      const maj = { [b + 'prixCts']: Number(prixCts), [b + 'source']: 'paypal', [b + 'ordre']: net(idCommande),
+        [b + 'ouvertJusqu']: Math.max(Number(deja && deja.ouvertJusqu) || 0, fin), ['users/' + cle + '/updatedAt']: t };
+      if (!(deja && (Number(deja.date) > 0 || Number(deja.le) > 0))) maj[b + 'date'] = t;
+      await db.ref().update(maj);
     }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
@@ -455,8 +471,11 @@ export function creerPaypal(ctx) {
   async function fermerAcces(rec, t) {
     const b = 'users/' + rec.cle + '/';
     if (rec.type === 'programme') {
+      // REMBOURSÉ, LE PROGRAMME N'EST PLUS ACQUIS : l'accès à vie tombe avec
+      // l'argent (rembourseLe, lu par programmeAcquis dans l'app).
       if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
-        await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t, [b + 'updatedAt']: t });
+        await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t,
+          [b + 'programmesAchetes/' + rec.prog + '/rembourseLe']: t, [b + 'updatedAt']: t });
       }
       const d = await M.majDroits(rec.cle, (x) => (x && Number(x.ultimeJusqu) > t ? { ultimeJusqu: t } : null));
       return (d || rec.prog) ? 'programme fermé au ' + dateFr(t) : null;
