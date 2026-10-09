@@ -21,6 +21,7 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
+import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -94,6 +95,7 @@ export const REGLE = `${DEBUT}
       "recov": { ".write": ${j(MEMBRE)} },
       "reactions": { ".write": ${j(MEMBRE)} },
       "relances": { ".write": ${j(MEMBRE)} },
+      "resRequests": { ".write": ${j(MEMBRE)} },
       "touches": { ".write": ${j(MEMBRE)} },
       "guests": { ".write": ${j(MEMBRE)} },
       "companies": { ".write": ${j(MEMBRE)} },
@@ -309,6 +311,8 @@ async function main() {
   if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
   // KPI du matin, 8 h 45 : e-mail à l'accueil avec le bouton « Envoyer sur WhatsApp ».
   if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
+  // Relève horaire des demandes de résiliation dans la boîte de l'accueil (API Gmail).
+  try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');

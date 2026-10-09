@@ -1,0 +1,15 @@
+{
+  "name": "fitpulse-cloud",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "engines": { "node": "22" },
+  "scripts": {
+    "copier": "mkdir -p lib && cp ../outils/fitpulse-resmail.mjs ../outils/fitpulse-autoimport.mjs ../outils/fitpulse-brief.mjs lib/ 2>/dev/null; true",
+    "predeploy": "npm run copier"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.1.0",
+    "google-auth-library": "^9.15.0"
+  }
+}

@@ -61,5 +61,7 @@ await check('créateur lit le suivi produit', await req('GET', 'pulse_product', 
 await check('manager ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mgr')), false);
 await check('membre ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mem')), false);
 await check('manager n’écrit pas le suivi produit', await req('PUT', 'pulse_product/p01/status', 'derriere', who('mgr')), false);
+await check('membre change le statut d’une demande reçue', await req('PUT', 'pulse/resRequests/niort/t1/status', 'contacte', who('mem')), true);
+await check('anonyme ne lit pas les demandes reçues', await req('GET', 'pulse/resRequests', undefined), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

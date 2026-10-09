@@ -76,6 +76,18 @@ un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurit
   démonstration » avec « Quitter la démo ». Recharger la page reste en démonstration.
 - **Partagé** (site en ligne) : base Firebase repcore-sync, nœud `/pulse`. Connexion e-mail + code depuis n'importe quel appareil : la clé SHA-256(e-mail|code) ouvre `/pulse_boot`, règles posées par `outils/fitpulse-serveur.mjs` (lancé à chaque mise en ligne et par `fitpulse-mail.yml`).
 
+## Demandes de résiliation reçues par e-mail
+
+Chaque heure, le serveur (`outils/fitpulse-resmail.mjs`, lancé par `fitpulse-mail.yml`, ou la fonction
+`club/cloud` au forfait Blaze) lit la boîte Gmail de l'accueil par l'API Gmail. Les messages des 30 derniers jours
+qui parlent de résiliation, ou qui viennent de l'appli adhérents, deviennent `/pulse/resRequests/{club}/{fil}`
+(clé = fil Gmail : jamais de doublon). Page Résiliations, bloc « Demandes reçues » : Ouvrir le mail, Je m'en occupe,
+Contacté, Sauvé, Résilier (crée le dossier), Hors sujet. Pastille rouge sans réponse de l'accueil depuis 48 h.
+
+Réglages : Résiliations > Demandes reçues > Réglages (boîte relevée, expéditeurs de l'appli). Secrets côté serveur
+uniquement : `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_TOKENS` (`{"niort":"<refresh token>"}`), jeton OAuth
+du compte accueil avec la portée `gmail.readonly`. Extrait de 200 caractères, purgé 90 jours après traitement.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

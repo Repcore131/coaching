@@ -269,6 +269,7 @@ function managerCockpit() {
   const tile = (href, l, cls, label, value, sub) => `<a class="ck2 ${cls}" href="${href}"><div class="ck2-h"><span>${label}</span><i class="hdot ${cls}"></i></div><b>${value}</b><small>${sub}</small><em>${l}</em></a>`;
   return `<div class="row wrap ck-rit"><button class="btn primary sm" data-act="ritual">${ico('sun')} Brief du matin</button><a class="btn sm" href="#/team">${ico('users')} Pilotage équipe</a></div><div class="cockpit2">
     ${tile('#/resiliations', 'Traiter', lvl(urgent, noOwner), 'Résiliations à traiter', res.length, `${urgent} à J-7 · ${noOwner} sans responsable`)}
+    ${(() => { const q = rrqCounts(CLUB.id); return q.open || deepGet(S, ['resRequestsMeta', CLUB.id, 'lastRunAt']) ? tile('#/resiliations', 'Ouvrir', lvl(q.late, q.open), 'Demandes reçues par e-mail', q.open, `${q.late ? `dont ${q.late} sans réponse depuis 48 h` : 'toutes ont une réponse'} · ${esc(rrqRunLabel(CLUB.id))}`) : ''; })()}
     ${tile('#/impayes', 'Relancer', lvl(dunNobody > 2, dunNobody || dunDueN), 'Impayés en cours', fmtE(dunTot), `${dun.length} dossiers · ${dunDueN} à relancer aujourd’hui`)}
     ${tile('#/members', 'Voir', lvl(silent.length > team.length / 2 && new Date().getHours() >= 15, silent.length), 'Sans saisie aujourd’hui', `${silent.length}/${team.length}`, silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi')}
   </div>`;

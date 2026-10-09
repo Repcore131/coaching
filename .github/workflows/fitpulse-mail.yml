@@ -74,6 +74,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          # Relève Gmail des demandes de résiliation (OAuth du compte accueil, jamais dans le code client)
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_TOKENS: ${{ secrets.GMAIL_TOKENS }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
           FITPULSE_URL: https://fitpulse-niort.web.app
           ESSAI_MAIL: ${{ inputs.essai_mail }}
           RAPPORT_ATTENTE_MIN: ${{ inputs.rapport && '12' || '4' }}

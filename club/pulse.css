@@ -1132,3 +1132,15 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .prod-st.prod-devant { border-color: var(--ok); }
 .prod-st.prod-derriere { border-color: var(--bad); }
 @media (max-width: 640px) { .prod-count { gap: 8px; } .prod-count .rc-tile { padding: 12px; } }
+
+/* ── Demandes de résiliation reçues par e-mail ── */
+.cockpit2 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.rrq-block { margin-bottom: 16px; }
+.rrq-block .card-head { gap: 8px; flex-wrap: wrap; }
+.rrq-list { display: grid; gap: 10px; }
+.rrq { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface-2); }
+.rrq.late { border-color: var(--bad); box-shadow: inset 4px 0 0 var(--bad); }
+.rrq-snip { margin: 4px 0; overflow-wrap: anywhere; }
+.rrq-hist { margin-top: 12px; }
+.rrq-hist summary { cursor: pointer; font-weight: 600; }
+.nav .pill-late, .pill.pill-late { background: var(--bad); color: #fff; margin-left: 4px; }
