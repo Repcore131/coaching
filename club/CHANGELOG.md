@@ -1,5 +1,15 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.8 (octobre 2026)
+- Impayés : un seul enregistrement « Payé » (markPaid) quel que soit l'écran, crédité au responsable du dossier sinon à l'auteur ; client obligatoire pour une saisie détaillée ; Membres > Contrôles (saisies sans client, fusion avec l'import).
+- Acomptes : « Acompte reçu », reste dû, historique au centime ; deux acomptes le même jour donnent deux saisies distinctes.
+- Date du premier incident conservée d'un import à l'autre, colonne « Depuis » et délai médian de récupération.
+- Un seul dossier impayé : mêmes issues et même historique dans Rétention, Relances et Impayés ; migration unique des anciennes actions (drapeau migratedLoyalty).
+- Rétention : suivis J+15 et J+30, 4 h entre deux tentatives (« Déjà tenté à »), confirmation avant Perdus ; page refaite (Aujourd'hui, À venir, Résultats, Clients perdus) triée par euros en jeu, tarifs dans Membres > Réglages.
+- Appels en 3 taps depuis l'accueil (Mes appels du jour) pour les impayés et la rétention ; promesse de paiement, rappel, transfert au manager.
+- Onglet Résultats commun (indicateurs avec formule, Euros gardés, bibliothèque de scripts partagée au réseau) ; rapport ROI mensuel sur une page A4.
+- Démonstration « Club Démo Centre » (?demo=1) et visite guidée en 6 étapes ; script de test du lot Confiance à coller dans la console.
+
 ## 2026.10.7 (octobre 2026)
 - Relève des résiliations : messages au score de 2 dans un onglet « À vérifier » (« C'est une demande » ou « Ignorer ») ; motif toujours pris dans la liste du club, « Santé » sans détail ; règles communes au script Gmail et à l'appli, testées sur 12 e-mails anonymisés.
 - Rattachement à la fiche client (e-mail, numéro, nom), suggestions quand plusieurs fiches se ressemblent, fusion des doublons, import Resamania rattaché au dossier ouvert du même client ; dossiers visibles dans la fiche client.
