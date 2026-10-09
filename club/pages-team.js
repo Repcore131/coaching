@@ -8,16 +8,18 @@ PAGES.members = {
   render() {
     const tab = UI.memTab || 'org';
     const all = clubMembers(CLUB.id, { all: true, gestion: true });
-    const T = [['org', TXT.equipe.org], ['hist', TXT.equipe.hist], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['carnets', TXT.equipe.carnets], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania'], ['controles', 'Contrôles']];
+    const T = [['org', TXT.equipe.org], ['hist', TXT.equipe.hist], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['carnets', TXT.equipe.carnets], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania'], ['controles', 'Contrôles'], ['reglages', 'Réglages']];
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
     T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal'], ['primes', 'Primes'], ['adoption', 'Adoption']);
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, carnets: memCarnets, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes, adoption: memAdoption, controles: memControles }[tab]();
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, carnets: memCarnets, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal, primes: memPrimes, adoption: memAdoption, controles: memControles, reglages: memReglages }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(nomAffiche())} · ${plur(all.filter(u => u.role === 'manager' && u.status === 'active').length, 'manager', 'managers')}, ${plur(all.filter(u => u.role === 'membre' && u.status === 'active').length, 'membre actif', 'membres actifs')}, ${plur(all.filter(u => u.status === 'pending').length, 'invitation', 'invitations')} en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button>${MULTI ? `<button class="btn" data-act="inviteMail">${ico('mail')} Inviter par e-mail</button>` : ''}</div>
       ${tabs('memTab', T, tab)}${body}`;
   },
   mount() { if ((UI.memTab || 'org') === 'tasks') bindPlanner(); },
 };
 
+// Membres > Réglages : tarifs par offre et paramètres du rapport ROI.
+function memReglages() { return `<div class="grid reglages">${tarifsCard()}${typeof roiCard === 'function' ? roiCard() : ''}</div>`; }
 // Un createur gere tout le monde ; un manager gere les membres (et lui-meme).
 const canEdit = u => isCreator() || u.id === ME.id || u.role === 'membre';
 function memberRow(u) {

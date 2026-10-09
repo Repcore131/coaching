@@ -133,9 +133,4 @@ function migrerLoyaltyImpayes() {
   }
   return ops;
 }
-// Retour d'appel d'un impayé (UI.pendingCall { clientId, kind: 'impaye', startedAt }) : la feuille s'ouvre.
-function dunRetourAppel() {
-  const p = UI.pendingCall; if (!p || p.kind !== 'impaye' || document.hidden) return;
-  UI.pendingCall = null; clearTimeout(dunRetourAppel.t); if (Date.now() - p.startedAt < 2 * 3600000) setTimeout(() => dunSheet(p.clientId), 200);
-}
-document.addEventListener('visibilitychange', dunRetourAppel);
+// Retour d'appel d'un impayé : retRetour (retention.js) ouvre la feuille du dossier.

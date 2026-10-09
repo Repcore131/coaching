@@ -303,44 +303,7 @@ ACTIONS.rsmCopyPrompt = async () => {
   catch (e) { openModal({ title: 'Prompt à copier', body: `<p class="muted small">Sélectionnez tout et copiez, puis collez dans Claude à côté de Resamania.</p><textarea class="input" rows="16" style="width:100%" onclick="this.select()">${esc(t)}</textarea>`, foot: '<button class="btn primary" data-close>Fermer</button>' }); }
 };
 
-// ── Adhérents à garder ────────────────────────────────────────────────────
-PAGES.loyalty = {
-  title: TXT.pages.loyalty,
-  render() {
-    const tab = UI.loyTab || 'fins';
-    const tasks = loyaltyTasks(CLUB.id);
-    const todo = tasks.filter(t => t.state === 'todo');
-    const clients = Object.values(S.clients).filter(c => c.clubId === CLUB.id);
-    const alerts = [];
-    if (!clients.length) alerts.push(['Aucune base client importée', 'Importez l’export Resamania « Résumé clients » (Imports CSV) pour générer les appels de suivi, anniversaires et renouvellements.']);
-    else {
-      if (!clients.some(c => c.birth)) alerts.push(['Aucune date de naissance', 'Les anniversaires ne remonteront pas : vérifiez la colonne date de naissance de l’export « Résumé clients ».']);
-      if (!Object.values(S.imports).some(i => i.clubId === CLUB.id && i.type === 'soldes' && i.active !== false) && !clients.some(c => Number(c.balance) > 0)) alerts.push(['Aucun solde importé', 'Les impayés n’apparaîtront pas tant que l’export « Solde clients » n’est pas importé.']);
-    }
-    const body = tab === 'fins' ? loyFins() : tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
-    const prot = loyProtected(CLUB.id, curMonth());
-    return `<div class="page-head"><div><h1>${TXT.pages.loyalty}</h1><p>${esc(nomAffiche())} · ${TXT.garder.sous} · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
-      <div class="stat-row loy-head"><div class="stat"><span>Valeur protégée ce mois</span><b class="ok">${fmtE(prot.total)}</b><small>${plur(prot.n, 'tâche réussie', 'tâches réussies')} (Joint OK ou RDV)</small></div><div class="stat"><span>Euros en jeu à traiter</span><b>${fmtE(todo.filter(x => !x.nextDate).reduce((s2, x) => s2 + x.valeurEnJeu, 0))}</b><small>${plur(todo.filter(x => !x.nextDate).length, 'tâche', 'tâches')} à faire maintenant</small></div></div>
-      ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
-      ${tabs('loyTab', [['fins', 'Fins d’engagement'], ['tasks', `Autres tâches (${todo.length})`], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
-  },
-};
-function loyTasks(todo) {
-  const f = UI.loyType || 'all';
-  const q = norm(UI.loyQ || '');
-  const sort = UI.loySort || 'value';
-  let list = todo.filter(t => (f === 'all' || t.type === f) && (!q || norm(t.client.name).includes(q)));
-  const prio = { impaye: 0, mandat: 1, renouvellement: 2, suivi15: 3, suivi30: 3, suivi: 3, anniversaire: 4 };
-  list.sort((a, b) => sort === 'value' ? (!!a.nextDate - !!b.nextDate) || (b.valeurEnJeu - a.valeurEnJeu) || a.due.localeCompare(b.due) : sort === 'amount' ? (b.amount || 0) - (a.amount || 0) : sort === 'prio' ? prio[a.type] - prio[b.type] || a.due.localeCompare(b.due) : a.due.localeCompare(b.due));
-  const cnt = t => todo.filter(x => t === 'all' || x.type === t).length;
-  return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
-    <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
-    <select class="input sm" style="width:auto" data-change="loySort"><option value="value" ${sort === 'value' ? 'selected' : ''}>Tri : euros en jeu</option><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
-    ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}${t.step ? ' J+' + t.step : ''}</span> <span class="badge ok" title="Valeur en jeu">${fmtE(t.valeurEnJeu)} en jeu</span>${t.nextDate ? ` <span class="badge info">prochaine action le ${dm(t.nextDate)}</span>` : ''}${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
-      <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${plur(t.client.incidents, 'incident', 'incidents')}` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
-      <div class="row wrap" style="gap:6px">${t.type === 'impaye' ? `<button class="btn sm primary" data-act="dunSheet" data-id="${t.client.id}">Noter le résultat</button><button class="btn sm ghost" data-act="dunHistOpen" data-id="${t.client.id}">Historique</button>` : Object.entries(OUTCOMES).filter(([k]) => k !== 'paid' && k !== 'smsprog').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-s="${t.step || ''}" data-v="${t.valeurEnJeu}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`}`;
-}
+// ── Rétention : page dans retention.js (PAGES.loyalty) ────────────────────
 ACTIONS.loyQ = el => { UI.loyQ = el.value; render(); };
 ACTIONS.loySort = el => { UI.loySort = el.value; render(); };
 // Type de relance (cadence) d'une tâche de rétention.
@@ -415,7 +378,7 @@ function loyPerf() {
   return `<div class="row" style="margin-bottom:12px">${monthNav('loyMonth', mk)}</div>
     <div class="stat-row" style="margin-bottom:12px"><div class="stat" data-tuile="j15"><span>Suivis J+15 réalisés</span><b>${J.j15}</b><small>adhérents joints ce mois</small></div><div class="stat" data-tuile="j30"><span>Suivis J+30 réalisés</span><b>${J.j30}</b><small>adhérents joints ce mois</small></div></div>
     ${rows.length ? `<div class="card">${rows.map(([uid, x], i) => `<div class="rank-row"><div class="rank-n">${i + 1}</div><div class="row">${avatar(S.users[uid])}<b>${esc(fullName(S.users[uid]))}</b></div><div>${progressBar(x.n ? x.ok / x.n : 0, { ticks: false })}<span class="muted small">${fmtP(x.n ? x.ok / x.n : 0)} de succès</span></div><b class="num">${plur(x.n, 'action', 'actions')}</b></div>`).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucune action ce mois-ci', text: 'Le classement démarre au premier appel.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucune action ce mois-ci', text: 'Notez un premier appel : chaque issue réussie entre dans ce tableau, par commercial.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`}`;
 }
 // Suivis réalisés du mois : un adhérent joint (issue réussie) par étape, J+15 et J+30 séparés.
 function suivisRealises(clubId, mk) {
@@ -432,7 +395,7 @@ ACTIONS.loyRetry = el => { const id = newId(); db.set(['loyalty', id], { id, cli
 ACTIONS.loyHistory = () => {
   const clientIds = new Set(Object.values(S.clients).filter(c => c.clubId === CLUB.id).map(c => c.id));
   const acts = Object.values(S.loyalty).filter(a => clientIds.has(a.clientId)).sort((a, b) => b.at - a.at).slice(0, 100);
-  openModal({ title: 'Historique des actions', drawer: true, body: `<p class="muted small" style="margin-top:0">Les dernières actions réalisées par le club.</p>${acts.map(a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><div class="row small"><b>${esc(S.clients[a.clientId] ? S.clients[a.clientId].name : '?')}</b><span class="badge">${LOYALTY_TYPES[a.type] ? LOYALTY_TYPES[a.type].label : a.type}</span><span class="spacer"></span><span class="muted">${ago(a.at)}</span></div><div class="small"><span class="${OUTCOMES[a.outcome] ? OUTCOMES[a.outcome].cls : ''}">${OUTCOMES[a.outcome] ? OUTCOMES[a.outcome].label : (typeof REV_OUT !== 'undefined' && REV_OUT[a.outcome]) || 'Relancé'}</span> · ${esc(fullName(S.users[a.userId]))}${a.note ? ` · « ${esc(a.note)} »` : ''}</div></div>`).join('') || '<div class="empty">Aucune action réalisée pour le moment.</div>'}` });
+  openModal({ title: 'Historique des actions', drawer: true, body: `<p class="muted small" style="margin-top:0">Les 100 derniers appels notés en rétention, du plus récent au plus ancien.</p>${acts.map(a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><div class="row small"><b>${esc(S.clients[a.clientId] ? S.clients[a.clientId].name : '?')}</b><span class="badge">${LOYALTY_TYPES[a.type] ? LOYALTY_TYPES[a.type].label : a.type}</span><span class="spacer"></span><span class="muted">${ago(a.at)}</span></div><div class="small"><span class="${OUTCOMES[a.outcome] ? OUTCOMES[a.outcome].cls : ''}">${OUTCOMES[a.outcome] ? OUTCOMES[a.outcome].label : (typeof REV_OUT !== 'undefined' && REV_OUT[a.outcome]) || 'Relancé'}</span> · ${esc(fullName(S.users[a.userId]))}${a.note ? ` · « ${esc(a.note)} »` : ''}</div></div>`).join('') || '<div class="empty">Aucune action réalisée pour le moment.</div>'}` });
 };
 ACTIONS.addClient = () => openModal({ title: 'Ajouter un client', body: `<form id="cf" class="form-grid"><label class="field full"><span>Nom complet</span><input class="input" name="name" required></label><label class="field"><span>Téléphone</span><input class="input" name="phone"></label><label class="field"><span>E-mail</span><input class="input" name="email"></label><label class="field"><span>Date de naissance</span><input class="input" type="date" name="birth"></label><label class="field"><span>Début de contrat</span><input class="input" type="date" name="start"></label><label class="field"><span>Fin de contrat</span><input class="input" type="date" name="end"></label><label class="field"><span>Solde dû (€)</span><input class="input" type="number" step="0.01" name="balance"></label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveClient">Ajouter</button>' });

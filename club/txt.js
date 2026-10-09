@@ -28,13 +28,13 @@ const TXT = {
   nav: {
     home: 'Accueil', journee: 'Ma journée', kpimatin: 'KPI du matin', dashboard: 'Mes objectifs', relances: 'Relances', leaderboard: 'Classement',
     equipeMembre: 'Équipe', recap: 'Récap du mois', rapporte: 'Ce que Fit Pulse a rapporté', team: 'Pilotage équipe', equipeManager: 'Matrice équipe',
-    b2b: 'Entreprise', resiliations: 'Résiliations', impayes: 'Impayés', loyalty: 'Adhérents à garder', pouls: 'Le Pouls du club',
+    b2b: 'Entreprise', resiliations: 'Résiliations', impayes: 'Impayés', loyalty: 'Rétention', pouls: 'Le Pouls du club',
     imports: 'Imports Resamania', controle: 'Contrôle des chiffres', confiance: 'Confiance des chiffres', profil: 'Mon espace', confidentialite: 'Confidentialité',
   },
   pages: {
     confidentialite: 'Confidentialité', donnees: 'Données personnelles', equipe: 'Équipe', controle: 'Contrôle des chiffres', kpimatin: 'KPI du matin',
     legal: 'Informations légales', team: 'Pilotage équipe', coaching: 'Fiche coaching', client: 'Fiche client', imports: 'Imports',
-    loyalty: 'Adhérents à garder', clubs: 'Club et réglages', home: 'Accueil', mesRelances: 'Mes relances', dashboard: 'Mes objectifs',
+    loyalty: 'Rétention', clubs: 'Club et réglages', home: 'Accueil', mesRelances: 'Mes relances', dashboard: 'Mes objectifs',
     leaderboard: 'Classement', pouls: 'Le Pouls du club', chat: 'Chat', resiliations: 'Résiliations', impayes: 'Impayés',
     quality: 'Contrôle qualité', recap: 'Récapitulatif du mois', equipePaliers: 'Équipe et paliers', profil: 'Mon espace', produit: 'Suivi produit',
     rapporte: 'Ce que Fit Pulse a rapporté', relances: 'Relances', opportunites: 'Opportunités',

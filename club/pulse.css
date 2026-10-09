@@ -1345,3 +1345,13 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .dsheet-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dsheet-chips .btn { min-height: 48px; justify-content: center; }
 .dhist { padding: 9px 0; border-bottom: 1px solid var(--line); }
+/* Rétention : une colonne de cartes, euros en jeu en gros */
+.ret-list { display: grid; gap: 10px; max-width: 760px; }
+.ret-card { display: grid; gap: 6px; padding: 12px 14px; }
+.ret-l1 { display: flex; align-items: flex-start; gap: 10px; }
+.ret-euros { text-align: right; display: grid; }
+.ret-euros b { font-size: var(--t-24, 24px); line-height: 1.1; }
+.ret-euros small { color: var(--muted); font-size: var(--t-12); }
+.ret-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ret-actions .btn { min-height: 44px; }
+.ret-call { flex: 1 1 140px; justify-content: center; }

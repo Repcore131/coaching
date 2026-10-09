@@ -476,6 +476,9 @@ const OUTCOMES = {
   message: { label: 'Message laissé', cls: 'warn', done: false },
   lost: { label: 'Ne renouvelle pas', cls: 'bad', done: true, lost: true },
   smsprog: { label: 'SMS programmé', cls: 'info', done: false, programme: true },
+  rappel: { label: 'À rappeler', cls: 'info', done: false, programme: true },
+  insatisfait: { label: 'Insatisfait, transféré au manager', cls: 'warn', done: true },
+  envoye: { label: 'Message envoyé', cls: 'ok', done: true },
 };
 const MAX_ATTEMPTS = 3;
 const SUIVI_COUPURE = 22; // jours après l'inscription : avant = appel J+15, après = appel J+30

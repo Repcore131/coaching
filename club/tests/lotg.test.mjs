@@ -83,8 +83,8 @@ test('point 6 : « Pas de réponse » noté dans Rétention apparaît côté Imp
   const h = J(run, `S.clients.c1.dunning.history.slice(-1)[0]`); assert.equal(h.outcome, 'pasreponse'); assert.equal(h.by, 'u'); assert.ok(h.at);
   assert.equal(run(`S.clients.c1.dunning.status`), 'relance'); assert.ok(run(`S.clients.c1.dunning.next`));
   const t = J(run, `loyaltyTasks('k').find(x => x.type === 'impaye' && x.client.id === 'c1').acts[0].outcome`); assert.equal(t, 'pasreponse');
-  run(`UI.loyType = 'impaye'`); const html = run(`loyTasks(loyaltyTasks('k').filter(t => t.state === 'todo'))`);
-  assert.doesNotMatch(html, /data-o="ok"|Joint, renouvelle|RDV pris/); assert.match(html, /data-act="dunSheet"/);
+  run(`UI.loyTab = 'today'`); const html = run(`PAGES.loyalty.render()`);
+  assert.doesNotMatch(html, /data-o="ok"|Joint, renouvelle|RDV pris|Joint, OK/); assert.match(html, /data-act="dunSheet" data-id="c2"/); run(`UI.loyTab = 'avenir'`); assert.match(run(`PAGES.loyalty.render()`), /data-act="dunSheet" data-id="c1"/);
   assert.equal(run(`loyaltyTasks('k').filter(t => t.type === 'impaye' && t.state === 'todo').length`), run(`dunRows('k').filter(c => Number(c.balance) > 0 && dunStatus(c) !== 'perdu').length`));
   assert.match(run(`(() => { UI.dunFilter = 'todo'; return dunTable(); })()`), /data-act="dunHistOpen"/);
   assert.equal(J(run, `Object.keys(DUN_OUTCOMES).filter(k => /joint|rdv/i.test(k) && DUN_OUT_ORDRE.includes(k))`).length, 0);
@@ -120,4 +120,23 @@ test('point 7 : aucun passage en Perdus sans la fenêtre de confirmation', () =>
   assert.equal(run(`loyaltyTasks('k').find(t => t.client.id === 'n1').state`), 'todo');
   const body = run('OUV.body + OUV.foot'); assert.match(body, /data-essais="3"/); assert.match(body, /Programmer un SMS/); assert.match(body, /Classer perdu/);
   run(`ACTIONS.loyPerdreOk({ dataset: { c: 'n1', t: 'suivi15', s: '15' } })`); assert.equal(run(`loyaltyTasks('k').find(t => t.client.id === 'n1').state`), 'lost');
+});
+
+test('point 2 : page Rétention, onglets, tri par euros en jeu (240 € avant 3 x 29,99 €), tarifs, phrases interdites', () => {
+  const run = appli({ clients: { c1: client({ balance: 240 }), f1: { id: 'f1', clubId: 'k', name: 'Fanny Exemple', offer: 'Confort', start: '2025-01-01', end: '', phone: '0600000002' } } });
+  run(`S.clients.f1.end = addDays(today(), 12); const m = addMonths(curMonth(), 3); S.clients.f1.end = m + '-' + today().slice(8); S.tarifs = { k: { [tarifCle('Confort')]: { mensuel: 29.99 } } }; REV++`);
+  // fin de contrat dans 3 mois : 3 x 29,99 € en jeu
+  const f = J(run, `retEuros(loyaltyTasks('k').find(t => t.client.id === 'f1' && t.type === 'renouvellement') || { type: 'renouvellement', client: S.clients.f1 })`);
+  assert.equal(Math.round(f.v * 100), Math.round(29.99 * 3 * 100));
+  run(`S.clients.f1.end = addDays(today(), 12); REV++`); run(`UI.loyTab = 'today'`);
+  const h = run(`PAGES.loyalty.render()`);
+  assert.match(h, /<h1>Rétention<\/h1>/); for (const o of ['Aujourd’hui', 'À venir', 'Résultats', 'Clients perdus']) assert.ok(h.includes(o), o);
+  const ordre = [...h.matchAll(/data-ret="([^"]+)" data-type="([^"]+)" data-euros="([\d.]+)"/g)].map(m => [m[1], m[2], Number(m[3])]);
+  assert.equal(ordre[0][0], 'c1'); assert.ok(ordre.findIndex(x => x[0] === 'f1') > 0);
+  assert.match(h, /Appeler/); assert.doesNotMatch(h, /\p{Extended_Pictographic}/u);
+  run(`S.tarifs = {}; REV++`); assert.match(run(`PAGES.loyalty.render()`), /tarif à renseigner/);
+  assert.match(run(`tarifsCard()`), /Confort/);
+  const build = ['pages-data.js', 'retention.js', 'calc.js', 'relances.js'].map(f => readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n');
+  for (const x of ['Rien à traiter sur cette vue pour le moment', 'le classement démarre au premier appel', 'Les dernières actions réalisées par le club']) assert.ok(!build.toLowerCase().includes(x.toLowerCase()), x);
+  assert.match(run(`PAGES.loyalty.render.call(PAGES.loyalty) && (() => { S.clients = {}; REV++; return PAGES.loyalty.render(); })()`), /Importez Résumé clients/);
 });
