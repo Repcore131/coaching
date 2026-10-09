@@ -47225,7 +47225,7 @@ function _rendreBoutonAchat(){
   const z=document.getElementById('ach-paypal');
   if(!z) return;
   const sdk=window.paypalAchat;
-  if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger.</div>'; return; }
+  if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger : vérifie ta connexion, puis rouvre cette fiche.</div>'; return; }
   // ══ DEUX BOUTONS, DEUX CHEMINS, AUCUNE AMBIGUITE (lot 5) ═══════════════
   // Le bouton carte n'est plus cache derriere « autres moyens de paiement » :
   // il a sa place, sous celui de PayPal, avec son propre intitule.
@@ -47276,17 +47276,129 @@ function _rendreBoutonAchat(){
       }),
       onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
     }));
-    if(carte.isEligible&&carte.isEligible()){
-      const lib=document.getElementById('ach-carte-lib');
-      if(lib) lib.style.display='';
-      carte.render('#ach-carte');
-    }
-  }catch(e){}
+    // Rendu, ou le secours à sa place (09/10/2026).
+    _rendreBoutonCarteOuSecours(carte,'ach-carte','achat','');
+  }catch(e){ _poserSecoursCarte('ach-carte','achat',''); }
 }
 // ⚠ LE MEME HABILLAGE POUR LES DEUX ECRANS. Le bouton carte de PayPal porte
 //   SON libelle, que nous ne choisissons pas : le notre est la ligne au-dessus.
 //   `fundingSource: FUNDING.CARD` est ce qui le fait sortir de « autres moyens
 //   de paiement », ou personne ne va le chercher.
+// ══ QUAND LE BOUTON CARTE NE S'AFFICHE PAS (09/10/2026) ═══════════════════
+//
+// Le bouton « Payer par carte » dépend de PayPal : un réglage du compte
+// (« Compte PayPal facultatif »), le pays, le SDK. S'il manque, l'écran ne
+// doit pas rester VIDE à l'endroit où quelqu'un s'apprêtait à payer : il dit
+// ce qui se passe, et il donne deux chemins qui marchent.
+//   · ABONNEMENT : le bouton PayPal (dont la fenêtre propose aussi la carte),
+//     ou la PAGE DE PAIEMENT HÉBERGÉE par PayPal pour le même plan. Payé là,
+//     l'abonnement n'est relié au compte qu'une fois son numéro (I-…) collé
+//     ici : le worker vérifie chez PayPal que l'adresse de l'abonné est celle
+//     du compte (indexer), puis ouvre l'accès au premier paiement reçu.
+//   · ACHAT D'UN PROGRAMME : le bouton PayPal seulement (une commande se crée
+//     depuis l'app, il n'y a pas de page hébergée sans serveur).
+// scripts/verif/paypal-carte.mjs vérifie chaque semaine que le bouton est là.
+/**
+ * PURE. La page d'abonnement hébergée par PayPal, pour un plan.
+ * @param {string} planId
+ * @returns {string} '' pour un identifiant invalide
+ */
+function lienPaiementHeberge(planId){
+  const id=String(planId||'').trim();
+  return /^P-[A-Z0-9]{10,40}$/.test(id)?'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id='+id:'';
+}
+/**
+ * PURE. Un numéro d'abonnement PayPal collé par quelqu'un, nettoyé.
+ * @param {string} s
+ * @returns {string} 'I-…' ou ''
+ */
+function idAbonnementColle(s){
+  const t=String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+  return /^I-[A-Z0-9]{6,30}$/.test(t)?t:'';
+}
+/**
+ * PURE. Le bloc de secours, à la place du bouton carte absent.
+ * ⚠ SANS LE SDK, LA CASE DES CGV N'EST PAS À L'ÉCRAN (elle vit avec les
+ *   boutons) : le bloc la porte alors lui-même, et le lien vers la page de
+ *   PayPal reste caché tant qu'elle n'est pas cochée. Payer ne contourne
+ *   jamais l'acceptation des conditions.
+ * @param {'abonnement'|'achat'} contexte
+ * @param {string} [planId] le plan choisi (abonnement)
+ * @param {boolean} [sdkAbsent] le SDK n'a pas pu se charger (aucun bouton PayPal à l'écran)
+ * @returns {string} du HTML
+ */
+function htmlSecoursCarte(contexte,planId,sdkAbsent){
+  const lien=contexte==='abonnement'?lienPaiementHeberge(planId):'';
+  let h='<div data-carte-secours class="carte-secours" style="margin-top:10px;background:var(--surface-2);'
+    +'border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;text-align:left;'
+    +'font-size:var(--fs-xs);line-height:1.6;color:var(--text)">'
+    +'<div style="font-weight:800;margin-bottom:6px">Le paiement par carte ne s’affiche pas ici.</div>'
+    +'<div style="color:var(--sub)">'+(sdkAbsent
+      ?'PayPal ne s’est pas chargé. Touche « Réessayer » : les boutons PayPal et carte reviennent avec lui.'
+      :'Tu peux quand même payer par carte, sans compte PayPal : touche le bouton PayPal '
+        +'ci-dessus, puis « Payer par carte » dans la fenêtre qui s’ouvre.')+'</div>';
+  if(lien){
+    const cgv=sdkAbsent
+      ?'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;cursor:pointer;'
+        +'text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs)">'
+        +'<input type="checkbox" id="secours-cgv" style="margin-top:3px;flex:0 0 16px;width:16px;height:16px;'
+        +'accent-color:var(--red)" '
+        +'onchange="var a=document.getElementById(\'secours-lien\');if(a)a.style.display=this.checked?\'block\':\'none\'">'
+        +'<span style="color:var(--sub);flex:1;min-width:0;line-height:1.6">J’ai lu et j’accepte les <a href="../terms.html" target="_blank" rel="noopener">'
+        +'conditions générales de vente</a>. Je demande l’accès immédiat au service et reconnais qu’à ce titre je '
+        +'perds mon droit de rétractation de 14 jours une fois le contenu numérique fourni.</span></label>'
+      :'';
+    h+='<div style="color:var(--sub);margin-top:8px">'+'Ou'+' passe par la page de paiement de PayPal, avec la même adresse '
+      +'e-mail que ton compte RepCore :</div>'+cgv
+      +'<a id="secours-lien" class="btn btn-outline btn-sm" style="display:'+(sdkAbsent?'none':'block')+';width:100%;margin:8px 0;text-align:center;text-decoration:none" '
+      +'href="'+escapeHtml(lien)+'" target="_blank" rel="noopener">Ouvrir la page de paiement PayPal</a>'
+      +'<div style="color:var(--sub)">Après le paiement, colle ici le numéro d’abonnement (il commence par I-) reçu par e-mail :</div>'
+      +'<div style="display:flex;gap:8px;margin-top:6px"><input id="carte-secours-id" placeholder="I-XXXXXXXXXXXX" '
+      +'autocomplete="off" style="flex:1;min-width:0;font-size:var(--fs-md);padding:10px 12px">'
+      +'<button class="btn btn-red btn-sm" style="margin:0;flex-shrink:0" onclick="signalerAbonnementColle()">Valider</button></div>';
+  }
+  return h+'</div>';
+}
+function _poserSecoursCarte(conteneur,contexte,planId){
+  const z=document.getElementById(conteneur);
+  if(!z||z.querySelector('[data-carte-secours]')) return false;
+  const lib=document.getElementById(contexte==='abonnement'?'pp-carte-lib':'ach-carte-lib');
+  if(lib) lib.style.display='none';
+  z.innerHTML=htmlSecoursCarte(contexte,planId);
+  return true;
+}
+// LE BOUTON CARTE, RENDU OU REMPLACÉ. `isEligible` dit non, le rendu échoue,
+// ou rien n'est apparu au bout de 10 s : le secours prend la place.
+function _rendreBoutonCarteOuSecours(carte,conteneur,contexte,planId){
+  const lib=document.getElementById(contexte==='abonnement'?'pp-carte-lib':'ach-carte-lib');
+  try{
+    if(!carte||!(carte.isEligible&&carte.isEligible())){ _poserSecoursCarte(conteneur,contexte,planId); return false; }
+    if(lib) lib.style.display='';
+    const pr=carte.render('#'+conteneur);
+    if(pr&&typeof pr.catch==='function') pr.catch(()=>_poserSecoursCarte(conteneur,contexte,planId));
+    setTimeout(()=>{ const z=document.getElementById(conteneur);
+      if(z&&!z.querySelector('iframe')&&!z.querySelector('[data-carte-secours]')) _poserSecoursCarte(conteneur,contexte,planId); },10000);
+    return true;
+  }catch(e){ _poserSecoursCarte(conteneur,contexte,planId); return false; }
+}
+// LE NUMÉRO D'ABONNEMENT COLLÉ. Il est posé sur le dossier (c'est ce que le
+// worker exige pour ouvrir : l'abonnement « courant ») et signalé au worker,
+// qui le vérifie chez PayPal avant de le relier. Il ne remplace jamais un
+// abonnement déjà relié.
+function signalerAbonnementColle(){
+  const u=currentUser;
+  const id=idAbonnementColle((document.getElementById('carte-secours-id')||{}).value);
+  if(!u){ toast('Crée ton compte avant.','var(--orange)'); return false; }
+  if(!id){ toast('Le numéro commence par I- (dans l’e-mail de PayPal).','var(--orange)'); return false; }
+  if(u.paypalSubscriptionId&&u.paypalSubscriptionId!==id){ toast('Un autre abonnement est déjà relié à ton compte : écris-moi.','var(--orange)'); return false; }
+  u.paypalSubscriptionId=id;
+  u.abonnement=Object.assign({},u.abonnement,{palier:_subPalier||'mensuel',formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie(),
+    source:'page_paypal',signaleLe:Date.now()});
+  try{ saveUser(); }catch(e){}
+  abonnementSignaler(id,true);
+  toast('Reçu : ton accès s’ouvre dès que PayPal confirme le paiement (quelques minutes).','var(--green)');
+  return true;
+}
 function _paiementCarteOptions(sdk){
   return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
     style:{layout:'vertical',color:'black',shape:'rect',height:45}};
@@ -130811,7 +130923,9 @@ function initPaypalSubscription(){
   script.src='https://www.paypal.com/sdk/js?client-id='+clientId
     +'&vault=true&intent=subscription&currency=EUR&enable-funding=card';
   script.onload=()=>renderPaypalButton(planId,coachId);
-  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
+  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>'
+    // LE SECOURS AUSSI (09/10/2026) : la page de paiement de PayPal, si le SDK seul est bloqué.
+    +htmlSecoursCarte('abonnement',planId,true);};
   document.head.appendChild(script);
 }
 function renderPaypalButton(planId,coachId){
@@ -130841,7 +130955,7 @@ function renderPaypalButton(planId,coachId){
   const _cgv=document.getElementById('cgv-ok');
   const _inner=document.getElementById('paypal-buttons-inner');
   _cgv.addEventListener('change',()=>{_inner.style.display=_cgv.checked?'':'none';});
-  if(typeof paypal==='undefined'){toast('PayPal non charge');return;}
+  if(typeof paypal==='undefined'){ _inner.innerHTML=htmlSecoursCarte('abonnement',planId,true); return; }
   // ══ LES OPTIONS SONT NOMMEES : DEUX BOUTONS S'EN SERVENT (lot 5) ══════
   // Celui de PayPal, et celui de la carte bancaire. Le meme abonnement, le
   // meme plan, la meme confirmation : seul le moyen de paiement change.
@@ -130976,14 +131090,11 @@ function renderPaypalButton(planId,coachId){
   // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
   // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
   // qu'un cadre vide — et le chemin PayPal, lui, reste entier.
-  try{
-    const carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal)));
-    if(carte.isEligible&&carte.isEligible()){
-      const lib=document.getElementById('pp-carte-lib');
-      if(lib) lib.style.display='';
-      carte.render('#pp-carte');
-    }
-  }catch(e){}
+  // ⚠ ET S'IL N'Y EN A PAS, LE SECOURS (09/10/2026) : un message et deux
+  //   chemins, jamais un cadre vide (_rendreBoutonCarteOuSecours).
+  let carte=null;
+  try{ carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal))); }catch(e){ carte=null; }
+  _rendreBoutonCarteOuSecours(carte,'pp-carte','abonnement',planId);
 }
 // ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
 

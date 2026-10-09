@@ -37354,6 +37354,61 @@ async function testExercices(){
         if(f.length&&!(f.length===1&&f[0]==='prix')) return _echec('Fondations : '+f.join(', '));
         return true;})());
 
+      // ══ PAIEMENT PAR CARTE : JAMAIS UN CADRE VIDE (09/10/2026) ═════════
+      ok('CARTE — le lien de la page PayPal hébergée et le numéro d’abonnement collé',(()=>{
+        const l=lienPaiementHeberge(PAYPAL_PLAN_ID);
+        if(l!=='https://www.paypal.com/webapps/billing/plans/subscribe?plan_id='+PAYPAL_PLAN_ID) return _echec('lien : '+l);
+        for(const x of ['', 'P-1', 'javascript:alert(1)', 'P-ABC"><img']) if(lienPaiementHeberge(x)!=='') return _echec('identifiant accepté : '+x);
+        if(idAbonnementColle('  i-abc12345678 ')!=='I-ABC12345678') return _echec('nettoyage');
+        if(idAbonnementColle('I-AB')!==''||idAbonnementColle('P-ABC12345678')!==''||idAbonnementColle('I-ABC 123 456 78')!=='I-ABC12345678') return _echec('validation');
+        // Le bloc : un message, le chemin PayPal, et — pour un abonnement — la page hébergée et la saisie.
+        const a=htmlSecoursCarte('abonnement',PAYPAL_PLAN_ID), b=htmlSecoursCarte('achat','');
+        if(a.indexOf('data-carte-secours')<0||a.indexOf(l)<0||a.indexOf('carte-secours-id')<0) return _echec('abonnement : '+a.slice(0,120));
+        if(b.indexOf('webapps/billing')>=0||b.indexOf('carte-secours-id')>=0) return _echec('un achat ne propose pas de page hébergée');
+        if(!/Payer par carte/.test(b)) return _echec('le chemin par le bouton PayPal n’est pas dit');
+        // Sans SDK : la case des CGV est dans le bloc, et le lien reste caché tant qu'elle n'est pas cochée.
+        const c=htmlSecoursCarte('abonnement',PAYPAL_PLAN_ID,true);
+        if(c.indexOf('secours-cgv')<0||!/id="secours-lien"[^>]*display:none/.test(c)) return _echec('sans SDK, le lien contourne les CGV');
+        if(/bouton PayPal ci-dessus/.test(c)) return _echec('sans SDK, le texte renvoie à un bouton absent');
+        if(a.indexOf('secours-cgv')>=0) return _echec('avec SDK, la case est en double');
+        return true;})());
+      ok('CARTE — bouton non éligible, rendu en échec, rien au bout du délai : le secours prend la place',(()=>{
+        const z=document.createElement('div'); z.id='carte-essai'; document.body.appendChild(z);
+        try{
+          if(_rendreBoutonCarteOuSecours({isEligible:()=>false},'carte-essai','abonnement',PAYPAL_PLAN_ID)!==false) return _echec('non éligible rendu');
+          if(!z.querySelector('[data-carte-secours]')) return _echec('non éligible : pas de secours');
+          z.innerHTML='';
+          _rendreBoutonCarteOuSecours({isEligible:()=>true,render:()=>{ throw new Error('x'); }},'carte-essai','achat','');
+          if(!z.querySelector('[data-carte-secours]')) return _echec('rendu en échec : pas de secours');
+          z.innerHTML='';
+          if(_rendreBoutonCarteOuSecours(null,'carte-essai','achat','')!==false||!z.querySelector('[data-carte-secours]')) return _echec('sans bouton : pas de secours');
+          // Un bouton rendu n'est pas recouvert.
+          z.innerHTML='';
+          _rendreBoutonCarteOuSecours({isEligible:()=>true,render:()=>{ z.innerHTML='<iframe></iframe>'; return Promise.resolve(); }},'carte-essai','achat','');
+          if(z.querySelector('[data-carte-secours]')) return _echec('le secours recouvre un bouton rendu');
+          return true;
+        } finally { z.remove(); }})());
+      ok('CARTE — le numéro collé est posé sur le dossier et signalé, sans remplacer un abonnement déjà relié',(()=>{
+        const sv=currentUser, sSave=window.saveUser, sSig=window.abonnementSignaler;
+        const z=document.createElement('div'); z.innerHTML='<input id="carte-secours-id">'; document.body.appendChild(z);
+        const signales=[];
+        try{
+          window.saveUser=()=>true; window.abonnementSignaler=(id,f)=>signales.push([id,f]);
+          currentUser={id:'cs',email:'cs@t.fr',role:'athlete',status:'FREE'};
+          document.getElementById('carte-secours-id').value='i-abc12345678';
+          if(!signalerAbonnementColle()) return _echec('refusé');
+          if(currentUser.paypalSubscriptionId!=='I-ABC12345678') return _echec('pas posé : '+currentUser.paypalSubscriptionId);
+          if(signales.length!==1||signales[0][0]!=='I-ABC12345678'||signales[0][1]!==true) return _echec('pas signalé : '+JSON.stringify(signales));
+          // Un autre numéro, alors qu'un abonnement est déjà relié : refusé.
+          document.getElementById('carte-secours-id').value='I-ZZZ99999999';
+          if(signalerAbonnementColle()) return _echec('un second abonnement remplace le premier');
+          if(currentUser.paypalSubscriptionId!=='I-ABC12345678') return _echec('le premier a bougé');
+          // Un numéro mal formé : refusé.
+          currentUser={id:'cs2',email:'cs2@t.fr',role:'athlete'};
+          document.getElementById('carte-secours-id').value='12345';
+          return signalerAbonnementColle()===false&&!currentUser.paypalSubscriptionId?true:_echec('numéro mal formé accepté');
+        } finally { z.remove(); currentUser=sv; window.saveUser=sSave; window.abonnementSignaler=sSig; }})());
+
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{

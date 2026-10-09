@@ -55,6 +55,15 @@
 //  7. Avec --ecrire, il colle lui-meme les identifiants dans rc-core a
 //     la place des chaines vides. Sans, il les affiche et tu les colles.
 //
+//  8. --plan-test (09/10/2026) : cree (ou retrouve) un plan de TEST a 1 EUR
+//     par mois, « RepCore TEST 1 EUR (a supprimer) », hors de PLANS, et
+//     affiche sa page de paiement PayPal : on y paie par carte, sans compte,
+//     pour verifier le parcours de bout en bout. --plan-test-off le
+//     DESACTIVE ensuite (PayPal ne supprime pas un plan). L'abonnement de test
+//     s'annule dans PayPal (Paiements automatiques) et le euro se rembourse
+//     depuis la transaction. Le worker ne connait pas ce plan : aucun acces
+//     n'est ouvert, l'evenement est range (paypal_orphelins).
+//
 //  IL NE CREE JAMAIS DEUX FOIS LE MEME PLAN : avant d'en creer un, il liste
 //  ceux qui existent et reutilise celui qui porte le meme nom. On peut donc le
 //  relancer sans rien casser.
@@ -69,6 +78,8 @@ const SANDBOX = ARGS.has('--sandbox');
 const ECRIRE = ARGS.has('--ecrire');
 const VERIFIER = ARGS.has('--verifier');
 const TARIFS = ARGS.has('--tarifs');
+const PLAN_TEST = ARGS.has('--plan-test');
+const PLAN_TEST_OFF = ARGS.has('--plan-test-off');
 const API = SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
 // ── LE FICHIER DE L'APPLICATION, ET SES PRIX ────────────────────────────
@@ -515,6 +526,7 @@ async function principal() {
   const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
   if (VERIFIER) { await verifier(tok); return; }
+  if (PLAN_TEST || PLAN_TEST_OFF) { await planTest(tok, PLAN_TEST_OFF); return; }
   if (TARIFS) {
     // D'ABORD LES PLANS QUI MANQUENT (les annuels sans engagement), PUIS LES
     // PRIX DE CEUX QUI EXISTENT : majTarifs relit les identifiants dans rc-core,
@@ -526,6 +538,28 @@ async function principal() {
   }
   const faits = await creerPlans(tok);
   afficherEtEcrire(faits);
+}
+
+// LE PLAN DE TEST A 1 EUR : cree ou retrouve par son nom, ou desactive.
+const NOM_PLAN_TEST = 'RepCore TEST 1 EUR (a supprimer)';
+async function planTest(tok, desactiver) {
+  const pr = await produit(tok);
+  let plan = await planExistant(tok, pr.id, NOM_PLAN_TEST);
+  if (desactiver) {
+    if (!plan) { console.log('\n  Aucun plan de test : rien a desactiver.\n'); return; }
+    if (plan.status !== 'INACTIVE') await pp(tok, 'POST', '/v1/billing/plans/' + plan.id + '/deactivate');
+    console.log('\n  Plan de test ' + plan.id + ' DESACTIVE. Pense a annuler l\'abonnement de test et a rembourser le euro.\n');
+    return;
+  }
+  if (!plan) {
+    plan = await pp(tok, 'POST', '/v1/billing/plans', corpsDuPlan(pr.id, { nom: NOM_PLAN_TEST,
+      description: 'Plan de test du paiement par carte. A desactiver apres le test.',
+      cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: '1.00' }] }));
+    console.log('\n  Plan de test cree : ' + plan.id);
+  } else console.log('\n  Plan de test deja la : ' + plan.id + ' (' + plan.status + ')');
+  console.log('  Page de paiement (carte, sans compte PayPal) :');
+  console.log('    https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=' + plan.id);
+  console.log('  Apres le test : node scripts/paypal_plans.mjs --plan-test-off\n');
 }
 
 // LES PLANS DE `PLANS`, CREES S'ILS MANQUENT (reconnus par leur NOM).
