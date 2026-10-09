@@ -25,6 +25,24 @@ const ROUTINE_MONTH = [
   ['paiements', 'Période = le mois, découpé en semaines si besoin', 'RSM_paiements_AAAA-MM_S1.csv …'],
 ];
 const defById = id => RSM_DEFS.find(d => d.id === id);
+// Contrôle de la semaine : chaque export de la routine est Reçu, Manquant ou Suspect.
+// Suspect : exactement 2 000 lignes (liste tronquée par Resamania), ou moins de la
+// moitié des lignes du dernier import des semaines précédentes (S.rsm.rowsHistory).
+const RSM_LIMITE = 2000;
+function rsmEtat(clubId, defId, t = today()) {
+  const since = dateOf(weekStart(t)).getTime(); const ts = Number(deepGet(S, ['rsm', 'routine', clubId, defId])) || 0;
+  if (!ts || ts < since) return { etat: 'Manquant', ts: ts || null };
+  const H = deepGet(S, ['rsm', 'rowsHistory', clubId, defId]) || []; const der = H[H.length - 1];
+  const rows = der ? der.rows : Number((Object.values(S.imports || {}).filter(i => i.clubId === clubId && i.defId === defId).sort((a, b) => b.at - a.at)[0] || {}).rows) || null;
+  const avant = H.filter(x => x.at < since).pop();
+  if (rows === RSM_LIMITE) return { etat: 'Suspect', ts, rows, message: 'Liste tronquée par Resamania : refaites l’export en deux fois' };
+  if (avant && rows != null && avant.rows > 0 && rows < avant.rows * 0.5) return { etat: 'Suspect', ts, rows, message: `${fmtN(rows)} lignes contre ${fmtN(avant.rows)} la semaine précédente : vérifiez les filtres de l’export` };
+  return { etat: 'Reçu', ts, rows };
+}
+function routineSemaine(clubId, t = today()) {
+  const L = ROUTINE_WEEK.map(([id]) => ({ id, label: (defById(id) || { label: id }).label, ...rsmEtat(clubId, id, t) }));
+  return { liste: L, total: L.length, recus: L.filter(x => x.etat !== 'Manquant').length, suspects: L.filter(x => x.etat === 'Suspect').length, manquants: L.filter(x => x.etat === 'Manquant').map(x => x.label) };
+}
 const rsmState = () => S.rsm || {};
 const ctrl = (clubId = CLUB.id) => deepGet(S, ['rsm', 'controls', clubId]) || {};
 
@@ -43,6 +61,11 @@ function impRsm() {
   };
   const cnt = (list, since) => list.filter(([id]) => (routine[id] || 0) >= since).length;
   return `${done}
+    ${rsmControleSemaine(CLUB.id)}
+    <div class="card" style="margin-bottom:14px"><div class="drop drop-dossier" id="rsm-dir-drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposer tout le dossier</div>
+      <div class="muted small">Le dossier de la semaine entier, ou un ZIP qui contient plusieurs exports : chaque fichier est lu et reconnu, la revue porte sur tous à la fois.</div>
+      <div class="row wrap" style="gap:8px;justify-content:center;margin-top:8px"><button class="btn sm" type="button" data-pick="rsm-dir">Choisir un dossier</button><button class="btn sm" type="button" data-pick="rsm-file">Choisir des fichiers ou un ZIP</button></div></div>
+      <input type="file" id="rsm-dir" webkitdirectory directory multiple hidden></div>
     <div class="card" style="margin-bottom:14px"><div class="drop" id="rsm-drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposez vos exports Resamania</div>
       <div class="muted small">Plusieurs fichiers à la fois : CSV des listes, ZIP des exports de gestion (sans les décompresser), XLSX. Chaque fichier est reconnu par ses colonnes.</div></div>
       <input type="file" id="rsm-file" multiple accept="${FILE_ACCEPT}" hidden></div>
@@ -74,8 +97,32 @@ function mountRsm() {
   drop.addEventListener('click', () => input.click());
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); rsmRead([...e.dataTransfer.files]); });
+  drop.addEventListener('drop', async e => { e.preventDefault(); drop.classList.remove('over'); rsmRead(await fichiersDuDepot(e.dataTransfer)); });
   input.addEventListener('change', () => { const f = [...input.files]; input.value = ''; rsmRead(f); });
+  // Dépôt d'un dossier entier (glissé ou choisi), ou d'un ZIP de plusieurs exports.
+  const dd = $('#rsm-dir-drop'), dir = $('#rsm-dir'); if (!dd || !dir) return;
+  $$('[data-pick]', dd).forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); $('#' + b.dataset.pick).click(); }));
+  dd.addEventListener('dragover', e => { e.preventDefault(); dd.classList.add('over'); });
+  dd.addEventListener('dragleave', () => dd.classList.remove('over'));
+  dd.addEventListener('drop', async e => { e.preventDefault(); dd.classList.remove('over'); rsmRead(await fichiersDuDepot(e.dataTransfer)); });
+  dir.addEventListener('change', () => { const f = [...dir.files].filter(x => !/(^|\/)(__MACOSX|\.)/.test(x.webkitRelativePath || x.name)); dir.value = ''; rsmRead(f); });
+}
+// Fichiers d'un dépôt : les dossiers glissés sont parcourus (sous-dossiers compris).
+async function fichiersDuDepot(dt) {
+  const items = [...(dt.items || [])].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (!items.length || items.every(x => x.isFile)) return [...dt.files];
+  const out = []; const lire = e => new Promise(res => {
+    if (e.isFile) { e.file(f => { if (!/^(\.|__MACOSX)/.test(f.name)) out.push(f); res(); }, () => res()); return; }
+    const r = e.createReader(); const tout = []; const lot = () => r.readEntries(async L => { if (!L.length) { for (const x of tout) await lire(x); res(); } else { tout.push(...L); lot(); } }, () => res()); lot();
+  });
+  for (const e of items) await lire(e);
+  return out;
+}
+function rsmControleSemaine(clubId) {
+  const R = routineSemaine(clubId); const cls = { 'Reçu': 'ok', 'Manquant': 'bad', 'Suspect': 'warn' };
+  return `<div class="card rsm-controle" style="margin-bottom:14px"><div class="card-head"><h3>Contrôle de la semaine</h3><span class="spacer"></span><span class="badge ${R.recus === R.total && !R.suspects ? 'ok' : 'warn'}" data-recus="${R.recus}">${R.recus} sur ${R.total} reçus${R.suspects ? `, ${R.suspects} suspect${R.suspects > 1 ? 's' : ''}` : ''}</span></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Export</th><th>État</th><th>Reçu le</th><th class="num">Lignes</th><th>À faire</th></tr></thead><tbody>
+    ${R.liste.map(x => `<tr data-def="${x.id}" data-etat="${x.etat}"><td>${esc(x.label)}</td><td><span class="badge ${cls[x.etat]}">${x.etat}</span></td><td class="small">${x.ts ? esc(dm(isoOf(new Date(x.ts)))) : ''}</td><td class="num">${x.rows != null ? fmtN(x.rows) : ''}</td><td class="small">${x.message ? esc(x.message) : x.etat === 'Manquant' ? 'À déposer cette semaine' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 async function rsmRead(files) {
   if (!files.length) return;
@@ -161,6 +208,7 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
     const type = r.def.id === 'resil' ? 'resil' : r.entries.length ? 'kpi' : (r.balances || r.noMandate || Object.keys(r.clients).length || r.clientsByName.length) ? 'clients' : 'control';
     ops.push([['imports', impId], { id: impId, name: r.name, type, defId: r.def.id, source: 'resamania', clubId: club, at: now, rows: r.rowsCount, count: r.entries.length + r.recov.length + r.resil.length, from: r.from, to: r.to, active: true, by: by }]);
     ops.push([['rsm', 'routine', club, r.def.id], now]);
+    ops.push([['rsm', 'rowsHistory', club, r.def.id], [...(deepGet(S, ['rsm', 'rowsHistory', club, r.def.id]) || []), { at: now, rows: Number(r.rowsCount) || 0 }].slice(-8)]);
     // KPI : identifiant derive de la cle de ligne -> reimport sans doublon
     for (const e of r.entries) {
       // Ventes/prospects du web ou de l'appli, non attribués : au membre virtuel PSO.

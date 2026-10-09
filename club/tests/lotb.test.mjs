@@ -1,0 +1,157 @@
+// Lot B (pilotage du directeur) : résiliations en euros, journée, brief, impayés, imports,
+// récap, confiance, adoption. Vrai code de l'appli.
+//   TZ=Europe/Paris node --test club/tests/lotb.test.mjs
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { chargerAppli } from '../outils/fitpulse-rapport.mjs';
+
+const base = (extra = {}) => ({ clubs: { k: { id: 'k', name: 'Club' } }, users: { u: { id: 'u', first: 'Alex', last: 'M', role: 'manager', status: 'active', clubs: ['k'] }, v: { id: 'v', first: 'Sam', last: 'V', role: 'membre', status: 'active', clubs: ['k'] } }, ...extra });
+const appli = (extra) => { const run = chargerAppli(base(extra)); run(`CLUB = S.clubs.k; ME = S.users.u;`); return run; };
+const J = (run, code) => JSON.parse(run(`JSON.stringify(${code})`));
+
+test('résiliation : 39,90 € et 4 mois restants, En jeu 160 €', () => {
+  const run = appli({ clients: { c1: { id: 'c1', clubId: 'k', name: 'Lea Martin', num: '77', price: 39.9, end: '2026-09-20' } },
+    resiliations: { r1: { id: 'r1', clubId: 'k', client: 'MARTIN Léa', date: '2026-05-20', status: 'nouvelle' } } });
+  const v = J(run, `(({ euros, estimee, mois, client }) => ({ euros, estimee, mois, id: client && client.id }))(valeurEnJeu(S.resiliations.r1))`);
+  assert.deepEqual(v, { euros: 160, estimee: false, mois: 4, id: 'c1' });
+  assert.match(run(`resCard(S.resiliations.r1)`), /En jeu : 160 €/);
+});
+test('sans prix ni réglage : 32 € et mention estimé ; panier moyen réglé', () => {
+  const run = appli({ resiliations: { r1: { id: 'r1', clubId: 'k', client: 'Inconnu Total', date: '2026-05-20', status: 'nouvelle' } } });
+  assert.equal(J(run, `valeurEnJeu(S.resiliations.r1).euros`), 32 * 12);
+  assert.match(run(`resCard(S.resiliations.r1)`), /estimé/);
+  run(`S.settings.panierMoyen = 40; REV++`);
+  assert.equal(J(run, `valeurEnJeu(S.resiliations.r1).euros`), 480);
+});
+test('homonymes : choix manuel, puis rattachement gardé', () => {
+  const run = appli({ clients: { a: { id: 'a', clubId: 'k', name: 'Paul Roy', price: 30, end: '2027-01-01' }, b: { id: 'b', clubId: 'k', name: 'Paul Roy', price: 45 } },
+    resiliations: { r1: { id: 'r1', clubId: 'k', client: 'Paul Roy', date: '2026-10-01', status: 'nouvelle' } } });
+  assert.equal(J(run, `resClient(S.resiliations.r1)`), null);
+  assert.match(run(`resCard(S.resiliations.r1)`), /Choisir la fiche \(2\)/);
+  run(`S.resiliations.r1.clientId = 'b'; REV++`);
+  assert.equal(J(run, `valeurEnJeu(S.resiliations.r1).euros`), 45 * 12);
+});
+test('tuile Valeur en jeu = somme des cartes ; récap « Sauvé »', () => {
+  const run = appli({ clients: { c1: { id: 'c1', clubId: 'k', name: 'A B', price: 30, end: '2099-01-01' } },
+    resiliations: { r1: { id: 'r1', clubId: 'k', client: 'A B', date: '2026-10-01', status: 'nouvelle' }, r2: { id: 'r2', clubId: 'k', client: 'C D', date: '2026-10-02', status: 'nouvelle', effective: '2099-01-01' },
+      r3: { id: 'r3', clubId: 'k', client: 'E F', date: '2026-10-03', status: 'sauvee', saved: true, valeur: 384 } } });
+  run(`UI.resTab = 'todo'`); const h = run(`PAGES.resiliations.render()`);
+  const cartes = [...h.matchAll(/data-valeur="(\d+)"/g)].reduce((s, m) => s + Number(m[1]), 0);
+  assert.equal(Number(h.match(/data-tuile="enjeu"><span>Valeur en jeu<\/span><b data-v="(\d+)"/)[1]), cartes);
+  const mk = run('curMonth()'); run(`UI.recapMonth = '${mk}'`);
+  assert.equal(J(run, `monthFigures('k', '${mk}').sauveEuros`), 384);
+});
+
+test('impayés : 4 tranches = total dû, date inconnue en « plus de 60 », Appeler seulement avec un numéro', () => {
+  const run = appli(); const t = J(run, 'today()'); const ago = n => J(run, `addDays(today(), -${n})`);
+  run(`Object.assign(S.clients, {
+    a: { id: 'a', clubId: 'k', name: 'Ana One', balance: 50, balanceAt: '${ago(3)}', phone: '06 11 22 33 44' },
+    b: { id: 'b', clubId: 'k', name: 'Bob Two', balance: 30.5, balanceAt: '${ago(20)}' },
+    c: { id: 'c', clubId: 'k', name: 'Cid Three', balance: 100, balanceAt: '${ago(45)}', phone: '' },
+    d: { id: 'd', clubId: 'k', name: 'Dan Four', balance: 19.5 } }); REV++;`);
+  void t;
+  const h = run(`dunTable()`);
+  const tr = [...h.matchAll(/data-tranche="(\d)" data-v="([\d.]+)"/g)].map(m => Number(m[2]));
+  assert.equal(tr.length, 4); assert.equal(Math.round(tr.reduce((s, x) => s + x, 0) * 100) / 100, 200);
+  assert.match(h, /Total dû<\/span><b>200 €/);
+  assert.equal(J(run, `detteTranche(S.clients.d)`), 3);
+  assert.match(h, /data-age="">\s*<span class="muted small">date inconnue/);
+  assert.equal((h.match(/data-appel="1"/g) || []).length, 1);
+  run(`UI.dunAge = '1'; UI.dunQ = 'bob'`); assert.match(run(`dunTable()`), /Bob Two/);
+  run(`UI.dunQ = 'ana'`); assert.doesNotMatch(run(`dunTable()`), /Ana One/);
+  run(`UI.dunAge = ''; UI.dunQ = ''; UI.dunFilter = 'nobody'`); assert.match(run(`dunTable()`), /Ana One/);
+});
+test('impayés : message SMS réglable, tuile dette de plus de 60 jours en rouge au-delà de 20 %', () => {
+  const run = appli({ clients: { a: { id: 'a', clubId: 'k', name: 'Ana One', balance: 59.9 }, b: { id: 'b', clubId: 'k', name: 'Bo T', balance: 10, balanceAt: '2099-01-01' } } });
+  assert.equal(J(run, `dunSmsTexte(S.clients.a)`), 'Bonjour Ana, votre club vous informe d’un solde de 59,90 €. Vous pouvez le régler à l’accueil ou depuis votre espace adhérent. Merci.');
+  run(`S.settings.dunSms = 'Salut {prénom} : {montant} €'; REV++`); assert.equal(J(run, `dunSmsTexte(S.clients.a)`), 'Salut Ana : 59,90 €');
+  assert.match(run(`managerCockpit()`), /data-tuile="dette60" data-rouge="true"/);
+});
+
+const EMOJI = /\p{Extended_Pictographic}/u;
+test('brief : un mardi, « Hier » = somme des saisies du lundi ; un lundi, « Samedi »', () => {
+  const run = appli({ kpis: undefined });
+  run(`S.kpis.contrats.enabled = true; Object.assign(S.entries, {
+    e1: { id: 'e1', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-10-12', value: 2, source: 'manual', at: 1 },
+    e2: { id: 'e2', userId: 'u', clubId: 'k', kpiId: 'contrats', date: '2026-10-12', value: 1, source: 'manual', at: 2 },
+    e3: { id: 'e3', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-10-10', value: 4, source: 'manual', at: 3 },
+    e4: { id: 'e4', userId: 'v', clubId: 'autre', kpiId: 'contrats', date: '2026-10-12', value: 9, source: 'manual', at: 4 } }); REV++;`);
+  const mardi = J(run, `(B => ({ v: B.veille, l: B.libVeille, t: B.hier.find(x => x.k.id === 'contrats').total }))(briefJour('k', '2026-10-13'))`);
+  const attendu = J(run, `Object.values(S.entries).filter(e => e.clubId === 'k' && e.date === '2026-10-12' && e.kpiId === 'contrats').reduce((s, e) => s + e.value, 0)`);
+  assert.deepEqual(mardi, { v: '2026-10-12', l: 'Hier', t: attendu });
+  const lundi = J(run, `(B => ({ v: B.veille, l: B.libVeille, t: B.hier.find(x => x.k.id === 'contrats').total }))(briefJour('k', '2026-10-12'))`);
+  assert.deepEqual(lundi, { v: '2026-10-10', l: 'Samedi', t: 4 });
+});
+test('brief : impayés sans import depuis 16 jours en rouge ; texte copié propre et court', () => {
+  const run = appli();
+  run(`S.rsm.routine = { k: { incidents: dateOf(addDays(today(), -16)).getTime() + 36e5, ventes: Date.now(), clients: dateOf(addDays(today(), -9)).getTime() + 36e5 } }; REV++;`);
+  const f = J(run, `fraicheur('k').map(x => [x.cle, x.niveau])`);
+  assert.deepEqual(f, [['ventes', 'ok'], ['incidents', 'rouge'], ['clients', 'orange']]);
+  run(`S.resiliations.r = { id: 'r', clubId: 'k', client: 'Zoé — Test 🔥', date: today(), status: 'nouvelle', effective: addDays(today(), 3) }; REV++;`);
+  const t = run(`briefTexte(briefJour('k'), 'Club 🏋️ — Centre')`);
+  assert.ok(t.split('\n').length <= 6); assert.ok(!/[–—]/.test(t)); assert.ok(!EMOJI.test(t));
+});
+test('Ma journée : à 11 h 05 le bloc Impayés est mis en avant ; pas de clôture du mois le 6', () => {
+  const run = appli({ clients: { a: { id: 'a', clubId: 'k', name: 'A', balance: 20 }, b: { id: 'b', clubId: 'k', name: 'B', balance: 30, dunning: { next: '2099-01-01' } } } });
+  const B = J(run, `journeeBlocs('k', new Date(2026, 9, 13, 11, 5)).map(b => ({ cle: b.cle, courant: b.courant, chiffre: b.chiffre }))`);
+  assert.deepEqual(B.filter(b => b.courant).map(b => b.cle), ['impayes']);
+  assert.equal(Number(B.find(b => b.cle === 'impayes').chiffre), J(run, `dunRows('k').filter(dunDue).length`));
+  assert.ok(!J(run, `journeeBlocs('k', new Date(2026, 9, 6, 9)).map(b => b.cle)`).includes('mois'));
+  assert.ok(J(run, `journeeBlocs('k', new Date(2026, 9, 5, 9)).map(b => b.cle)`).includes('mois'));
+  assert.ok(J(run, `journeeBlocs('k', new Date(2026, 9, 12, 9)).map(b => b.cle)`).includes('routine'));
+  assert.ok(!J(run, `journeeBlocs('k', new Date(2026, 9, 13, 9)).map(b => b.cle)`).includes('routine'));
+});
+test('clôture : absent hors « sans saisie », projection 100 au 15 septembre (13 sur 26 jours ouvrés), message court', () => {
+  const run = appli();
+  assert.equal(J(run, `sansSaisie('k').length`), 2);
+  run(`S.absences = { v: { [today()]: true } }; REV++;`); assert.deepEqual(J(run, `sansSaisie('k').map(u => u.id)`), ['u']);
+  run(`S.kpis.contrats.required = true; S.kpis.contrats.enabled = true; S.targets['2026-09'] = { v: { contrats: 100 } };
+    S.entries.c50 = { id: 'c50', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-09-10', value: 50, source: 'manual', at: 1 }; REV++;`);
+  const p = J(run, `(p => ({ proj: p.proj, ec: p.ecoules, tot: p.total, v: p.verdict }))(projectionMois('k', '2026-09', '2026-09-15').find(p => p.k.id === 'contrats'))`);
+  assert.deepEqual(p, { proj: 100, ec: 13, tot: 26, v: 'Atteint' });
+  const t = run(`clotureTexte('k')`); assert.ok(t.split('\n').length <= 5); assert.ok(!EMOJI.test(t)); assert.ok(!/[–—]/.test(t));
+});
+
+test('récap : revenu récurrent de 3 clients = 89,70 € ; commentaire rangé par mois ; mailto court', () => {
+  const run = appli({ clients: { a: { id: 'a', clubId: 'k', name: 'A', price: 29.9 }, b: { id: 'b', clubId: 'k', name: 'B', price: 39.9 }, c: { id: 'c', clubId: 'k', name: 'C', price: 19.9 } } });
+  const mk = J(run, 'curMonth()');
+  assert.equal(J(run, `revenusMois('k', '${mk}').mrr`), 89.7);
+  run(`UI.recapMonth = '${mk}'`); assert.match(run('PAGES.recap.render()'), /data-rev="mrr" data-v="89.7"><span>Revenu mensuel récurrent<\/span><b>89,70 €/);
+  assert.doesNotMatch(run('PAGES.recap.render()'), /data-estimation/);
+  run(`S.recapNotes = { k: { '2026-09': 'Bon mois, priorité aux avis.' } }; UI.recapMonth = '2026-09'`);
+  assert.match(run('PAGES.recap.render()'), /Bon mois, priorité aux avis\./);
+  run(`UI.recapMonth = '2026-10'`); assert.doesNotMatch(run('PAGES.recap.render()'), /Bon mois, priorité/);
+  run(`S.recapNotes.k['2026-09'] = 'x'.repeat(3000)`);
+  const t = run(`recapGerantTexte('k', '2026-09')`); assert.ok(t.length <= 1800); assert.ok(t.split('\n').length <= 10);
+  run(`for (let i = 0; i < 4; i++) S.clients['n' + i] = { id: 'n' + i, clubId: 'k', name: 'N' + i }; REV++;`);
+  run(`UI.recapMonth = '${mk}'`); assert.match(run('PAGES.recap.render()'), /Estimation : prix moyen utilisé/);
+});
+test('compteur : 384 € sauvés + 120 € récupérés par l’équipe = 504 € + boutique ; hypothèses ; membres exclus', () => {
+  const run = appli(); const t = J(run, 'today()');
+  run(`S.kpis.nutrition.enabled = true; S.resiliations.r = { id: 'r', clubId: 'k', client: 'X Y', date: today(), status: 'sauvee', saved: true, valeur: 384 };
+    S.entries.i1 = { id: 'i1', userId: 'v', clubId: 'k', kpiId: 'impayes', date: today(), value: 120, source: 'manual', at: 1 };
+    S.entries.n1 = { id: 'n1', userId: 'v', clubId: 'k', kpiId: 'nutrition', date: today(), value: 45.5, source: 'manual', at: 2 }; REV++;`);
+  void t;
+  const R = J(run, `rapporteCompteurData('k')`);
+  assert.equal(R.sauve, 384); assert.equal(R.impayes, 120); assert.equal(R.total, 504 + R.boutique); assert.equal(R.boutique, 45.5);
+  const h = run(`rapporteCompteur('k')`); assert.match(h, /panier moyen de 32 €/); assert.match(h, /x 59 minutes/);
+  assert.ok(!/h<\/b>[^]*data-total/.test(h)); assert.equal(Number(h.match(/data-total="([\d.]+)"/)[1]), R.total);
+  run(`ME = S.users.v`); assert.equal(run(`rapporteCompteur('k')`), '');
+});
+
+test('contrôle de la semaine : 2 000 lignes ou deux fois moins que la semaine précédente = Suspect', () => {
+  const run = appli(); const lundi = J(run, 'dateOf(weekStart(today())).getTime()');
+  run(`S.rsm.routine = { k: { clients: ${lundi + 3600e3}, ventes: ${lundi + 3600e3}, paiements: ${lundi - 3 * 864e5} } };
+    S.rsm.rowsHistory = { k: { clients: [{ at: ${lundi + 3600e3}, rows: 2000 }], ventes: [{ at: ${lundi - 7 * 864e5}, rows: 1000 }, { at: ${lundi + 3600e3}, rows: 400 }] } }; REV++;`);
+  const c = J(run, `rsmEtat('k', 'clients')`); assert.equal(c.etat, 'Suspect'); assert.equal(c.message, 'Liste tronquée par Resamania : refaites l’export en deux fois');
+  assert.equal(J(run, `rsmEtat('k', 'ventes').etat`), 'Suspect');
+  assert.equal(J(run, `rsmEtat('k', 'paiements').etat`), 'Manquant');
+  const R = J(run, `routineSemaine('k')`); assert.equal(R.total, 7); assert.equal(R.recus, 2); assert.equal(R.suspects, 2);
+  assert.match(run(`rsmControleSemaine('k')`), /data-def="clients" data-etat="Suspect"/);
+});
+test('un ZIP de 7 CSV lance la revue des 7 fichiers en une fois', async () => {
+  const run = chargerAppli(base(), { libs: true }); run(`CLUB = S.clubs.k; ME = S.users.u;`);
+  run(`globalThis.__zip = new JSZip(); for (let i = 1; i <= 7; i++) __zip.file('export' + i + '.csv', 'Nom;Montant\\nA;' + i + '\\n');`);
+  run(`globalThis.__fin = (async () => { const buf = await __zip.generateAsync({ type: 'uint8array' }); const f = { name: 'semaine.zip', size: buf.length, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) }; await rsmRead([f]); return UI.rsmBatch.length; })()`);
+  const n = await run('__fin'); assert.equal(n, 7);
+});

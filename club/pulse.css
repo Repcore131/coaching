@@ -1207,3 +1207,32 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .pk-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; font-size: 13px; cursor: grab; }
 .pk-card .input.sm { padding: 3px 6px; font-size: 12px; min-width: 0; flex: 1; }
 @media (max-width: 760px) { .pk-board { grid-template-columns: repeat(6, 78%); } }
+/* Impayés : ancienneté de la dette */
+.dette-bar { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.dette-t { min-width: 120px; flex: 1; text-align: left; border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 10px; background: var(--surface-2); color: var(--text); cursor: pointer; display: grid; gap: 2px; font: inherit; }
+.dette-t span { font-size: var(--t-12); color: var(--muted); } .dette-t b { font-size: var(--t-16); } .dette-t small { font-size: var(--t-11); color: var(--muted); }
+.dette-t.t0 { border-left: 4px solid var(--ok); } .dette-t.t1 { border-left: 4px solid var(--warn); } .dette-t.t2 { border-left: 4px solid #F97316; } .dette-t.t3 { border-left: 4px solid var(--bad); }
+.dette-t.on { outline: 2px solid var(--fp); }
+@media (max-width: 560px) { .dette-t { min-width: calc(50% - 3px); } }
+/* Ma journée et brief du jour */
+.journee { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; }
+.jr-bloc { display: grid; gap: 6px; align-content: start; min-width: 0; border: 1px solid var(--line); }
+.jr-bloc.courant { border: 2px solid var(--fp); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fp) 18%, transparent); }
+.jr-bloc.passe:not(.courant) { opacity: .85; }
+.jr-t { font-family: var(--font-title); font-size: var(--t-20); text-transform: uppercase; }
+.jr-n b { font-family: var(--font-title); font-size: var(--t-40); line-height: 1; } .jr-n span { color: var(--muted); }
+.jr-bloc .btn { justify-self: start; }
+.brief-jour { margin-bottom: 14px; }
+.bj-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 14px; margin-top: 8px; }
+.bj-bloc h4 { margin: 0 0 6px; font-size: var(--t-14); }
+.bj-bloc .row { gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.bj-det { padding: 2px 0 4px; }
+.bj-actions { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--t-13); }
+.btn.warn-btn { border-color: var(--warn); color: var(--warn); }
+/* Récap : en-tête imprimé au nom du club, commentaire, revenus, compteur */
+.print-only { display: none; }
+@media print { .print-only { display: block !important; } .rc-print-head { display: flex !important; align-items: center; gap: 14px; margin-bottom: 12px; } .rc-print-head img { max-height: 56px; max-width: 160px; } .rc-note label > span { display: none; } }
+.rc-note { margin-bottom: 14px; } .rc-note textarea { resize: vertical; }
+.rc-rev { margin-bottom: 6px; } .rc-tile small + small { display: block; }
+.rap-compteur { margin-bottom: 14px; } .rc-total { font-family: var(--font-title); font-size: var(--t-40); }
+.rc-lignes .row { padding: 4px 0; border-bottom: 1px solid var(--line); gap: 8px; } .rc-hyp { margin-top: 8px; } .rc-hyp ul { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; }

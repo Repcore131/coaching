@@ -80,6 +80,7 @@ export const REGLE = `${DEBUT}
         }
       },
       "prefs": { "$uid": { ".write": ${j(SOIMEME)} } },
+      "usage": { "$uid": { ".write": ${j(SOIMEME)} } },
       "tasks": {
         "library": { ".write": ${j(MGR)} },
         "plan": { ".write": ${j(MGR)} },

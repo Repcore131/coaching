@@ -227,7 +227,7 @@ function kpiCard(x, exp) {
 // Valeur gardée par les sauvetages d'une période (mensualités x mois restants).
 function sauvValeur(uid, r) {
   if (!r || typeof valeurEnJeu !== 'function') return 0;
-  return resList(CLUB.id).filter(d => resStatus(d) === 'sauvee' && (!uid || d.ownerId === uid)).filter(d => { const e = S.entries['sv_' + d.id]; const dt = (e && e.date) || d.date; return dt >= r.from && dt <= r.to; }).reduce((s, d) => s + (Number(d.enJeu) || valeurEnJeu(d).euros), 0);
+  return resList(CLUB.id).filter(d => resStatus(d) === 'sauvee' && (!uid || d.ownerId === uid)).filter(d => { const e = S.entries['sv_' + d.id]; const dt = (e && e.date) || d.date; return dt >= r.from && dt <= r.to; }).reduce((s, d) => s + resValeur(d), 0);
 }
 function bindKpiDrag() {
   const grid = $('#kpi-grid'); if (!grid) return;

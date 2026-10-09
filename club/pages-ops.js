@@ -34,7 +34,8 @@ PAGES.resiliations = {
   render() {
     const tab = UI.resTab || 'todo';
     const all = resList(CLUB.id);
-    const open = all.filter(resOpen).sort((a, b) => (resUrgent(b) - resUrgent(a)) || (valeurEnJeu(b).euros - valeurEnJeu(a).euros) || (a.effective || a.date).localeCompare(b.effective || b.date));
+    // À traiter : échéance la plus proche d'abord (inconnue en dernier), puis valeur décroissante.
+    const open = all.filter(resOpen).sort((a, b) => (a.effective || '9999').localeCompare(b.effective || '9999') || (resValeur(b) - resValeur(a)));
     const mk = UI.resMonth || curMonth();
     const month = all.filter(r => r.date.slice(0, 7) === mk);
     // sauvé = date du sauvetage ; résilié = date effective (à défaut, date de la demande)
@@ -43,15 +44,15 @@ PAGES.resiliations = {
     const handledTimes = month.map(r => { const a = resActions(r).find(x => x.label !== 'Demande enregistrée'); return a && r.at ? (a.at - r.at) / 86400000 : null; }).filter(x => x != null && x >= 0);
     const reasons = {}; month.forEach(r => { const k = r.reason || 'Non renseigné'; reasons[k] = (reasons[k] || 0) + 1; });
     const noOwner = open.filter(r => !r.ownerId).length, urgent = open.filter(resUrgent).length;
-    const enJeu = r => Number(r.enJeu) || valeurEnJeu(r).euros;
+    const enJeu = resValeur; const vOpen = open.reduce((s, r) => s + resValeur(r), 0);
     const vSaved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const vLost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · uniquement les demandes <b>à arbitrer</b> : les résiliations déjà acceptées partent à l’historique.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
     const kpis = `<div class="stat-row">
       <div class="stat ${open.length ? 'hot' : ''}"><span>À arbitrer</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
       <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
-      <div class="stat"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small>taux de sauvetage ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
-      <div class="stat"><span>Valeur sauvée ce mois</span><b class="ok">${fmtE(vSaved)}</b><small>mensualités gardées</small></div>
+      <div class="stat" data-tuile="enjeu"><span>Valeur en jeu</span><b data-v="${vOpen}">${fmtE(vOpen)}</b><small>${plur(open.length, 'demande ouverte', 'demandes ouvertes')}</small></div>
+      <div class="stat" data-tuile="sauvees"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small><b data-v="${vSaved}">${fmtE(vSaved)}</b> sauvés · taux ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
       <div class="stat"><span>Valeur perdue ce mois</span><b class="bad">${fmtE(vLost)}</b><small>résiliations effectives</small></div>
       <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
@@ -71,7 +72,8 @@ function resCard(r) {
     <div class="row wrap"><div class="spacer" style="min-width:180px"><b class="t-14">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
       ${r.effective ? `<span class="badge ${n <= 7 ? 'bad' : n <= 15 ? 'warn' : ''}">${n < 0 ? 'effective depuis ' + (-n) + ' j' : n === 0 ? 'effective aujourd’hui' : 'J-' + n}</span>` : '<span class="badge">date effective ?</span>'}
       <span class="badge ${RES_STATUS[st].cls}">${RES_STATUS[st].label}</span></div>
-    ${(() => { const v = valeurEnJeu(r); const c = clubClients(r.clubId).find(x => tokensKey(x.name || '') === tokensKey(r.client || '')); return `<div class="res-val"><b>En jeu : ${fmtE(v.euros)}</b>${v.estimee ? ' <span class="muted small">valeur estimée</span>' : ''}${c && c.offer ? ` <span class="muted small">· ${esc(c.offer)}</span>` : ''}</div>`; })()}
+    ${(() => { const v = valeurEnJeu(r); const c = v.client; const nb = c ? 0 : resCandidats(r).length;
+      return `<div class="res-val" data-valeur="${resValeur(r)}"><b>En jeu : ${fmtE(resValeur(r))}</b>${v.estimee ? ' <span class="muted small">estimé</span>' : ''} <span class="muted small">· ${v.engage ? plur(v.mois, 'mois restant', 'mois restants') : 'sans engagement, 12 mois'}</span>${c ? ` <a class="small" href="#/client/${c.id}">Fiche ${esc(c.num ? 'n° ' + c.num : c.name)}</a>` : nb > 1 ? ` <button class="btn sm" data-act="resPickClient" data-id="${r.id}">Choisir la fiche (${nb})</button>` : ' <span class="muted small">aucune fiche</span>'}</div>`; })()}
     ${last ? `<div class="small" style="margin-top:8px"><span class="muted">Dernière action :</span> ${esc(last.label)}${last.note ? '<br><span class="muted">« ' + esc(last.note) + ' »</span>' : ''} <span class="muted">· ${esc(fullName(S.users[last.by]))}, ${ago(last.at)}</span></div>` : ''}
     <div class="row wrap" style="margin-top:10px;gap:6px">
       ${r.ownerId ? `<span class="small">${avatar(S.users[r.ownerId], 'xs')}</span><span class="small spacer">${mine ? '<b>Vous</b>' : esc(fullName(S.users[r.ownerId]))}</span>` : `<button class="btn sm primary" data-act="resTake" data-id="${r.id}">Je m’en occupe</button><span class="spacer"></span>`}
@@ -101,6 +103,10 @@ function resOffersTables(month, enJeu) {
     ${Object.entries(motifs).sort((a, b) => b[1].n - a[1].n).map(([k, m]) => `<tr><td>${esc(k)}</td><td class="num">${m.n}</td><td class="num">${m.s}</td><td class="num">${fmtP(m.n ? m.s / m.n : null)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucune demande.</td></tr>'}</tbody></table></div></div></div>`;
 }
 const resActions = r => [...(r.actions || []), ...Object.values(r.log || {})].sort((a, b) => (a.at || 0) - (b.at || 0));
+// Plusieurs fiches au même nom : le manager choisit (rattachement gardé dans r.clientId).
+ACTIONS.resPickClient = el => { const r = S.resiliations[el.dataset.id]; const L = resCandidats(r);
+  openModal({ title: `Fiche de ${r.client}`, body: `<div class="grid">${L.map(c => `<button class="btn" style="justify-content:flex-start" data-act="resPickOk" data-id="${r.id}" data-c="${c.id}">${esc(c.name || '')} ${c.num ? '· n° ' + esc(c.num) : ''} ${c.end ? '· fin ' + dmy(c.end) : ''} ${mensualite(c, true) ? '· ' + fmtE(mensualite(c, true)) + ' par mois' : ''}</button>`).join('')}</div>` }); };
+ACTIONS.resPickOk = el => { db.batch([[['resiliations', el.dataset.id, 'clientId'], el.dataset.c], resLogOp(S.resiliations[el.dataset.id], 'Fiche client rattachée')]); closeModal(); };
 ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
 ACTIONS.resCall = el => {
   const r = S.resiliations[el.dataset.id];
@@ -118,7 +124,7 @@ ACTIONS.resCallSave = () => {
 };
 ACTIONS.resSaveIt = el => {
   const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
-  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], valeurEnJeu(r).euros], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
+  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], valeurEnJeu(r).euros], [['resiliations', r.id, 'valeur'], valeurEnJeu(r).euros], ...(resClient(r) && !r.clientId ? [[['resiliations', r.id, 'clientId'], resClient(r).id]] : []), [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
     [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
   celebrate('Client sauvé', `${r.client} reste au club`, { kind: 'win' });
 };
@@ -217,6 +223,21 @@ PAGES.impayes = {
     return head + (isManager() ? tabs('impTab2', [['suivi', 'Suivi des dossiers'], ['canaux', 'Récupéré par canal']], tab) : '') + (tab === 'suivi' ? dunTable() : impayesAnalyse.render());
   },
 };
+// Ancienneté de la dette : today() moins la date du solde (c.balanceAt). Date inconnue : plus de 60 jours.
+const DETTE_AGE = [[15, '0 à 15 jours'], [30, '16 à 30 jours'], [60, '31 à 60 jours'], [Infinity, 'plus de 60 jours']];
+const detteAge = c => c.balanceAt ? Math.max(0, Math.round((dateOf(today()) - dateOf(String(c.balanceAt).slice(0, 10))) / 864e5)) : null;
+const detteTranche = c => { const a = detteAge(c); return a == null ? 3 : DETTE_AGE.findIndex(t => a <= t[0]); };
+function detteTranches(open) { return DETTE_AGE.map((t, i) => { const L = open.filter(c => detteTranche(c) === i); return { i, label: t[1], n: L.length, v: Math.round(L.reduce((s, c) => s + Number(c.balance), 0) * 100) / 100 }; }); }
+// Message SMS (réglage commun dunSms) : {prénom} et {montant} remplacés.
+function dunSmsTexte(c) {
+  const tpl = reglage('dunSms', DUN_SMS_DEFAUT); const montant = fmtE(Number(c.balance)).replace(/\s*€$/, '');
+  return tpl.replace(/\{pr[ée]nom\}/gi, (c.first || c.name || '').trim().split(/\s+/)[0] || '').replace(/\{montant\}/g, montant);
+}
+ACTIONS.dunSms = el => {
+  const c = S.clients[el.dataset.id]; const txt = dunSmsTexte(c);
+  const done = () => { db.batch([dunPatch(c, {}, 'Message de relance copié')]); toast('Message copié'); };
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { openModal({ title: 'Message à envoyer', body: `<textarea class="input" rows="5" readonly>${esc(txt)}</textarea>`, foot: '<button class="btn" data-close>Fermer</button>' }); done(); });
+};
 function dunTable() {
   const f = UI.dunFilter || 'todo';
   const rows = dunRows(CLUB.id);
@@ -234,9 +255,11 @@ function dunTable() {
     recupere: c => ['recupere', 'a_verifier'].includes(dunOf(c).status) && (dunOf(c).recoveredAt || '').slice(0, 7) === mk,
     perdu: c => dunStatus(c) === 'perdu',
   };
-  const q = norm(UI.dunQ || '');
-  const list = rows.filter(pick[f]).filter(c => !q || norm(c.name).includes(q) || String(c.num || '').includes(q))
-    .sort((a, b) => (Number(b.balance) > 0 && Number(a.balance) > 0 ? dunAttendu(b) - dunAttendu(a) : 0) || (Number(b.balance) - Number(a.balance)) || (dunOf(b).recoveredAt || '').localeCompare(dunOf(a).recoveredAt || ''));
+  const q = norm(UI.dunQ || ''); const ageF = UI.dunAge === '' || UI.dunAge == null ? null : Number(UI.dunAge);
+  const ageOf = c => { const a = detteAge(c); return a == null ? 1e6 : a; };
+  const list = rows.filter(pick[f]).filter(c => !q || norm(c.name).includes(q) || String(c.num || '').includes(q)).filter(c => ageF == null || (Number(c.balance) > 0 && detteTranche(c) === ageF))
+    .sort(UI.dunSort === 'age' ? (a, b) => ageOf(b) - ageOf(a) : UI.dunSort === 'age-' ? (a, b) => ageOf(a) - ageOf(b) : (a, b) => (Number(b.balance) > 0 && Number(a.balance) > 0 ? dunAttendu(b) - dunAttendu(a) : 0) || (Number(b.balance) - Number(a.balance)) || (dunOf(b).recoveredAt || '').localeCompare(dunOf(a).recoveredAt || ''));
+  const anc = detteTranches(open);
   const tranches = DUN_AGE.map((t, i) => { const L = open.filter(c => dunTranche(c) === i); return { t, n: L.length, v: L.reduce((s, c) => s + Number(c.balance), 0) }; });
   const late30 = open.filter(c => dunAge(c) > 30 && !dunOf(c).ownerId);
   const members = clubMembers(CLUB.id);
@@ -254,25 +277,28 @@ function dunTable() {
       <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok"><span class="trace-n"${traceAttr({ t: 'recov', canal: 'all', club: CLUB.id, from: rgM.from, to: rgM.to, v: recTot })}>${fmtE(recTot)}</span></b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
       <div class="stat"><span>Dossiers soldés ce mois</span><b>${recMonth.length}</b><small>passés en « Récupéré »</small></div></div>
     ${open.length ? `<div class="age-tiles">${tranches.map(x => `<div class="age-tile ${x.t[3]}"><span>${x.t[2]}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')} · attendu ${fmtP(x.t[1])}</small></div>`).join('')}</div>` : ''}
+    ${open.length ? `<div class="card dette-age" style="margin-bottom:12px;padding:12px 14px"><div class="row wrap"><b>Ancienneté de la dette</b><span class="muted small spacer">depuis la date du solde ; date inconnue comptée dans « plus de 60 jours »</span>${ageF != null ? `<button class="btn sm ghost" data-act="ui" data-key="dunAge" data-val="">Toutes les anciennetés</button>` : ''}</div>
+      <div class="dette-bar" role="group" aria-label="Ancienneté de la dette">${anc.map(x => `<button class="dette-t t${x.i} ${ageF === x.i ? 'on' : ''}" data-act="ui" data-key="dunAge" data-val="${ageF === x.i ? '' : x.i}" data-tranche="${x.i}" data-v="${x.v}" style="flex:${Math.max(x.v, total * 0.08) || 1}" aria-pressed="${ageF === x.i}"><span>${x.label}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')}</small></button>`).join('')}</div></div>` : ''}
     ${late30.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>${plur(late30.length, 'dossier a passé', 'dossiers ont passé')} 30 jours sans responsable</b>${late30.slice(0, 4).map(c => esc(c.name || '')).join(', ')}. Chaque semaine perdue fait baisser la chance de récupérer.</div></div>` : ''}
     ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucun impayé pour l’instant</b>Dans Imports Resamania, déposez « Clients en incident » (Points d’attention) et la liste Incidents : chaque client débiteur devient une ligne ici.</div></div>` : ''}
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
-    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Ouvert depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th class="num sortable" data-act="ui" data-key="dunSort" data-val="${UI.dunSort === 'age' ? 'age-' : 'age'}" aria-sort="${UI.dunSort === 'age' ? 'descending' : UI.dunSort === 'age-' ? 'ascending' : 'none'}">Âge${UI.dunSort === 'age' ? ' ▼' : UI.dunSort === 'age-' ? ' ▲' : ''}</th><th>Ouvert depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.slice(0, Number(UI.dunMax || 100)).map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
       return `<tr class="${dunDue(c) ? 'due' : ''}"><td><a href="#/client/${esc(c.id)}"><b>${esc(c.name || 'Sans nom')}</b></a><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
+        <td class="num nowrap" data-age="${detteAge(c) ?? ''}">${rec ? '' : detteAge(c) == null ? '<span class="muted small">date inconnue</span>' : plur(detteAge(c), 'jour', 'jours')}</td>
         <td class="small nowrap">${rec ? `soldé le ${dm(d.recoveredAt)}${joursOuvert(c) != null ? ' · ' + plur(joursOuvert(c), 'jour', 'jours') : ''}` : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${joursOuvert(c) == null ? 'n.d.' : plur(joursOuvert(c), 'jour', 'jours')}</span>`}${dunPromiseLate(c) ? `<div class="bad">promesse du ${dm(dunPromiseDate(c))} non tenue</div>` : ''}</td>
         <td class="num">${rec ? '' : fmtE(dunAttendu(c))}</td>
         <td>${rec ? `<span class="badge ok">Récupéré${d.canal && RECOV_CHANNELS[d.canal] ? ' · ' + RECOV_CHANNELS[d.canal].label.toLowerCase() : ''}</span>${d.by ? `<div class="muted small">par ${esc(fullName(S.users[d.by]))}</div>` : ''}` : `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="status">${Object.entries(DUN_STATUS).filter(([k]) => k !== 'recupere').map(([k, v]) => `<option value="${k}" ${st === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>`}</td>
         <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>
         <td>${rec ? '' : `<input class="input sm" type="date" value="${d.next || ''}" data-change="dunSet" data-id="${c.id}" data-k="next">`}</td>
         <td><input class="input sm note" value="${esc(d.note || '')}" placeholder="Ajouter une note" data-change="dunSet" data-id="${c.id}" data-k="note"></td>
-        <td class="nowrap">${rec ? '' : `<button class="btn sm" data-act="dunLink" data-id="${c.id}" title="Copier un SMS avec le lien de paiement">Lien de paiement</button> <button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>${list.length > Number(Number(UI.dunMax || 100)) ? `<button class="btn sm" style="margin-top:8px" data-act="ui" data-key="dunMax" data-val="${Number(UI.dunMax || 100) + 100}">Afficher 100 de plus (${list.length - Number(UI.dunMax || 100)} restants)</button>` : ''}`
+        <td class="nowrap">${rec ? '' : `${c.phone ? `<a class="btn sm" href="tel:${esc(String(c.phone).replace(/[^\d+]/g, ''))}" data-appel="1">${ico('phone')} Appeler</a> ` : ''}<button class="btn sm" data-act="dunSms" data-id="${c.id}">Copier le message</button> <button class="btn sm" data-act="dunLink" data-id="${c.id}" title="Copier un SMS avec le lien de paiement">Lien de paiement</button> <button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>${list.length > Number(Number(UI.dunMax || 100)) ? `<button class="btn sm" style="margin-top:8px" data-act="ui" data-key="dunMax" data-val="${Number(UI.dunMax || 100) + 100}">Afficher 100 de plus (${list.length - Number(UI.dunMax || 100)} restants)</button>` : ''}`
       : `<div class="card">${emptyBox({ art: 'done', title: f === 'mine' ? 'Aucun dossier à votre nom' : 'Rien dans cette vue', text: f === 'mine' ? 'Prenez un dossier sans responsable avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.', cta: f === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="dunFilter" data-val="nobody">Voir les dossiers sans responsable</button>' : '' })}</div>`}
     <p class="muted small">Un client absent du prochain export « Clients en incident » passe automatiquement en « Récupéré », avec le canal lu dans la liste Incidents (équipe, client en ligne, prélèvement…). Les notes, responsables et dates restent d’un import à l’autre.</p>`;
 }
 // Message de paiement prêt à envoyer (modifiable dans Réglages), noté dans l'historique.
-const DUN_SMS = 'Bonjour {prenom}, il reste {montant} à régler sur votre abonnement Fitness Park. Vous pouvez payer en ligne depuis votre espace adhérent ou à l’accueil. Merci, l’équipe du club.';
+const DUN_SMS = 'Bonjour {prenom}, il reste {montant} à régler sur votre abonnement. Vous pouvez payer en ligne depuis votre espace adhérent ou à l’accueil. Merci, l’équipe du club.';
 ACTIONS.dunLink = el => {
   const c = S.clients[el.dataset.id]; const tpl = (S.clubs[CLUB.id] || {}).dunSms || DUN_SMS;
   const txt = tpl.replace(/\{prenom\}/g, (c.name || '').split(' ')[0]).replace(/\{montant\}/g, fmtE(Number(c.balance)));

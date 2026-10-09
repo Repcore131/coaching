@@ -174,7 +174,7 @@ function emptyState() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, benchmark: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
   };
   if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
   return st;

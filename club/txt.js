@@ -26,7 +26,7 @@ const TXT = {
     zone: 'Zone',
   },
   nav: {
-    home: 'Accueil', kpimatin: 'KPI du matin', dashboard: 'Mes objectifs', relances: 'Relances', leaderboard: 'Classement',
+    home: 'Accueil', journee: 'Ma journée', kpimatin: 'KPI du matin', dashboard: 'Mes objectifs', relances: 'Relances', leaderboard: 'Classement',
     equipeMembre: 'Équipe', recap: 'Récap du mois', rapporte: 'Ce que Fit Pulse a rapporté', team: 'Pilotage équipe', equipeManager: 'Matrice équipe',
     b2b: 'Entreprise', resiliations: 'Résiliations', impayes: 'Impayés', loyalty: 'Adhérents à garder', pouls: 'Le Pouls du club',
     imports: 'Imports Resamania', controle: 'Contrôle des chiffres', profil: 'Mon espace', confidentialite: 'Confidentialité',

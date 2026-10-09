@@ -54,13 +54,28 @@ function encaisseMois(clubId, mk) {
   return seen ? Math.round(s * 100) / 100 : null;
 }
 // Valeur en jeu d'une demande de resiliation : mensualite x mois restants.
-function valeurEnJeu(r) {
-  const c = clubClients(r.clubId).find(x => tokensKey(x.name || '') === tokensKey(r.client || ''));
-  const m = c ? mensualite(c) : prixMoyen(r.clubId);
-  let mois = dureeVieMois(r.clubId) / 2;
-  if (c && c.end && c.end > today()) mois = Math.max(1, (dateOf(c.end) - dateOf(today())) / (30.44 * 86400000));
-  return { euros: Math.round(m * Math.max(1, mois)), estimee: !c };
+// Panier moyen du club (Club et réglages > Réglages), 32 € à défaut.
+const PANIER_DEFAUT = 32;
+const panierMoyen = () => { const v = Number(deepGet(S || {}, ['settings', 'panierMoyen'])); return v > 0 ? v : PANIER_DEFAUT; };
+// Fiches possibles d'une demande : numéro client s'il est connu, sinon nom normalisé.
+function resCandidats(r) {
+  const L = clubClients(r.clubId); const num = String(r.num || r.clientNum || '').trim();
+  if (num) { const x = L.filter(c => String(c.num || '') === num); if (x.length) return x; }
+  const n = norm(r.client || ''), t = tokensKey(r.client || ''); if (!n) return [];
+  const exact = L.filter(c => norm(c.name || '') === n); return exact.length ? exact : L.filter(c => tokensKey(c.name || '') === t);
 }
+// Fiche rattachée : choisie (r.clientId), sinon trouvée sans ambiguïté.
+function resClient(r) { if (r.clientId && S.clients[r.clientId]) return S.clients[r.clientId]; const L = resCandidats(r); return L.length === 1 ? L[0] : null; }
+// Valeur en jeu d'une demande : prix mensuel x mois d'engagement restants à la date
+// de la demande (au moins 1) ; sans engagement, 12 mois de valeur future.
+// Prix : fiche client, sinon panier moyen du club (valeur alors « estimée »).
+function valeurEnJeu(r) {
+  const c = resClient(r); const pc = c ? mensualite(c, true) : 0; const prix = pc > 0 ? pc : panierMoyen();
+  const engage = !!(c && c.end && c.end > r.date); const mois = engage ? (moisRestants(c.end, r.date) || 1) : 12;
+  return { euros: Math.round(prix * mois), estimee: !(pc > 0), prix, mois, engage, client: c };
+}
+// Valeur retenue d'un dossier : figée au sauvetage (r.valeur), calculée sinon.
+const resValeur = r => Number(r.valeur) || Number(r.enJeu) || valeurEnJeu(r).euros;
 
 // ── Reglages : bareme des offres ──────────────────────────────────────────
 function offersCard() {

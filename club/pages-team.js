@@ -519,7 +519,7 @@ ACTIONS.changeMyCode = async () => {
 };
 
 // ── Presences : conges, maladie, formation (le rythme attendu en tient compte) ──
-const ABS = { conge: { l: 'Congé', c: 'C' }, maladie: { l: 'Maladie', c: 'M' }, formation: { l: 'Formation', c: 'F' } };
+const ABS = { true: { l: 'Absent', c: 'A' }, conge: { l: 'Congé', c: 'C' }, maladie: { l: 'Maladie', c: 'M' }, formation: { l: 'Formation', c: 'F' } };
 const ABS_CYCLE = [null, 'conge', 'maladie', 'formation'];
 function memPresences() {
   const mk = UI.presMonth || curMonth(); const n = daysIn(mk); const days = Array.from({ length: n }, (_, i) => `${mk}-${pad(i + 1)}`);

@@ -10,6 +10,22 @@
 // Chaque fichier est reconnu par ses colonnes (jamais par son nom seul).
 // Chaque ligne recoit une cle stable : reimporter le meme fichier, ou deux
 // exports qui se recouvrent, ne cree jamais de doublon.
+//
+// Reception sans clic (format attendu, le serveur n'est pas dans ce fichier) :
+//  - une adresse e-mail dediee par club, de la forme imports+<clubId>@<domaine>,
+//    a mettre en destinataire des envois programmes de Resamania ;
+//  - une fonction serveur lit chaque message recu, garde les pieces jointes
+//    .csv, .zip, .xlsx (20 Mo au plus par fichier, comme readAnyFile), et ignore
+//    les autres ; l'expediteur doit appartenir a la liste blanche du club ;
+//  - chaque piece jointe passe par readAnyFile puis par
+//    analyzeTable(table, { clubId, month }) avec le mois precedent, exactement
+//    comme un depot manuel ; le plan obtenu est ecrit par rsmCommitPlan
+//    (pages-resamania.js), qui tient S.rsm.routine et S.rsm.rowsHistory ;
+//  - un fichier non reconnu, tronque (2 000 lignes) ou deux fois plus court que
+//    la semaine precedente n'est pas ecrit : il remonte dans « Controle de la
+//    semaine » avec l'etat Suspect.
+// Cette chaine existe deja pour une boite Gmail ou un dossier Drive par club
+// (outils/fitpulse-autoimport.mjs, rsmauto.js, onglet « Arrivees automatiques »).
 
 // ── Lecture de fichiers : CSV, XLSX, ZIP ──────────────────────────────────
 // Bibliotheques hebergees sur le site (vendor/) : SheetJS 0.20.3 (corrige les

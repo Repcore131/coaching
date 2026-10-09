@@ -210,6 +210,7 @@ PAGES.home = {
       </div>
       ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
       ${manager ? localTransferCard() : ''}
+      ${manager ? briefDuJourCard() : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
         <div class="card col8"><details class="race-det" ${innerWidth > 860 ? 'open' : ''}><summary>Voir la course au palier</summary>${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</details></div>
@@ -264,14 +265,16 @@ function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;
   const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0); const dunTot = dun.reduce((s, c) => s + Number(c.balance), 0); const dunNobody = dun.filter(c => !dunOf(c).ownerId).length; const dunDueN = dun.filter(dunDue).length;
   const team = clubMembers(CLUB.id);
-  const silent = team.filter(u => !Object.values(S.entries).some(e => e.userId === u.id && e.date === today() && e.source === 'manual'));
+  const silent = sansSaisie(CLUB.id); const presents = team.filter(u => !u.virtual && !deepGet(S, ['absences', u.id, today()]));
   const lvl = (bad, warn) => bad ? 'h-alert' : warn ? 'h-watch' : 'h-good';
   const tile = (href, l, cls, label, value, sub) => `<a class="ck2 ${cls}" href="${href}"><div class="ck2-h"><span>${label}</span><i class="hdot ${cls}"></i></div><b>${value}</b><small>${sub}</small><em>${l}</em></a>`;
-  return `<div class="row wrap ck-rit"><button class="btn primary sm" data-act="ritual">${ico('sun')} Brief du matin</button><a class="btn sm" href="#/team">${ico('users')} Pilotage équipe</a></div><div class="cockpit2">
+  return `<div class="row wrap ck-rit"><button class="btn primary sm" data-act="ritual">${ico('sun')} Brief du matin</button><a class="btn sm" href="#/journee">${ico('cal')} ${TXT.nav.journee}</a><button class="btn sm" data-act="clotureJour">${ico('check')} ${TXT.cloture.bouton}</button><a class="btn sm" href="#/team">${ico('users')} Pilotage équipe</a>${new Date().getDay() === 1 ? (() => { const rt = routineSemaine(CLUB.id); return `<a class="btn sm ${rt.recus < rt.total || rt.suspects ? 'warn-btn' : ''}" href="#/imports" data-act="ui" data-key="impTab" data-val="rsm" data-routine="${rt.recus}">Routine : ${rt.recus} sur ${rt.total} reçus${rt.suspects ? `, ${rt.suspects} à vérifier` : ''}</a>`; })() : ''}</div><div class="cockpit2">
     ${tile('#/resiliations', 'Traiter', lvl(urgent, noOwner), 'Résiliations à traiter', res.length, `${urgent} à J-7 · ${noOwner} sans responsable`)}
     ${(() => { const q = rrqCounts(CLUB.id); return q.open || deepGet(S, ['resRequestsMeta', CLUB.id, 'lastRunAt']) ? tile('#/resiliations', 'Ouvrir', lvl(q.late, q.open), 'Demandes reçues par e-mail', q.open, `${q.late ? `dont ${q.late} sans réponse depuis 48 h` : 'toutes ont une réponse'} · ${esc(rrqRunLabel(CLUB.id))}`) : ''; })()}
     ${tile('#/impayes', 'Relancer', lvl(dunNobody > 2, dunNobody || dunDueN), 'Impayés en cours', fmtE(dunTot), `${dun.length} dossiers · ${dunDueN} à relancer aujourd’hui`)}
-    ${tile('#/members', 'Voir', lvl(silent.length > team.length / 2 && new Date().getHours() >= 15, silent.length), 'Sans saisie aujourd’hui', `${silent.length}/${team.length}`, silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi')}
+    ${(() => { const v60 = dun.filter(c => detteTranche(c) === 3).reduce((s, c) => s + Number(c.balance), 0); const rouge = dunTot > 0 && v60 > 0.2 * dunTot;
+      return tile('#/impayes', 'Voir', rouge ? 'h-alert' : v60 ? 'h-watch' : 'h-good', 'Dette de plus de 60 jours', fmtE(v60), `${fmtP(dunTot ? v60 / dunTot : 0)} du total dû${rouge ? ', au-delà de 20 %' : ''}`).replace('class="ck2 ', `data-tuile="dette60" data-rouge="${rouge}" class="ck2 `); })()}
+    ${tile('#/members', 'Voir', lvl(silent.length > team.length / 2 && new Date().getHours() >= 15, silent.length), 'Sans saisie aujourd’hui', `${silent.length}/${presents.length}`, silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi')}
   </div>`;
 }
 

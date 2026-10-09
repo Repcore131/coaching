@@ -139,6 +139,7 @@ function brandBlock(big = false) {
 // tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
   ['home', TXT.nav.home, 'dashboard'],
+  ['journee', TXT.nav.journee, 'cal', true],
   ['kpimatin', TXT.nav.kpimatin, 'send'],
   ['dashboard', TXT.nav.dashboard, 'target'],
   ['relances', TXT.nav.relances, 'phone'],
@@ -240,7 +241,7 @@ function renderNowInner() {
   if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
   if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;
   if (!PAGES[r] || PAGES[r].auth === false) r = 'home';
-  if (PAGES[r].manager && !isManager()) r = 'home';
+  if (PAGES[r].manager && !isManager()) { r = 'home'; history.replaceState(null, '', location.pathname + location.search + '#/home'); }
   if (PAGES[r].creator && !isCreator()) { r = 'home'; history.replaceState(null, '', location.pathname + location.search + '#/home'); }
   const keepScroll = UI._lastRoute === r ? window.scrollY : 0;
   const active = document.activeElement; const focusKey = active && active.dataset ? active.dataset.focus : null;

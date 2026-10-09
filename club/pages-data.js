@@ -282,7 +282,7 @@ ACTIONS.impDetail = el => {
 
 // Saisie manuelle : l'historique mensuel du club, pour la comparaison
 // annuelle (utile pour les mois d'avant Fit Pulse).
-const MANUAL_FIELDS = [['contrats', 'Contrats signés', 'qty'], ['visiteurs', 'Visiteurs', 'qty'], ['complements', 'Compléments (nutrition) €', 'eur'], ['goodies', 'Goodies (accessoires) €', 'eur'], ['impayes', 'Impayés récupérés €', 'eur'], ['caPack', 'CA Pack €', 'eur']];
+const MANUAL_FIELDS = [['contrats', 'Contrats signés', 'qty'], ['visiteurs', 'Visiteurs', 'qty'], ['complements', 'Compléments (nutrition) €', 'eur'], ['goodies', 'Goodies (accessoires) €', 'eur'], ['impayes', 'Impayés récupérés €', 'eur'], ['caPack', 'CA Pack €', 'eur'], ['mrr', 'Revenu récurrent €', 'eur']];
 function impManual() {
   const y = Number(UI.manYear || curMonth().slice(0, 4));
   const cm = curMonth();
@@ -427,7 +427,7 @@ function clubList() {
 ACTIONS.clubForm = el => {
   const c = el.dataset.id ? S.clubs[el.dataset.id] : null;
   openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : '')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label><div class="field"><span>Jours d’ouverture (rythme des objectifs)</span><div class="chips">${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, n) => `<label class="chip-radio"><input type="checkbox" name="od_${n}" ${(c && Array.isArray(c.openDays) ? c.openDays : [1, 2, 3, 4, 5, 6]).includes(n) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div></div>
-<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label></div>
+<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label><label class="field"><span>E-mail du gérant</span><input class="input" type="email" name="gerantEmail" value="${esc(c && c.gerantEmail || '')}"></label></div>
     <div class="form-grid"><label class="field"><span>${TXT.clubs.couleur}</span><input class="input" type="color" name="couleur" value="${esc(c && COULEUR_OK(c.couleur) ? c.couleur : '#12B3A8')}"><small class="muted">${TXT.clubs.couleurAide}</small><label class="chk"><input type="checkbox" name="couleurDefaut" ${c && COULEUR_OK(c.couleur) ? '' : 'checked'}> ${TXT.clubs.couleurDefaut}</label></label><label class="field"><span>${TXT.clubs.logo}</span><input class="input" name="logo" maxlength="80" value="${esc(c && c.logo || '')}" placeholder="assets/logo-club.svg"><small class="muted">${TXT.clubs.logoAide}</small></label></div></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="clubSave" data-id="${c ? c.id : ''}">Enregistrer</button>` });
 };
@@ -435,7 +435,7 @@ ACTIONS.clubSave = el => {
   const f = formData($('#clf')); if (!f.name.trim()) return;
   let id = el.dataset.id;
   if (!id) { id = norm(f.name).replace(/ /g, '-').slice(0, 30) || newId(); if (S.clubs[id]) id += '-' + newId().slice(-4); }
-  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), couleur: !f.couleurDefaut && COULEUR_OK(f.couleur) ? f.couleur.toUpperCase() : null, logo: /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test((f.logo || '').trim()) ? f.logo.trim() : null }]];
+  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), gerantEmail: (f.gerantEmail || '').trim() || null, couleur: !f.couleurDefaut && COULEUR_OK(f.couleur) ? f.couleur.toUpperCase() : null, logo: /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test((f.logo || '').trim()) ? f.logo.trim() : null }]];
   if (!el.dataset.id) ops.push([['users', ME.id, 'clubs'], [...(ME.clubs || []), id]]);
   db.batch(ops); closeModal(); toast('Club enregistré.');
 };
@@ -449,8 +449,23 @@ function clubBase() {
       return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${['actifs', 'sortants'].map(k => `<td class="num"><input class="cell" type="number" min="0" value="${v[k] ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="${k}"></td>`).join('')}<td class="num">${v.actifs ? fmtN(net) : 'n.d.'}</td><td class="num"><input class="cell" type="number" min="0" value="${v.objectif ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="objectif"></td><td class="num">${toSign != null ? `<b>${fmtN(toSign)}</b>` : 'n.d.'}</td><td class="num ${toSign != null && team && team < toSign ? 'bad' : ''}">${team ? fmtN(team) : 'n.d.'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k], el.value === '' ? null : toNum(el.value)); toast('Enregistré'); };
+// Réglages communs (S.settings) : valeurs par défaut lisibles, modifiables par un manager.
+const DUN_SMS_DEFAUT = 'Bonjour {prénom}, votre club vous informe d’un solde de {montant} €. Vous pouvez le régler à l’accueil ou depuis votre espace adhérent. Merci.';
+const reglage = (k, def) => { const v = deepGet(S || {}, ['settings', k]); return v == null || v === '' ? def : v; };
+function reglagesCommunsCard() {
+  return `<div class="card" id="reglages-communs"><h3>Réglages communs</h3><div class="form-grid">
+    <label class="field"><span>Panier moyen (€ par mois)</span><input class="input" inputmode="decimal" name="panierMoyen" data-change="settingSet" data-k="panierMoyen" data-num="1" value="${esc(String(deepGet(S, ['settings', 'panierMoyen']) || ''))}" placeholder="${PANIER_DEFAUT} (par défaut)"><small class="muted">Valeur d’une résiliation quand le prix du client est inconnu.</small></label>
+    <label class="field"><span>Minutes gagnées par jour ouvré</span><input class="input" inputmode="numeric" name="minutesGagneesJour" data-change="settingSet" data-k="minutesGagneesJour" data-num="1" value="${esc(String(deepGet(S, ['settings', 'minutesGagneesJour']) || ''))}" placeholder="59 (par défaut)"><small class="muted">Temps gagné compté par le compteur « Ce que Fit Pulse a rapporté ».</small></label>
+    <label class="field"><span>Conservation des fiches (mois après la fin du contrat)</span><input class="input" inputmode="numeric" name="conservationMois" data-change="settingSet" data-k="conservationMois" data-num="1" value="${esc(String(deepGet(S, ['settings', 'conservationMois']) || ''))}" placeholder="24 (par défaut)"></label>
+    <label class="field full"><span>Message SMS des impayés</span><textarea class="input" rows="3" name="dunSms" data-change="settingSet" data-k="dunSms" placeholder="${esc(DUN_SMS_DEFAUT)}">${esc(deepGet(S, ['settings', 'dunSms']) || '')}</textarea><small class="muted">Copié par le bouton « Copier le message » de la liste des impayés. {prénom} et {montant} sont remplacés.</small></label>
+  </div></div>`;
+}
+ACTIONS.settingSet = el => { if (!isManager()) return; const k = el.dataset.k; let v = String(el.value || '').trim();
+  if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (!v) v = null; else v = v.slice(0, 600);
+  db.set(['settings', k], v); toast('Enregistré'); };
 function clubSettings() {
   return `<div class="grid">
+    ${reglagesCommunsCard()}
     ${offersCard()}
     <div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
       <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>Le score est la moyenne de vos % d’objectif, pondérée par les points de chaque KPI, plafonnée à 150 %. Les points récompensent l’atteinte : 25, 50, 75 puis 100 % des points du KPI. En calcul continu, chaque unité rapporte sa part, sans marche. Le calcul continu est conseillé pour les petits objectifs (moins de 5).</div></div>

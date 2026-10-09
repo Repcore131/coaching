@@ -74,6 +74,7 @@ export const REGLE_ORGS = `"orgs": {
           "imports": { ".write": ${j(mgr(O))} },
           "kpis": { ".write": ${j(crea(O))} },
           "prefs": { "$uid": { ".write": ${j(SOIMEME)} } },
+          "usage": { "$uid": { ".write": ${j(SOIMEME)} } },
           "tasks": { "library": { ".write": ${j(mgr(O))} }, "plan": { ".write": ${j(mgr(O))} }, "done": { ".write": ${j(LIBRE)} } },
           "chat": { "$id": { ".write": ${j(`${acces(O)} && (${mgr(O)} || !data.exists() || data.child('userId').val() === ${UID} || newData.exists())`)} } },
           "clients": { ".write": ${j(LIBRE)} }, "loyalty": { ".write": ${j(LIBRE)} }, "resiliations": { ".write": ${j(LIBRE)} },

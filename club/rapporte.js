@@ -20,7 +20,7 @@ function rapporteMois(clubId, mk) {
     return { ref: e.id, date: e.date, libelle: c ? c.name : e.clientNum ? `Adhérent n° ${e.clientNum}` : 'Saisie du KPI, sans fiche adhérent', detail: `${isImported(e) ? 'import Resamania' : 'saisie'} · ${fullName(S.users[e.userId])}`, euros: Number(e.value) || 0, lien: lienClient(c && c.id) || '#/impayes' }; });
   // 2. Résiliations sauvées (date du sauvetage dans le mois) x valeur restante
   const sav = resList(clubId).filter(r => resStatus(r) === 'sauvee').map(r => ({ r, d: ((S.entries['sv_' + r.id] || {}).date) || r.date })).filter(x => x.d >= from && x.d <= to)
-    .map(({ r, d }) => { const v = Number(r.enJeu) || valeurEnJeu(r).euros; return { ref: r.id, date: d, libelle: r.client || 'Adhérent', detail: `sauvé par ${fullName(S.users[r.ownerId])}${r.reason ? ' · motif ' + r.reason : ''}`, euros: v, lien: lienClient(r.clientId) || '#/resiliations' }; });
+    .map(({ r, d }) => { const v = resValeur(r); return { ref: r.id, date: d, libelle: r.client || 'Adhérent', detail: `sauvé par ${fullName(S.users[r.ownerId])}${r.reason ? ' · motif ' + r.reason : ''}`, euros: v, lien: lienClient(r.clientId) || '#/resiliations' }; });
   // 3. Renouvellements après relance
   const contacts = id => [...Object.values(S.loyalty || {}).filter(a => a.clientId === id && a.type === 'renouvellement').map(a => a.at), ...Object.values(S.touches || {}).filter(x => x.clientId === id && x.kind === 'fincontrat').map(x => x.at)];
   const ren = clubClients(clubId).filter(c => c.renewedAt && c.renewedAt >= from && c.renewedAt <= to).map(c => {
@@ -63,3 +63,36 @@ PAGES.rapporte = {
 };
 ACTIONS.rapPrix = () => openModal({ title: 'Prix de l’abonnement Fit Pulse', body: `<label class="field"><span>Prix mensuel (€ HT)</span><input class="input" id="rap-prix" inputmode="decimal" value="${esc(String(deepGet(S, ['clubs', CLUB.id, 'prixFitPulse']) || ''))}"></label>`, foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="rapPrixOk">Enregistrer</button>' });
 ACTIONS.rapPrixOk = () => { const v = parseMontant($('#rap-prix').value); if (!(v > 0)) { toast('Prix invalide.'); return; } db.set(['clubs', CLUB.id, 'prixFitPulse'], Math.round(v * 100) / 100); closeModal(); };
+
+// ── Compteur du mois (Récap et Ma journée, managers) ──────────────────────
+// Euros : résiliations sauvées (valeur de chaque dossier) + impayés récupérés par
+// l'équipe (canal « équipe ») + boutique (nutrition et accessoires). Le temps
+// gagné est affiché à part : il n'est jamais additionné aux euros.
+const MINUTES_JOUR_DEFAUT = 59;
+function rapporteCompteurData(clubId, mk = curMonth(), t = today()) {
+  const from = mk + '-01', to = `${mk}-${pad(daysIn(mk))}`; const rg = { from, to };
+  const sauvees = resList(clubId).filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date || '').slice(0, 7) === mk);
+  const sauve = Math.round(sauvees.reduce((s, r) => s + resValeur(r), 0) * 100) / 100;
+  const impayes = Math.round(recoveredFor(clubId, rg, 'equipe') * 100) / 100;
+  const boutiqueK = ['nutrition', 'accessoires'].filter(k => S.kpis[k]);
+  const boutique = Math.round(boutiqueK.reduce((s, k) => s + sumRange(clubId, null, k, from, to), 0) * 100) / 100;
+  const minutes = Number(reglage('minutesGagneesJour', MINUTES_JOUR_DEFAUT)) || MINUTES_JOUR_DEFAUT;
+  const jours = joursOuvres(from, t < to ? t : to); const heures = Math.round(jours * minutes / 6) / 10;
+  return { mk, sauve, nSauvees: sauvees.length, impayes, boutique, total: Math.round((sauve + impayes + boutique) * 100) / 100, jours, minutes, heures, panier: panierMoyen(), panierRegle: !!Number(deepGet(S, ['settings', 'panierMoyen'])) };
+}
+function rapporteCompteur(clubId, mk) {
+  if (!isManager()) return '';
+  const R = rapporteCompteurData(clubId, mk); const heures = String(R.heures).replace('.', ',');
+  return `<div class="card rap-compteur" data-total="${R.total}"><div class="row wrap"><div class="spacer"><div class="eyebrow">${esc(monthLabel(R.mk))}</div><h3>Ce que Fit Pulse a rapporté ce mois</h3></div><b class="rc-total">${fmtE(R.total)}</b></div>
+    <div class="rc-lignes">
+      <div class="row small"><span class="spacer">Résiliations sauvées (${R.nSauvees})</span><b>${fmtE(R.sauve)}</b></div>
+      <div class="row small"><span class="spacer">Impayés récupérés par l’équipe</span><b>${fmtE(R.impayes)}</b></div>
+      <div class="row small"><span class="spacer">Boutique : nutrition et accessoires</span><b>${fmtE(R.boutique)}</b></div>
+      <div class="row small"><span class="spacer">Temps gagné, hors total en euros</span><b>${heures} h</b></div></div>
+    <details class="small rc-hyp"><summary>Hypothèses</summary><ul>
+      <li>Résiliation sauvée : prix mensuel du client multiplié par les mois d’engagement restants à la date de la demande (au moins 1) ; sans engagement, 12 mois. Prix inconnu : panier moyen de ${fmtE(R.panier)}${R.panierRegle ? ' (réglage du club)' : ' (valeur par défaut, réglable dans Club et réglages)'}.</li>
+      <li>Impayés : régularisations du canal « équipe du club » dans la liste Incidents, et règlements notés dans Fit Pulse.</li>
+      <li>Boutique : saisies et imports des KPI nutrition et accessoires du mois.</li>
+      <li>Temps gagné : ${plur(R.jours, 'jour ouvré écoulé', 'jours ouvrés écoulés')} x ${R.minutes} minutes = ${heures} heures. Ce temps n’est pas converti en euros.</li></ul></details>
+    <a class="small" href="#/rapporte">Voir chaque dossier</a></div>`;
+}
