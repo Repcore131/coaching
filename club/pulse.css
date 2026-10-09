@@ -1371,3 +1371,29 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .eg-podium .step { text-align: center; padding: 10px 6px; border-radius: 10px; background: var(--surface-2); display: grid; gap: 4px; }
 .eg-podium .p1 { min-height: 96px; } .eg-podium .p2 { min-height: 80px; } .eg-podium .p3 { min-height: 68px; }
 .has-tip { cursor: help; border-bottom: 1px dotted var(--line); }
+/* Rapport ROI : feuille A4 portrait, fond blanc, jaune réservé aux 4 chiffres clés, sans ombre */
+:root { --roi-jaune: #F2C500; --roi-jaune-fonce: #B8930A; }
+.roi-page { background: #fff; color: #111; max-width: 794px; margin: 0 auto; padding: 36px 40px; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 14px; box-shadow: none; }
+.roi-page .muted { color: #555; }
+.roi-head { display: grid; grid-template-columns: 1fr auto auto; gap: 20px; align-items: center; }
+.roi-brand { display: flex; align-items: center; gap: 10px; color: #111; } .roi-brand b { font-size: 24px; letter-spacing: -.02em; }
+.roi-meta { display: grid; text-align: left; font-size: 12px; } .roi-meta b { letter-spacing: .08em; }
+.roi-club { border-left: 1px solid #ddd; padding-left: 16px; font-size: 13px; }
+.roi-titre { font-size: 32px; margin: 6px 0 0; letter-spacing: -.02em; }
+.roi-phrase { margin: 0; font-size: 14px; color: #333; }
+.roi-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid #e5e5e5; border-bottom: 1px solid #e5e5e5; padding: 14px 0; }
+.roi-k { display: grid; gap: 2px; padding: 0 12px; border-left: 1px solid #e5e5e5; } .roi-k:first-child { border-left: 0; padding-left: 0; }
+.roi-v { font-size: 32px; line-height: 1.05; color: var(--roi-jaune-fonce); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.roi-l { font-weight: 700; font-size: 14px; } .roi-k small { color: #555; font-size: 12px; }
+.roi-nc { font-size: 16px; color: #555; font-weight: 600; }
+.roi-bloc h2 { font-size: 20px; margin: 0 0 6px; }
+.roi-t { font-size: 12px; } .roi-t th, .roi-t td { padding: 5px 8px; }
+.roi-page .chart svg { max-height: 150px; }
+.roi-pied { border-top: 1px solid #e5e5e5; padding-top: 10px; font-size: 12px; color: #444; display: grid; gap: 4px; } .roi-pied p { margin: 0; }
+@media (max-width: 640px) { .roi-page { padding: 20px 16px; } .roi-kpis { grid-template-columns: 1fr 1fr; gap: 12px; } .roi-k { border-left: 0; padding: 0; } .roi-head { grid-template-columns: 1fr; } }
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body.print-roi .recap > :not(#roi-page), body.print-roi .recap .no-print { display: none !important; }
+  body.print-roi .roi-page { border: 0; border-radius: 0; padding: 0; max-width: none; width: 190mm; gap: 10px; }
+  body.print-roi .roi-v { color: #111; background: var(--roi-jaune); padding: 0 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

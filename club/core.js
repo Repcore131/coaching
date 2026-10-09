@@ -217,7 +217,7 @@ function etatInitial() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {}, celebrated: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, tarifs: {}, transferts: {}, roiCfg: {}, scriptsReseau: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, tarifs: {}, transferts: {}, roiCfg: {}, scriptsReseau: {}, billing: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
   };
   if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
   return st;

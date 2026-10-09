@@ -100,6 +100,8 @@ PAGES.recap = {
   manager: true,
   mount() { recapInstantane(CLUB.id); },
   render() {
+    // Onglet Rapport ROI (managers) : une page A4 à remettre au directeur.
+    if (UI.recapTab === 'roi' && isManager()) return `<div class="recap"><div class="no-print">${tabs('recapTab', [['recap', 'Récapitulatif'], ['roi', 'Rapport ROI']], 'roi')}</div>${roiOnglet()}</div>`;
     const mk = UI.recapMonth || addMonths(curMonth(), -1);
     const pm = addMonths(mk, -1);
     const F = monthFigures(CLUB.id, mk), P = monthFigures(CLUB.id, pm);
@@ -116,7 +118,7 @@ PAGES.recap = {
       .filter(r => cols.some(([k]) => r.cur[k] || r.prev[k])).sort((a, b) => b.cur.contrats - a.cur.contrats || b.cur.boutique - a.cur.boutique);
     const maxOf = k => Math.max(1, ...rows.map(r => r.cur[k]));
     const salesMax = Math.max(1, ...rows.map(r => Math.max(r.cur.contrats, r.prev.contrats)));
-    return `<div class="recap">
+    return `<div class="recap">${isManager() ? `<div class="no-print">${tabs('recapTab', [['recap', 'Récapitulatif'], ['roi', 'Rapport ROI']], 'recap')}</div>` : ''}
       <div class="recap-head"><div><div class="eyebrow">${esc(nomAffiche())}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
         <div class="row wrap no-print">${monthNav('recapMonth', mk)}<button class="btn" data-act="recapCsv">${ico('download')} CSV</button><button class="btn" data-act="recapGerant">${ico('mail')} Envoyer au gérant</button><button class="btn primary" data-act="recapPrint">${ico('download')} Imprimer / PDF</button></div></div>
 

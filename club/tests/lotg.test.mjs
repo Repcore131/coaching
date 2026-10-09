@@ -195,3 +195,19 @@ test('point 10 : script partagé au réseau sans nom d’adhérent', () => {
   run(`ACTIONS.scriptPartage({ dataset: { id: 't1' } })`); const x = J(run, `Object.values(S.scriptsReseau)[0]`);
   assert.deepEqual(Object.keys(x).sort(), ['at', 'channel', 'kind', 'step', 'taux', 'text']); assert.equal(run(`S.templates.t1.sharedNetwork`), true);
 });
+test('point 11 : rapport ROI, non calculable sans Incidents, recupFP + recupAuto = total Impayés, temps mis à jour', () => {
+  const run = appli({ clients: { c1: client({ balance: 80, dunning: { ownerId: 'v', history: [{ at: Date.now() - 864e5 * 3, by: 'v', outcome: 'pasreponse', label: 'Pas de réponse' }] } }), c2: client({ id: 'c2', num: '5002', balance: 50 }) } });
+  const mk = run('curMonth()'); run(`UI.recapMonth = '${mk}'; UI.recapTab = 'roi'`);
+  assert.match(run(`roiRapport('${mk}')`), /non calculable/);
+  run(`db.batch(markPaid(S.clients.c1, 80, { author: 'v' })); db.batch(markPaid(S.clients.c2, 50, { author: 'u' }));
+    S.imports.inc = { id: 'inc', clubId: 'k', defId: 'incidents', active: true, source: 'resamania', at: Date.now(), from: '${mk}-01', to: '${mk}-28', name: 'RSM_incidents.csv' };
+    S.recov.r1 = { id: 'r1', clubId: 'k', date: '${mk}-02', amount: 35.5, canal: 'client', clientNum: '9' }; S.recov.r2 = { id: 'r2', clubId: 'k', date: '${mk}-03', amount: 12.25, canal: 'auto', clientNum: '8' }; REV++`);
+  const R = J(run, `roiFigures('k', '${mk}')`); const rg = `{ from: '${mk}-01', to: '${mk}-${run(`daysIn('${mk}')`)}' }`;
+  assert.equal(R.recupFP, 80); assert.equal(Math.round((R.recupFP + R.recupAuto) * 100), Math.round(run(`recoveredFor('k', ${rg})`) * 100));
+  assert.doesNotMatch(run(`roiRapport('${mk}')`), /data-roi="recup"><b class="roi-v"><span class="roi-nc">non calculable/);
+  run(`S.loyalty.x1 = { id: 'x1', clientId: 'c1', type: 'suivi15', outcome: 'noanswer', userId: 'v', at: Date.now() }; S.imports.a1 = { id: 'a1', clubId: 'k', auto: true, at: Date.now() }; REV++`);
+  const t20 = J(run, `roiFigures('k', '${mk}').tempsH`); run(`db.set(['roiCfg', 'k', 'minImport'], 10)`); const t10 = J(run, `roiFigures('k', '${mk}').tempsH`);
+  assert.ok(t10 < t20, `${t20} puis ${t10}`); assert.match(run(`roiRapport('${mk}')`), /estimation/);
+  assert.equal(R.roi, null); run(`db.set(['billing', 'price'], 99)`); assert.match(run(`roiRapport('${mk}')`), /fois le prix de l’abonnement/);
+  assert.match(run(`PAGES.recap.render()`), /Rapport ROI[\s\S]*Synthèse du mois/); assert.match(run(`roiCard()`), /minImport/);
+});
