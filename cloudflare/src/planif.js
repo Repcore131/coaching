@@ -41,6 +41,10 @@ export function travaux(M) {
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
+    // L'avis avant le renouvellement d'un annuel (art. L215-1), une fois par
+    // échéance : notification et e-mail Systeme.io (renouvellement.js).
+    { nom: 'renouvellement', quand: (p) => apres(p, 10, 45) && p.heure < 21, cles: () => (M.paypal && M.paypal.renouvellementsCles ? M.paypal.renouvellementsCles() : []),
+      un: (k, t) => M.paypal.avisRenouvellementUn(k, t), cout: 12 },
     // « Ton accès se termine dans N jours », une fois par échéance.
     { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la

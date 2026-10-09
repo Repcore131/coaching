@@ -125,13 +125,16 @@ lisent là.
 - **b. La date d'entrée en vigueur des CGV.** Le texte dit « avant l'entrée en
   vigueur de la présente version » et l'en-tête « Version du 9 octobre 2026 » :
   mets la date réelle de publication.
-- **c. L'information avant chaque renouvellement annuel (art. L215-1).** La
-  CGV §4 l'annonce (entre 3 mois et 1 mois avant la date anniversaire) parce que
-  la loi l'impose pour un contrat reconduit tacitement. **Elle n'est pas codée** :
-  il faut un envoi par le worker (push ou e-mail via Systeme.io, jamais depuis
-  l'app). Option A : je la code avant la publication. Option B : publier sans
-  l'annuel (laisser les deux plans annuels vides : l'app ne le propose pas) tant
-  qu'elle n'existe pas.
+- **c. L'information avant chaque renouvellement annuel (art. L215-1) — CODÉE
+  le 09/10/2026** (`cloudflare/src/renouvellement.js`). Le worker note la date
+  anniversaire de chaque annuel payé (`renouvellements/<clé>`) et, à J-60,
+  envoie une notification et pose l'étiquette Systeme.io qui déclenche
+  l'e-mail. **Reste à Kevin** : dans Systeme.io, créer l'étiquette, les champs
+  `date_renouvellement` et `montant_renouvellement`, et la règle « étiquette
+  ajoutée → e-mail » ; puis poser les secrets du worker `SYSTEMEIO_API_KEY`,
+  `SYSTEMEIO_TAG_RENOUVELLEMENT` (et les variables `SYSTEMEIO_CHAMP_ECHEANCE`,
+  `SYSTEMEIO_CHAMP_MONTANT`). Sans eux, seule la notification part : la loi
+  demande un écrit (e-mail), la notification seule ne suffit pas.
 - **d. Le renouvellement des ANCIENS annuels engagés.** Les CGV de l'époque disent
   « à l'issue des douze mois, reconduction mois par mois », mais leur plan PayPal
   est annuel : PayPal reprélèvera 114 € / 298,80 € pour une nouvelle année. Option

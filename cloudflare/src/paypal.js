@@ -29,6 +29,7 @@
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
+import { avisDu, texteAvis, etiqueterSystemeio } from './renouvellement.js';
 
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
@@ -59,9 +60,9 @@ const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.
 //   pendant la transition, et tant qu'un ancien abonné paie.
 const OFFRES_FIXES = {
   'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'] },
-  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'] },
+  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'], annuel: true },
   'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'] },
-  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'] },
+  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'], annuel: true },
   // `demi` : le 1er mois d'Ultime à moitié prix — UNE fois par compte
   // (droits.demiPackUtilise, posé à l'ouverture), sortie de pack ou code
   // ambassadeur « ultime_demi ».
@@ -80,7 +81,7 @@ export const PLANS_ANNUELS_SANS_ENGAGEMENT = Object.freeze({
 });
 export const OFFRES_PAYPAL = Object.freeze(Object.assign({}, OFFRES_FIXES,
   Object.fromEntries(Object.values(PLANS_ANNUELS_SANS_ENGAGEMENT).filter((p) => /^P-[A-Z0-9]+$/.test(p.id))
-    .map((p) => [p.id, { formule: p.formule, montants: [...p.montants] }]))));
+    .map((p) => [p.id, { formule: p.formule, montants: [...p.montants], annuel: true }]))));
 function montantValide(plan, montant, devise, role) {
   if (!plan || String(devise || '').toUpperCase() !== 'EUR') return false;
   if ((role === 'coach') !== !!plan.coachPlan) return false;
@@ -265,7 +266,9 @@ export function creerPaypal(ctx) {
     const reserveComptee = fin === calculee ? reserve : Number(finNotee && finNotee.reserve) || 0;
     const maj = { ['users/' + cle + '/abonnement/statutPaypal']: type, ['users/' + cle + '/abonnement/finAccesPaypal']: fin,
       ['users/' + cle + '/abonnement/resilieLe']: t, ['users/' + cle + '/updatedAt']: t,
-      ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }) };
+      ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }),
+      // Résilié : plus de reconduction, donc plus d'avis L215-1 (renouvellement.js).
+      ['renouvellements/' + cle]: null };
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
@@ -300,6 +303,16 @@ export function creerPaypal(ctx) {
       } else if (plan && plan.formule && statut !== 'COACHING_SUIVI') {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
         maj[b + 'abonnement/formule'] = plan.formule;
+      }
+      // UN ANNUEL : la prochaine date anniversaire, pour l'avis L215-1
+      // (renouvellement.js). L'avis déjà parti pour CETTE échéance est gardé.
+      const prochaine = plan && plan.annuel && sub.billing_info && Date.parse(sub.billing_info.next_billing_time || '');
+      if (Number(prochaine) > t) {
+        const avant = await lire('renouvellements/' + cle);
+        maj['renouvellements/' + cle] = { abo, echeance: Number(prochaine), formule: plan.formule,
+          montant: centimes(ress.amount && (ress.amount.total || ress.amount.value)) || null,
+          avisPour: avant && Number(avant.avisPour) === Number(prochaine) ? avant.avisPour : null,
+          avisLe: avant && Number(avant.avisPour) === Number(prochaine) ? avant.avisLe || null : null };
       }
       await db.ref().update(maj);
       if (role !== 'coach') await droitsOuverts(cle, abo, plan);
@@ -695,7 +708,35 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements };
+  // ── L'AVIS AVANT LE RENOUVELLEMENT ANNUEL (art. L215-1) ────────────────
+  // Une clé par jour de travail (planif.js). Notification urgente ET e-mail
+  // Systeme.io (s'il est configuré) ; l'avis est noté parti dès qu'UN des
+  // deux canaux a porté, sinon il se retente le lendemain.
+  const renouvellementsCles = async () => Object.keys((await lire('renouvellements')) || {});
+  async function avisRenouvellementUn(cle, t0) {
+    const t = t0 || now();
+    const r = await lire('renouvellements/' + cle);
+    if (!r) return 'aucun';
+    const d = avisDu(r.echeance, t, r.avisPour);
+    if (!d.envoyer) return Number(r.echeance) > t ? 'pas_encore' : 'echu';
+    const [fname, email] = await Promise.all([lire('users/' + cle + '/fname'), lire('users/' + cle + '/email')]);
+    const x = texteAvis({ prenom: fname || '', formule: r.formule, echeance: Number(r.echeance), montantCentimes: r.montant });
+    let push = 0, mail = 'non_configure';
+    try {
+      const p = await M.envoyerPush(cle, { type: 'acces', url: './', tag: 'renouvellement-' + r.echeance, title: x.title, body: x.body }, { urgent: true });
+      push = Number(p && p.envoye) || 0;
+    } catch (e) { push = 0; }
+    try {
+      mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', date: x.date, montant: x.montant });
+    } catch (e) { mail = 'erreur : ' + String(e && e.message || e).slice(0, 80); }
+    const parti = push > 0 || mail === 'envoye';
+    await db.ref('renouvellements/' + cle).update(parti
+      ? { avisPour: Number(r.echeance), avisLe: t, push, email: mail, tardif: d.tardif || null, dernierEchec: null }
+      : { dernierEchec: { le: t, push, email: mail } });
+    return parti ? 'avis_envoye' : 'avis_en_echec';
+  }
+
+  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════
