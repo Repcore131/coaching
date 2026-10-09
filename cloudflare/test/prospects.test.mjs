@@ -128,3 +128,16 @@ test('les visites se comptent par jour, pour une page qui existe seulement', asy
   assert.deepEqual(w.F.lire('vitrines_stats'), { 'kevin-guellec': { '2026-10-06': 2 } });
   assert.ok(travaux({ planifies: {} }).some((x) => x.nom === 'prospects' && x.heure));
 });
+
+test('série 6 (lot 9) : la formule libre du coach est acceptée quand elle est complète, et nommée', () => {
+  const v = { formules: ['coaching_essentiel'], libre: { lib: 'Pack été', prix: 0, mois: 2, inclus: 'Deux appels' }, prixPerso: { coaching_essentiel: { lib: 'Mon suivi', prix: 59 } } };
+  assert.deepEqual(PR.formulesVitrine(v), ['coaching_essentiel', 'libre']);
+  assert.equal(PR.libFormuleVitrine(v, 'libre'), 'ta formule « Pack été »');
+  assert.equal(PR.libFormuleVitrine(v, 'coaching_essentiel'), 'ta formule « Mon suivi »');
+  assert.equal(PR.libFormuleVitrine({ formules: ['coaching_essentiel'] }, 'coaching_essentiel'), '');
+  assert.deepEqual(PR.formulesVitrine({ formules: [], libre: { lib: 'Sans prix', mois: 2 } }), []);
+  assert.deepEqual(PR.formulesVitrine({ formules: [], libre: { lib: 'x', prix: 9000, mois: 2 } }), []);
+  const r = PR.prospectDepuisFormulaire({ prenom: 'Léa', contact: '+33612345678', formule: 'libre', site: '' }, v, {}, Date.UTC(2026, 9, 8));
+  assert.equal(r.ok, true);
+  assert.equal(r.prospect.formule, 'libre');
+});

@@ -21,7 +21,7 @@ name: APK Android
 on:
   push:
     branches: [main]
-    paths: ['android/**', 'well-known/assetlinks.json', '.github/workflows/apk.yml']
+    paths: ['android/**', 'well-known/assetlinks.json', 'scripts/verif/assetlinks.mjs', '.github/workflows/apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -42,6 +42,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+
+      # SÉRIE 6 (lot 15) : assetlinks.json bien formé, clé actuelle en premier,
+      # empreinte Play App Signing en second dès qu'elle est posée.
+      - name: Contrôler assetlinks.json
+        run: node scripts/verif/assetlinks.mjs
 
       - name: La clé est-elle posée ?
         id: cle
@@ -101,6 +106,30 @@ jobs:
             exit 1
           fi
           echo "CERT=$CERT" >> "$GITHUB_ENV"
+
+      # SÉRIE 6 (lot 15) : L'AAB POUR GOOGLE PLAY, signé avec la même clé
+      # d'envoi, vérifié comme l'APK, gardé en artefact (la Play Console le
+      # re-signe avec Play App Signing).
+      - name: Construire l'AAB (Google Play)
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        working-directory: android
+        run: |
+          export RC_KEYSTORE="$RUNNER_TEMP/cle.keystore"
+          ./gradlew --no-daemon bundleRelease
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          C=$(keytool -printcert -jarfile "$AAB" | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | tr 'a-f' 'A-F')
+          echo "certificat de l'AAB : $C"
+          [ -n "$C" ] && [ "$C" = "$CERT" ] || { echo "::error::L'AAB n'est pas signé avec la clé de l'APK."; exit 1; }
+          cp "$AAB" "../RepCore-${{ steps.deja.outputs.v }}.aab"
+
+      - name: Garder l'AAB (artefact, 90 jours)
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RepCore-${{ steps.deja.outputs.v }}-aab
+          path: RepCore-${{ steps.deja.outputs.v }}.aab
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Publier la release
         if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'

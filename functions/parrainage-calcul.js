@@ -63,6 +63,75 @@ function deciderRattachement(d, ctx) {
   return { ok: true, raison: null };
 }
 
+// ══ LE FILLEUL QUALIFIÉ, ET LE PLAFOND DU PARRAIN (01/10/2026) ═══════════
+//
+// Un mois offert ne part plus sur quatre séances qu'on peut fabriquer en une
+// soirée, avec une adresse jetable. Le filleul est QUALIFIÉ quand :
+//   · son adresse e-mail est VÉRIFIÉE (email_verified du jeton Firebase, que
+//     le Worker relève lui-même : parrainage/verifies/<clé>) ;
+//   · il a au moins QUATRE séances où au moins une série est validée,
+//   · tombées sur QUATRE jours calendaires distincts (heure de Paris),
+//   · étalées sur au moins DIX jours entre le premier et le dernier.
+// Une séance datée dans le futur du serveur ne compte pas.
+//
+// PARRAINAGE_AU_PAIEMENT (recommandé, actif) : le mois n'est crédité qu'au
+// PREMIER PAIEMENT du filleul, ET seulement s'il est qualifié. Payé avant
+// d'être qualifié, il est mis en attente ; la qualification le déclenche.
+//
+// PLAFOND : au plus PARRAIN_MOIS_MAX_AN mois offerts par parrain sur douze
+// mois glissants (le mois du palier des 10 compris). Au-delà, rien n'est
+// crédité : le Worker le journalise et prévient le créateur.
+const PARRAINAGE_AU_PAIEMENT = true;
+const PARRAIN_MOIS_MAX_AN = 6;
+const AN_MS = 365 * 864e5;
+const QUALIF_JOURS_MIN = 10;
+const _JOUR_PARIS = new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" });
+function _jourParis(t) { return _JOUR_PARIS.format(new Date(t)); }
+// Les séries validées d'une séance (même définition que xp.js).
+function _seriesValidees(s) {
+  const d = s && s.data && typeof s.data === "object" ? s.data : null;
+  if (!d) return 0;
+  let n = 0;
+  for (const k of Object.keys(d)) for (const st of ((d[k] || {}).sets || [])) if (st && st.done === true) n++;
+  return n;
+}
+// PURE. Le filleul est-il qualifié ? `seances` : tableau (ou objet indexé) des
+// séances de son dossier ; `emailVerifie` : true seulement si le serveur l'a vu
+// dans un jeton ; `maintenant` : ms.
+function filleulQualifie(seances, emailVerifie, maintenant) {
+  if (emailVerifie !== true) return false;
+  const t = Number(maintenant) || Date.now();
+  const liste = Array.isArray(seances) ? seances : (seances && typeof seances === "object" ? Object.values(seances) : []);
+  const jours = new Set();
+  for (const s of liste) {
+    const d = Number(s && s.date);
+    if (!(d > 0) || d > t + 10 * 60e3) continue;
+    if (_seriesValidees(s) < 1) continue;
+    jours.add(_jourParis(d));
+  }
+  if (jours.size < SEUIL_SEANCES) return false;
+  const tri = [...jours].sort();
+  const ecart = (Date.parse(tri[tri.length - 1] + "T00:00:00Z") - Date.parse(tri[0] + "T00:00:00Z")) / 864e5;
+  return ecart >= QUALIF_JOURS_MIN;
+}
+// PURE. Les mois offerts à ce parrain sur les douze derniers mois : un par
+// filleul crédité (creditLe), plus le mois du palier des 10 (mentorLe).
+function moisOffertsSurUnAn(compte, maintenant) {
+  const t = Number(maintenant) || Date.now(), depuis = t - AN_MS;
+  const f = (compte && compte.filleuls) || {};
+  let n = 0;
+  for (const k of Object.keys(f)) if (f[k] && f[k].creditE && Number(f[k].creditLe) > depuis) n++;
+  if (Number(compte && compte.mentorLe) > depuis) n++;
+  return n;
+}
+// Les options des décisions ci-dessous. SANS options (l'ancien appelant,
+// functions/index.js), le comportement d'avant : qualifié, pas de plafond.
+function _opts(o) {
+  if (!o) return { qualifie: true, auPaiement: false, plafond: Infinity };
+  return { qualifie: o.qualifie === true, auPaiement: o.auPaiement === true,
+    plafond: Number.isFinite(Number(o.plafond)) ? Number(o.plafond) : PARRAIN_MOIS_MAX_AN };
+}
+
 // LE PREMIER PAIEMENT D'UN FILLEUL. Rend ce qu'il faut écrire, ou null quand il
 // n'y a rien à faire (pas de parrain, ou déjà payant : UN seul mois par
 // filleul, au premier paiement, jamais aux renouvellements).
@@ -76,16 +145,26 @@ function deciderRattachement(d, ctx) {
 // donnera jamais deux fois, même si les événements sont rejoués ou arrivent
 // dans le désordre.
 function _valides(filleuls) { return Object.keys(filleuls).filter((k) => filleuls[k] && (filleuls[k].creditE || filleuls[k].statut === "payant")).length; }
-function premierPaiement(compte, id, maintenant) {
+// `o` : {qualifie, auPaiement, plafond} — voir filleulQualifie. Non qualifié :
+// payant, mais en ATTENTE (enAttente) ; plafond atteint : rien de crédité,
+// `plafond: true` pour que l'appelant le journalise.
+function premierPaiement(compte, id, maintenant, o) {
   const f = compte && compte.filleuls && compte.filleuls[id];
   if (!f || f.statut === "payant") return null;
-  const credit = !f.creditE;
+  const op = _opts(o);
+  const annee = moisOffertsSurUnAn(compte, maintenant);
+  const veut = !f.creditE && !f.plafondLe && op.qualifie;
+  const plafond = veut && annee >= op.plafond;
+  const credit = veut && !plafond;
   const maj = { statut: "payant", payeLe: maintenant };
   if (credit) { maj.creditE = true; maj.creditLe = maintenant; }
+  if (!f.creditE && !f.plafondLe && !op.qualifie) maj.enAttente = true;
+  if (plafond) maj.plafondLe = maintenant;
   const filleuls = Object.assign({}, compte.filleuls, { [id]: Object.assign({}, f, maj) });
   const payants = Object.keys(filleuls).filter((k) => filleuls[k] && filleuls[k].statut === "payant").length;
   const actifs = _valides(filleuls);
-  const mentor = credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe);
+  // Le mois du palier des 10 compte aussi dans le plafond.
+  const mentor = credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe) && annee + 2 <= op.plafond;
   return {
     filleul: maj,
     moisGagnes: (Number(compte && compte.moisGagnes) || 0) + (credit ? 1 : 0),
@@ -93,6 +172,8 @@ function premierPaiement(compte, id, maintenant) {
     actifs,
     credit,
     mentor,
+    plafond,
+    enAttente: !!maj.enAttente,
     prenom: String(f.prenom || "").trim() || "Ton filleul"
   };
 }
@@ -101,21 +182,34 @@ function premierPaiement(compte, id, maintenant) {
 // Rend ce qu'il faut écrire, ou null quand il n'y a rien à faire (pas ce
 // filleul, ou déjà crédité : par ses séances, ou par un premier paiement).
 const SEUIL_SEANCES = 4;
-function seuilSeances(compte, id, maintenant) {
+// AVEC `o` (le Worker) : la QUALIFICATION. Non qualifié : null, on
+// repassera. Au paiement (auPaiement) et pas encore payé : null aussi —
+// c'est le premier paiement qui créditera. Payé en attente de qualification :
+// c'est ICI que le mois part. Plafond atteint : rien, `plafond: true`.
+function seuilSeances(compte, id, maintenant, o) {
   const f = compte && compte.filleuls && compte.filleuls[id];
-  if (!f || f.creditE) return null;
-  const deja = f.statut === "payant";   // crédité au paiement, avant la règle des séances
-  const maj = { creditE: true, actifLe: maintenant };
-  if (!deja) maj.creditLe = maintenant;
+  // Déjà refusé au plafond : on ne le rejuge pas (ni journal ni push répétés).
+  if (!f || f.creditE || f.plafondLe) return null;
+  const op = _opts(o);
+  if (!op.qualifie) return null;
+  if (op.auPaiement && f.statut !== "payant") return null;
+  // Sans options : crédité au paiement, avant la règle des séances (ancien modèle).
+  const deja = !o && f.statut === "payant";
+  const annee = moisOffertsSurUnAn(compte, maintenant);
+  const plafond = !deja && annee >= op.plafond;
+  const credit = !deja && !plafond;
+  const maj = plafond ? { plafondLe: maintenant, actifLe: maintenant } : { creditE: true, actifLe: maintenant };
+  if (credit) { maj.creditLe = maintenant; maj.enAttente = null; }
   const filleuls = Object.assign({}, compte.filleuls, { [id]: Object.assign({}, f, maj) });
+  for (const k of Object.keys(filleuls[id])) if (filleuls[id][k] === null) delete filleuls[id][k];
   const actifs = _valides(filleuls);
-  const credit = !deja;
   return {
     filleul: maj,
     moisGagnes: (Number(compte && compte.moisGagnes) || 0) + (credit ? 1 : 0),
     actifs,
     credit,
-    mentor: credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe),
+    plafond,
+    mentor: credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe) && annee + 2 <= op.plafond,
     prenom: String(f.prenom || "").trim() || "Ton filleul"
   };
 }
@@ -137,4 +231,5 @@ function textePaiement(p) {
 }
 
 module.exports = { CODE_RE, PALIER_MENTOR, DELAI_RATTACHEMENT_MS, emailNormalise, cleNormalisee, cleVersEmail,
-  idFilleul, deciderRattachement, premierPaiement, textePaiement, SEUIL_SEANCES, seuilSeances, texteSeuil };
+  idFilleul, deciderRattachement, premierPaiement, textePaiement, SEUIL_SEANCES, seuilSeances, texteSeuil,
+  PARRAINAGE_AU_PAIEMENT, PARRAIN_MOIS_MAX_AN, QUALIF_JOURS_MIN, filleulQualifie, moisOffertsSurUnAn };

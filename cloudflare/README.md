@@ -7,17 +7,68 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
 | Notification « Ton coach a répondu à ton bilan » (et au bilan de cycle) | dans la minute qui suit la réponse |
 | Notification « Nouveau défi » aux athlètes du coach | dans la minute |
 | Défis : équipe, classement, paliers, podium, « Plus que 48 h » | à chaque progression, et chaque matin à 9 h |
-| Série en danger | jeudi 18 h |
+| Série en danger | jeudi 17 h (jusqu’à 21 h) |
 | Rappel de bilan | samedi 10 h |
 | Ton mois en chiffres (Wrapped) | le 1er du mois, 10 h |
 | Badge à portée | dimanche 17 h |
-| Messages tombés la nuit (21 h – 8 h) | 8 h 05 |
+| Messages tombés la nuit (21 h – 8 h, heure de l'athlète) | dès 8 h chez l'athlète (vérifié chaque heure) |
 | Rareté des badges | chaque nuit, 3 h 17 |
 | Parrainage et codes ambassadeur : jugés, rattachés, parrain prévenu | dans la minute |
 | Clic sur un lien partagé (écran « Viralité ») | à l'arrivée |
 
-Règles d'envoi : **une notification par jour et par personne au plus**, rien entre 21 h et 8 h
-(heure de Paris), chaque type se coupe dans l'app (Réglages → Notifications).
+## Règles d'envoi
+
+- **Deux notifications par jour et par personne au plus, la seconde seulement si elle compte.**
+  Chaque message a une priorité (`PUSH_PRIORITE`, `src/metier.js`) : duel_fin 90, serie 85,
+  duel_j2 80, defi 70, retour, parcours et accueil 60, wrapped 55, badge, filleul, coach et message
+  50, reactions 45, bilan, acces et prospect 40, relance 30, sante 20. Le message la précise dans
+  `prio`, sinon c'est celle de son type ; le type, lui, reste celui des préférences (`pushPrefs`).
+  - `push_log/<clé>` = `{jour, n, at, type, prio}` : le premier push du jour passe toujours ; le
+    second seulement si sa priorité est **≥ 80** (la série, un duel) ; jamais de troisième.
+  - Le jour est celui de l'athlète, dans son fuseau : un changement d'heure ne le décale pas.
+  - Un message refusé pour le plafond ou les heures calmes ne perd pas son travail : le J-2 d'un
+    duel (`duels/<id>/rappel`) et les réactions (`reactions_push/<clé>`) ne sont consommés
+    qu'après un envoi réussi ou un refus définitif (préférence coupée, aucun appareil).
+  - **Le jeudi, de 8 h à 18 h**, l'accès et le rappel de santé se taisent chez un athlète dont la
+    série n'est pas validée cette semaine : l'accès repart le lendemain, la santé est sautée.
+  - **Le samedi 10 h**, `serie_sam` : « Dernier week-end pour ta série de N semaines », pour qui ne
+    s'est pas entraîné depuis jeudi 18 h.
+  - Le push urgent de l'administrateur (litige PayPal) reste hors plafond.
+- **Un humain qui écrit n'est pas plafonné au jour** (`PUSH_HUMAINS` : `coach`, `message`).
+  - Concernés : la messagerie (`coach` vers l'athlète, `message` vers le coach) et la réponse au
+    bilan, texte ou vocale (déposée en `coach`). `bilan` n'en est pas : c'est le rappel de remplir
+    son bilan, un push de jeu.
+  - Ils n'écrivent pas `push_log`. Leur plafond est celui du **fil** (le tag, `message-<clé>`) :
+    un push toutes les 10 minutes, `push_log_humain/<clé>/<tag>` = `at`, en transaction.
+  - Les préférences (`pushPrefs`) et les heures calmes valent pour eux comme pour les autres.
+  - Les types de jeu (`serie`, `defi`, `badge`…) gardent le plafond du jour.
+- **Rien entre 21 h et 8 h, heure de l'athlète.**
+  - Le fuseau, c'est `users/<clé>/tz` : le nom IANA du fuseau de l'appareil (`America/Montreal`),
+    écrit par l'app à chaque démarrage s'il a changé.
+  - Un fuseau absent ou mal formé vaut `Europe/Paris`. L'app, le Worker et la règle de la base
+    partagent le même motif ; `scripts/verif/regles.mjs` vérifie qu'ils restent identiques.
+  - Les travaux planifiés (série, bilan, badge, Wrapped, accès, retour) se déclenchent toujours à
+    l'heure de **Paris**. Ils n'envoient que si l'heure **locale** de l'athlète est entre 8 h et 21 h.
+  - Sinon, le message est **déposé** pour son matin, et compté comme parti : il n'est pas redéposé le
+    lendemain.
+- **La nuit, une file par athlète.**
+  - `push_attente/<clé>/<id>` = `{message, at, tz}` : au plus **5** entrées, les plus récentes.
+  - Au matin, **un seul** push les résume (« 2 messages de ton coach, 1 défi »). Il prend le type,
+    le lien et la priorité du plus important (coach et message, puis acces et prospect, filleul,
+    defi, relance, serie et bilan, le reste). Une entrée seule part telle quelle. La file est vidée
+    dans la même écriture que le dépôt de la sous-tâche.
+  - L'ancienne place unique (`{message, at, prio, cumul, tz}`) se relit comme une entrée.
+  - Le travail `attente` passe **chaque heure** : chaque message part quand l'athlète est sorti de
+    *ses* heures calmes. 8 h à Montréal, c'est 14 h à Paris. Un message de plus de 14 h est retiré.
+- **Une panne passagère ne perd rien.**
+  - 429 ou 5xx sur **tous** les appareils : le jour n'est pas consommé.
+  - Dans la file (événement, sous-tâche), l'envoi lève `push_transitoire`. `planif.js` le remet en
+    fin de file (`essais` + 1 ; au cinquième échec, `evenements_ko`).
+  - 404 ou 410 : l'abonnement est mort, il est supprimé.
+- **Chaque type se coupe** dans l'app (Réglages → Notifications).
+- **Le coût** : le fuseau et les préférences se lisent en **une** requête (la surface du dossier,
+  `?shallow=true`). Les rappels planifiés lisent le fuseau dans le profil (`worker/profils`), sans
+  requête de plus.
 
 ## Ce que coûte le plan gratuit
 
@@ -47,15 +98,46 @@ refusés jusqu'à minuit (UTC).
    ```
    type C:\Users\kevin\RepCore-secrets\vapid-privee.txt | npx wrangler@4 secret put VAPID_PRIVATE_KEY
    ```
-5. **Déployer** :
-   ```
-   npx wrangler@4 deploy
-   ```
+5. **Déployer** : la première fois à la main (`npx wrangler@4 deploy`), ensuite **par GitHub**
+   seulement — voir « Déployer » ci-dessous.
 6. Vérifier : `https://repcore-serveur.<sous-domaine>.workers.dev/sante` doit répondre
-   `{"ok":true,"base":true,"secret":true,"acces":"compte_service","vapid":true}`.
+   `{"ok":true,"base":true,"vapid":true,"derniereMinuteIlYA_s":…,"file":0,"ko":0}` — `ok` n'est vrai
+   qu'une fois la première minute passée (voir « La veille »). Le détail (mode d'accès à la base, secrets posés) est
+   réservé à l'administrateur : `/sante?cles=1` (voir « Limites »).
 
 L'adresse du serveur est ensuite posée dans l'app (`SERVEUR_LEGER_URL`, `app/rc-core.*.js`) et dans
 les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qui allume le tout.
+
+## Déployer
+
+**Le Worker part de `main`, par `.github/workflows/cloudflare.yml`, et de nulle part ailleurs.**
+
+| quand | ce qui tourne |
+|---|---|
+| une PR qui touche `cloudflare/`, `functions/*-calcul.js` ou `tarifs.json` | `npm test` et la compilation (`wrangler deploy --dry-run`) ; **rien n'est déployé** |
+| un push sur `main` qui touche ces fichiers, ou *Run workflow* sur `main` | les tests, puis `wrangler deploy --tag <commit>`, puis la **sonde** `/sante` (5 essais, 30 s d'écart : `ok`, `vapid` et `base` vrais). Sonde en échec : `wrangler rollback` vers la version précédente, et le travail est **rouge** |
+| chaque matin (05:23 UTC) | la **concordance** : la version en ligne doit porter le tag du dernier commit de `main` qui touche le Worker. Un déploiement fait à la main depuis une autre branche, ou un déploiement raté : **rouge** |
+
+Un `npx wrangler deploy` depuis ton poste reste possible en urgence. La concordance du lendemain sera
+alors rouge, tant que *Run workflow* sur `main` n'aura pas remis la version de `main`.
+
+### Les deux secrets GitHub (une fois)
+
+1. **Le jeton Cloudflare** : Cloudflare → *My Profile* (en haut à droite) → *API Tokens* →
+   *Create Token* → modèle **« Edit Cloudflare Workers »** → *Use template*.
+   - *Account Resources* : ton compte seulement.
+   - *Zone Resources* : *All zones* convient (le Worker est sur `workers.dev`).
+   - *Continue to summary* → *Create Token*, puis **copier le jeton** : il n'est montré qu'une fois.
+2. **L'identifiant du compte** : Cloudflare → *Workers & Pages* → colonne de droite, **Account ID**.
+3. Dépôt GitHub → *Settings* → *Secrets and variables* → *Actions* → *New repository secret* :
+   - `CLOUDFLARE_API_TOKEN` : le jeton ;
+   - `CLOUDFLARE_ACCOUNT_ID` : l'identifiant.
+
+Sans eux, le travail affiche un avertissement et ne déploie rien.
+
+**Les secrets du Worker lui-même** (`FIREBASE_SERVICE_ACCOUNT`, `VAPID_PRIVATE_KEY`, `PAYPAL_*`…) restent
+posés chez Cloudflare par `wrangler secret put`. Un déploiement ne les touche pas, et ils ne passent
+jamais par GitHub.
 
 ## Comment ça marche
 
@@ -65,8 +147,11 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
   plus tard dans la minute, **relit la base** pour vérifier ce qu'il annonce, agit, puis le supprime.
 - **Le Worker ne relit jamais les séances d'un athlète** (10 ms de calcul) : c'est l'app de
   l'athlète qui écrit sa progression dans chaque défi où il est inscrit.
-- **Le Worker n'écrit jamais dans `droits/`** : dans l'app, un nœud `droits/` non vide prime sur le
-  dossier, et y écrire aurait coupé l'essai d'un filleul ou rétrogradé un parrain abonné.
+- **Le Worker écrit `droits/` par `majDroits`, en transaction, et ne réécrit jamais un accès posé à
+  la main** (source `main` ou `suspension`, écran Accès du créateur). C'est lui seul qui l'écrit : le
+  paiement PayPal (`/paypal`), l'essai (`/fn/ouvrirEssai`, `essai.js`), l'achat d'un programme
+  (`/fn/verifierAchatProgramme`, même chemin que le webhook), les codes de coach, le parrainage. Les
+  règles le ferment à tous les clients ; dans l'app, un nœud `droits/` non vide prime sur le dossier.
 - État de travail (curseurs des lots) : `/worker/jobs/<nom>`, fermé à tous les clients.
 - **Un événement à la fois par type, par compte et par cible** : l'app écrit l'événement ET son
   verrou `evenements_attente/<compte>/<type>/<cible>` (`{id, at}`, `at` à l'heure du serveur) dans la
@@ -125,6 +210,109 @@ vérification à la main : `docs/apercu-liens.md`.
 - **Purge** : le 1er du mois, 4 h 10, `paypal_evenements` de plus de 90 jours (PayPal ne renvoie
   plus rien après trois jours), par lots de 200, les plus anciens d'abord (`.indexOn: ["at"]`).
 
+## La veille
+
+- **Le pouls** : chaque minute écrit, dans la même écriture que le bail rendu (aucune requête de
+  plus), `worker/verrou/pouls` = `{t, requetes, evenements, echecs, erreur, source}`.
+- **`/sante`** (public, mis en cache 30 s, 3 lectures au plus) rend
+  `{ok, base, vapid, derniereMinuteIlYA_s, file, ko}` : `file` = les événements en attente (`50+`
+  au-delà), `ko` = ceux rangés en échec. **503** si le pouls manque ou a plus de 5 minutes, ou si la
+  base ne répond pas (`raison` : `pouls_absent`, `pouls_ancien`, `base_injoignable`).
+- **`.github/workflows/veille-serveur.yml`**, toutes les 15 minutes : `curl` sur `/sante`. Si ça
+  échoue, ou si `ko` a monté depuis le dernier courriel : un courriel (`scripts/envoyer_mail.mjs`,
+  mêmes secrets `MAIL_*` que le rapport payeur), **un par heure au plus**, et le travail échoue tant
+  que la panne dure. Une panne est vue en 20 minutes au pire, plus le retard éventuel des travaux
+  programmés de GitHub.
+- **Un événement rangé dans `evenements_ko`** (cinq échecs) envoie aussi un push urgent au créateur,
+  un par heure au plus (`worker/alerte_ko`).
+- **Les journaux** : `[observability]` dans `wrangler.toml` garde un réveil sur dix (le bilan JSON de
+  la minute, et les erreurs) : tableau de bord Cloudflare > Workers > repcore-serveur > Logs.
+- **L'essayer** : couper le déclencheur (Workers > repcore-serveur > Settings > Triggers), attendre
+  5 minutes, puis lancer la veille à la main (Actions > Veille du serveur > Run workflow) : croix
+  rouge et courriel. Remettre le déclencheur.
+
+## Le programme de départ d'une invitation (`redeemCode`, 05/10/2026)
+
+Un coach qui invite en lot (« Inviter plusieurs athlètes ») peut choisir un
+modèle : le code `/rc_codes/<code>` porte alors `programmeModeleId`
+(l'identifiant du modèle, ≤ 64 caractères, borné par les règles).
+
+**Pourquoi c'est le Worker qui pose le programme.** Le modèle vit dans
+`users/<coach>/coachPrograms`, que les règles n'ouvrent qu'au coach : depuis
+le compte de l'athlète, il est illisible. `redeemCode`, qui consomme déjà le
+code avec le compte de service, lit le modèle, choisit la version comme
+l'app (`publicVise`, sinon le genre de l'athlète), retire `_essai` et
+`_foundation`, écrit `sessions_config` et `assignedProgram*` dans le dossier
+de l'athlète, et **renvoie le programme dans sa réponse** : l'app le pose
+tout de suite, et l'athlète le voit à sa première ouverture.
+
+**Pourquoi pas un événement `/evenements` (`assigner_modele`).** C'était
+l'autre voie : l'app dépose l'événement, la file le traite au passage
+suivant de la planification. Entre-temps — la première ouverture —
+l'athlète aurait vu « Programme en cours de création ». `redeemCode` tourne
+déjà au bon moment et avec les bons droits : un appel de plus, pas une file
+de plus, et aucun type d'événement à ouvrir dans les règles.
+
+Garde-fous : un programme **réel** déjà en place n'est jamais remplacé ; un
+modèle supprimé entre-temps ne bloque pas le code (le compte est créé, sans
+programme) ; le modèle du coach n'est pas modifié. Tant que le Worker n'est
+pas redéployé, l'app ne pose le programme que si le modèle est lisible sur
+l'appareil (coach et athlète sur le même téléphone).
+
+## Le créateur, reconnu par son UID
+
+Depuis le 01/10/2026, les règles de la base et le Worker ne reconnaissent plus le créateur à son
+adresse e-mail (un compte Google, Apple ou lié peut porter la même adresse sous un autre UID), mais
+à **son UID Firebase et une adresse vérifiée** : `auth.uid === '<UID>' && auth.token.email_verified === true`.
+
+L'UID vit dans **une seule constante**, `CREATEUR_UID` de `src/createur.js`. Pour la poser :
+
+1. Console Firebase → *Authentication* → *Utilisateurs* → la ligne `guellec.coachingpro@gmail.com`
+   → colonne **UID utilisateur** (28 caractères ; ce n'est pas un secret).
+2. Remplacer `'UID_CREATEUR_A_POSER'` par cet UID dans `CREATEUR_UID` (pas dans `UID_A_POSER`).
+3. `node scripts/poser_uid_createur.mjs` (depuis la racine) : le recopie dans `database.rules.json`.
+4. `node scripts/verif/regles.mjs` doit finir par « Rien de bloquant. »
+
+Tant que l'UID n'est pas posé, `regles.mjs` échoue — et avec lui le déploiement (`firebase.yml`) :
+des règles déployées avec le texte de remplacement ne reconnaîtraient plus personne comme créateur.
+L'adresse du créateur doit aussi être **vérifiée** : le jeton porte `email_verified`. Si elle ne
+l'est pas, cliquer le lien de vérification reçu par e-mail, puis se déconnecter et se reconnecter
+(le jeton n'est relu qu'à la connexion ou au renouvellement, au plus une heure).
+
+## Le support du créateur (`src/support.js`, build 1876)
+
+`POST /support` (ou `/fn/support`), même protocole et même jeton Firebase que `/fn/<nom>`. **Réservé au créateur** : l'UID (`CREATEUR_UID`, voir ci-dessus) ET l'adresse vérifiée `CREATOR_EMAIL`. Tant que l'UID n'est pas posé, la route refuse tout le monde (403).
+
+| `action` | Ce qu'elle fait |
+|---|---|
+| `lire {email}` | le dossier allégé : coach, statut, bilans résumés (date, photos présentes, réponse), versions du programme (date, motif), événements en attente, droits — sans photo ni texte de santé |
+| `rouvrirBilan {email, bilanId, vues}` | pose `aCompleter` sur le bilan : la demande apparaît sur l'accueil de la personne |
+| `restaurerProgramme {email, index}` | remet une entrée de `sessions_config_history`, après y avoir poussé l'état courant (motif `restauration`) |
+| `retirerDoublonBilan {email, bilanId}` | retire le bilan, pose la pierre tombale (`supprimes/bilans`), et le garde 30 jours dans `support_corbeille/<clé>` |
+| `rattacher {email, coachEmail}` | remet `coachEmailKey`, `coachId`, `coachName` (retrait du suivi fait par erreur) |
+| `exporter {email}` | le JSON complet du dossier |
+| `journal`, `tickets` | les 50 dernières lignes de `support_log`, les 50 derniers signalements |
+
+Chaque action écrit `support_log/<id> = {le, action, email, avant, apres}` (des **résumés**). `support_log` et `support_tickets` : lus par le créateur seul, écrits par le Worker seul (règles).
+
+`signalerProbleme {texte, diag}` (`/fn/signalerProbleme`) : tout compte connecté, un par minute ; le diagnostic (version, écran, envois en attente, 20 dernières erreurs JS nettoyées, taille du stockage) est borné à 6 000 caractères.
+
+Dans l'app : **Accès → Support : réparer un dossier**, et **Signaler un problème** dans le profil (athlète) et la barre latérale (coach).
+
+### Restaurer UN dossier depuis une sauvegarde
+
+La sauvegarde complète (`.github/workflows/sauvegarde.yml`, le dimanche ; artefact 35 jours, release brouillon) contient `users`. Pour ne remettre QUE le dossier d'une personne (clé = adresse avec `.` → `,`) :
+
+```bash
+read -rs SAUVEGARDE_CLE && export SAUVEGARDE_CLE
+# 1. Simuler : affiche les champs à ajouter, retirer, modifier. Rien n'est écrit.
+node scripts/restaurer_noeud.mjs sauvegarde-2026-10-05-complet.tar.enc 'users/lea@exemple,fr' --compte ~/RepCore-secrets/compte-service.json
+# 2. Écrire ce seul dossier (un PUT sur users/<clé>, les autres ne bougent pas)
+node scripts/restaurer_noeud.mjs sauvegarde-2026-10-05-complet.tar.enc 'users/lea@exemple,fr' --compte ~/RepCore-secrets/compte-service.json --ecrire
+```
+
+⚠ Le dossier revient **à la date de l'archive** : ce que la personne a fait depuis (séances, bilans) disparaît. Exporte d'abord son dossier actuel (`exporter` ci-dessus) pour pouvoir recopier à la main ce qui est plus récent. Les nuits, seuls les nœuds critiques sont exportés (`users` n'en fait pas partie, pour le quota de 10 Go/mois) : la sauvegarde d'un dossier a donc au plus 7 jours.
+
 ## Limites
 
 - **`/sante?cles=1`** interroge PayPal et Cloudinary : il est réservé à l'administrateur. Poser le
@@ -137,8 +325,18 @@ vérification à la main : `docs/apercu-liens.md`.
   $s = Get-Content C:\Users\kevin\RepCore-secrets\admin-secret.txt
   Invoke-RestMethod https://repcore-serveur.repcore.workers.dev/sante?cles=1 -Headers @{Authorization="Bearer $s"}
   ```
-  Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public.
-- **`/arrivee` et `/amb-clic`** : 30 appels par minute et par adresse IP, au-delà `429`. C'est la
+  Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public, et ne dit
+  que `ok`, `base`, `vapid` et le pouls (voir « La veille ») : le mode d'accès à la base (`acces`) et les secrets posés
+  (`paypalPose`, `cloudinaryPose`, `garmin`) ne sortent que par `/sante?cles=1`.
+- **Aucune route publique sans limite** (01/10/2026). Trois limiteurs par adresse IP, déclarés dans
+  `wrangler.toml` et posés par `npx wrangler deploy` (rien à régler à la main) :
+  `LIMITE_ROUTES` (toute requête sauf `OPTIONS`, 120 par minute), `LIMITE_ARRIVEES` (ci-dessous) et
+  `LIMITE_REVEIL` (`/reveil`, **POST seulement** — sinon `405` —, 6 par minute). Au-delà : `429`.
+- **L'alerte de quota** (`src/pouls.js`) : chaque `429` servi est compté dans
+  `worker/pouls_429/<AAAAMMJJHH>` (heure UTC). Au-delà de **500 par heure**, un push urgent part vers
+  le créateur, une fois par heure. Chaque nuit (03:30 UTC), les jours posés dans le futur sous
+  `/metrics` et `/attribution` sont effacés — la règle ne sait pas borner une date.
+- **`/arrivee`, `/amb-clic`, `/prospect`, `/vitrine-vue`** : 30 appels par minute et par adresse IP, au-delà `429`. C'est la
   **limitation de débit des Workers** (`[[ratelimits]]` dans `wrangler.toml`, binding
   `LIMITE_ARRIVEES`), gratuite, sans rien à régler dans le tableau de bord. Les **règles de limitation
   du pare-feu** (WAF, *Security → WAF → Rate limiting rules*, une règle gratuite) ne s'appliquent
@@ -152,32 +350,71 @@ vérification à la main : `docs/apercu-liens.md`.
 mémoire (`CHARGE=10,100,1000` pour choisir N ; `npm test` fait 10 et 100). À chaque réveil : au
 plus 50 requêtes, au plus 5 chiffrements, et chacun reçoit son message une fois.
 
-Mesuré le 27/09/2026 (Node 22). Un réveil par minute :
+Mesuré le 01/10/2026 (Node 22), après le lot « charge » (jobs en un GET, profils par pages, fenêtre
+de 21 h, série dès 17 h). Un réveil par minute :
 
 | abonnés | chemin | réveils (minutes) | fini à | servis | requêtes max / réveil | requêtes en tout | chiffrements max / réveil | calcul médian / max |
 |---|---|---|---|---|---|---|---|---|
-| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 95 | 4 | 12.5 / 16.5 ms |
-| 10 | série (jeudi 18 h) | 5 | 18:04 | 10 | 38 | 186 | 2 | 5.4 / 9.3 ms |
-| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 875 | 4 | 9.2 / 14.8 ms |
-| 100 | série (jeudi 18 h) | 50 | 18:49 | 100 | 38 | 1 851 | 2 | 4.3 / 8.7 ms |
-| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 750 | 4 | 8.7 / 39.9 ms |
-| 1 000 | série (jeudi 18 h) | 360 | 00:00 | **360** | 38 | 13 321 | 2 | 3.9 / 17.2 ms |
+| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 96 | 4 | 10.5 / 18.4 ms |
+| 10 | série (jeudi 17 h) | 5 | 17:04 | 10 | 34 | 147 | 2 | 5.4 / 8.0 ms |
+| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 851 | 4 | 8.3 / 13.3 ms |
+| 100 | série (jeudi 17 h) | 50 | 17:49 | 100 | 34 | 1 409 | 2 | 4.8 / 9.7 ms |
+| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 501 | 4 | 8.8 / 33.4 ms |
+| 1 000 | série (jeudi 17 h) | 241 | 21:01 | **480** | 34 | 6 749 | 2 | 6.6 / 15.4 ms |
+
+**Au-delà de ~500 athlètes, ou deux jeudis de suite avec `sautes` > 0 : passer au plan payant.**
+Quand, combien, et comment : `docs/capacite.md`. Le mode file (`FILE_PUSH = "queue"`, Cloudflare
+Queues) est prêt dans le code et testé à 10 000 abonnés (épreuve (d) ci-dessous).
+
+Et quatre épreuves, dans `npm test` :
+
+| épreuve | résultat |
+|---|---|
+| (a) **tous** les travaux actifs, jeudi 1er octobre 18 h, 300 abonnés, rien de pré-marqué | **300/300 servis à 20:13**, au plus 35 requêtes par réveil |
+| (b) la série lancée à 20 h 40 pour 300 : la fenêtre se ferme | 40 servis, 260 dans `sautes` et dans `evenements_ko`, aucun compté sans push |
+| (c) base vide, 1 440 minutes (minute + alerte de quota) | **7 615 sous-requêtes par jour** (23 098 avant), au plus 9 par réveil |
+| (d) **mode file** (plan payant, fausse file en mémoire), 10 000 abonnés, série du jeudi | **10 000/10 000 servis**, enfilés en 1 réveil, 505 lots de 20, 1 % de 503 rejoués, personne deux fois |
 
 Ce qu'il faut en retenir :
 
-- **Le chiffrement d'un push coûte ~1,2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), soit ~6 ms,
-  sous les 10 ms. Au-delà, la suite part au réveil suivant. En pratique ce plafond ne mord pas :
-  **ce sont les 50 requêtes qui bornent** (un push en coûte 7 à 8 : préférences, journal du jour,
-  abonnements, transaction, envoi), soit 4 push par minute par la file, 2 par un rappel planifié
-  (qui relit en plus 3 à 5 champs du dossier).
+- **LES NOUVEAUX PLAFONDS.** Série du jeudi : **~480 athlètes** servis entre 17 h et 21 h (180 avant :
+  18 h–21 h, et trois à cinq lectures par athlète, même pour ceux qu'on ne relance pas). Un défi
+  publié : toujours 4 par minute par la file, ~1 000 en 4 h. Au-delà de 480 athlètes à relancer le
+  même jeudi, la liste s'arrête à 21 h : `worker/jobs/serie/sautes` dit combien, et une ligne
+  `travail_incomplet` apparaît dans l'écran des échecs (`evenements_ko`).
+- **Ce qui a changé** :
+  - `worker/jobs` se lit en **un GET** par réveil, et ne s'écrit qu'en **un update** final, celui qui
+    rend aussi le verrou. Un travail fini ne coûte plus rien ; une minute à vide en coûte 5.
+  - Les rappels (`serie`, `acces`, `retour`, `wrapped`) lisent `worker/profils` et `push_log` **par
+    pages de 200** (une requête chacune) : un athlète écarté (série cassée, déjà notifié aujourd'hui,
+    pas d'échéance) ne coûte plus aucune requête. Le profil est rafraîchi à chaque fin de séance
+    (`seance_fin`) et, s'il manque ou date de plus de 7 jours, par le rappel lui-même — en deux
+    requêtes : la « surface » du dossier (`?shallow=true` : tous ses champs simples d'un coup) et
+    l'écriture. Il ne sert qu'à **écarter** : un athlète retenu est relu avant tout envoi.
+  - `serie`, `retour`, `bilan`, `wrapped`, `badge` et `duels` s'arrêtent à **21 h** : après, le push
+    serait écarté (heures calmes) et l'athlète compté traité sans rien recevoir.
+  - L'alerte de quota lit son seau toutes les 5 minutes, et non chaque minute.
+- **Le chiffrement d'un push coûte ~1,2 à 2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), sous
+  les 10 ms. **Ce sont toujours les 50 requêtes qui bornent** : un push en coûte 5 (préférences,
+  abonnements, transaction du journal, envoi), un rappel planifié retenu ~7 de plus au pire ; d'où 2
+  rappels par minute (le travail garde 15 + 2 requêtes de marge par athlète).
 - Le « calcul » est celui de Node, hors base simulée mais avec ses réponses fabriquées : une
   estimation haute. Les pics (premier réveil, JIT) ne se reproduisent pas dans un Worker chaud.
-- **À 1 000 abonnés, la série du jeudi ne passe pas** : 2 par minute de 18 h à 21 h, puis les heures
-  calmes ; à minuit, 640 n'ont rien reçu. Un défi publié arrive à tous, en 4 h. Les leviers, si on
-  y arrive : lire en une requête ce que les rappels planifiés lisent en cinq, commencer la série
-  plus tôt, ou passer au plan payant de Cloudflare (bien plus de requêtes par exécution).
+- **Le levier suivant**, si 480 ne suffit plus : passer au plan payant de Cloudflare (1 000
+  sous-requêtes par exécution), ou étaler la série sur le mercredi soir.
 
 - **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
+  - **Dans le plafond des 50 sous-requêtes** (01/10/2026). Un webhook a un budget de 44 (`BUDGET_REQUETE`,
+    `index.js`) ; mesuré avant ce lot, un premier paiement complet en coûtait 72 d'un bloc.
+    - Ce qui peut attendre la minute suivante part en sous-tâches : les suites d'un premier paiement
+      (parrain, ambassadeur, attribution) ; la reprise d'un premier paiement remboursé ou contesté ;
+      les push (parrain, filleul, litige) ; les orphelins au-delà du premier, et l'événement du lien
+      après eux, dans l'ordre de PayPal. Chaque sous-tâche est gardée par sa transaction : la rejouer
+      ne compte rien deux fois.
+    - Avant chaque écriture, il reste au moins 8 requêtes, sinon `ErreurBudget` est levée **avant
+      d'écrire** : réponse 503, l'événement reste `en_cours`, et PayPal le renvoie.
+    - Les tests (`paypal.test.mjs`, `remboursements.test.mjs`) comptent chaque sous-requête de chaque
+      webhook : au plus 40 aujourd'hui, 46 exigés.
   - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
     après son succès seulement. Un renvoi d'un événement `fait` : 200. Pendant un `en_cours` de moins
     de 10 min : 503 (PayPal renverra). Plus vieux : repris. Une erreur : état `erreur`, réponse 500.
@@ -222,12 +459,12 @@ Ce qu'il faut en retenir :
    RepCore > **Webhooks > Add Webhook** :
    - URL : `https://repcore-serveur.repcore.workers.dev/paypal`
    - Événements : `BILLING.SUBSCRIPTION.ACTIVATED`, `.CANCELLED`, `.EXPIRED`, `.SUSPENDED`,
-     `.PAYMENT.FAILED`, `PAYMENT.SALE.COMPLETED`, `PAYMENT.SALE.REFUNDED`,
-     `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`.
+     `.PAYMENT.FAILED`, **`.UPDATED`** (changer de formule, lot 45), `PAYMENT.SALE.COMPLETED`,
+     `PAYMENT.SALE.REFUNDED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`.
    - Noter le **Webhook ID** affiché, et le **Secret** de l'application (même page).
 2. Cloudinary (https://console.cloudinary.com/settings/api-keys) : **API Key** et **API Secret**.
 3. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\secrets-paiements.ps1`
-   pose les quatre secrets. `/sante` doit alors dire `"paypal":true,"cloudinary":true`.
+   pose les quatre secrets. `/sante?cles=1` doit alors dire `"paypal":"ok","cloudinary":"ok"`.
 
 Sans ces secrets, rien ne casse : `/paypal` refuse (signature invérifiable), et les suppressions
 de vidéos attendent dans la file de l'app jusqu'à ce que le serveur sache les faire.
@@ -247,6 +484,35 @@ Le **nom du compte Cloudinary** vient du worker, jamais de l'app : secret facult
   athlète qui le désigne) ;
 - réponses : 400 (identifiant invalide) et 403 (pas le tien) sont définitives, l'app sort le média de
   sa file ; 409 (propriétaire pas encore indexé) et 503 le laissent en file.
+
+### Les envois signés (`cloudinarySigner`, 01/10/2026)
+
+L'app ne poste plus rien à Cloudinary sans une **signature du Worker** : `/fn/cloudinarySigner`
+vérifie le jeton Firebase, impose le dossier (`repcore/<id du compte>[/<rubrique>]`, celui d'un
+athlète dont l'appelant est le coach — même contrôle que la suppression —, ou
+`repcore/audio/<clé de l'athlète>`), signe les formats (`allowed_formats`) et limite à **30 signatures
+par heure et par compte**. Le secret est le même `CLOUDINARY_API_SECRET` que pour la suppression.
+Preset signé : `repcore_videos` par défaut, ou le secret facultatif `CLOUDINARY_UPLOAD_PRESET`.
+
+**À faire par Kevin dans la console Cloudinary, une fois le Worker déployé** (sinon un envoi sans
+signature reste possible, puisque le preset public existe encore) :
+
+1. https://console.cloudinary.com → **Settings** → **Upload** → **Upload presets** → `repcore_videos`.
+2. **Signing mode** : passer de *Unsigned* à **Signed**. Enregistrer. À partir de là, un envoi sans
+   signature valide est refusé par Cloudinary (`401 Upload preset must be whitelisted for unsigned
+   uploads`).
+3. Dans le même preset, **Upload control** :
+   - **Allowed formats** : `mp4, mov, webm, jpg, png, webp` (plus `ogg, m4a` si les commentaires
+     audio doivent continuer de passer : ils partent comme des vidéos) ;
+   - **Max file size** : la console n'a qu'un plafond par preset. Mettre **100 Mo** sur
+     `repcore_videos` ; pour tenir **10 Mo** sur les images, créer un second preset signé
+     `repcore_images` (formats `jpg, png, webp`, 10 Mo) et le poser en secret
+     `CLOUDINARY_UPLOAD_PRESET_IMAGE` — le Worker l'utilisera pour les images dès qu'il est posé.
+4. Vérifier : un envoi depuis l'app passe ; `curl -F file=@x.jpg -F upload_preset=repcore_videos
+   https://api.cloudinary.com/v1_1/dntu57ml/image/upload` répond une erreur.
+
+Les comptes Cloudinary « personnels » d'un coach (`cloudinaryName`/`cloudinaryPreset` dans son
+dossier) ne servent plus aux envois : seul le compte du service sait être signé par le Worker.
 
 ## Paiement direct au coach (`paiements-coach.js`) : FERMÉ tant que la sandbox ne l'a pas prouvé
 
@@ -295,7 +561,7 @@ instructions du guide Garmin.
 5. Dans l'outil « Endpoint Configuration » du portail Garmin, déclarer en **push**
    (pas en ping) pour Dailies, Sleeps, HRV, Deregistrations et User Permissions :
    `https://repcore-serveur.repcore.workers.dev/garmin/push/<GARMIN_PUSH_SECRET>`.
-6. Vérifier : `/sante` dit `"garmin": true`, puis relier un compte de test depuis
+6. Vérifier : `/sante?cles=1` dit `"garmin": true`, puis relier un compte de test depuis
    l'app (Lifestyle › Connecter mes données santé › Connecter Garmin) et
    synchroniser la montre : la journée arrive dans `sante_sync/<clé>/jours`.
 
@@ -303,9 +569,90 @@ instructions du guide Garmin.
 `garmin-client-id` quand il est présent) qui les authentifie. Changer
 `GARMIN_PUSH_SECRET` impose de redéclarer l'adresse au portail.
 
+## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
+
+Le socle côté serveur ; l'app s'en sert pour le brouillon C2, le point de la semaine, l'import
+de séance, le premier programme, la photo du repas, la relance des athlètes à risque et « Demander à RepCore ». Deux appels (protocole
+onCall, jeton Firebase vérifié) :
+
+- `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
+  Tâches : `bilan`, `hebdo`, `import`, `programme`, `relance` (Claude Sonnet 5.5, réflexion
+  adaptative, effort `low` ou `medium`, repli côté serveur `fallbacks:'default'`) ; `repas`,
+  `relance_courte` (Claude Haiku 4.5). Réponse toujours structurée (schéma JSON par tâche) ; un
+  refus ou une réponse coupée rendent `{ok:false, raison}`, jamais un texte partiel. Un `athlete`
+  n'est accepté que si l'appelant en est le coach (même contrôle que la suppression des médias).
+  **Rien n'est écrit sous `users/`** : la proposition repart vers l'app, qui la fait relire.
+- `/fn/iaRetour` `{journalId, statut:'valide'|'modifie'|'rejete', distance}` : ce que le coach en a
+  fait, et l'écart (0 à 1) entre la proposition et le texte envoyé.
+
+**Le premier programme (`programme`, 05/10/2026).** Depuis la fiche d'un athlète qui a son bilan
+de départ et aucun programme, l'app envoie `{depart, contraintes, profilSansPoids, modeles, banque}`
+(`chargeProgrammeIA` : les réponses de départ utiles, `deb-health` et les contraintes déclarées
+en CONTRAINTE, jamais `deb-tca` ni `deb-traitement` ; 12 modèles résumés au plus ; la banque rangée
+par matériel). Claude **ne réécrit pas le programme** : il rend `{modeleId, raisonChoix,
+ajustements:[{type, seance, exercice, par, pourquoi}], alertes}` (types `jour`, `remplacement`,
+`retrait`, `series`, `duree`). Le Worker contrôle la sortie (`controlerProgramme`) : un modèle hors
+de la liste → `{ok:false, raison:'sortie_invalide'}` ; un remplacement par un nom hors banque est
+retiré. L'app rejoue les ajustements elle-même (`appliquerAjustementsIA`), écarte ceux qui ne
+valident pas, montre un récapitulatif à cocher, et n'écrit qu'un **brouillon**.
+
+**La photo du repas (`repas`, Haiku 4.5, 05/10/2026).** L'app envoie UNE image réduite sur
+l'appareil (1 024 px, JPEG 0,8, `charge.image`) ; elle n'est ni stockée, ni journalisée, ni envoyée
+à Cloudinary. Claude rend `{aliments:[{nom, grammes, confiance}], remarque}` — jamais de calories
+(elles viennent de CIQUAL, dans l'app), 8 aliments au plus (`controlerRepas`). Ouverte à un athlète
+Ultime, ou à un athlète suivi par un coach dont l'offre est Coach ou Pro : c'est alors **le coach
+qui paie** (son `ia_quota`, son journal, `athlete` noté). **60 appels par mois et par compte**
+(`ia_appels/<compte>/<AAAA-MM>/repas`, lu par son titulaire, écrit par le Worker), en plus du
+plafond en dollars. L'offre du coach est posée chaque jour dans `droits/<athlète>/couvertParCoach/plan`
+(travail `couverture_coachs`) : l'app de l'athlète ne peut pas lire `coachs_registre`.
+
+**Le risque d'abandon (`risque.js`, sans LLM, 05/10/2026).** Le travail `retention` (4 h 30)
+range, pour chaque résumé d'activité, un exemple (variables 14 jours avant aujourd'hui, cible :
+actif dans les 14 jours suivants — rien du futur dans les variables) et les variables du jour.
+À la fin : régression logistique (L2, 200 itérations, déterministe) si le jeu compte ≥ 200 exemples
+dont ≥ 30 de chaque classe, sinon les poids par défaut (`POIDS_DEFAUT`) ; AUC sur 20 % tenus à
+l'écart (tirés par hachage de la clé). Publie `risque_modele` = {poids, n, auc, t} — aucune clé de
+compte, lisible par tout compte connecté — et `risque/<compte>` = {p, t}, lisible par son coach seul.
+L'app montre une puce « risque » à partir de 0,6, avec les deux variables qui pèsent le plus ;
+`urgencyScore` n'est pas modifié.
+
+**La relance proposée (`relance_courte`, Haiku 4.5, puis `/fn/relanceIA`).** Dans l'écran des
+relances, pour un athlète à risque sans relance depuis 7 jours : l'assistant propose `{texte}`
+(280 caractères au plus, sans culpabilisation ni donnée de santé, une question). Le coach relit,
+modifie ; **seul son clic sur « Envoyer »** appelle `relanceIA` {athlete, texte, voie:'canal'|'push',
+journalId}, qui vérifie qu'il est le coach, refuse une deuxième relance dans la semaine (409),
+envoie (carte « Un mot de ton coach », ou notification de type `relance`) et écrit
+`relances_auto/<coach>/<athlète>` avec `moyen:'ia_valide'`.
+
+**« Demander à RepCore » (`assistant`, Sonnet 5.5, effort low, 05/10/2026).** Le Worker est un
+**proxy sans état** : il relaie `{messages, tools}` (outils de l'app, JSON schema `strict:true`) avec
+un prompt système figé et mis en cache (`SYSTEME_ASSISTANT`), et rend la réponse brute
+`{contenu, stop_reason}`. La boucle d'outils tourne **dans l'app** (au plus 4 tours), avec ses
+fonctions pures : aucune donnée d'entraînement n'est lue ici, et le journal ne garde ni question ni
+réponse. Réservé à un athlète **autonome en Ultime** (403 sinon), au quota habituel (429).
+
+**Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
+nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète
+Ultime 1 $ (`IA_PLAFONDS`). Au-delà : `429 « Quota IA du mois atteint. »`. Le coût de chaque appel
+(`PRIX`, $ par million de jetons : Sonnet 2 / 10 / 0,2 en cache, Haiku 1 / 5 / 0,1) est ajouté par
+transaction, et noté dans `ia_journal/<compte>/<id>` — effacé au-delà de 90 jours, la nuit
+(`planif.js`, travail `ia_journal`). Les deux nœuds sont lisibles par leur titulaire, écrits par le
+Worker seul (`database.rules.json`).
+
+**Mise en service** (Kevin, dans son terminal — la clé ne passe ni par le dépôt, ni par Claude) :
+
+```
+npx wrangler@4 secret put ANTHROPIC_API_KEY     # coller la clé à l'invite
+'0' | npx wrangler@4 secret put IA_COUPEE        # l'interrupteur : '0' ouvert
+```
+
+ou `secrets.ps1`, étape 3. **Couper l'assistant sans redéployer** : `'1' | npx wrangler@4 secret put
+IA_COUPEE` — toutes les demandes répondent alors `503 « L'assistant est en pause. »`, sans appel ni
+coût. Sans clé, c'est la même réponse.
+
 ## Pas encore branché
 
-- **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).
+- **Le mois de mentorat** de l'Ultime (il vivait dans `droits/` côté Cloud Functions ; pas encore porté dans le Worker).
 - **L'aperçu personnalisé** des liens `/@pseudo` et `/coach/slug` (emblème du rang, prénom) : ils
   gardent l'aperçu par défaut.
 
@@ -318,7 +665,7 @@ une heure, se renouvelle seul, et la clé qui le signe ne quitte jamais le worke
 Il remplace l'ancien **code secret de la base de données** (`FIREBASE_DB_SECRET`) : un accès total,
 sans expiration, envoyé dans l'URL de chaque requête (`?auth=…`), donc dans les journaux de ce
 qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en sert encore, et
-`/sante` le dit : `"acces":"secret_historique"`. L'état voulu est `"acces":"compte_service"`.
+`/sante?cles=1` le dit : `"acces":"secret_historique"`. L'état voulu est `"acces":"compte_service"`.
 
 ### Mise en place (une fois)
 
@@ -330,7 +677,7 @@ qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en 
 3. Le compte → **Clés** → **Ajouter une clé** → **JSON**. Enregistrer le fichier sous
    `C:\Users\kevin\RepCore-secrets\compte-service.json`, **hors du dépôt**.
 4. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\compte-service.ps1` : pose
-   le secret `FIREBASE_SERVICE_ACCOUNT`, vérifie `/sante`, puis retire `FIREBASE_DB_SECRET` du worker.
+   le secret `FIREBASE_SERVICE_ACCOUNT`, vérifie `/sante?cles=1`, puis retire `FIREBASE_DB_SECRET` du worker.
 5. **Révoquer l'ancien code secret** : console Firebase → ⚙ Paramètres du projet → Comptes de
    service → Codes secrets de la base de données → supprimer. Tant qu'il existe, il ouvre toute la
    base, à qui l'a.
@@ -341,7 +688,7 @@ qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en 
    `compte-service.json` par le nouveau fichier.
 2. Relancer `compte-service.ps1` : le worker prend la nouvelle clé au déploiement du secret (les
    jetons déjà émis avec l'ancienne restent valables au plus une heure).
-3. `/sante` doit dire `"acces":"compte_service"`.
+3. `/sante?cles=1` doit dire `"acces":"compte_service"`.
 4. Supprimer l'**ancienne** clé dans **Clés** (son identifiant est `private_key_id` dans l'ancien
    fichier), puis effacer l'ancien fichier.
 

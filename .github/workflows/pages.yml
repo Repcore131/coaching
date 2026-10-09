@@ -1,3 +1,19 @@
+# GitHub Pages : repcore131.github.io/coaching/
+#
+# ⚠ JUSQU'AU 01/10/2026, CE TRAVAIL PUBLIAIT LE DÉPÔT ENTIER (path: .) :
+#   scripts, règles de la base, code du Worker, docs/ (les plans), android/…
+#   tout était lisible à repcore131.github.io/coaching/<chemin>.
+#
+# CE QUI EST PUBLIÉ, désormais : le site public assemblé par
+# scripts/fabriquer_site.mjs — LA MÊME LISTE que Firebase Hosting — plus
+# l'appli VAULT construite (servie seulement ici).
+#
+# POURQUOI PAS vault/ SEUL : le sitemap, robots.txt, les balises canonical et
+# les images d'aperçu (og:image) de la page de vente, du blog et de l'app
+# désignent encore repcore131.github.io/coaching/. Les retirer d'ici casserait
+# les aperçus partagés et les liens déjà donnés. Passer tout sur
+# repcore-sync.web.app est un choix à faire à part (et ce travail ne
+# publierait plus alors que vault/).
 name: Deployer les Pages
 on:
   push:
@@ -22,7 +38,12 @@ jobs:
       url: ${{ steps.deploiement.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
+      # fabriquer_site.mjs) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

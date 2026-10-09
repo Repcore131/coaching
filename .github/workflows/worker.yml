@@ -1,0 +1,60 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LES TESTS DU SERVEUR LÉGER, À CHAQUE PUSH ET PR QUI TOUCHE cloudflare/
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI (lot 51, 02/10/2026). cloudflare.yml ne se déclenche en push que
+#  sur main : un push sur une branche de travail qui casse un test du Worker
+#  ne rougissait qu'une fois la PR ouverte. Ce workflow joue `node --test` dans
+#  cloudflare/ sur TOUT push et toute PR qui touche le dossier. Il ne déploie
+#  rien et ne lit aucun secret.
+# ══════════════════════════════════════════════════════════════════════════
+name: Tests du serveur léger
+
+on:
+  push:
+    paths:
+      - 'cloudflare/**'
+      - 'scripts/mise_en_prod.mjs'
+      - 'scripts/migrer_boutique.mjs'
+      - 'scripts/verif/mise_en_prod.test.mjs'
+      - 'scripts/migrer_fitpulse.mjs'
+      - 'scripts/verif/migrer_fitpulse.test.mjs'
+      - 'scripts/verif/regles_en_ligne.mjs'
+      - '.github/workflows/worker.yml'
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - 'scripts/mise_en_prod.mjs'
+      - 'scripts/migrer_boutique.mjs'
+      - 'scripts/verif/mise_en_prod.test.mjs'
+      - 'scripts/migrer_fitpulse.mjs'
+      - 'scripts/verif/migrer_fitpulse.test.mjs'
+      - 'scripts/verif/regles_en_ligne.mjs'
+      - '.github/workflows/worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: npm ci (@anthropic-ai/sdk, package-lock.json)
+        working-directory: cloudflare
+        run: npm ci
+      - name: node --test
+        working-directory: cloudflare
+        run: node --test "test/*.test.mjs"
+      # Série 6 (lot 10) : la liste de mise en production, sur une fausse base.
+      - name: mise_en_prod (fausse base)
+        run: node --test scripts/verif/mise_en_prod.test.mjs scripts/verif/migrer_fitpulse.test.mjs scripts/verif/rapport_erreurs.test.mjs scripts/verif/assetlinks.test.mjs scripts/verif/exploitation.test.mjs

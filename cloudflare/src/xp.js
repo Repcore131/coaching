@@ -26,15 +26,43 @@
 // Le Worker ne relit pas le journal : il BORNE la valeur de l'app, comme pour
 // le journal lui-même (jours × barème).
 export const XP = { seance: 100, complete: 30, record: 50, bilan: 80, badge: 40, badgePalier4: 200,
-  nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, semaineAssiette: 75, parcours: 300 };
+  nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, semaineAssiette: 75, parcours: 300,
+  // La mission du jour (01/10/2026) : le coffre vaut 50 V au plus, une fois par jour.
+  mission: 50,
+  // Le retour (02/10/2026) : +50 V à la 1re séance après 14 jours sans séance.
+  retour: 50,
+  // L'arbre des tractions (09/10/2026) : 75 V par nœud validé, une fois.
+  noeud: 75 };
+// Les dix nœuds de l'arbre des tractions (ARBRE_TRACTIONS de l'app, dans cet
+// ordre ; un test le rappelle). Le serveur ne rejuge pas un nœud : il BORNE
+// la valeur du client au nombre de nœuds connus que le dossier porte, datés.
+export const ARBRE_CLES = ['suspension', 'scapulaires', 'australiennes', 'isometries', 'excentriques',
+  'assistees', 'propre5', 'lestee10', 'haute3', 'muscleup'];
+/** Le nombre de nœuds connus et datés dans u.arbreTractions. */
+export function noeudsArbre(arbre) {
+  const n = arbre && typeof arbre === 'object' && arbre.noeuds && typeof arbre.noeuds === 'object' ? arbre.noeuds : {};
+  return ARBRE_CLES.filter((k) => n[k] && Number(n[k].at) > 0).length;
+}
+// Le retour de l'app (RETOUR_COMBAT_J) : une absence de 14 jours au moins.
+export const RETOUR_JOURS = 14;
 export const XP_PLAFOND_JOUR = 400;
 export const SEANCE_MIN_MIN = 15, SEANCE_MIN_SERIES = 6, VOLTS_PAR_SERIE = 10;
 export const RANGS = [
   { n: 1, nom: 'ÉTINCELLE', seuil: 0 }, { n: 2, nom: 'IMPULSION', seuil: 1800 }, { n: 3, nom: 'VOLTAGE', seuil: 3800 },
-  { n: 4, nom: 'MACHINE', seuil: 7500 }, { n: 5, nom: 'ÉLITE', seuil: 14000 }, { n: 6, nom: 'SURTENSION', seuil: 20000 },
-  { n: 7, nom: 'MONSTRE', seuil: 29000 }, { n: 8, nom: 'FOUDRE', seuil: 37000 }, { n: 9, nom: 'TITAN', seuil: 53000 },
-  { n: 10, nom: 'LÉGENDE', seuil: 85000 },
+  { n: 4, nom: 'MACHINE', seuil: 7500 }, { n: 5, nom: 'ÉLITE', seuil: 13500 }, { n: 6, nom: 'SURTENSION', seuil: 21000 },
+  { n: 7, nom: 'MONSTRE', seuil: 30500 }, { n: 8, nom: 'FOUDRE', seuil: 42000 }, { n: 9, nom: 'TITAN', seuil: 55500 },
+  { n: 10, nom: 'LÉGENDE', seuil: 84000 },
 ];
+// Le prestige de l'app (PRESTIGE_TRANCHE) : une étoile par 20 000 V au-delà de LÉGENDE.
+export const PRESTIGE_TRANCHE = 20000;
+// LA PART HORS ENTRAÎNEMENT (XP_HORS_PART de l'app) : journal, cible, nuit,
+// check-in et semaine d'assiette, au plus 40 % des volts d'entraînement de la
+// fenêtre de 7 jours, ou 150 V si c'est plus. Le serveur n'a pas le détail
+// par jour : il borne le TOTAL par semaines entières, 40 % de l'entraînement
+// plus 150 V par semaine du compte — une borne que le calcul de l'app ne
+// dépasse jamais (chaque fenêtre de 7 jours tient sous la sienne).
+export const HORS_PART = 0.4, HORS_PLANCHER = 150;
+export const HORS = ['nutrition', 'cible', 'sommeil', 'checkin', 'semaineAssiette'];
 const EX_RENOMMAGES = {
   'ABDUCTEURS A LA MACHINE': 'ABDUCTEUR A LA MACHINE',
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE': 'CURL LARRY SCOTT MACHINE GUIDEE',
@@ -154,11 +182,13 @@ export function avancer(etat0, seances, alias, tRecu) {
     if (!s || !(d > 0)) continue;
     // Une date dans le futur du serveur n'est pas une séance faite : ignorée.
     if (d > tRecu + 10 * 60e3) continue;
-    if (seriesValidees(s) > 0) e.faites++;
+    const sv = seriesValidees(s);
+    if (sv > 0) e.faites++;
     if (d > (Number(e.derniere) || 0)) e.derniere = d;
     const j = heureLocale(d, s.tz).jour;
     let nRec = 0;
     const data = s.data && typeof s.data === 'object' ? s.data : {};
+    const prJour = {};
     for (const nm of Object.keys(data)) {
       let cur = 0;
       for (const st of ((data[nm] || {}).sets || [])) {
@@ -168,9 +198,22 @@ export function avancer(etat0, seances, alias, tRecu) {
       }
       if (!cur) continue;
       const k = cleExo(nm, alias);
+      if (cur > (prJour[k] || 0)) prJour[k] = cur;
       const h = Number(e.meilleurs[k]) || 0;
       if (h > 0 && cur > h) nRec++;
       if (cur > h) e.meilleurs[k] = cur;
+    }
+    // LE JOURNAL DES QUARANTE DERNIERS JOURS (01/10/2026) : ce que valeurServeur
+    // relit pour les défis, les duels et les saisons, sans relire une séance.
+    // Une séance sans série validée ne compte JAMAIS (ni séance, ni kilos, ni charge).
+    if (sv > 0) {
+      e.jr = e.jr || {};
+      const r = e.jr[j] || { n: 0, ton: 0, pr: {} };
+      r.n = (Number(r.n) || 0) + 1;
+      r.ton = (Number(r.ton) || 0) + tonnageSeance(s);
+      r.pr = Object.assign({}, r.pr || {});
+      for (const k of Object.keys(prJour)) if (prJour[k] > (Number(r.pr[k]) || 0)) r.pr[k] = prJour[k];
+      e.jr[j] = r;
     }
     let reste = XP_PLAFOND_JOUR - (Number(e.jours[j]) || 0);
     let gagnes = 0;
@@ -192,7 +235,97 @@ export function avancer(etat0, seances, alias, tRecu) {
   const derniers = Object.keys(e.jours).sort().slice(-4);
   e.jours = Object.fromEntries(derniers.map((k) => [k, e.jours[k]]));
   if (e.sem) e.sem = Object.fromEntries(Object.keys(e.sem).sort().slice(-SEMAINES_GARDEES).map((k) => [k, e.sem[k]]));
+  if (e.jr) {
+    const ks = Object.keys(e.jr).sort();
+    const limite = ks.length ? decalerJour(ks[ks.length - 1], -JOURS_GARDES) : '';
+    e.jr = Object.fromEntries(ks.filter((k) => k >= limite).map((k) => [k, e.jr[k]]));
+  }
   return e;
+}
+
+// ══ LES SCORES DES DÉFIS, DES DUELS ET DES SAISONS, CALCULÉS ICI (01/10/2026) ══
+// Ils étaient écrits par l'app (defiValeur) et seulement COMPARÉS par le
+// Worker : n'importe qui pouvait écrire 999 depuis la console. Ils se tirent
+// maintenant du journal e.jr, que seul le Worker écrit. La règle est celle de
+// functions/defis-calcul.js (valeurDefi), aux deux nuances près que le
+// journal impose : les bornes sont des JOURS (heure locale de la séance), et
+// une séance sans série validée ne compte pas.
+export const JOURS_GARDES = 40;
+const decalerJour = (j, n) => {
+  const [a, m, d] = String(j).split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d) + n * J).toISOString().slice(0, 10);
+};
+// Les exercices d'une séance : `data` (nom → {sets}) ou `exercises` (ancienne forme).
+function _liste(x) {
+  if (Array.isArray(x)) return x.filter(Boolean);
+  if (x && typeof x === 'object') return Object.keys(x).map((k) => x[k]).filter(Boolean);
+  return [];
+}
+function _exos(s) {
+  if (s && s.data && typeof s.data === 'object' && Object.keys(s.data).length)
+    return Object.keys(s.data).map((nm) => ({ nom: nm, sets: _liste((s.data[nm] || {}).sets) }));
+  return _liste(s && s.exercises).filter((e) => e && (e.name || e.nm)).map((e) => ({ nom: e.name || e.nm, sets: _liste(e.sets) }));
+}
+/** Les kilos d'une séance : la règle de functions/defis-calcul.js (tonnageSeance). */
+export function tonnageSeance(s) {
+  if (Number(s && s.volume) > 0) return Math.round(Number(s.volume));
+  let v = 0;
+  for (const e of _exos(s)) for (const st of e.sets) {
+    if (!st || st.done === false) continue;
+    v += (parseFloat(st.weight) || 0) * (parseFloat(st.repsDone != null ? st.repsDone : st.reps) || 0);
+  }
+  return Math.round(v);
+}
+/**
+ * L'INSTANTANÉ « AVANT » d'une progression : les meilleures charges telles
+ * qu'elles étaient AVANT les séances de ce recalcul (etatAvant), figées au
+ * premier calcul du défi `id`. Rend le nouvel état (copie) ; ne touche à rien
+ * si l'instantané existe. Les instantanés de plus de 120 jours sont oubliés.
+ */
+export function figerRef(etatAvant, etat, id, t) {
+  const e = Object.assign({}, etat, { ref: Object.assign({}, (etat && etat.ref) || {}) });
+  for (const k of Object.keys(e.ref)) if (!(Number(e.ref[k] && e.ref[k].at) > t - 120 * J)) delete e.ref[k];
+  if (!e.ref[id]) e.ref[id] = { at: t, m: Object.assign({}, (etatAvant && etatAvant.meilleurs) || {}) };
+  return e;
+}
+/**
+ * PURE. La valeur d'un athlète pour une mesure, entre debut et fin (instants) :
+ *   seances         Σ n des jours de la fenêtre ;
+ *   tonnage         Σ ton ;
+ *   serie           les semaines (lundiDuJour) où Σ n atteint le quota ;
+ *   progressionPct  la moyenne des (max pendant / meilleur avant − 1) × 100,
+ *                   « avant » étant l'instantané `ref` (ou etat.ref[ref]).
+ */
+export function valeurServeur(etat, mesure, debut, fin, quota, ref) {
+  const jr = (etat && etat.jr) || {};
+  const j0 = heureLocale(Number(debut), null).jour, j1 = heureLocale(Number(fin), null).jour;
+  const jours = Object.keys(jr).filter((j) => j >= j0 && j <= j1);
+  if (mesure === 'seances') return jours.reduce((a, j) => a + (Number(jr[j].n) || 0), 0);
+  if (mesure === 'tonnage') return jours.reduce((a, j) => a + (Number(jr[j].ton) || 0), 0);
+  if (mesure === 'serie') {
+    const q = Math.max(1, Number(quota) || 1), sem = {};
+    for (const j of jours) { const l = lundiDuJour(j); sem[l] = (sem[l] || 0) + (Number(jr[j].n) || 0); }
+    return Object.keys(sem).filter((l) => sem[l] >= q).length;
+  }
+  if (mesure === 'progressionPct') {
+    const r = typeof ref === 'string' ? (etat && etat.ref && etat.ref[ref] && etat.ref[ref].m) : ref;
+    const avant = r || {};
+    const pendant = {};
+    for (const j of jours) for (const k of Object.keys(jr[j].pr || {})) {
+      const w = Number(jr[j].pr[k]) || 0;
+      if (w > (pendant[k] || 0)) pendant[k] = w;
+    }
+    const pcts = Object.keys(pendant).filter((k) => Number(avant[k]) > 0).map((k) => (pendant[k] / Number(avant[k]) - 1) * 100);
+    if (!pcts.length) return 0;
+    return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10;
+  }
+  return 0;
+}
+/** Le classement d'un défi (functions/defis-calcul.js, metriqueClassement) :
+ *  la progression en %, les semaines, sinon les séances — jamais les kilos. */
+export function metriqueServeur(etat, mesure, debut, fin, quota, ref) {
+  if (mesure === 'progressionPct' || mesure === 'serie') return valeurServeur(etat, mesure, debut, fin, quota, ref);
+  return valeurServeur(etat, 'seances', debut, fin, quota, ref);
 }
 // Les séances lues par /users/<k>/sessions?orderBy="$key"&startAt=... : un
 // tableau (à trous) ou un objet {index: séance}. Rend la liste dans l'ordre.
@@ -215,7 +348,7 @@ export function valeurBadges(badges, secrets) {
 }
 /**
  * LE TOTAL SERVEUR. `client` : u.xpDetail (les catégories de l'app) ;
- * `dossier` : {nBilans, badges, debut (1re trace du compte)}.
+ * `dossier` : {nBilans, badges, debut (1re trace du compte), arbre (u.arbreTractions)}.
  */
 export function totalServeur(etat, client, dossier, t) {
   const c = client && typeof client === 'object' ? client : {};
@@ -234,8 +367,23 @@ export function totalServeur(etat, client, dossier, t) {
     // Lot N4 : la semaine d'assiette (5 jours tenus sur 7), une par semaine au plus.
     semaineAssiette: borne('semaineAssiette', (Math.floor(jours / 7) + 1) * XP.semaineAssiette),
     parcours: borne('parcours', XP.parcours),
+    // La mission du jour : un coffre par jour au plus, à 50 V.
+    mission: borne('mission', jours * XP.mission),
+    // Un retour demande 14 jours d'absence : au plus un par tranche de 14 jours du compte.
+    retour: borne('retour', Math.floor(jours / RETOUR_JOURS) * XP.retour),
+    // L'arbre des tractions : au plus un nœud de plus par nœud que le dossier porte.
+    arbre: borne('arbre', noeudsArbre(d.arbre) * XP.noeud),
     archive: borne('archive', jours * XP.sommeil),
   });
+  // La part hors entraînement, rabotée dans l'ordre de l'app (XP_HORS_RABOT).
+  const entr = (Number(cat.seance) || 0) + (Number(cat.complete) || 0) + (Number(cat.record) || 0) + (Number(cat.semaine) || 0);
+  const permis = Math.floor(HORS_PART * entr + HORS_PLANCHER * Math.ceil(jours / 7));
+  let trop = HORS.reduce((a, k) => a + (Number(cat[k]) || 0), 0) - permis;
+  for (const k of ['semaineAssiette', 'cible', 'nutrition', 'checkin', 'sommeil']) {
+    if (trop <= 0) break;
+    const r = Math.min(Number(cat[k]) || 0, trop);
+    cat[k] -= r; trop -= r;
+  }
   const total = Object.keys(cat).reduce((a, k) => a + (Number(cat[k]) || 0), 0);
   return { total, cat, nonVerifies: b.nonVerifies };
 }
@@ -248,4 +396,29 @@ export function rangDe(xp) {
 export function voltsPublics(total) {
   const r = rangDe(total);
   return { xp: Math.round(r.xp), de: r.rang.seuil, a: r.suivant ? r.suivant.seuil : 0 };
+}
+
+// ══ LE JOKER DU COFFRE (mission du jour, 01/10/2026) ══════════════════════
+// Un joker de série se gagne toutes les 4 semaines validées (STREAK_JOKER_TOUS
+// de l'app), ou dans le coffre de la mission du jour. Le serveur lit
+// u.streakJokers pour dire si une série est « sauvée » (serieDuJour) : il ne
+// prend pas un joker que rien n'explique. Ceux du coffre doivent être DATÉS
+// dans u.missions (coffre {gain: 'joker', at}) ; les autres, couverts par la
+// série en cours (streak + jokers déjà consommés dans cette série) / 4.
+// ⚠ Un joker gagné dans une série d'avant, cassée depuis, n'est plus expliqué :
+//   le serveur le refuse, et se tait sur la série plutôt que de mentir.
+export const JOKERS_MAX = 2, JOKER_TOUS = 4;
+export function jokersMission(missions) {
+  let n = 0;
+  for (const j of Object.keys(missions && typeof missions === 'object' ? missions : {})) {
+    const c = missions[j] && missions[j].coffre;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(j) && c && c.gain === 'joker' && Number(c.at) > 0) n++;
+  }
+  return n;
+}
+export function jokersAdmis(u) {
+  const declares = Math.max(0, Math.min(JOKERS_MAX, Math.floor(Number(u && u.streakJokers) || 0)));
+  if (!declares) return 0;
+  const serie = Math.floor(((Number(u && u.streak) || 0) + (Number(u && u.streakJokersUtilises) || 0)) / JOKER_TOUS);
+  return Math.min(declares, serie + jokersMission(u && u.missions));
 }

@@ -69,13 +69,19 @@ function scene({avecDocument}) {
     // Le cas reel d'un appareil passe par plusieurs livraisons avant ce lot.
     await semer('repcore-v' + VIEUX, [['./rc-core.' + VIEUX + '.js', 5500000],
       ['./rc-style.' + VIEUX + '.css', 590000], ['./icons/icon-192x192.png', 4000],
-      ['./exercices/squat.webp', 40000]]);
+      ['./exercices/squat.webp', 40000],
+      // motion-lab.js?v=<build> (01/10/2026) : une version ancienne, a purger.
+      ['./motion-lab.js?v=' + VIEUX, 660000]]);
     await semer('repcore-v' + PRECEDENT, [['./rc-core.' + PRECEDENT + '.js', 5500000],
       ['./rc-style.' + PRECEDENT + '.css', 590000], ['./data/ciqual.json', 672000],
       // La base porte sa version (sw.js, CIQUAL_VERSION) : c'est elle qui l'autorise a passer.
-      ['./data/ciqual.version', 10, ((SW.match(/const CIQUAL_VERSION = '([^']+)'/) || [])[1]) || '']]);
+      ['./data/ciqual.version', 10, ((SW.match(/const CIQUAL_VERSION = '([^']+)'/) || [])[1]) || ''],
+      // La version COURANTE de motion-lab, chargee par le nouvel index.html
+      // alors que l'ancien worker tenait encore la page : elle doit passer.
+      ['./motion-lab.js?v=' + BUILD, 660000]]);
     const neuf = [['./rc-core.' + BUILD + '.js', 5500000], ['./rc-style.' + BUILD + '.css', 590000],
-      ['./rc-core.' + POLLUANT + '.js', 5500000]];               // la pollution
+      ['./rc-core.' + POLLUANT + '.js', 5500000],                // la pollution
+      ['./motion-lab.js?v=' + POLLUANT, 660000]];
     if (avecDocument) neuf.push(['./index.html', 440000, "window.RC_BUILD='" + BUILD + "';"]);
     await semer('repcore-v' + BUILD, neuf);
   })();
@@ -139,6 +145,12 @@ const ko = [];
   if (!PURGE_IMAGES && !imageReportee) ko.push('le report a perdu exercices/squat.webp');
   if (PURGE_IMAGES && imageReportee) ko.push('la purge des illustrations est annoncee mais exercices/squat.webp a ete reporte');
   if (restes.length !== 1) ko.push('les anciens caches n’ont pas ete supprimes : ' + restes.join(', '));
+  // motion-lab.js?v= : la courante reportee, les anciennes purgees (meme garde que rc-*).
+  const ml = restants.filter(u => /^motion-lab\.js\?v=/.test(u));
+  console.log('  motion-lab gardes : ' + (ml.join(', ') || 'aucun'));
+  if (!ml.includes('motion-lab.js?v=' + BUILD)) ko.push('motion-lab.js?v=' + BUILD + ' (courant) n’a pas ete reporte');
+  if (ml.includes('motion-lab.js?v=' + VIEUX)) ko.push('motion-lab.js?v=' + VIEUX + ' (ancien) a ete reporte');
+  if (ml.includes('motion-lab.js?v=' + POLLUANT)) ko.push('motion-lab.js?v=' + POLLUANT + ' (ancien, dans le cache neuf) n’a pas ete purge');
 }
 // ══ SCENE 2 : LE CACHE NEUF EST INUTILISABLE ══════════════════════════════
 // Sans document, la purge des anciens caches doit etre REPORTEE : les retirer
@@ -151,6 +163,107 @@ const ko = [];
   if (!journal.some(l => /conserv/.test(l))) ko.push('rien n’est dit sur les anciens caches conserves');
 }
 
+// ══ SCENES 3 ET 4 : L'INSTALLATION ET LA COPIE D'index.html (01/10/2026) ══
+// Un worker neuf ne retelecharge que ce qui a change : il recopie des anciens
+// caches les actifs versionnes de meme nom et les fichiers statiques de moins
+// de STATIC_TTL_MS. Le banc compte les appels a fetch.
+function mondeReseau(source, reseau) {
+  const magasin = new Map(), appels = [];
+  class CacheReseau extends FauxCache {
+    async add(rq) {
+      const r = await faux.fetch(typeof rq === 'string' ? new Request(new URL(rq, O + '/app/').href) : rq);
+      if (!r.ok) throw new Error('add : ' + r.status);
+      await this.put(rq, r);
+    }
+  }
+  const caches = {
+    async open(n) { if (!magasin.has(n)) magasin.set(n, new CacheReseau(n)); return magasin.get(n); },
+    async keys() { return [...magasin.keys()]; },
+    async delete(n) { return magasin.delete(n); },
+    async match(rq) { for (const c of magasin.values()) { const r = await c.match(rq); if (r) return r; } },
+  };
+  const ecoutes = new Map();
+  const self_ = {
+    addEventListener: (n, f) => ecoutes.set(n, f), skipWaiting: () => {},
+    registration: {update: async () => {}, showNotification: async () => {}, scope: O + '/app/'},
+    clients: {claim: () => {}, matchAll: async () => [], openWindow: async () => {}},
+    location: {origin: O},
+  };
+  const faux = {
+    self: self_, caches, location: self_.location, clients: self_.clients,
+    fetch: async (rq) => { const u = typeof rq === 'string' ? rq : rq.url; appels.push({url: u.replace(O + '/app/', './'), mode: rq.cache}); return reseau(u); },
+    indexedDB: {open: () => ({})},
+    console: {log: () => {}, warn: () => {}, error: () => {}},
+    // Le Request du navigateur resout un chemin relatif sur l'adresse du worker.
+    Response, Request: class extends Request { constructor(u, o) { super(typeof u === 'string' ? new URL(u, O + '/app/').href : u, o); } },
+    Headers, URL, setTimeout, clearTimeout,
+  };
+  new Function(...Object.keys(faux), source)(...Object.values(faux));
+  return {caches, appels, ecoutes};
+}
+const page = (texte, statut, type) => new Response(texte, {status: statut || 200,
+  headers: {'content-type': type || 'text/html; charset=utf-8', date: new Date().toUTCString()}});
+{
+  // Un worker « v1001 » : CACHE et les deux actifs renommes, le reste tel quel.
+  const src = SW.replace(/const CACHE = 'repcore-v\d+'/, "const CACHE = 'repcore-v1001'")
+    .replace(/rc-core\.\d+\.js/g, 'rc-core.1001.js').replace(/rc-style\.\d+\.css/g, 'rc-style.1001.css')
+    .replace(/rc-theme\.\d+\.css/g, 'rc-theme.1001.css');
+  const ASSETS_SW = new Function(src.slice(src.indexOf('const AVATARS'), src.indexOf('// Une séance en cours interdit')) + '; return ASSETS;')();
+  const {caches, appels, ecoutes} = mondeReseau(src, (u) => page('reseau:' + u, 200, /\.html$/.test(u) ? 'text/html' : 'application/octet-stream'));
+  // L'ANCIEN CACHE v1000 : rc-core.1001.js (la page vient de le demander a
+  // l'ancien worker), toutes les images sauf une, et une image vieille de 40 jours.
+  const vieux = await caches.open('repcore-v1000');
+  const statiques = ASSETS_SW.filter(a => !/index\.html$/.test(a) && !/rc-(core|style|theme)\./.test(a));
+  const absente = statiques[statiques.length - 1], perimee = statiques[statiques.length - 2];
+  const jour = 864e5;
+  const copie = (date) => new Response('ancien', {status: 200, headers: {date: new Date(date).toUTCString()}});
+  await vieux.put('./rc-core.1001.js', copie(Date.now() - 2 * jour));
+  await vieux.put('./index.html', page('ancienne page'));
+  for (const a of statiques) if (a !== absente) await vieux.put(a, copie(a === perimee ? Date.now() - 40 * jour : Date.now() - 3 * jour));
+  let p = null;
+  ecoutes.get('install')({waitUntil: q => { p = q; }});
+  await p;
+  const neuf = await caches.open('repcore-v1001');
+  const ranges = (await neuf.keys()).length;
+  // rc-theme.1001.css, absent de l'ancien cache comme rc-style : telecharge.
+  const attendus = ['./index.html', './rc-style.1001.css', './rc-theme.1001.css', absente, perimee].sort();
+  const vus = appels.map(a => a.url).sort();
+  console.log('\nSCENE 3 — install de v1001 sur un cache v1000 (' + ASSETS_SW.length + ' entrees d’ASSETS)');
+  console.log('  telecharges : ' + vus.join(', '));
+  console.log('  ranges dans le cache neuf : ' + ranges + ' / ' + ASSETS_SW.length);
+  if (JSON.stringify(vus) !== JSON.stringify(attendus)) ko.push('install : fetch appele pour ' + vus.join(', ') + ' au lieu de ' + attendus.join(', '));
+  if (ranges !== ASSETS_SW.length) ko.push('install : ' + ranges + ' entrees rangees au lieu de ' + ASSETS_SW.length);
+  const modeIndex = (appels.find(a => a.url === './index.html') || {}).mode;
+  if (modeIndex !== 'reload') ko.push('index.html n’est plus demande avec cache:reload (' + modeIndex + ')');
+  for (const a of appels.filter(a => a.url !== './index.html'))
+    if (a.mode === 'reload') ko.push(a.url + ' demande avec cache:reload : le cache HTTP immutable suffit');
+  if ((await (await neuf.match('./rc-core.1001.js')).text()) !== 'ancien') ko.push('rc-core.1001.js n’a pas ete recopie de l’ancien cache');
+}
+{
+  // SCENE 4 : un 503 sur index.html ne remplace pas la copie hors ligne ; une
+  // vraie page (200, text/html) la remplace.
+  let statut = 503;
+  const {caches, ecoutes} = mondeReseau(SW, () => statut === 503 ? page('Service indisponible', 503) : page('page neuve', 200));
+  const c = await caches.open('repcore-v' + BUILD);
+  await c.put('./index.html', page('page en cache'));
+  const naviguer = async () => {
+    let p = null;
+    ecoutes.get('fetch')({request: new Request(O + '/app/index.html'), respondWith: q => { p = q; }});
+    const r = await p;
+    await new Promise(res => setTimeout(res, 20));   // la mise en cache est detachee
+    return r;
+  };
+  const r1 = await naviguer();
+  const apres503 = await (await c.match('./index.html')).text();
+  statut = 200;
+  await naviguer();
+  const apres200 = await (await c.match('./index.html')).text();
+  console.log('\nSCENE 4 — index.html : reponse ' + r1.status + ' → cache « ' + apres503 + ' » ; puis 200 → « ' + apres200 + ' »');
+  if (apres503 !== 'page en cache') ko.push('un 503 a remplace la copie hors ligne d’index.html');
+  if (apres200 !== 'page neuve') ko.push('une vraie page (200, text/html) n’a pas remplace la copie');
+}
+
 if (ko.length) { console.error('\nDEFAUTS :\n  ' + ko.join('\n  ')); process.exit(1); }
 console.log('\nLa courante et la precedente, pas plus. Le reste est purge, le report est intact,');
+console.log('l’install ne retelecharge que ce qui manque ou a vieilli, un 503 ne remplace pas la page,');
 console.log('et un cache neuf inutilisable ne fait pas jeter l’ancien.');

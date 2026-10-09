@@ -1,93 +1,5 @@
 {
   "rules": {
-    // >>> FITPULSE (bloc gere par club/outils/fitpulse-serveur.mjs : ne pas modifier a la main)
-    "pulse": {
-      ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()",
-      ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur' || (auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && !data.exists())",
-      "users": {
-        "$uid": {
-          ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')) && (auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur' || (data.child('role').val() !== 'createur' && (!newData.exists() || newData.child('role').val() === 'membre' || newData.child('role').val() === data.child('role').val())))",
-          "first": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" }, "last": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" }, "avatar": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" },
-          "salt": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" }, "codeHash": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" }, "bootKey": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" },
-          "status": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() && data.val() === 'pending' && newData.val() === 'active'" }
-        }
-      },
-      "entries": {
-        "$id": {
-          ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')) || (auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (newData.exists() ? (newData.child('userId').val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || (newData.child('by').val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() && (newData.child('kpiId').val() === 'sauvetage' || newData.child('kpiId').val() === 'impayes'))) : (data.child('userId').val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || data.child('by').val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val())))",
-          "checkedAt": { ".validate": "data.val() === newData.val() || (auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" },
-          "checkedBy": { ".validate": "data.val() === newData.val() || (auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" },
-          ".validate": "newData.hasChildren(['userId', 'kpiId', 'date', 'value']) && newData.child('value').isNumber() && newData.child('value').val() > -1000000 && newData.child('value').val() < 1000000 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
-        }
-      },
-      "prefs": { "$uid": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" } },
-      "tasks": {
-        "library": { ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" },
-        "plan": { ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" },
-        "done": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" }
-      },
-      "chat": {
-        "$id": {
-          ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && ((auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')) || !data.exists() || data.child('userId').val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || newData.exists())",
-          ".validate": "!newData.child('text').exists() || (newData.child('text').isString() && newData.child('text').val().length <= 2000)",
-          "image": { ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 400000" }
-        }
-      },
-      "clients": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "loyalty": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "resiliations": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "recov": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "reactions": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "relances": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "touches": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "guests": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "companies": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "prospects": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "opps": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
-      "kudos": { "$day": { "$uid": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()" } } },
-      "audit": { "$id": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && !data.exists() && newData.exists()" } },
-      "logs": { "$club": { "$day": { "$id": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && !data.exists() && newData.exists()" } } } },
-      "coaching": { "$uid": { "actions": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" } } },
-      "$autre": { ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" }
-    },
-    "pulse_boot": {
-      ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')",
-      "$k": {
-        ".read": true,
-        ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && ((auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')) || newData.val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || (newData.isString() && newData.parent().child(newData.val()).val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()) || (!newData.exists() && (data.val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || (data.isString() && data.parent().child(data.val()).val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()))))",
-        ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
-      }
-    },
-    "pulse_inbox": {
-      "$uid": {
-        ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()",
-        "$id": { "readAt": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() && data.parent().exists()" } }
-      }
-    },
-    "pulse_push": {
-      "$uid": {
-        ".read": false,
-        ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()",
-        "$h": { ".validate": "newData.hasChildren(['endpoint', 'keys', 'at']) && newData.child('endpoint').isString() && newData.child('endpoint').val().beginsWith('https://') && newData.child('endpoint').val().length < 1000" }
-      }
-    },
-    "fitpulse_mail": {
-      ".read": false,
-      "$id": {
-        ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur') && !data.exists() && newData.exists() && $id.length <= 40",
-        ".validate": "newData.hasChildren(['email', 'first', 'code', 'role', 'club', 'at']) && newData.child('at').val() == now",
-        "email": { ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^@ ]+@[^@ ]+[.][a-zA-Z]{2,24}$/)" },
-        "first": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
-        "last": { ".validate": "newData.isString() && newData.val().length <= 40" },
-        "code": { ".validate": "newData.isString() && newData.val().matches(/^FP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)" },
-        "role": { ".validate": "newData.val() == 'membre' || newData.val() == 'manager' || newData.val() == 'createur'" },
-        "club": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "by": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "at": { ".validate": "newData.isNumber()" },
-        "$autre": { ".validate": false }
-      }
-    },
-    // <<< FITPULSE
     "users": {
       "$emailKey": {
         ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
@@ -152,6 +64,152 @@
           "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
           "$autre": { ".validate": false }
         },
+        // L ARBRE DES TRACTIONS (09/10/2026) — le test guide et les dix
+        // noeuds. Liste blanche fermee a chaque etage, comme morpho : l app
+        // borne avant d ecrire (arbreEntreeNoeud, arbreEntreeTest). Les volts
+        // ne s y ecrivent pas : le Worker les borne a 75 V par noeud connu.
+        "arbreTractions": {
+          "noeuds": {
+            "$noeud": {
+              ".validate": "$noeud.matches(/^(suspension|scapulaires|australiennes|isometries|excentriques|assistees|propre5|lestee10|haute3|muscleup)$/) && newData.hasChildren(['at', 'mode'])",
+              "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "mode": { ".validate": "newData.isString() && newData.val().matches(/^(saisie|video)$/)" },
+              "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+              "certifie": { ".validate": "newData.isBoolean()" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "tests": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|1[0-9])$/) && newData.hasChildren(['at', 'total', 'paliers', 'niveau'])",
+              "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500 && newData.val() % 1 === 0" },
+              "paliers": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 30 && newData.val() % 1 === 0" },
+              "niveau": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|intermediaire|avance|expert)$/)" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
+        // LES OBJECTIFS MESURABLES (build 1962), poses par le coach.
+        "objectifCap": {
+          "taille":    { ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 200" },
+          "recordExo": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+          "recordKg":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 600" },
+          "semaines":  { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 104" },
+          "fixeLe":    { ".validate": "newData.isNumber()" },
+          "$autre":    { ".validate": false }
+        },
+        // LES GABARITS DE FORCE (build 1960) : 6 plans au plus, chacun genere
+        // (genererGabarit) et borne : 13 semaines, 4 seances, 16 series.
+        "gabaritsForce": {
+          "plans": {
+            "$id": {
+              ".validate": "$id.matches(/^g[a-z0-9]{6,20}$/) && newData.hasChildren(['cle', 'exo', 'base', 'debut', 'semaines'])",
+              "cle":   { ".validate": "newData.isString() && newData.val().matches(/^(cinq_trois_un|sheiko_bloc|smolov|neuf_semaines_sbd|top_set_backoff)$/)" },
+              "exo":   { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+              "max":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 600" },
+              "base":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+              "cycle": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+              "debut": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "semaines": {
+                "$w": {
+                  ".validate": "$w.matches(/^([0-9]|1[0-2])$/)",
+                  "n":     { ".validate": "newData.isNumber()" },
+                  "debut": { ".validate": "newData.isNumber()" },
+                  "phase": { ".validate": "newData.isString() && newData.val().length <= 30" },
+                  "seances": {
+                    "$s": {
+                      ".validate": "$s.matches(/^[0-3]$/)",
+                      "$x": {
+                        ".validate": "$x.matches(/^([0-9]|1[0-5])$/) && newData.hasChildren(['reps', 'kg'])",
+                        "reps":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 30" },
+                        "pct":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 120" },
+                        "kg":     { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+                        "amrap":  { ".validate": "newData.isBoolean()" },
+                        "test":   { ".validate": "newData.isBoolean()" },
+                        "manuel": { ".validate": "newData.isBoolean()" },
+                        "$autre": { ".validate": false }
+                      }
+                    }
+                  },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "amraps": {
+                "$w": {
+                  ".validate": "$w.matches(/^([0-9]|1[0-2])$/) && newData.hasChildren(['kg', 'reps'])",
+                  "w":    { ".validate": "newData.isNumber()" },
+                  "kg":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+                  "reps": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100" },
+                  "vise": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 30" },
+                  "e1":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+                  "at":   { ".validate": "newData.isNumber()" },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
+        // LA FRISE AUTOUR DE LA SEANCE (build 1959) : l heure de seance par
+        // jour de la semaine (0 = lundi) et les rappels de l app.
+        "frise": {
+          "heures": { "$j": { ".validate": "$j.matches(/^[0-6]$/) && newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" } },
+          "notifs": { ".validate": "newData.isBoolean()" },
+          "$autre": { ".validate": false }
+        },
+        // LE MODE RAMADAN (build 1957) — la periode, les horaires du jour
+        // (sahur, iftar), l heure de seance et le compteur d eau. Liste
+        // blanche fermee ; l app controle avant d ecrire (enregistrerRamadan).
+        "ramadan": {
+          ".validate": "newData.hasChildren(['actif'])",
+          "actif":       { ".validate": "newData.isBoolean()" },
+          "debut":       { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+          "fin":         { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+          "ville":       { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "heureSeance": { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+          "par":         { ".validate": "newData.isString() && newData.val().matches(/^(athlete|coach)$/)" },
+          "majLe":       { ".validate": "newData.isNumber()" },
+          "termineLe":   { ".validate": "newData.isNumber()" },
+          "horaires": {
+            "$jour": {
+              ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.hasChildren(['iftar', 'sahur'])",
+              "iftar":  { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+              "sahur":  { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "eau": { "$jour": { ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 40" } },
+          "$autre": { ".validate": false }
+        },
+        // LES DEFIS STREET (build 1956) — records solo et equipe par format,
+        // et les derniers essais. Liste blanche fermee : l app borne avant
+        // d ecrire (defiStreetEntree). Un score est un temps (s) ou des reps.
+        "defisStreet": {
+          "records": {
+            "$format": {
+              ".validate": "$format.matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/)",
+              "solo":   { ".validate": "newData.hasChildren(['score', 'at']) && newData.child('score').isNumber() && newData.child('score').val() > 0 && newData.child('score').val() <= 100000 && newData.child('at').isNumber() && (!newData.child('certifie').exists() || newData.child('certifie').isBoolean()) && newData.child('membres').val() === null" },
+              "equipe": { ".validate": "newData.hasChildren(['score', 'at', 'membres']) && newData.child('score').isNumber() && newData.child('score').val() > 0 && newData.child('score').val() <= 100000 && newData.child('at').isNumber() && newData.child('membres').isNumber() && newData.child('membres').val() >= 2 && newData.child('membres').val() <= 10 && newData.child('certifie').val() === null" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "essais": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|[12][0-9])$/) && newData.hasChildren(['f', 'mode', 'score', 'at'])",
+              "f":        { ".validate": "newData.isString() && newData.val().matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/)" },
+              "mode":     { ".validate": "newData.isString() && newData.val().matches(/^(solo|equipe|battle)$/)" },
+              "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+              "at":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "certifie": { ".validate": "newData.isBoolean()" },
+              "membres":  { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 10" },
+              "$autre":   { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
         // LOT TC1 — LES TESTS DE COMPATIBILITE FILMES. Une entree par test
         // (squat, developpe, traction, souleve), ecrite par l athlete apres
         // la lecture de sa video SUR SON APPAREIL : la video ne part jamais,
@@ -194,15 +252,140 @@
         // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
         // ferait rejeter l ecriture du dossier entier.
         "nutrition": {
+          // LE PILOTE DE SECHE (build 1958) : le cardio ajoute, la derniere
+          // decision (ce que l athlete lit) et l historique, 12 au plus.
+          "pilote": {
+            "cardioMinSem": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+            "derniere": {
+              ".validate": "newData.hasChildren(['date', 'action'])",
+              "date":   { ".validate": "newData.isNumber()" },
+              "action": { ".validate": "newData.isString() && newData.val().matches(/^(cardio_plus|baisser_glucides|remonter)$/)" },
+              "valeur": { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 1000" },
+              "kcal":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10000" },
+              "phrase": { ".validate": "newData.isString() && newData.val().length <= 200" },
+              "$autre": { ".validate": false }
+            },
+            "histo": {
+              "$i": {
+                ".validate": "$i.matches(/^([0-9]|1[01])$/) && newData.hasChildren(['date', 'action', 'decision'])",
+                "date":     { ".validate": "newData.isNumber()" },
+                "action":   { ".validate": "newData.isString() && newData.val().matches(/^(cardio_plus|baisser_glucides|remonter)$/)" },
+                "valeur":   { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 1000" },
+                "decision": { ".validate": "newData.isString() && newData.val().matches(/^(applique|refuse)$/)" },
+                "$autre":   { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          },
           "eau": {
             "$date": { ".validate": "$date.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" }
           }
         },
+        // Les mesures demandees a chaque bilan, posees par le coach (build 1882).
+        "mesuresBilan": {
+          "cles": { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(bicep-r|bicep-l|chest|waist|hips|glutes|thigh-r|thigh-l|calf-r|calf-l|bust|neck)$/)" } },
+          "completToutesLes": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 26" },
+          "$autre": { ".validate": false }
+        },
         "questionsCoach": {
           "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" }
         },
+        // SERIE 6 : les valeurs par defaut du coach (Mes reglages). Le defaut de
+        // bilan est borne comme bilanCadence + questionsCoach ; les autres
+        // sections (prescription, affichage, methode, profil) sont bornees par
+        // leurs lots.
+        // SERIE 6, LOT 4 : l exception d affichage posee par le COACH sur ce
+        // dossier. L athlete ne peut pas la changer lui-meme (sa propre ecriture
+        // doit laisser la valeur intacte) : elle ne sert qu a masquer, jamais a
+        // reafficher ce qu il a masque.
+        "affichageCoach": {
+          ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/) && (auth.token.email.replace('.', ',') !== $emailKey || data.val() === newData.val())"
+        },
+        // SÉRIE 6 (lot 8) : le profil de suivi pose par l invitation.
+        "profilSuivi": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme)$/)" },
+        // SÉRIE 6 (lot 7) : les modèles de plan du coach, 30 au plus.
+        "plansModeles": {
+          "$i": {
+            ".validate": "$i.matches(/^([0-9]|[12][0-9])$/) && newData.hasChildren(['id', 'nom'])",
+            "id": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{4,32}$/)" },
+            "nom": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+            "famille": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "sexe": { ".validate": "newData.isString() && newData.val().matches(/^(H|F)$/)" },
+            "avecComplements": { ".validate": "newData.isBoolean()" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "squelette": { ".validate": "newData.hasChildren() || !newData.exists()" },
+            "catalogues": { ".validate": "newData.hasChildren() || !newData.exists()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "defautsCoach": {
+          "profil": {
+            "cle": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme|moi)$/)" },
+            "le": { ".validate": "newData.isNumber()" },
+            "_precedent": { ".validate": "newData.hasChildren()" },
+            "$autre": { ".validate": false }
+          },
+          "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/)" },
+          "methode": {
+            "reperesVolume": {
+              "$muscle": {
+                ".validate": "$muscle.matches(/^[A-Z_]{2,20}$/)",
+                "mev": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMax": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mrv": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "methodesRegles": {
+              "$cle": {
+                ".validate": "$cle.matches(/^[a-z-]{2,20}$/)",
+                "maxParSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7 && newData.val() % 1 === 0" },
+                "coutFatigue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          },
+          "prescription": {
+            "series": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0" },
+            "reps": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12" },
+            "repos": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16" },
+            "rir": { ".validate": "newData.isString() && newData.val().matches(/^[0-5]$/)" },
+            "dechargeSeriesPct": { ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 90" },
+            "dechargeRirPlus": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0" },
+            "$autre": { ".validate": false }
+          },
+          "bilan": {
+            ".validate": "newData.hasChildren(['freq', 'jour']) || newData.hasChildren(['_precedent'])",
+            "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+            "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+            "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+            "_precedent": {
+              "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+              "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+              "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+              "$autre": { ".validate": false }
+            },
+            "$autre": { ".validate": false }
+          }
+        },
         "rgpd": {
           "dernierExport": { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        },
+        // L ACTIVATION (05/10/2026) : la date d inscription, le canal d arrivee
+        // (liste fermee) et trois premieres fois — seance, bilan de depart,
+        // repas —, en millisecondes. Une date absente vaut « pas encore » (un
+        // null ne s ecrit pas). Seul le TYPE est verifie : imposer « jamais
+        // reecrit » ici ferait rejeter le dossier entier au premier envoi d un
+        // appareil en retard ; c est l app qui ne reecrit pas (activationCompleter).
+        "activation": {
+          "inscrit":        { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "canal":          { ".validate": "newData.isString() && newData.val().matches(/^(autonome|coach|ami|ambassadeur)$/)" },
+          "premiereSeance": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "premierBilan":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "premierRepas":   { ".validate": "newData.isNumber() && newData.val() > 0" },
           "$autre": { ".validate": false }
         },
 
@@ -222,7 +405,7 @@
           //   un champ non declare fait rejeter le PUT ENTIER du dossier, en
            //   silence. Sans cette ligne, le premier abonne a Ultime aurait
           //   cesse de se synchroniser sans que rien ne le dise.
-          "formule": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "formule": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "prochaineEcheance": { ".validate": "newData.isNumber()" },
           // ⚠ LE TERME DE L'ENGAGEMENT (24/09/2026), ET IL DOIT ETRE DECLARE ICI.
           //   `abonnement` est une liste blanche fermee par "$autre": false : un
@@ -234,10 +417,10 @@
           //   offert du parrainage), et DECLARES ICI pour la meme raison que
           //   `formule` : l app renvoie le dossier entier, et un champ inconnu
           //   ferait rejeter tout le PUT, en silence.
-          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40" },
-          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
+          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "resilieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
-          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "source": { ".validate": "newData.isString() && newData.val().length < 40" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
@@ -268,6 +451,19 @@
         // La longueur est celle de NOTE_TEXTE_MAX cote client. Les etiquettes
         // sont la liste fermee de NOTE_TAGS ; null est accepte, c est l absence
         // d etiquette.
+        // LES LIENS DE VIDEO (30/09/2026). Ecrits par l athlete, affiches chez
+        // son coach : Cloudinary, Firebase Storage et YouTube, rien d autre. Une
+        // URL hors liste ferait rejeter le PUT ENTIER du dossier : _doPushOne la
+        // met en conformite avant d envoyer (_videosConformes), et
+        // scripts/mesure_urls_videos.py dit, sur un export, ce qui ne passerait pas.
+        "videos": {
+          "$i": {
+            "url": { ".validate": "newData.isString() && newData.val().length < 600 && (newData.val().beginsWith('https://res.cloudinary.com/') || newData.val().beginsWith('https://firebasestorage.googleapis.com/') || newData.val().beginsWith('https://youtu.be/') || newData.val().beginsWith('https://www.youtube.com/'))" },
+            // Le retour ecrit du coach sur la video : 4 000 caracteres au plus.
+            "feedback": { ".validate": "newData.isString() && newData.val().length <= 4000" }
+          }
+        },
+
         "coachNotes": {
           "$athleteId": {
             "$i": {
@@ -294,7 +490,7 @@
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|promu|sommet|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines|arbre_5|arbre_10)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
@@ -310,6 +506,11 @@
         // RepCore, pas le nombre d utilisateurs.
         //
         // La longueur est celle de MOT_COACH_MAX cote client.
+        // LE FUSEAU DE L'APPAREIL (01/10/2026) : un nom IANA, ou rien. Le serveur
+        // léger en tire les heures calmes et le jour du plafond d'un push. Même
+        // motif que TZ_RE (app et Worker) ; l'app retombe sur Europe/Paris.
+        "tz": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^(UTC|[A-Z][A-Za-z_+-]*(\\/[A-Za-z0-9_+-]+){1,2})$/)" },
+
         "motCoach": {
           "texte": { ".validate": "newData.isString() && newData.val().length <= 600" },
           "maj":   { ".validate": "newData.isNumber() && newData.val() > 0" },
@@ -335,7 +536,48 @@
         // seance n est pas touche — aucun "$autre" : false.
         "sessions": {
           "$i": {
-            "noteAthlete": { ".validate": "newData.isString() && newData.val().length <= 280" }
+            "noteAthlete": { ".validate": "newData.isString() && newData.val().length <= 280" },
+            // Les consignes du coach sur la seance : 4 000 caracteres au plus.
+            "notes": { ".validate": "newData.isString() && newData.val().length <= 4000" }
+          }
+        },
+
+        // ── LES TEXTES LIBRES LES PLUS GROS, BORNES A 4 000 CARACTERES (01/10/2026) ──
+        // Sans borne, un dossier pouvait porter un texte de plusieurs megaoctets,
+        // renvoye EN ENTIER a chaque synchronisation. L app les rogne avant chaque
+        // PUT (_textesBornes, TEXTE_LIBRE_MAX = 4000) : un texte trop long ne fait
+        // donc jamais rejeter le dossier, il arrive coupe. La liste de ce qui est
+        // borne, et de ce qui ne peut pas l etre, est dans scripts/verif/regles.mjs.
+        "bio":              { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "catchphrase":      { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "vision":           { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "traitementDetail": { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        // Les reponses texte d un bilan. Les photos encore en base64 (clef
+        // « -photo- ») en sont exclues : voir l en-tete de ce dossier.
+        "bilans": {
+          "$i": {
+            "$champ": { ".validate": "!newData.isString() || $champ.matches(/-photo-/) || newData.val().length <= 4000" }
+          }
+        },
+        // Les modeles de message du coach : schema FERME.
+        "msgTemplates": {
+          "$i": {
+            "id":        { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "cat":       { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "titre":     { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "corps":     { ".validate": "newData.isString() && newData.val().length <= 4000" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        // Les anciens commentaires rapides (avant les modeles) : schema FERME.
+        "quickComments": {
+          "$i": {
+            "id":    { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "label": { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "text":  { ".validate": "newData.isString() && newData.val().length <= 4000" },
+            "pos":   { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
           }
         },
 
@@ -384,6 +626,27 @@
         "contacts": {
           "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
         },
+
+        // ══ LES CHAMPS DE DROITS SONT GELES (30/09/2026) ══════════════════════
+        // Le palier, le role et le plan d un coach se lisaient ICI, dans un
+        // noeud que son titulaire ecrit a volonte : un PUT status:'COACHING_SUIVI'
+        // ouvrait tout. Ils ne changent plus que par le Worker (compte de
+        // service, qui ne passe pas par ces regles) ou par le createur.
+        // L app envoie le dossier ENTIER : une valeur IDENTIQUE passe, et
+        // _doPushOne recopie ces champs depuis le serveur avant chaque PUT
+        // (_alignerChampsGeles) pour ne jamais faire rejeter un envoi.
+        // La SUPPRESSION d un champ n est pas validee par Firebase : elle
+        // passe, et n ouvre rien — la verite est dans droits/ et coachs_registre/.
+        "status": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "paymentStatus": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "accessExpiry": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "coachPlan": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "coachSubActive": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        // Un objet ne se compare pas d un bloc : on gele chaque feuille.
+        "programmesAchetes": { "$prog": { "$champ": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" } } },
+        // Le role : la premiere pose, a 'athlete' seulement. 'coach' est pose
+        // par le Worker (devenirCoach), sur invitation ou place Libre.
+        "role": { ".validate": "newData.val() === data.val() || (!data.exists() && newData.val() === 'athlete') || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
 
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
@@ -524,8 +787,8 @@
   //   croyant l ouvrir, et c est la faute la plus chere possible ici.
   "droits": {
     "$emailKey": {
-      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  auth.token.email === 'guellec.coachingpro@gmail.com'\n)",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)\n)",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "palier": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "avant": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "echeance": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4102444800000" },
@@ -553,13 +816,34 @@
       // « Rouvrir » le rend tel quel, abonnement PayPal compris.
       "avantEcheance": { ".validate": "newData.isNumber() && newData.val() >= 0" },
       "avantSource": { ".validate": "newData.isString() && newData.val().length < 30" },
+      // Les programmes de la boutique ACHETES (01/10/2026) : <id> = date de
+      // l achat. Pose par le Worker quand PayPal confirme ; c est lui qui ouvre
+      // boutique_contenu/<id>.
+      "programmes": { "$progId": { ".validate": "newData.isNumber() && newData.val() > 0" } },
+      // LE QUOTA DU COACH (02/10/2026), ecrit par le serveur leger seul : jusqu a
+      // quand l athlete est couvert par la formule de son coach, et son rang
+      // de rattachement (que le client ne doit pas pouvoir antidater).
+      "couvertParCoach": { "jusqu": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "plan": { ".validate": "newData.isString() && (newData.val() === 'libre' || newData.val() === 'coach' || newData.val() === 'pro')" }, "$autre": { ".validate": false } },
+      "rattache": { "coach": { ".validate": "newData.isString() && newData.val().length < 200" }, "le": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "$autre": { ".validate": false } },
       "$autre": { ".validate": false }
+    }
+  },
+
+  // LE REGISTRE DES COACHS (30/09/2026). Un compte est coach parce qu il est
+  // ICI, pas parce que son dossier dit role:'coach'. Ecrit par le Worker seul
+  // (devenirCoach, les paiements PayPal d un plan coach) : plan, actifJusqu.
+  // Lu par son titulaire (l app en tire son plan), et par les regles de
+  // rc_codes : seul un coach enregistre peut emettre un code.
+  "coachs_registre": {
+    "$k": {
+      ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+      ".write": false
     }
   },
 
   "boutique": {
     ".read": "auth != null",
-    ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+    ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
     "$progId": {
       ".validate": "$progId.length < 60",
       "nom": { ".validate": "newData.isString() && newData.val().length < 80" },
@@ -577,11 +861,14 @@
       // image non redimensionnee remplirait le quota a elle seule, et elle est
       // relue par CHAQUE athlete qui ouvre la boutique.
       "image": { ".validate": "newData.isString() && newData.val().length < 420000" },
-      // ⚠ LES SEANCES SONT UNE CHAINE JSON, ET C EST DELIBERE. Valider sept
-      // jours d exercices champ par champ demanderait ici une transcription de
-      // tout le modele de donnees, qui divergerait du code au premier ajout.
-      // Une chaine bornee protege ce qui compte a cet etage : la taille.
-      "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
+      // ⚠ LES SEANCES NE SONT PLUS ICI (01/10/2026). Ce noeud est lu par
+      // TOUT compte connecte : y laisser le contenu vendu, c etait le donner.
+      // Elles vivent dans boutique_contenu/<id>, ouvert a l acheteur seul.
+      // La fiche dit seulement qu il y a un contenu (aContenu).
+      "aContenu": { ".validate": "newData.isBoolean()" },
+      "semaines": { ".validate": "(newData.isNumber() && newData.val() > 0 && newData.val() < 200) || (newData.isString() && newData.val().length < 40)" },
+      "seancesSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 15" },
+      "niveau": { ".validate": "newData.isString() && newData.val().length < 40" },
       "maj": { ".validate": "newData.isNumber()" },
       // Retire de la vente sans etre supprime : un programme deja achete doit
       // rester lisible par ceux qui l ont paye.
@@ -590,10 +877,62 @@
     }
   },
 
+  // LE CONTENU VENDU (01/10/2026) : les seances d un programme de la
+  // boutique, en chaine JSON bornee (meme raison qu avant : valider sept jours
+  // d exercices champ par champ transcrirait tout le modele). Lu par
+  // l ACHETEUR — droits/<sa cle>/programmes/<id>, pose par le Worker quand
+  // PayPal confirme le paiement, et que personne d autre n ecrit — et par le
+  // createur, adresse VERIFIEE. Ecrit par le createur seul.
+  "boutique_contenu": {
+    "$progId": {
+      ".read": "auth != null && (root.child('droits').child(auth.token.email.replace('.', ',')).child('programmes').child($progId).exists() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".validate": "$progId.length < 60",
+      "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
+      "maj": { ".validate": "newData.isNumber()" },
+      "$autre": { ".validate": false }
+    }
+  },
+
   "coach_public": {
       "$emailKey": {
         ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $emailKey)",
         ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        // SERIE 6, LOT 5 : le slogan imprime sur les documents (60 caracteres).
+        "slogan": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        // SERIE 6 : le defaut de BILAN du coach, et lui seul (defautsCoachPublics).
+        "defautsCoach": {
+          "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(sansChiffres|essentiel)$/)" },
+          "methode": {
+            "reperesVolume": {
+              "$muscle": {
+                ".validate": "$muscle.matches(/^[A-Z_]{2,20}$/)",
+                "mev": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMax": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mrv": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "methodesRegles": {
+              "$cle": {
+                ".validate": "$cle.matches(/^[a-z-]{2,20}$/)",
+                "maxParSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7 && newData.val() % 1 === 0" },
+                "coutFatigue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          },
+          "bilan": {
+            ".validate": "newData.hasChildren(['freq', 'jour'])",
+            "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+            "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+            "questions": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+            "$autre": { ".validate": false }
+          },
+          "$autre": { ".validate": false }
+        },
         "fname": {
           ".validate": "newData.isString() && newData.val().length < 120"
         },
@@ -892,12 +1231,13 @@
                   "prenom":     { ".validate": "newData.isString() && newData.val().length <= 24" },
                   "$autre":     { ".validate": false }
                 },
-                // SA PROGRESSION, ECRITE PAR L ATHLETE LUI-MEME (serveur leger,
-                // 27/09/2026) : le Worker Cloudflare ne relit pas les seances.
-                // Memes conditions que l inscription ; des nombres bornes.
-                "valeur":   { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
-                "metrique": { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
-                "maj":      { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() > 0" }
+                // SA PROGRESSION, ECRITE PAR LE WORKER SEUL (01/10/2026) : elle
+                // se tire de ses seances (xp_etat), plus de ce que l app ecrit.
+                // Aucune ecriture client : une console ne s y donne plus 999.
+                "valeur":   { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "metrique": { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "maj":      { ".validate": "newData.isNumber()" },
+                "srv":      { ".validate": "newData.isBoolean()" }
               }
             }
           }
@@ -959,6 +1299,92 @@
             "$msgId": {
               ".validate": "newData.isString() && newData.val().length <= 8"
             }
+          }
+        },
+
+        // LE DEFI 28 JOURS (build 1956). Le coach le cree (dates, phases,
+        // regles, graine du tirage) ; la GRAINE est posee a la creation et ne
+        // change plus : publiee avant toute inscription, elle rend le tirage
+        // verifiable (src/core/062, tirageDefi28). Comme les defis du Canal,
+        // un athlete ne lit que SA feuille de participants : le tableau de
+        // participation est au coach. Le resultat du tirage ne nomme que des
+        // prenoms et des tickets (empreintes), jamais une cle.
+        // Ce que l athlete peut lister : l id de chaque defi 28 jours et son debut.
+        "defis28_liste": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$d28": { ".validate": "$d28.matches(/^t[a-z0-9]{8,24}$/) && newData.isNumber() && newData.val() > 0" }
+        },
+        "defis28": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$d28": {
+            "def": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey",
+              ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && (!data.exists() || (newData.exists() && newData.child('graine').val() === data.child('graine').val() && newData.child('debut').val() === data.child('debut').val()))",
+              ".validate": "$d28.matches(/^t[a-z0-9]{8,24}$/) && newData.hasChildren(['titre', 'debut', 'fin', 'graine', 'minCheckins', 'gagnants', 'creeLe'])",
+              "titre":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+              "debut":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "fin":         { ".validate": "newData.isNumber() && newData.val() === newData.parent().child('debut').val() + 28 * 86400000 - 1" },
+              "graine":      { ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{32}$/)" },
+              "minCheckins": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 28 && newData.val() % 1 === 0" },
+              "gagnants":    { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0" },
+              "creeLe":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+              "recompense":  { ".validate": "newData.isString() && newData.val().length <= 120" },
+              "phases": {
+                "$i": {
+                  ".validate": "$i.matches(/^[0-3]$/) && newData.hasChildren(['titre', 'du', 'au'])",
+                  "titre": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+                  "du":    { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 28" },
+                  "au":    { ".validate": "newData.isNumber() && newData.val() >= newData.parent().child('du').val() && newData.val() <= 28" },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "regles": { "$i": { ".validate": "$i.matches(/^[0-7]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+              "$autre": { ".validate": false }
+            },
+            "tirage": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey",
+              ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && !data.exists() && now > root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('fin').val()",
+              ".validate": "newData.hasChildren(['le', 'graine', 'eligibles'])",
+              "le":        { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+              "graine":    { ".validate": "newData.val() === root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('graine').val()" },
+              "eligibles": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+              "tickets":   { "$i": { ".validate": "$i.matches(/^[0-9]{1,4}$/) && newData.isString() && newData.val().matches(/^[0-9a-f]{64}$/)" } },
+              "gagnants":  { "$i": { ".validate": "$i.matches(/^[0-9]$/) && newData.isString() && newData.val().length <= 24" } },
+              "$autre":    { ".validate": false }
+            },
+            "participants": {
+              "$athleteKey": {
+                ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+                ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').exists() && now <= root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('fin').val() + 86400000",
+                "inscription": {
+                  ".validate": "newData.hasChildren(['le', 'prenom'])",
+                  "le":     { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+                  "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+                  "$autre": { ".validate": false }
+                },
+                // Un check-in par jour (1 a 28), horodate, dans la fenetre du defi.
+                "checkins": {
+                  "$j": { ".validate": "$j.matches(/^([1-9]|1[0-9]|2[0-8])$/) && newData.isNumber() && newData.val() <= now + 60000 && newData.val() >= root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('debut').val()" }
+                },
+                // LES PHOTOS J1 ET J28 : tamponnees dans l app, ecrites UNE
+                // fois (jamais remplacees : la regle refuse une reecriture),
+                // retirables (le retrait du consentement efface). L image ne
+                // part QU AVEC le consentement ; sans lui, seule l empreinte.
+                "photos": {
+                  "$p": {
+                    ".validate": "$p.matches(/^(j1|j28)$/) && !data.exists() && newData.hasChildren(['at', 'empreinte', 'consentement'])",
+                    "at":           { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+                    "empreinte":    { ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{64}$/)" },
+                    "consentement": { ".validate": "newData.isBoolean()" },
+                    "img":          { ".validate": "newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 300000 && newData.parent().child('consentement').val() === true" },
+                    "$autre":       { ".validate": false }
+                  }
+                },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
           }
         },
 
@@ -1128,6 +1554,11 @@
       "$code": {
         ".read": true,
 
+        // ⚠ DEPUIS LE 30/09/2026 : CREER un code exige d etre au registre des
+        //   coachs (ou le createur), et le code doit porter SA clef. Un compte
+        //   quelconque ne fabrique plus de code. Et plus personne d autre que
+        //   son coach ne passe redeemed a true : c est le Worker (redeemCode,
+        //   devenirCoach) qui consomme, apres verification.
         // Une QUATRIEME voie s ajoute ici, et une seule : l ouverture du lien
         // par quelqu un qui n a PAS encore de compte. C est tout l objet du
         // suivi d invitation — un athlete qui ouvre le lien avant de s inscrire
@@ -1149,7 +1580,7 @@
         // serveur, une telemetrie d ouverture est necessairement falsifiable ;
         // la difference avec /metrics, qui accepte l ecriture sans rien
         // connaitre, est qu il faut ici detenir le code.
-        ".write": "(auth != null && (!data.exists() || data.child('coachEmailKey').val() === auth.token.email.replace('.', ',') || (data.child('redeemed').val() !== true && newData.child('redeemed').val() === true && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val()))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
+        ".write": "(auth != null && ((!data.exists() && (root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)) && newData.child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || data.child('coachEmailKey').val() === auth.token.email.replace('.', ','))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
 
         // Trois etats, dans cet ordre, et rien d autre.
         "etat":     { ".validate": "newData.isString() && newData.val().matches(/^(envoye|ouvert|cree)$/)" },
@@ -1162,6 +1593,20 @@
         // ici : le noeud est en lecture publique.
         "prenom": { ".validate": "newData.isString() && newData.val().length < 60" },
         "nom":    { ".validate": "newData.isString() && newData.val().length < 60" },
+        // Le programme de depart choisi par le coach (invitations en lot,
+        // 05/10/2026) : l identifiant d un de SES modeles, rien d autre. C est
+        // le Worker (redeemCode) qui le lit et pose le programme.
+        "programmeModeleId": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)" },
+        // Serie 6 (lot 8) : le profil de suivi de l invitation, liste fermee.
+        "profilSuivi": { ".validate": "newData.isString() && newData.val().matches(/^(debutant|hypertrophie|seche|forme)$/)" },
+        // La cadence de bilan des Reglages de coaching (06/10/2026), donnee au
+        // nouvel athlete : memes bornes que users/bilanCadence.
+        "bilanCadence": {
+          ".validate": "newData.hasChildren(['freq', 'jour'])",
+          "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+          "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+          "$autre": { ".validate": false }
+        },
 
         "coachEmailKey": { ".validate": "!data.exists() || data.val() === newData.val()" },
         "coachId":       { ".validate": "!data.exists() || data.val() === newData.val()" },
@@ -1217,10 +1662,16 @@
       // additionne les jours du mois en UNE requete bornee par orderBy="$key".
       // Sans ce droit, il faudrait trente-et-une requetes pour un ecran que
       // seule une personne ouvre. Les autres gardent la lecture par jour.
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "$jour": {
         ".read": "auth != null",
-        ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        // UNE DATE PLAUSIBLE, et pas seulement un motif a chiffres : annee 2020
+        // a 2099, mois 01 a 12, jour 01 a 31. « Aujourd hui a un jour pres »
+        // N EST PAS EXPRIMABLE ICI : le langage des regles n a aucune fonction
+        // de date, et `now` (un nombre) ne se compare pas a une clef texte. Le
+        // Worker efface donc chaque nuit les jours poses dans le futur
+        // (pouls.js, purgerJoursFuturs) ; voir scripts/verif/regles.mjs.
+        ".validate": "$jour.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
 
         // PURGE GLISSANTE A QUATRE CENTS JOURS : la seule ecriture permise ici,
         // et elle est reservee au createur. Ce noeud n avait JAMAIS ete purge —
@@ -1245,7 +1696,7 @@
         //   sur ce point couterait TOUTES les mesures du tunnel, en silence.
         //   Le noeud ne porte aucune donnee personnelle : le risque est un
         //   chiffre faux, pas une fuite.
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true) && !newData.exists()",
         "$evenement": {
           // ⚠ LES QUATRE DERNIERS NOMS NE SONT PAS DES ETAPES DE TUNNEL, ce sont
           //   des COMPTEURS DE CAPACITE : oct_in_ko et oct_out_ko comptent les
@@ -1257,7 +1708,13 @@
           //   Ils sont incrementes par rcq(), par paquets de quarante-cinq
           //   secondes, et lus par la carte « Capacite » du createur.
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo)$/)"
+          // ⚠ BORNE PAR ECRITURE (01/10/2026). Une etape de tunnel n avance que
+          //   de UN : exactement la valeur precedente plus un, ou 1 si le compteur
+          //   n existe pas encore. Un .sv increment est vu ici APRES resolution.
+          //   Les quatre compteurs de capacite arrivent par paquets (rcqVider) :
+          //   ils avancent d au plus RCQ_PAS_MAX = 1 000 000 par ecriture.
+          //   AVANT : un seul PUT anonyme pouvait poser 9 999 999 d un coup.
+          ".validate": "newData.isNumber() && newData.val() < 10000000 && (($evenement.matches(/^(visite_ouverte|visite_vers_inscription|essai_direct|landing_view|landing_cta_click|coach_landing_view|blog_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|install_passe|premiere_seance_prete|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo)$/) && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))) || ($evenement.matches(/^(oct_in_ko|oct_out_ko|cld_envois|cld_ko)$/) && ((!data.exists() && newData.val() > 0 && newData.val() <= 1000000) || (data.exists() && newData.val() > data.val() && newData.val() - data.val() <= 1000000))))"
         }
       }
     },
@@ -1572,6 +2029,24 @@
         // LOT C6 : les formules proposees (des CLES du tableau des offres, jamais
         // un prix) et le message d accueil montre apres « Ca m interesse ».
         "formules":    { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)" } },
+        // SERIE 6 (lot 9) : les prix du coach, par formule publiee, et SA formule.
+        "prixPerso": {
+          "$k": {
+            ".validate": "$k.matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)",
+            "prix": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000" },
+            "mois": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 24 && newData.val() % 1 === 0" },
+            "lib":  { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "libre": {
+          ".validate": "newData.hasChildren(['lib', 'prix', 'mois'])",
+          "lib":    { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+          "prix":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000" },
+          "mois":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 24 && newData.val() % 1 === 0" },
+          "inclus": { ".validate": "newData.isString() && newData.val().length <= 140" },
+          "$autre": { ".validate": false }
+        },
         "accueil":     { ".validate": "newData.isString() && newData.val().length <= 600" },
         // Le coach encaisse dans l app (bouton « Payer ») : un simple drapeau, verifie cote serveur a la commande.
         "paiement":    { ".validate": "newData.isBoolean()" },
@@ -1669,7 +2144,7 @@
         ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['createur', 'createurNom', 'mesure', 'duree', 'creeLe', 'statut'])",
         "createur":    { ".validate": "newData.isString() && newData.val().length <= 200" },
         "createurNom": { ".validate": "newData.isString() && newData.val().length <= 24" },
-        "mesure":      { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "mesure":      { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct|street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid))$/)" },
         "duree":       { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
         "creeLe":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
         "statut":      { ".validate": "newData.isString() && newData.val().matches(/^(attente|accepte|en_cours|termine|annule)$/)" },
@@ -1691,13 +2166,32 @@
           ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
           ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && (root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',') || (newData.parent().child('statut').val() === 'accepte' && newData.parent().child('createur').val() === auth.token.email.replace('.', ',') && root.child('pseudos').child(newData.val()).exists()))"
         },
+        // LA PROGRESSION DE CHACUN, ECRITE PAR LE WORKER SEUL (01/10/2026) :
+        // tiree de ses seances (xp_etat, valeurServeur). Plus d ecriture client.
+        // ".validate": false : pas meme glissee dans le duel a sa creation (la
+        // regle de duels/$id ouvre la creation au createur).
         "progres": {
+          ".validate": false,
           "$k": {
-            ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours'",
             ".validate": "newData.hasChildren(['valeur', 'maj'])",
             "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
             "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "srv":    { ".validate": "newData.isBoolean()" },
             "$autre": { ".validate": false }
+          }
+        },
+        // LES BATTLES STREET (build 1956) : chacun pose SON meilleur score
+        // (src/core/061, scoreDefi), pendant le battle seulement, dans un duel
+        // dont la mesure est un format street. Le Worker compare (duels.js).
+        // ⚠ Un score déclaré : seul « certifie » dit qu'une vidéo l'a lu.
+        "street": {
+          "$k": {
+            ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours' && now <= root.child('duels').child($id).child('fin').val() && root.child('duels').child($id).child('mesure').val().beginsWith('street_')",
+            ".validate": "newData.hasChildren(['score', 'at'])",
+            "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+            "at":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "certifie": { ".validate": "newData.isBoolean()" },
+            "$autre":   { ".validate": false }
           }
         },
         // debut, fin, scores, gagnant, rejointLe, termineLe, rappel, maj : le
@@ -1708,28 +2202,46 @@
     // Ce que l invite voit AVANT de rejoindre (arrivee nominative, /i) :
     // le prenom du createur, la mesure, la duree. Lecture publique, ecrit une
     // fois par le createur, avec le duel.
+    // LE CLASSEMENT STREET (build 1956) : par format, le meilleur score de
+    // chacun sous son PSEUDO public (jamais une cle). Opt-in : l app n y
+    // ecrit que sur « Publier au classement ». Score declare ; « certifie »
+    // dit qu une video l a lu sur le telephone.
+    "classements_street": {
+      ".read": "auth != null",
+      "$format": {
+        ".indexOn": ["score"],
+        "$pseudo": {
+          ".write": "auth != null && root.child('pseudos').child($pseudo).val() === auth.token.email.replace('.', ',')",
+          ".validate": "$format.matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/) && newData.hasChildren(['score', 'at'])",
+          "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+          "at":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "certifie": { ".validate": "newData.isBoolean()" },
+          "$autre":   { ".validate": false }
+        }
+      }
+    },
     "duels_publics": {
       "$id": {
         ".read": true,
         ".write": "auth != null && !data.exists() && newData.parent().parent().child('duels').child($id).child('createur').val() === auth.token.email.replace('.', ',')",
         ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['prenom', 'mesure', 'duree'])",
         "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
-        "mesure": { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "mesure": { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct|street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid))$/)" },
         "duree":  { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
         "$autre": { ".validate": false }
       }
     },
     // ── LES EVENEMENTS SAISONNIERS (28/09/2026) ──────────────────────────
     // (« /evenements » est la file du Worker : ils vivent dans /saisons.)
-    // Crees par Kevin (ecran admin), lus par tout compte connecte. Chacun
-    // ecrit SA progression pendant la saison (saisons_progres/<id>/<lui>,
-    // la regle des defis du Canal) ; le Worker en tire, chaque heure, le
+    // Crees par Kevin (ecran admin), lus par tout compte connecte. Le Worker
+    // ecrit la progression de chacun (saisons_progres/<id>/<lui>, tiree de
+    // ses seances depuis le 01/10/2026) ; il en tire, chaque heure, le
     // compteur collectif (/stats/saisons/<id>, lecture publique avec /stats)
     // et le badge Edition de qui a boucle (saisons_resultats/<lui>/<id>).
     "saisons": {
       ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$id.matches(/^[a-z0-9][a-z0-9-]{2,40}$/) && newData.hasChildren(['nom', 'debut', 'fin', 'mesure', 'objectifPerso', 'objectifCollectif', 'badgeCle', 'couleurAccent', 'texteAccueil'])",
         "nom":               { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 60" },
         "debut":             { ".validate": "newData.isNumber()" },
@@ -1740,16 +2252,22 @@
         "badgeCle":          { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{2,40}$/)" },
         "couleurAccent":     { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
         "texteAccueil":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+        // Posee par le Worker (calendrier-saisons.js, le 25 a 12 h) : une saison
+        // posee a la main par Kevin sur la meme periode l emporte toujours.
+        "auto":              { ".validate": "newData.isBoolean()" },
         "$autre":            { ".validate": false }
       }
     },
     "saisons_progres": {
       "$id": {
+        // ECRIT PAR LE WORKER SEUL depuis le 01/10/2026 (comme les duels) ;
+        // lu par son titulaire (la jauge montre la valeur du serveur).
         "$k": {
-          ".write": "auth != null && $k === auth.token.email.replace('.', ',') && root.child('saisons').child($id).exists() && now >= root.child('saisons').child($id).child('debut').val() && now <= root.child('saisons').child($id).child('fin').val() + 86400000",
+          ".read": "auth != null && $k === auth.token.email.replace('.', ',')",
           ".validate": "newData.hasChildren(['valeur', 'maj'])",
           "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
           "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "srv":    { ".validate": "newData.isBoolean()" },
           "$autre": { ".validate": false }
         }
       }
@@ -1764,6 +2282,18 @@
         "$k": {
           ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
           ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 1 && newData.val() <= 7 && newData.val() % 1 === 0"
+        }
+      }
+    },
+    // « JE PARTICIPE » (02/10/2026) : l inscription a une saison, par son
+    // titulaire, pour une saison qui existe. Elle choisit les destinataires de
+    // mi-parcours et de J-2 (le Worker la lit). Rien d autre : true, ou effacee.
+    "saisons_inscrits": {
+      "$id": {
+        "$k": {
+          ".read": "auth != null && $k === auth.token.email.replace('.', ',')",
+          ".write": "auth != null && $k === auth.token.email.replace('.', ',') && root.child('saisons/' + $id).exists()",
+          ".validate": "newData.isBoolean() && newData.val() === true"
         }
       }
     },
@@ -1878,14 +2408,19 @@
     "garmin_etats": { ".read": false, ".write": false },
     // LOT M2 : LA MESSAGERIE COACH <-> ATHLETE. Un fil par couple : le coach le
     // lit toujours (son historique) ; l athlete tant qu il est rattache. Chacun
-    // n ecrit que SON role, un message ne se modifie ni ne s efface, et seul le
+    // n ecrit que SON role, un message ne se modifie pas (le coach peut retirer
+    // le sien dans les 30 s : l annulation de l envoi groupe), et seul le
     // destinataire passe `lu` a true.
     "messages": {
       "$coachKey": {
         "$athleteKey": {
           ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
           "$msgId": {
-            ".write": "auth != null && !data.exists() && newData.exists() && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && ((auth.token.email.replace('.', ',') === $coachKey && newData.child('de').val() === 'coach') || (auth.token.email.replace('.', ',') === $athleteKey && newData.child('de').val() === 'athlete'))",
+            // L ENVOI GROUPE (06/10/2026) : « Annuler l envoi » retire ce que le
+            // coach vient de poster. SEULEMENT son message, et pendant 30 s
+            // (10 s a l ecran, plus la marge du reseau). Au-dela, rien ne
+            // s efface, comme avant.
+            ".write": "auth != null && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && ((!data.exists() && newData.exists() && ((auth.token.email.replace('.', ',') === $coachKey && newData.child('de').val() === 'coach') || (auth.token.email.replace('.', ',') === $athleteKey && newData.child('de').val() === 'athlete'))) || (data.exists() && !newData.exists() && auth.token.email.replace('.', ',') === $coachKey && data.child('de').val() === 'coach' && data.child('at').val() > now - 30000))",
             ".validate": "$msgId.matches(/^m[a-z0-9]{8,20}$/) && newData.hasChildren(['de', 'texte', 'at'])",
             "de":    { ".validate": "newData.isString() && newData.val().matches(/^(coach|athlete)$/)" },
             "texte": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000" },
@@ -1896,6 +2431,25 @@
             },
             "$autre": { ".validate": false }
           }
+        }
+      }
+    },
+    // L INDEX DES FILS (06/10/2026) : un resume par fil, pour que la boite du
+    // coach se lise en un appel. Le coach lit tout son index ; l athlete ne
+    // lit que SON fil, tant qu il est rattache. L un ou l autre l ecrit.
+    "messagesIndex": {
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$athleteKey": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          ".write": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
+          ".validate": "newData.hasChildren(['de', 'at'])",
+          "dernierTexte":  { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "de":            { ".validate": "newData.isString() && newData.val().matches(/^(coach|athlete)$/)" },
+          "at":            { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
+          "nonLusCoach":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "nonLusAthlete": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "$autre": { ".validate": false }
         }
       }
     },
@@ -1949,6 +2503,68 @@
         }
       }
     },
+    // L ASSISTANT IA (cloudflare/src/ia.js, 05/10/2026) : la consommation du
+    // mois (micro-dollars) et le journal des propositions. Lus par leur
+    // titulaire, ecrits par le Worker seul (compte de service) : le client ne
+    // peut ni remettre son compteur a zero, ni maquiller son journal.
+    "ia_quota": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
+    },
+    // LE POINT DE LA SEMAINE (cloudflare/src/hebdo.js, 05/10/2026).
+    // hebdo_entree : le resume d un athlete, ecrit par SON coach seul (le
+    // dossier de l athlete le designe), lu par le Worker seul (compte de
+    // service). hebdo : le point ecrit par le Worker, lu par le coach.
+    // hebdo_batch : l etat du lot, au Worker seul.
+    "hebdo_entree": {
+      ".read": false,
+      "$coachKey": {
+        "$athleteKey": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          ".validate": "!newData.exists() || newData.hasChildren(['prenom'])"
+        }
+      }
+    },
+    "hebdo": {
+      ".write": false,
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey"
+      }
+    },
+    "hebdo_batch": {
+      ".read": false,
+      ".write": false
+    },
+    // LE RISQUE D ABANDON (cloudflare/src/risque.js, 05/10/2026), ecrit par le
+    // Worker chaque nuit. risque_modele : des poids et des effectifs, aucune
+    // cle de compte — lu par tout compte connecte (l app explique la puce).
+    // risque/<athlete> : {p, t}, lu par SON coach seul (pas par l athlete).
+    "risque_modele": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "risque": {
+      ".write": false,
+      "$athleteKey": {
+        ".read": "auth != null && root.child('users').child($athleteKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',')"
+      }
+    },
+    // LA PHOTO DU REPAS (05/10/2026) : le nombre d appels du mois, par
+    // compte (60 au plus). Lu par son titulaire, ecrit par le Worker seul.
+    "ia_appels": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
+    },
+    "ia_journal": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
+    },
     "relances_auto": {
       ".write": false,
       "$coachKey": {
@@ -1970,6 +2586,21 @@
     },
     "xp_etat": { ".read": false, ".write": false },
     "volts_publics": { "$p": { ".read": true, ".write": false } },
+    // LES LIGUES (01/10/2026) : ecrites par le Worker SEUL (cloudflare/src/
+    // ligues.js, metier.js). Le score est celui du serveur (xp_etat/<k>.sem) :
+    // aucune ecriture client, nulle part. ligues_membres/<k> = {lundi, groupe,
+    // division, nom}, lu par son titulaire ; c est lui qui ouvre la lecture
+    // du groupe (ligues/<lundi>/<g> et ligues_public/<lundi>/<g>) AUX SEULS
+    // MEMBRES de ce groupe, cette semaine-la. ligues_prive (les cles de
+    // compte) et ligues_index ne se lisent pas : ils n ont pas de regle.
+    "ligues_membres": { "$k": { ".read": "auth != null && $k === auth.token.email.replace('.', ',')", ".write": false } },
+    "ligues_resultats": { "$k": { ".read": "auth != null && $k === auth.token.email.replace('.', ',')", ".write": false } },
+    "ligues": { "$lundi": { "$g": {
+      ".read": "auth != null && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/lundi').val() === $lundi && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/groupe').val() === $g",
+      ".write": false } } },
+    "ligues_public": { "$lundi": { "$g": {
+      ".read": "auth != null && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/lundi').val() === $lundi && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/groupe').val() === $g",
+      ".write": false } } },
     // LES REACTIONS ENTRE AMIS (lot D, 29/09/2026) : cinq emojis FIXES, jamais
     // de texte. /reactions/<pseudo>/<jour de sa seance>/<pseudo de l envoyeur>.
     // Ecrit par l envoyeur (son pseudo, et il suit le destinataire), une par
@@ -2031,7 +2662,7 @@
     "defi_mois": {
       ".read": "auth != null",
       "$mois": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && newData.hasChildren(['titre', 'mesure', 'objectif', 'debut', 'fin'])",
         "titre":    { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 80" },
         "texte":    { ".validate": "newData.isString() && newData.val().length <= 300" },
@@ -2067,7 +2698,7 @@
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('evenements_attente').child(newData.child('par').val()).child(newData.child('type').val()).child(newData.child('cible').val()).child('id').val() === $id",
         ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at', 'cible'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|duel_cree|seance_fin|reaction|message)$/)" },
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|bilan_a_completer|bilan_corrige|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|duel_cree|seance_fin|reaction|message)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -2076,8 +2707,11 @@
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
+        // L abonnement que celui-ci remplace (onApprove, 02/10/2026) : le Worker
+        // verifie chez PayPal qu il est a ce compte avant de l annuler.
+        "remplace": { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/) && newData.parent().child('type').val() === 'abonnement'" },
         "jour":  { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
-        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || (newData.parent().child('type').val() === 'message' && newData.val() === newData.parent().child('i').val() && ((newData.parent().child('coach').val() === auth.token.email.replace('.', ',') && root.child('messages').child(auth.token.email.replace('.', ',')).child(newData.parent().child('dest').val()).child(newData.val()).child('de').val() === 'coach') || (newData.parent().child('dest').val() === newData.parent().child('coach').val() && root.child('messages').child(newData.parent().child('coach').val()).child(auth.token.email.replace('.', ',')).child(newData.val()).child('de').val() === 'athlete'))) || (newData.parent().child('type').val() === 'reaction' && newData.val().matches(/^[a-z0-9_]{3,40}$/) && root.child('amis').child(auth.token.email.replace('.', ',')).child(newData.val()).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
+        "cible": { ".validate": "newData.isString() && ((newData.parent().child('type').val() === 'bilan_corrige' && newData.val() === auth.token.email.replace('.', ',') && root.child('users').child(newData.val()).child('coachEmailKey').exists()) || ((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite' || newData.parent().child('type').val() === 'bilan_a_completer') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || (newData.parent().child('type').val() === 'message' && newData.val() === newData.parent().child('i').val() && ((newData.parent().child('coach').val() === auth.token.email.replace('.', ',') && root.child('messages').child(auth.token.email.replace('.', ',')).child(newData.parent().child('dest').val()).child(newData.val()).child('de').val() === 'coach') || (newData.parent().child('dest').val() === newData.parent().child('coach').val() && root.child('messages').child(newData.parent().child('coach').val()).child(auth.token.email.replace('.', ',')).child(newData.val()).child('de').val() === 'athlete'))) || (newData.parent().child('type').val() === 'reaction' && newData.val().matches(/^[a-z0-9_]{3,40}$/) && root.child('amis').child(auth.token.email.replace('.', ',')).child(newData.val()).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
         "$autre": { ".validate": false }
       }
     },
@@ -2104,12 +2738,13 @@
     // range par le Worker, lu par l administrateur (ecran Ambassadeurs), qui
     // peut effacer une ligne une fois vue.
     "evenements_ko": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
-      "$id": { ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()" }
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      "$id": { ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true) && !newData.exists()" }
     },
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
+    "push_log_humain": { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
@@ -2127,11 +2762,30 @@
     // Chaque encaissement : a qui, combien, premier paiement ou non. Relu par
     // le serveur leger quand un remboursement ou un litige arrive.
     "paypal_transactions": { ".read": false, ".write": false },
+    // Changer de formule (02/10/2026) : la revision demandee (sa date d effet)
+    // et le remplacement d un abonnement par un autre, en attente de l
+    // activation du nouveau. Serveur leger seul.
+    "paypal_revisions":     { ".read": false, ".write": false },
+    "paypal_remplacements": { ".read": false, ".write": false },
+    // Les resiliations demandees dans l app (02/10/2026) : {ts, motif, abo,
+    // effet, annulerLe, annuleLe}. Ecrites par le serveur leger seul (route
+    // /resiliation), qui annule l abonnement chez PayPal a la date d effet.
+    "resiliations":         { ".read": false, ".write": false },
+    // Le dernier renouvellement rembourse en totalite, par abonnement : la
+    // periode qu il couvrait et la date de fermeture (serveur leger seul).
+    "paypal_rembourses":    { ".read": false, ".write": false },
     // Le journal des remboursements, retrofacturations et litiges : qui, quoi,
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).
+    // Les indicateurs du createur (02/10/2026) : MRR, abonnes, resilies, churn,
+    // un par jour (indicateurs/<AAAA-MM-JJ>). Ecrits par le serveur leger seul,
+    // lus par le createur seul : ce sont les chiffres de son entreprise.
+    "indicateurs": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
     "paypal_journal": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false
     },
 
@@ -2146,7 +2800,7 @@
       // LA RETENTION (/stats/retention, serveur leger) : des agregats, mais des
       // chiffres d affaires en creux — le createur seul. Le reste (badges,
       // saisons) reste public, comme avant.
-      "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      "retention": { ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
       "$autre": { ".read": true }
     },
     // LE RESUME D ACTIVITE d un compte, pour la retention agregee : des jours
@@ -2169,6 +2823,18 @@
         "finEssai": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "payant":   { ".validate": "newData.isBoolean()" },
         "lev":      { "$l": { ".validate": "$l.matches(/^(parcours|checkin|notif|duel|defi|coach|invite)$/) && newData.isBoolean()" } },
+        // L ACTIVATION (05/10/2026, activationCohortes) : l inscription, le
+        // canal (liste fermee) et trois premieres fois, en millisecondes. Le
+        // palier du moment, pour la part payante a J30.
+        "act": {
+          "i": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "c": { ".validate": "newData.isString() && newData.val().matches(/^(autonome|coach|ami|ambassadeur)$/)" },
+          "s": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "b": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "r": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        },
+        "pal":      { ".validate": "newData.isString() && newData.val().matches(/^(aucun|essentielle|ultime|suivi)$/)" },
         "$autre":   { ".validate": false }
       }
     },
@@ -2180,13 +2846,18 @@
     // noms fermes, aucune cle ne designe une personne (le code d un parrain,
     // lui, n est jamais enregistre). Lecture : le createur (ecran Viralite).
     "attribution": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "jours": {
         "$jour": {
-          ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          // Une date plausible (comme /metrics). « Aujourd hui a un jour pres »
+          // n est pas exprimable dans les regles : le Worker efface chaque nuit
+          // les jours poses dans le futur (pouls.js).
+          ".validate": "$jour.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
           "src": {
             "$s": {
-              ".validate": "$s.matches(/^[a-z0-9_-]{1,20}$/)",
+              // LISTE BLANCHE (01/10/2026), la meme que SRC_CONNUS (Worker) et
+              // ATTR_SRC_CONNUS (app) : un src inconnu y arrive en 'autre'.
+              ".validate": "$s.matches(/^(amb|amis|autre|avant|badge|bilan|bio|blog|blog-cycle|blog-fiche|carte|champion|charge|coachs|commissions|cycle|defi|diete|direct|dossier|duel|email|envois|facebook|fond|ig|instagram|invitation|journal|kit|logo|mes|muscles|parrainage|pesees|photos|play|profil|pub|qr|rang|record|records|saison|seance|seo|seances|serie|site|story|team|tiktok|victoire|visuel|vitrine|whatsapp|wrapped|youtube)$/)",
               "$m": {
                 ".write": true,
                 ".validate": "$m.matches(/^(partage|telechargement|copie|clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
@@ -2195,7 +2866,10 @@
           },
           "amb": {
             "$c": {
-              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/)",
+              // UN AMBASSADEUR QUI EXISTE : sans cela, chaque code bien forme
+              // ouvrait un noeud de plus. Le Worker (compte de service) ne passe
+              // pas par ces regles et verifie la fiche lui-meme.
+              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/) && root.child('ambassadeurs').child($c).exists()",
               "$m": {
                 ".write": true,
                 ".validate": "$m.matches(/^(clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
@@ -2207,7 +2881,7 @@
       },
       "semaines": {
         "$lundi": {
-          ".validate": "$lundi.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          ".validate": "$lundi.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
           "actifs": { ".write": true, ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)" },
           "$autre": { ".validate": false }
         }
@@ -2220,9 +2894,9 @@
     // comptent clics, inscriptions, paiements et commissions. L admin n y
     // touche, en pratique, que pour creer une fiche et marquer « payee ».
     "ambassadeurs": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "$code": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$code.matches(/^[A-Z0-9]{3,16}$/)",
         "nom":           { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
         "instagram":     { ".validate": "newData.isString() && newData.val().length <= 60" },
@@ -2245,7 +2919,7 @@
     "ambassadeurs_publics": {
       "$code": {
         ".read": true,
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         "nom":      { ".validate": "newData.isString() && newData.val().length <= 80" },
         "avantage": { ".validate": "newData.isString() && (newData.val() === 'essai+1mois' || newData.val() === 'ultime_demi')" },
         "actif":    { ".validate": "newData.isBoolean()" },
@@ -2257,7 +2931,7 @@
     "ambassadeurs_vue": {
       "$secret": {
         ".read": true,
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)"
       }
     },
     // UNE demande par compte, a vie, vers un code actif ; jugee par
@@ -2274,15 +2948,45 @@
       }
     },
 
+    // Le support du createur (build 1876, cloudflare/src/support.js) : le
+    // journal des actions et les signalements. Ecrits par le Worker seul
+    // (compte de service), lus par le createur seul. support_corbeille et
+    // support_tickets_dernier : aucun acces client.
+    // SERIE 6 (lot 14) : le capteur d erreurs. Ecrit par le Worker seul
+    // (POST /erreur), lu par le createur seul (ecran « Sante de l app »).
+    "erreurs": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "support_publics": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "erreurs_jour": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "support_log": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "support_tickets": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+
     // Reglages lus par toute l app, ecrits par le createur seul. droitsServeur :
     // pose par le script de rattrapage des paiements (remplir-paiements.mjs)
     // une fois droits/ rempli pour les abonnes d avant ; l app ne ferme qu a
     // partir de la l abonnement que seul le dossier affirme.
     "reglages_publics": {
       ".read": "auth != null",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "droitsServeur": {
         "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        // v = 2 : droits/ et coachs_registre/ remplis par remplir-droits.mjs.
+        // L app ne lit plus le dossier pour le palier qu a partir de la.
+        "v": { ".validate": "newData.isNumber() && newData.val() > 0" },
         "$autre": { ".validate": false }
       },
       // LES TROIS INTERRUPTEURS DES ETAPES SUIVANTES (ordre de fermeture,
@@ -2305,9 +3009,14 @@
       "$autre": { ".validate": false }
     },
 
+    // LE CATALOGUE D EXERCICES (01/10/2026) : un coach AU REGISTRE
+    // (coachs_registre/<cle>, ecrit par le Worker ou le createur), ou un palier
+    // Ultime dans droits/ (ecrit par le serveur). Plus jamais users/<cle>/role,
+    // que son titulaire ecrivait : un role « coach » pose avant le gel n ouvre
+    // plus rien.
     "exercices": {
-      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+      ".read": "auth != null && (\n  root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)"
     }
   }
 }

@@ -29,9 +29,11 @@ if (!sortie) { console.error('usage : node scripts/fabriquer_site.mjs <dossier d
 const OUT = path.resolve(sortie);
 if (OUT === RACINE || RACINE.startsWith(OUT + path.sep)) { console.error('Refus : la sortie contiendrait le depot.'); process.exit(2); }
 
-const DOSSIERS = ['app', 'blog', 'i', 'maj', 'p', 'c', 'a'];
-const FICHIERS = ['index.html', 'legal.html', 'privacy.html', 'terms.html', '404.html', 'aide-apk.html',
-  'logo.png', 'og-image.png', 'robots.txt', 'sitemap.xml', 'tarifs.json'];
+const DOSSIERS = ['app', 'blog', 'i', 'maj', 'p', 'c', 'a', 'aide'];
+// coachs.html : l'annuaire public des coachs ; charte.css : la charte des
+// pages publiques (i/, p/, c/, 404.html la lient en /charte.css).
+const FICHIERS = ['index.html', 'coachs.html', 'legal.html', 'privacy.html', 'terms.html', '404.html', 'aide-apk.html',
+  'logo.png', 'og-image.png', 'robots.txt', 'sitemap.xml', 'tarifs.json', 'charte.css'];
 // Dans app/ : les fichiers de travail qui vivent a cote du code servi.
 const HORS_APP = [/^tests\.js$/, /\.d\.ts$/, /\.map$/, /\.md$/i];
 // LE CONTROLE FINAL : aucun de ces chemins ne doit exister dans la sortie.
@@ -67,6 +69,10 @@ if (PAGES) {
 } else if (fs.existsSync(path.join(RACINE, '.nojekyll'))) {
   fs.copyFileSync(path.join(RACINE, '.nojekyll'), path.join(OUT, '.nojekyll'));
 }
+
+// LE PLAN DU SITE, régénéré sur la copie publiée : <lastmod> = dernier commit
+// de chaque page (scripts/sitemap.mjs ; l'historique du checkout doit être complet).
+execFileSync(process.execPath, [path.join(RACINE, 'scripts', 'sitemap.mjs'), path.join(OUT, 'sitemap.xml')], { stdio: 'inherit' });
 
 if (MINIFIER) execFileSync(process.execPath, [path.join(RACINE, 'scripts', 'minifier.mjs'), path.join(OUT, 'app')], { stdio: 'inherit' });
 

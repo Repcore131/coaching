@@ -1,0 +1,52 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LA DIVERGENCE AVEC main (série 6, lot 10)
+# ══════════════════════════════════════════════════════════════════════════
+#  Chaque matin, pour chaque PR ouverte : combien de commits de main sa
+#  branche n'a pas. Dès qu'il y en a, UN ticket (ouvert, ou mis à jour)
+#  « <branche> : main a N commits absents » ; revenu à zéro, il se ferme.
+#  Lecture seule sur le code : rien n'est fusionné ici.
+# ══════════════════════════════════════════════════════════════════════════
+name: Divergence avec main
+
+on:
+  schedule:
+    - cron: '41 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  divergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compter et signaler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr list --state open --json number,headRefName --jq '.[] | "\(.number) \(.headRefName)"' |
+          while read -r PR BR; do
+            git fetch -q origin "$BR" || continue
+            N=$(git rev-list --count "origin/$BR..origin/main")
+            TITRE="$BR : main a des commits absents (PR #$PR)"
+            NUM=$(gh issue list --state open --label divergence --search "\"$BR :\" in:title" --json number --jq '.[0].number // empty')
+            if [ "$N" -gt 0 ]; then
+              CORPS="La branche \`$BR\` (PR #$PR) n'a pas **$N** commit(s) de \`main\`.
+
+          Les fusionner dans la branche (merge, jamais rebase sur une branche partagée), puis relancer les tests.
+
+          $(git log --oneline "origin/$BR..origin/main" | head -20)"
+              if [ -n "$NUM" ]; then gh issue edit "$NUM" --title "$TITRE" --body "$CORPS"
+              else gh label create divergence --color B60205 --description "Une branche a du retard sur main" 2>/dev/null || true
+                   gh issue create --title "$TITRE" --body "$CORPS" --label divergence; fi
+            elif [ -n "$NUM" ]; then
+              gh issue close "$NUM" --comment "La branche a rattrapé main."
+            fi
+          done

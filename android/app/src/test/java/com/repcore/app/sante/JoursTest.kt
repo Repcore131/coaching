@@ -100,7 +100,7 @@ class JoursTest {
         assertEquals("23:00", j.coucher); assertEquals("07:00", j.lever)
     }
 
-    @Test fun `FC et poids, la dernière du jour, VFC, la moyenne, méthode rmssd, hors fenêtre écarté`() {
+    @Test fun `FC la dernière du jour, poids la première du matin, VFC la moyenne, méthode rmssd, hors fenêtre écarté`() {
         val j = Jours.construire(paris, d("2026-10-14"), d("2026-10-15"),
             pas = mapOf(d("2026-10-15") to 8123L, d("2026-10-01") to 1L),
             fcRepos = listOf(Mesure(t("2026-10-15T05:00:00Z"), 58.0), Mesure(t("2026-10-15T07:00:00Z"), 54.4)),
@@ -110,7 +110,26 @@ class JoursTest {
         assertEquals(setOf(d("2026-10-15")), j.keys)
         val x = j[d("2026-10-15")]!!
         assertEquals(8123L, x.pas); assertEquals(54, x.fcRepos); assertEquals(45.5, x.vfc!!, 0.0)
-        assertEquals("rmssd", x.vfcMethode); assertEquals(78.4, x.poids!!, 0.0); assertEquals(17.8, x.masseGrasse!!, 0.0)
+        // 06:00Z = 08:00 à Paris : la pesée du matin, pas celle de 20:00.
+        assertEquals("rmssd", x.vfcMethode); assertEquals(79.5, x.poids!!, 0.0); assertEquals("08:00", x.poidsHeure)
+        assertEquals(17.8, x.masseGrasse!!, 0.0)
+    }
+
+    @Test fun `trois pesées le même jour, 07 h 10, 13 h, 21 h, celle de 07 h 10`() {
+        val j = Jours.construire(paris, d("2026-10-15"), d("2026-10-15"),
+            poids = listOf(Mesure(t("2026-10-15T19:00:00Z"), 81.4), Mesure(t("2026-10-15T05:10:00Z"), 80.0), Mesure(t("2026-10-15T11:00:00Z"), 80.9)))
+        val x = j[d("2026-10-15")]!!
+        assertEquals(80.0, x.poids!!, 0.0); assertEquals("07:10", x.poidsHeure)
+    }
+
+    @Test fun `sans pesée du matin, 14 h et 20 h, la première du jour, et 3 h 30 n'est pas un matin`() {
+        val a = Jours.construire(paris, d("2026-10-15"), d("2026-10-15"),
+            poids = listOf(Mesure(t("2026-10-15T18:00:00Z"), 81.0), Mesure(t("2026-10-15T12:00:00Z"), 80.6)))
+        assertEquals(80.6, a[d("2026-10-15")]!!.poids!!, 0.0); assertEquals("14:00", a[d("2026-10-15")]!!.poidsHeure)
+        val b = Jours.construire(paris, d("2026-10-15"), d("2026-10-15"),
+            poids = listOf(Mesure(t("2026-10-15T01:30:00Z"), 82.0), Mesure(t("2026-10-15T07:00:00Z"), 80.2)),
+            masseGrasse = listOf(Mesure(t("2026-10-15T19:00:00Z"), 19.0), Mesure(t("2026-10-15T05:00:00Z"), 18.0)))
+        assertEquals(80.2, b[d("2026-10-15")]!!.poids!!, 0.0); assertEquals(18.0, b[d("2026-10-15")]!!.masseGrasse!!, 0.0)
     }
 
     @Test fun `un poids pris à 23 h 30 à Paris reste sur son jour`() {
@@ -129,12 +148,12 @@ class JoursTest {
 
     @Test fun `le corps JSON, format rc-sante-1`() {
         val j = sortedMapOf(d("2026-10-15") to Jour(pas = 8123, sommeilMin = 452, coucher = "23:10", lever = "06:52",
-            phases = Phases(90, 282, 80, 10), fcRepos = 54, vfc = 45.5, vfcMethode = "rmssd", poids = 78.4, masseGrasse = 17.8),
+            phases = Phases(90, 282, 80, 10), fcRepos = 54, vfc = 45.5, vfcMethode = "rmssd", poids = 78.4, poidsHeure = "07:10", masseGrasse = 17.8),
             d("2026-10-14") to Jour(pas = 0))
         assertEquals("{\"v\":1,\"plateforme\":\"android\",\"source\":\"healthconnect\",\"envoye\":1760000000000," +
             "\"jours\":{\"2026-10-14\":{\"pas\":0},\"2026-10-15\":{\"pas\":8123,\"sommeilMin\":452,\"coucher\":\"23:10\",\"lever\":\"06:52\"," +
             "\"phases\":{\"profond\":90,\"leger\":282,\"paradoxal\":80,\"eveil\":10},\"fcRepos\":54,\"vfc\":45.5,\"vfcMethode\":\"rmssd\"," +
-            "\"poids\":78.4,\"masseGrasse\":17.8}},\"origines\":{\"pas\":\"samsung\",\"sommeil\":\"garmin\"}}",
+            "\"poids\":78.4,\"poidsHeure\":\"07:10\",\"masseGrasse\":17.8}},\"origines\":{\"pas\":\"samsung\",\"sommeil\":\"garmin\"}}",
             Jours.corps(j, mapOf("sommeil" to "garmin", "pas" to "samsung"), 1760000000000))
     }
 }

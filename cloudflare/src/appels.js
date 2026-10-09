@@ -58,7 +58,9 @@ export async function verifierJeton(jeton, projet, o) {
   if (!(corps.iat <= s + 300)) throw new Error('jeton du futur');
   if (!corps.sub) throw new Error('jeton sans sujet');
   if (!corps.email) throw new Error('jeton sans adresse');
-  return { email: String(corps.email).toLowerCase(), uid: corps.sub };
+  // email_verified : le serveur le lit LUI-MÊME dans un jeton signé par Google
+  // (parrainage : un filleul n'est qualifié qu'avec une adresse vérifiée).
+  return { email: String(corps.email).toLowerCase(), uid: corps.sub, emailVerifie: corps.email_verified === true };
 }
 
 // Une erreur « à la Firebase » : le client lit error.message.
@@ -66,7 +68,8 @@ export class ErreurAppel extends Error {
   constructor(statut, message) { super(message); this.statut = statut; }
 }
 export async function repondreAppel(req, gestionnaires, contexte) {
-  const nom = new URL(req.url).pathname.replace(/^\/fn\//, '');
+  // `contexte.nom` : une route nommée (/abonnement/changer) qui parle le même protocole.
+  const nom = contexte.nom || new URL(req.url).pathname.replace(/^\/fn\//, '');
   const g = gestionnaires[nom];
   const envoyer = (statut, corps) => new Response(JSON.stringify(corps), { status: statut,
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*',

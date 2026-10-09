@@ -41,6 +41,14 @@ fantôme dit qu'elle ne restaure pas.
 
 Mesure du 02/09/2026 : 4 142 / 18 aux trois passes, aucun fantôme.
 
+Mesure du 05/10/2026 (build 1799) : **6 044 / 0 aux trois passes, aucun
+fantôme**, dans les conditions de `suite.mjs` (fuseau de Paris, 412×4000,
+Ciqual, illustrations et règles chargées). `detail2` donne le message et la
+ligne de chaque fantôme. Les restes qui en faisaient — chronomètre de séance,
+feuille du laboratoire (`#ml-style`), célébrations en file (`#bdg-ecran`),
+légende préparée, contenu de la boutique — sont rendus par le `finally` du
+test qui les crée (`_woTimerZero`, `_mlStyleRendre`/`_mlGarde`, `_bdgRendre`).
+
 ## Captures
 
 `capture.mjs` prend une page qui contient des blocs `.banc`, chacun de
@@ -60,13 +68,33 @@ version qui divergerait au premier changement.
 ## La suite intégrée
 
 ```bash
-node scripts/verif/suite.mjs "http://127.0.0.1:8799/index.html"
+python3 -m http.server 8799 --bind 127.0.0.1 &   # à la RACINE du dépôt
+node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" [port] [--tolere=N]
 ```
 
-Rend `{total, echecs, liste}`. Une cinquantaine d'échecs sont attendus hors
-navigateur réel : écrans non montés, service worker absent. **Comparer à une
-base** avant de conclure à une régression : relever le chiffre sur
-`git stash`, puis sur la version modifiée.
+Rend `{total, echecs, liste}`, puis une ligne finale lisible :
+
+```
+SUITE : 6037 tests, 0 echec(s) — VERT
+```
+
+**Le code de sortie arrête la livraison** (lot 51, 02/10/2026) : la suite joue
+dans `.github/workflows/firebase.yml`, AVANT « Deployer », et sort en **1** si
+elle a levé, si une ligne du rapport commence par « ⛔ SUITE INTERROMPUE », si
+moins de 1 000 tests ont joué (`SUITE_MIN`), ou s'il y a plus d'échecs que
+`--tolere=N` (0 par défaut — à n'utiliser que le temps de corriger un échec
+connu). `SUITE_ATTENDUS` retire en plus les échecs propres à un Chrome sans
+GPU ni codecs (`echecs-attendus.json`, vide aujourd'hui).
+
+**La fenêtre est fixée par le script** : 412×4000, mobile
+(`Emulation.setDeviceMetricsOverride` avant le premier `Runtime.evaluate`). Le
+« menu de gêne » de `tests.js` se ferme quand sa case sort de l'écran : le
+résultat dépendait de la taille par défaut de la fenêtre. `VW` / `VH`
+l'écrasent pour une mesure ponctuelle.
+
+**Chiffre de référence (02/10/2026, build 1798) : 6 037 tests, échecs
+attendus = 0.** Contre-épreuve : `DLR_ALLEGE` passé de 0.80 à 0.81 → 2 échecs,
+sortie 1.
 
 ### Deux pièges qui faisaient mentir le rapport
 
@@ -81,3 +109,25 @@ substitution lève à mi-parcours ; la suite étant un seul `try`, tout ce qui
 suivait ne s'exécutait plus. Mesuré : **2 117** tests joués sans ce
 chargement, **3 729** avec. 1 612 assertions passaient pour absentes, et un
 lot pouvait en casser sans que rien ne l'indique.
+
+## La fumée des pages
+
+```bash
+node scripts/verif/fumee-pages.mjs [http://127.0.0.1:8799] [9223]
+```
+
+Charge `/`, `/app/` (sans compte, puis l'accueil d'un athlète de
+démonstration), `/i/`, `/p/`, `/c/`, `/a/` et `/maj/`, en 390×844 et 1280×800,
+à Paris et à la Martinique : 32 chargements, chacun sur un stockage vide et
+réseau extérieur coupé. Sortie 1 sur une exception non rattrapée, une
+ressource du site en 4xx/5xx (hors `EXCEPTIONS` du script : `favicon.ico`,
+images à repli) ou un texte visible contenant NaN, undefined, Infinity ou
+[object Object] — sans égard à la casse, car un titre en majuscules CSS
+s'affiche « UNDEFINED ».
+
+Contre-épreuve du 05/10/2026 : « Tes '+undefined+' missions » dans l'accueil
+de l'athlète → 4 échecs (2 tailles × 2 fuseaux), sortie 1.
+
+Joué par `suite.yml` (chaque push) et `firebase.yml` (avant « Deployer »), avec
+`banniere-geometrie.mjs` et les règles sur l'émulateur
+(`firebase emulators:exec --only database --project demo-repcore`).

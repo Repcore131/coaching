@@ -38,7 +38,9 @@ def rcSigne = rcEnv('RC_KEYSTORE') && rcEnv('RC_KEYSTORE_PASS') && rcEnv('RC_KEY
 def twaManifest = [
     applicationId: 'com.repcore.app',
     hostName: 'repcore-sync.web.app', // The domain being opened in the TWA.
-    launchUrl: '/app/index.html', // The start path for the TWA. Must be relative to the domain.
+    // ?src=play (02/10/2026) : l'attribution range ces ouvertures dans « play ».
+    // LauncherActivity le retire si l'APK n'a pas été installé par le Play Store.
+    launchUrl: '/app/index.html?src=play', // The start path for the TWA. Must be relative to the domain.
     name: 'RepCore', // The application name.
     launcherName: 'RepCore', // The name shown on the Android Launcher.
     themeColor: '#080808', // The color used for the status bar.
@@ -72,8 +74,8 @@ android {
         applicationId "com.repcore.app"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 4
-        versionName "4"
+        versionCode 6
+        versionName "6"
         // L'adresse du serveur léger (réception Health Connect) et du site.
         buildConfigField "String", "SERVEUR", '"https://repcore-serveur.repcore.workers.dev"'
         buildConfigField "String", "SITE", '"https://repcore-sync.web.app"'

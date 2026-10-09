@@ -140,6 +140,12 @@ export function nettoyerJour(j, source) {
       else ignores++;
     }
   } else if (j.coucher != null || j.lever != null || j.phases != null) ignores++;
+  // L'HEURE DE LA PESÉE RETENUE (05/10/2026) : la première du matin, que le
+  // coach voit à côté du poids. Seulement avec un poids, et au format HH:MM.
+  if (j.poidsHeure !== undefined && j.poidsHeure !== null) {
+    if (v.poids !== undefined && HHMM.test(String(j.poidsHeure))) v.poidsHeure = String(j.poidsHeure);
+    else ignores++;
+  }
   if (v.vfc !== undefined) {
     const m = String(j.vfcMethode || '').toLowerCase();
     v.vfcMethode = m === 'rmssd' || m === 'sdnn' ? m : METHODE_DEFAUT[source] || 'sdnn';
@@ -159,7 +165,7 @@ export function nettoyerJour(j, source) {
 // jours/<d>/origines/<famille> : 'garmin' quand Garmin l'a écrit, effacée
 // quand une autre source le réécrit.
 const FAMILLE = { pas: 'pas', sommeilMin: 'sommeil', coucher: 'sommeil', lever: 'sommeil', phases: 'sommeil',
-  fcRepos: 'fcRepos', vfc: 'vfc', vfcMethode: 'vfc', poids: 'poids', masseGrasse: 'masseGrasse' };
+  fcRepos: 'fcRepos', vfc: 'vfc', vfcMethode: 'vfc', poids: 'poids', poidsHeure: 'poids', masseGrasse: 'masseGrasse' };
 export function ecrireJours(cle, brut, source, maintenant) {
   const maj = {};
   let ignores = 0;
@@ -183,6 +189,9 @@ export function ecrireJours(cle, brut, source, maintenant) {
     // Champ par champ : un envoi des pas seuls n'efface pas le sommeil reçu.
     const p = 'sante_sync/' + cle + '/jours/' + d + '/';
     for (const k of cles) maj[p + k] = v[k];
+    // Un poids sans heure efface l'heure d'un poids précédent : elle ne
+    // désignerait plus la pesée affichée.
+    if (v.poids !== undefined && v.poidsHeure === undefined) maj[p + 'poidsHeure'] = null;
     maj[p + 'recu'] = maintenant;
     const familles = new Set(cles.map((k) => FAMILLE[k]).filter(Boolean));
     for (const f of familles) maj[p + 'origines/' + f] = source === 'garmin' ? 'garmin' : null;
@@ -316,12 +325,16 @@ export function rappelSante({ meta, rappel, t }) {
 }
 
 /** Un compte (clé de sante_sync) : lit, décide, pousse, retient. */
-export async function rappelSanteUn(cle, t, { db, envoyerPush }) {
+// `serieReservee(cle, t)` (metier.js) : le jeudi de 8 h à 18 h, un athlète dont
+// la série n'est pas validée garde sa place pour « Ta série est en danger » ;
+// le rappel de santé est alors SAUTÉ (rien n'est retenu : il pourra partir demain).
+export async function rappelSanteUn(cle, t, { db, envoyerPush, serieReservee }) {
   const node = (await db.ref('sante_sync/' + cle + '/meta').get()).val();
   if (!node || node.plateforme !== 'ios') return 'pas_ios';
   const rappel = (await db.ref('sante_sync/' + cle + '/rappel').get()).val();
   const d = rappelSante({ meta: node, rappel, t });
   if (!d.ok) return d.raison;
+  if (serieReservee && await serieReservee(cle, t)) return 'reserve_serie';
   const r = await envoyerPush(cle, MESSAGE_RAPPEL, { attendre: false });
   if (!r || !r.envoye) return (r && r.raison) || 'echec';
   await db.ref('sante_sync/' + cle + '/rappel').set({ jour: paris(t).jour, n: d.n, recu: d.recu });

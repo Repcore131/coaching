@@ -23,8 +23,9 @@ function monde(extra) {
       m2: { de: 'athlete', texte: 'Un peu courbaturée mais ça va, merci !', at: T - 30e3, lu: false },
       m3: { de: 'coach', texte: 'Déjà lu', at: T - 20e3, lu: true } } } } }, extra || {}));
   const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: F.fetchImpl });
-  const M = creerMetier({ db, vapid: VAPID, fetchImpl: F.fetchImpl, maintenant: () => T });
-  return { F, M };
+  let horloge = T;
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: F.fetchImpl, maintenant: () => horloge });
+  return { F, M, avance: (ms) => { horloge += ms; } };
 }
 
 test('le type de push « message » est déclaré', () => {
@@ -74,4 +75,28 @@ test('les préférences comptent : un coach qui a coupé « message » ne reçoi
   await w2.M.evenement({ type: 'message', par: LEA, coach: COACH, dest: COACH, i: 'm2' });
   assert.equal(w2.F.recus.length, 0);
   assert.equal(w.F.recus.length, 1);
+});
+
+test('deux messages du même fil en 2 min : un seul push ; après 10 min, le suivant part', async () => {
+  const w = monde();
+  w.F.ecrire('messages/' + COACH + '/' + LEA + '/m4', { de: 'coach', texte: 'Et pense à t’hydrater.', at: T, lu: false });
+  w.F.ecrire('messages/' + COACH + '/' + LEA + '/m5', { de: 'coach', texte: 'Bonne soirée !', at: T, lu: false });
+  await w.M.evenement({ type: 'message', par: COACH, coach: COACH, dest: LEA, i: 'm1' });
+  w.avance(2 * 60e3);
+  await w.M.evenement({ type: 'message', par: COACH, coach: COACH, dest: LEA, i: 'm4' });
+  assert.equal(recus(w).length, 1, 'un fil, un push toutes les 10 min');
+  w.avance(9 * 60e3);
+  await w.M.evenement({ type: 'message', par: COACH, coach: COACH, dest: LEA, i: 'm5' });
+  assert.equal(recus(w).length, 2);
+  // Un autre fil (l'athlète vers le coach) n'est pas freiné par celui-ci.
+  await w.M.evenement({ type: 'message', par: LEA, coach: COACH, dest: COACH, i: 'm2' });
+  assert.equal(recus(w).length, 3);
+});
+
+test('un message à un athlète qui a coupé « coach » ne part pas', async () => {
+  const w = monde();
+  w.F.ecrire('users/' + LEA + '/pushPrefs', { coach: false });
+  assert.equal(await w.M.evenement({ type: 'message', par: COACH, coach: COACH, dest: LEA, i: 'm1' }), 'envoye');
+  assert.equal(recus(w).length, 0);
+  assert.equal(w.F.lire('push_log_humain/' + LEA), null);
 });

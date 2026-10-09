@@ -1,5 +1,10 @@
 // Lance la suite integree dans un Chrome headless et rend le rapport.
-const [,, url, port='9223'] = process.argv;
+// --tolere=N (02/10/2026) : N echecs connus ignores le temps de leur correction.
+// Par defaut 0 — tout echec fait sortir en 1, et la livraison s'arrete.
+const args = process.argv.slice(2);
+const opt = args.find((a) => a.startsWith('--tolere='));
+const TOLERE = opt ? Math.max(0, parseInt(opt.slice(9), 10) || 0) : 0;
+const [url, port='9223'] = args.filter((a) => !a.startsWith('--'));
 const t = await (await fetch(`http://127.0.0.1:${port}/json/new?` + encodeURIComponent(url),
   { method: 'PUT' })).json();
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -21,13 +26,23 @@ await cmd('Network.setCacheDisabled', { cacheDisabled: true });
 // Toute assertion ecrite pour verifier qu'un calcul de jours resiste au passage
 // a l'heure d'ete passait donc au vert sans rien avoir traverse, y compris avec
 // une division brute de millisecondes. Le fuseau est celui des utilisateurs.
-await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
-// LA FENETRE. Par defaut 800x600, comme avant ; la CI passe VW=1280 VH=2000 :
-// a 800x600, un test de la liste de gene ne trouve pas son bouton hors champ
-// et interrompt la suite (constate le 30/09/2026).
-if (process.env.VW || process.env.VH)
-  await cmd('Emulation.setDeviceMetricsOverride', { width: +(process.env.VW || 800), height: +(process.env.VH || 600),
-    deviceScaleFactor: 1, mobile: false });
+// --tz=<IANA> (02/10/2026) : un autre fuseau, pour verifier qu'un affichage de
+// date ne depend pas de celui de la machine — America/Martinique (UTC-4, sans
+// heure d'ete), Pacific/Tahiti (UTC-10). Par defaut, Paris.
+const optTz = args.find((a) => a.startsWith('--tz='));
+const TZ = optTz ? optTz.slice(5) : 'Europe/Paris';
+await cmd('Emulation.setTimezoneOverride', { timezoneId: TZ });
+console.log('fuseau :', TZ);
+// LA FENETRE EST FIXEE ICI, ET PLUS PAR LA CI (02/10/2026). Un telephone,
+// 412 de large, et 4000 de haut : un test de la liste de gene (tests.js,
+// « menu de gene ») ferme son menu quand la case sort de l'ecran, si bien que
+// le resultat dependait de la taille par defaut de la fenetre — 800x600 en
+// local, autre chose sur un runner. VW / VH restent possibles pour une mesure.
+// --fenetre-par-defaut : aucune emulation, la taille de la fenetre de Chrome
+// (800x600 en headless) — pour verifier que le total n'en depend pas.
+if (!args.includes('--fenetre-par-defaut'))
+  await cmd('Emulation.setDeviceMetricsOverride', { width: +(process.env.VW || 412),
+    height: +(process.env.VH || 4000), deviceScaleFactor: 1, mobile: !(process.env.VW || process.env.VH) });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
@@ -84,11 +99,44 @@ console.log('regles :', await ev(`(async()=>{ try{
 }catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
-    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; }
+    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':'')),
+    noms:r.detail.filter(x=>!x.ok).map(x=>x.n)}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
-// LE CODE DE SORTIE DIT LE RESULTAT (30/09/2026) : la CI le lit. Une suite
-// interrompue (erreur, ou moins de 1000 tests joues) est un echec aussi.
+// LE CODE DE SORTIE DIT LE RESULTAT : la CI le lit, et la livraison
+// (firebase.yml, « Suite integree ») s'arrete sur un 1. Echec si :
+//   · la suite a leve (rap.erreur) ou n'a rien rendu ;
+//   · une ligne du rapport commence par « ⛔ SUITE INTERROMPUE » ;
+//   · moins de SUITE_MIN tests joues (1000 par defaut) ;
+//   · plus d'echecs que --tolere=N (0 par defaut) — hors echecs attendus de
+//     SUITE_ATTENDUS (scripts/verif/echecs-attendus.json), propres a un
+//     Chrome sans GPU ni codecs.
 const MIN = +(process.env.SUITE_MIN || 1000);
-process.exit(rap && !rap.erreur && rap.echecs === 0 && rap.total >= MIN ? 0 : 1);
+const total = (rap && rap.total) || 0;
+let echecs = (rap && rap.echecs) || 0;
+let compte = echecs;
+const interrompue = !!(rap && (rap.liste || []).some((l) => String(l).startsWith('⛔ SUITE INTERROMPUE')));
+if (process.env.SUITE_ATTENDUS && rap && !rap.erreur) {
+  const {readFileSync} = await import('node:fs');
+  const attendus = new Set((JSON.parse(readFileSync(process.env.SUITE_ATTENDUS, 'utf8')).echecs) || []);
+  const noms = rap.noms || [];
+  const imprevus = noms.filter((n) => !attendus.has(n));
+  const gueris = [...attendus].filter((n) => !noms.includes(n));
+  console.log('\nEchecs attendus (hors navigateur reel) : ' + (noms.length - imprevus.length) + ' sur ' + attendus.size + '.');
+  if (gueris.length) console.log('::warning::Attendu(s) qui passe(nt) desormais, a retirer de ' + process.env.SUITE_ATTENDUS + ' :\n  ' + gueris.join('\n  '));
+  // Les noms sur UNE ligne : une annotation GitHub ne garde que la première,
+  // et le nom du test en échec se perdait (build 1876).
+  if (imprevus.length) console.log('::error::Echec(s) IMPREVU(S) : ' + imprevus.map((n) => n.replace(/\s+/g, ' ')).join(' | '));
+  compte = imprevus.length;
+}
+const raisons = [];
+if (!rap) raisons.push('aucun rapport');
+else if (rap.erreur) raisons.push('erreur : ' + rap.erreur);
+if (interrompue) raisons.push('suite interrompue');
+if (rap && !rap.erreur && total < MIN) raisons.push('seulement ' + total + ' tests joues (minimum ' + MIN + ')');
+if (compte > TOLERE) raisons.push(compte + ' echec(s) pour ' + TOLERE + ' tolere(s)');
+console.log('\nSUITE : ' + total + ' tests, ' + echecs + ' echec(s)' + (TOLERE ? ' (' + TOLERE + ' tolere(s))' : '') +
+  ' — ' + (raisons.length ? 'ROUGE : ' + raisons.join(' ; ') : 'VERT'));
+if (raisons.length) console.log('::error::Suite integree ROUGE : ' + raisons.join(' ; '));
+process.exit(raisons.length ? 1 : 0);

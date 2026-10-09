@@ -9,12 +9,33 @@ compatibility_date = "2026-09-01"
 [triggers]
 crons = ["* * * * *"]
 
-# /arrivee et /amb-clic : 30 appels par minute et par adresse IP, au-delà 429.
+# LES LIMITES, par adresse IP, au-delà 429 : AUCUNE ROUTE PUBLIQUE SANS LIMITE.
 # L'API de limitation des Workers (gratuite) ; voir README, « Limites ».
+# La période ne peut valoir que 10 ou 60 secondes.
+# /arrivee, /amb-clic, /prospect, /vitrine-vue : 30 appels par minute.
 [[ratelimits]]
 name = "LIMITE_ARRIVEES"
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
+
+# /reveil (POST seulement) : 6 appels par minute.
+[[ratelimits]]
+name = "LIMITE_REVEIL"
+namespace_id = "1002"
+simple = { limit = 6, period = 60 }
+
+# Toutes les routes (sauf OPTIONS) : 120 appels par minute.
+[[ratelimits]]
+name = "LIMITE_ROUTES"
+namespace_id = "1003"
+simple = { limit = 120, period = 60 }
+
+# LES JOURNAUX DU WORKER : le bilan de chaque minute (console.log dans
+# scheduled) et les erreurs, gardés un sur dix (tableau de bord Cloudflare >
+# Workers > repcore-serveur > Logs). Gratuit dans les limites du plan.
+[observability]
+enabled = true
+head_sampling_rate = 0.1
 
 [vars]
 FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"
@@ -30,3 +51,34 @@ PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPU
 # et, pour les paiements et la suppression des vidéos (secrets-paiements.ps1) :
 #   PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 # et, facultatif (dntu57ml a défaut) : CLOUDINARY_CLOUD_NAME
+# et, pour l'assistant IA (ia.js ; secrets.ps1, étape 3) :
+#   ANTHROPIC_API_KEY   la clé de l'API Claude (absente : l'assistant répond « en pause »)
+#   IA_COUPEE           '1' pour couper l'assistant sans redéployer, '0' pour le rouvrir
+
+# ══ LE PLAN PAYANT (Workers Paid, 5 $/mois) : PRÉPARÉ, PAS ACTIVÉ ════════
+# Quand et comment basculer : docs/capacite.md. Tant que ce bloc reste en
+# commentaire, le Worker tourne exactement comme sur le plan gratuit : sans
+# liaison PUSHS ni FILE_PUSH, tout passe par /evenements et le réveil.
+# ⚠ NE PAS DÉCOMMENTER SUR LE PLAN GRATUIT : le déploiement (cloudflare.yml)
+#   échouerait faute de files créées et de plan qui les porte.
+#
+# 1. Les deux files (une fois) :
+#      npx wrangler@4 queues create repcore-push
+#      npx wrangler@4 queues create repcore-push-ko
+# 2. Décommenter :
+#
+# [[queues.producers]]
+# binding = "PUSHS"
+# queue = "repcore-push"
+#
+# [[queues.consumers]]
+# queue = "repcore-push"
+# max_batch_size = 20
+# max_retries = 5
+# dead_letter_queue = "repcore-push-ko"
+#
+# 3. Et ajouter dans [vars] (plus haut) :
+#      FILE_PUSH = "queue"          # le drapeau : sans lui, la file n'est pas utilisée
+#      BUDGET = "900"               # requêtes par réveil (plafond payant : 1 000)
+#      MAX_CHIFFREMENTS = "200"     # chiffrements de push par exécution (30 s de calcul)
+#    (COUT_PUSH, ~8 requêtes par push, ne change pas.)

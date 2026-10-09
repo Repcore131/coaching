@@ -22,16 +22,50 @@ export const DUEL_MESURES = ['seances', 'tonnage', 'serie', 'progressionPct'];
 export const DUEL_J = 864e5;
 export const DUEL_ANNULE_APRES = 30 * DUEL_J;   // accepté, jamais commencé
 export const DUEL_RAPPEL_AVANT = 2 * DUEL_J;    // le push de J-2
+// LES BATTLES STREET (build 1956) : un duel sur un format de défi street
+// (FORMATS_DEFIS de l'app, src/core/061). La mesure porte le format :
+// « street_the100 ». Il démarre dès que l'invité rejoint ; chacun pose SON
+// meilleur score dans duels/<id>/street/<sa clé> pendant la durée (le
+// Worker ne relit aucune séance : il compare). En « temps », le plus petit
+// gagne, et un score absent perd.
+export const STREET_FORMATS = { the100: 'temps', pharaon: 'temps', demiBBR: 'temps', onTheBar: 'reps',
+  special6: 'temps', super10: 'temps', deathPyramid: 'temps' };
+export const STREET_NOMS = { the100: 'The 100', pharaon: 'Pharaon', demiBBR: 'Demi-BBR', onTheBar: 'On the bar',
+  special6: 'Spécial 6', super10: 'Super 10', deathPyramid: 'Death pyramid' };
+export const STREET_RE = /^street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/;
+export const STREET_SCORE_MAX = 100000;
+// Le format d'une mesure street, ou null.
+export function formatStreet(mesure) {
+  const x = STREET_RE.exec(String(mesure || ''));
+  return x ? x[1] : null;
+}
+export function mesureValide(mesure) {
+  return DUEL_MESURES.indexOf(mesure) >= 0 || !!formatStreet(mesure);
+}
+// 'moins' : le plus petit gagne (un chrono) ; 'plus' sinon.
+export function sensDuel(mesure) {
+  const f = formatStreet(mesure);
+  return f && STREET_FORMATS[f] === 'temps' ? 'moins' : 'plus';
+}
 // Ce qu'on dit de la mesure : « 14 jours de régularité ».
 const MOTS = { seances: 'régularité', serie: 'régularité', tonnage: 'volume', progressionPct: 'progression' };
 
 export function texteDuel(mesure, duree) {
   const d = DUEL_DUREES.indexOf(Number(duree)) >= 0 ? Number(duree) : 14;
+  const f = formatStreet(mesure);
+  if (f) return 'Battle ' + STREET_NOMS[f] + ' sur ' + d + ' jours';
   return d + ' jours de ' + (MOTS[mesure] || 'régularité');
 }
 // La valeur lisible d'un score.
 export function texteScore(mesure, v) {
   const n = Number(v) || 0;
+  const f = formatStreet(mesure);
+  if (f) {
+    if (!(n > 0)) return 'pas de score';
+    if (STREET_FORMATS[f] === 'reps') return Math.round(n) + ' rép.';
+    const s = Math.round(n);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
   if (mesure === 'tonnage') return (n >= 10000 ? (Math.round(n / 100) / 10).toString().replace('.', ',') + ' t' : Math.round(n) + ' kg');
   if (mesure === 'progressionPct') return (Math.round(n * 10) / 10).toString().replace('.', ',') + ' %';
   if (mesure === 'serie') return Math.round(n) + ' sem.';
@@ -44,13 +78,23 @@ export function autreNom(d, cle) {
 }
 // Les scores, lus dans la progression que chacun a écrite.
 export function scoresDe(d) {
+  if (d && formatStreet(d.mesure)) {
+    const st = d.street || {};
+    const w = (k) => { const x = k && st[k]; const n = Number(x && x.score); return isFinite(n) && n > 0 && n <= STREET_SCORE_MAX ? n : 0; };
+    return { createur: w(d.createur), invite: w(d.invite) };
+  }
   const p = (d && d.progres) || {};
   const v = (k) => { const x = k && p[k]; const n = Number(x && x.valeur); return isFinite(n) && n >= 0 ? n : 0; };
   return { createur: v(d && d.createur), invite: v(d && d.invite) };
 }
-// 'createur', 'invite' ou 'egalite'.
-export function gagnantDe(scores) {
+// 'createur', 'invite' ou 'egalite'. `mesure` : un chrono street se gagne
+// au plus petit temps, et 0 (aucun score posé) perd toujours.
+export function gagnantDe(scores, mesure) {
   const a = Number(scores && scores.createur) || 0, b = Number(scores && scores.invite) || 0;
+  if (sensDuel(mesure) === 'moins') {
+    if (a > 0 && b > 0) return a < b ? 'createur' : (b < a ? 'invite' : 'egalite');
+    return a > 0 ? 'createur' : (b > 0 ? 'invite' : 'egalite');
+  }
   return a > b ? 'createur' : (b > a ? 'invite' : 'egalite');
 }
 // Le démarrage : à la première séance de l'invité. Le début recule de 4 h
@@ -78,17 +122,19 @@ const jourFr = (t) => new Date(Number(t)).toLocaleDateString('fr-FR', { timeZone
 
 // ── Les messages ─────────────────────────────────────────────────────────
 // `cle` : à qui l'on écrit. Un titre court, un corps qui dit quoi faire.
+// `prio` (metier.js, PUSH_PRIORITE) : le J-2 (80) et le résultat (90) passent
+// en second push du jour ; les autres messages de duel gardent celle du type.
 export function pushRejoint(d) {
   return { type: 'defi', url: './?duels=1', tag: 'duel-rejoint-' + d.id,
     title: String(d.inviteNom || 'Ton pote').slice(0, 24) + ' relève ton duel ⚡',
-    body: texteDuel(d.mesure, d.duree) + '. Le duel commence à sa première séance.' };
+    body: texteDuel(d.mesure, d.duree) + (formatStreet(d.mesure) ? '. Le battle est lancé : pose ton meilleur score.' : '. Le duel commence à sa première séance.') };
 }
 // LA REVANCHE (lot B, 29/09/2026) : un duel né « accepte » entre amis. Rien à
 // accepter : la première séance de l'invité lance le compte.
 export function pushRevanche(d) {
   return { type: 'defi', url: './?duels=1', tag: 'duel-revanche-' + d.id,
     title: String(d.createurNom || 'Ton pote').slice(0, 24) + ' te défie en revanche ⚡',
-    body: texteDuel(d.mesure, d.duree) + '. Ta prochaine séance lance le compte.' };
+    body: texteDuel(d.mesure, d.duree) + (formatStreet(d.mesure) ? '. Le battle est lancé : pose ton meilleur score.' : '. Ta prochaine séance lance le compte.') };
 }
 // PURE. Un duel créé entre amis, prêt à être rattaché à son invité ?
 //   'ok' | une raison de refus.
@@ -109,27 +155,29 @@ export function pushDebut(d, cle) {
 export function pushRappel(d, cle) {
   const s = scoresDe(d);
   const moi = cle === d.createur ? s.createur : s.invite, lui = cle === d.createur ? s.invite : s.createur;
-  const etat = moi > lui ? 'Tu mènes' : (moi < lui ? 'Tu es mené' : 'Égalité');
-  return { type: 'defi', url: './?duels=1', tag: 'duel-j2-' + d.id,
+  const g = gagnantDe({ createur: s.createur, invite: s.invite }, d.mesure);
+  const role = cle === d.createur ? 'createur' : 'invite';
+  const etat = g === 'egalite' ? 'Égalité' : (g === role ? 'Tu mènes' : 'Tu es mené');
+  return { type: 'defi', prio: 'duel_j2', url: './?duels=1', tag: 'duel-j2-' + d.id,
     title: 'Plus que 2 jours contre ' + autreNom(d, cle).slice(0, 24),
-    body: etat + ' : ' + texteScore(d.mesure, moi) + ' contre ' + texteScore(d.mesure, lui) + '. Une séance peut tout changer.' };
+    body: etat + ' : ' + texteScore(d.mesure, moi) + ' contre ' + texteScore(d.mesure, lui) + (formatStreet(d.mesure) ? '. Un essai peut tout changer.' : '. Une séance peut tout changer.') };
 }
 export function pushResultat(d, cle, gagnant) {
   const s = d.scores || scoresDe(d);
   const moi = cle === d.createur ? s.createur : s.invite, lui = cle === d.createur ? s.invite : s.createur;
   const score = texteScore(d.mesure, moi) + ' contre ' + texteScore(d.mesure, lui);
   const role = cle === d.createur ? 'createur' : 'invite';
-  if (gagnant === 'egalite') return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  if (gagnant === 'egalite') return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: 'Égalité contre ' + autreNom(d, cle).slice(0, 24), body: score + '. Revanche ?' };
-  if (gagnant === role) return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  if (gagnant === role) return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: 'Tu as gagné ton duel ⚡', body: score + ' contre ' + autreNom(d, cle).slice(0, 24) + '. Badge CHAMPION débloqué.' };
-  return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: autreNom(d, cle).slice(0, 24) + ' remporte le duel', body: score + '. Revanche ?' };
 }
 // Ce que la clôture écrit dans /defis_resultats/<cle>/<id> : la même forme
 // que les défis du Canal (l'app en tire le badge CHAMPION), et `duel`.
 export function resultatPour(d, cle, gagnant, t) {
   const role = cle === d.createur ? 'createur' : 'invite';
-  return { titre: ('Duel contre ' + autreNom(d, cle)).slice(0, 80), mesure: DUEL_MESURES.indexOf(d.mesure) >= 0 ? d.mesure : 'seances',
+  return { titre: ('Duel contre ' + autreNom(d, cle)).slice(0, 80), mesure: mesureValide(d.mesure) ? d.mesure : 'seances',
     collectif: false, fin: Number(d.fin) || t, termineLe: t, champion: gagnant === role, duel: true };
 }

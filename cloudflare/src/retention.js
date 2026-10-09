@@ -37,7 +37,7 @@ const net = (s) => String(s || 'direct').toLowerCase().replace(/[^a-z0-9_-]/g, '
 const jourDe = (t) => new Date(t).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
 const jours = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / J);
 
-export function accVide() { return { c: {}, d: { dau: 0, wau: 0, mau: 0, n: 0 }, f: {}, l: {} }; }
+export function accVide() { return { c: {}, d: { dau: 0, wau: 0, mau: 0, n: 0 }, f: {}, l: {}, a: {} }; }
 /** Un résumé d'activité est-il lisible ? */
 export function resumeValide(r) {
   return !!(r && typeof r === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(String(r.inscrit || '')));
@@ -86,7 +86,12 @@ export function accumuler(acc0, r, t) {
   if (r.parcours) f.parcours++;
   if (Number(r.finEssai) > 0 && Number(r.finEssai) <= t) f.finEssai++;
   if (r.payant) f.payant++;
-  // 4. Les leviers : seulement les cohortes dont le J30 est connu.
+  // 4. L'activation (u.activation, recopiée dans le résumé sous `act`).
+  if (r.act) {
+    acc.a = acc.a || {};
+    accumulerActivation(acc.a, { role: 'athlete', activation: r.act, palier: r.pal }, t);
+  }
+  // 5. Les leviers : seulement les cohortes dont le J30 est connu.
   if (j30ok !== null) {
     const lev = r.lev || {};
     for (const L of LEVIERS) {
@@ -114,7 +119,99 @@ export function resultat(acc0, t) {
     return { cle: L.cle, lib: L.lib, avec: { n: x.an, j30: pct(x.ao, x.an) }, sans: { n: x.sn, j30: pct(x.so, x.sn) },
       alerte: x.an < SEUIL_GROUPE || x.sn < SEUIL_GROUPE };
   });
-  return { maj: t, comptes: Number(d.n) || 0,
+  const activation = finirActivation(acc.a || {});
+  return { maj: t, comptes: Number(d.n) || 0, activation,
     actifs: { dau: d.dau || 0, wau: d.wau || 0, mau: d.mau || 0, dauMau: d.mau > 0 ? Math.round(d.dau / d.mau * 1000) / 10 : null },
     cohortes, entonnoir: { sources, total }, leviers, seuilGroupe: SEUIL_GROUPE };
+}
+
+// ══ L'ACTIVATION, PAR SEMAINE D'INSCRIPTION ET PAR CANAL (05/10/2026) ══════
+//
+// Chaque compte inscrit depuis ce lot porte u.activation = {inscrit, canal,
+// premiereSeance, premierBilan, premierRepas} (dates en ms, posées UNE fois
+// par l'app). Le résumé d'activité la recopie (act: {i, c, s, b, r}) avec le
+// palier du moment (pal). Par semaine d'inscription (lundi, Paris) et par
+// canal :
+//   n          comptes de la cohorte ;
+//   seance24h  % ayant fait leur première séance dans les 24 h, parmi ceux
+//              inscrits depuis 24 h au moins ;
+//   delaiMedH  délai médian jusqu'à la première séance, en heures, parmi ceux
+//              qui l'ont faite ;
+//   bilan7j    % ayant rempli le bilan de départ dans les 7 jours, parmi ceux
+//              inscrits depuis 7 jours au moins ;
+//   payantJ30  % dont le palier n'est pas « aucun », parmi ceux inscrits depuis
+//              30 jours au moins (le palier LU au calcul, pas celui du jour 30 :
+//              l'historique des paliers n'est pas gardé).
+// Exclus : les comptes sans activation (antérieurs, pas de rétro-calcul) et
+// les coachs. Une date antérieure à l'inscription (horloge du téléphone) est
+// ramenée à l'inscription.
+export const CANAUX = ['autonome', 'coach', 'ami', 'ambassadeur'];
+const H = 3600e3;
+const DELAIS_MAX = 5000;   // par groupe : la médiane n'a pas besoin de plus
+// Le lundi (Paris) de la semaine d'un instant, AAAA-MM-JJ.
+function lundiDe(t) {
+  const j = jourDe(t);
+  const d = new Date(j + 'T12:00:00Z');
+  const k = (d.getUTCDay() + 6) % 7;
+  return new Date(d.getTime() - k * J).toISOString().slice(0, 10);
+}
+// PURE. Une activation lisible, normalisée, ou null. Accepte la forme du
+// dossier (inscrit, canal, premiereSeance…) et celle du résumé (i, c, s…).
+export function activationNormale(a) {
+  if (!a || typeof a !== 'object') return null;
+  const ins = Number(a.inscrit != null ? a.inscrit : a.i);
+  if (!(ins > 0)) return null;
+  const c = String(a.canal != null ? a.canal : a.c || '');
+  const date = (v) => { const x = Number(v); return x > 0 ? Math.max(ins, x) : null; };
+  return { inscrit: ins, canal: CANAUX.includes(c) ? c : 'autonome',
+    premiereSeance: date(a.premiereSeance != null ? a.premiereSeance : a.s),
+    premierBilan: date(a.premierBilan != null ? a.premierBilan : a.b),
+    premierRepas: date(a.premierRepas != null ? a.premierRepas : a.r) };
+}
+/** Ajoute UN dossier ({role, activation, palier}) à l'accumulateur d'activation. */
+export function accumulerActivation(acc, dossier, t) {
+  const x = dossier || {};
+  if (x.role === 'coach') return acc;
+  const a = activationNormale(x.activation);
+  if (!a || a.inscrit > t) return acc;
+  const sem = lundiDe(a.inscrit);
+  const g = ((acc[sem] = acc[sem] || {})[a.canal] = acc[sem][a.canal]
+    || { n: 0, n24: 0, s24: 0, d: [], n7: 0, b7: 0, n30: 0, p30: 0 });
+  g.n++;
+  const age = t - a.inscrit;
+  if (age >= 24 * H) { g.n24++; if (a.premiereSeance && a.premiereSeance - a.inscrit < 24 * H) g.s24++; }
+  if (a.premiereSeance && g.d.length < DELAIS_MAX) g.d.push(Math.round((a.premiereSeance - a.inscrit) / H * 10) / 10);
+  if (age >= 7 * J) { g.n7++; if (a.premierBilan && a.premierBilan - a.inscrit < 7 * J) g.b7++; }
+  if (age >= 30 * J) { g.n30++; if (x.palier && x.palier !== 'aucun') g.p30++; }
+  return acc;
+}
+/** PURE. La médiane d'une liste de nombres, ou null. */
+export function mediane(l) {
+  const v = (l || []).map(Number).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : Math.round((v[m - 1] + v[m]) / 2 * 10) / 10;
+}
+/** Les cohortes publiées : [{sem, canal, n, seance24h, n24, delaiMedH, bilan7j, n7, payantJ30, n30}]. */
+export function finirActivation(acc) {
+  const out = [];
+  for (const sem of Object.keys(acc || {}).sort().slice(-COHORTES_MAX)) {
+    for (const canal of CANAUX) {
+      const g = acc[sem][canal];
+      if (!g) continue;
+      out.push({ sem, canal, n: g.n, seance24h: pct(g.s24, g.n24), n24: g.n24, delaiMedH: mediane(g.d),
+        bilan7j: pct(g.b7, g.n7), n7: g.n7, payantJ30: pct(g.p30, g.n30), n30: g.n30 });
+    }
+  }
+  return out;
+}
+/**
+ * PURE. Les cohortes d'activation d'une liste de dossiers
+ * ({role, activation, palier}), à l'instant `maintenant`.
+ */
+export function activationCohortes(dossiers, maintenant) {
+  const t = Number(maintenant) || Date.now();
+  const acc = {};
+  for (const d of dossiers || []) accumulerActivation(acc, d, t);
+  return finirActivation(acc);
 }

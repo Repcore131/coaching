@@ -1,0 +1,151 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  PRÉPARER LA MISE EN PRODUCTION — un seul bouton (série 6, lot 10)
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  Actions > « Préparer la mise en production » > Run workflow, sur la
+#  branche de la PR. Deux modes :
+#    · ecrire = non (par défaut) : SAUVEGARDE chiffrée, migrations À BLANC,
+#      et la liste FAIT / À FAIRE (scripts/mise_en_prod.mjs) dans le résumé ;
+#    · ecrire = oui : la même sauvegarde, puis les migrations POUR DE VRAI
+#      (droits, puis boutique) et le déploiement du Worker.
+#  L'environnement GitHub « production » peut exiger une approbation
+#  (Settings > Environments > production > Required reviewers).
+#
+#  ── LES SECRETS (noms seulement, jamais lus ici en clair) ──
+#    FIREBASE_SERVICE_ACCOUNT  le JSON du compte de service (déjà posé)
+#    SAUVEGARDE_CLE            la phrase de passe des archives (sauvegarde.yml)
+#    CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID  le déploiement du Worker
+#    PAYPAL_CLIENT_SECRET      le rattrapage des droits relit PayPal
+# ══════════════════════════════════════════════════════════════════════════
+name: Préparer la mise en production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ecrire:
+        description: 'Écrire pour de vrai (migrations + déploiement du Worker)'
+        type: choice
+        options: [non, oui]
+        default: non
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mise-en-prod
+  cancel-in-progress: false
+
+jobs:
+  preparer:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ⚠ PAR COMPARAISON, jamais la table des secrets : seuls les NOMS des
+      # secrets posés sortent de cette étape.
+      - name: Les secrets posés
+        id: secrets
+        env:
+          A: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+          B: ${{ secrets.SAUVEGARDE_CLE != '' }}
+          C: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          D: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+          E: ${{ secrets.PAYPAL_CLIENT_SECRET != '' }}
+        run: |
+          L=""
+          [ "$A" = "true" ] && L="$L,FIREBASE_SERVICE_ACCOUNT"
+          [ "$B" = "true" ] && L="$L,SAUVEGARDE_CLE"
+          [ "$C" = "true" ] && L="$L,CLOUDFLARE_API_TOKEN"
+          [ "$D" = "true" ] && L="$L,CLOUDFLARE_ACCOUNT_ID"
+          [ "$E" = "true" ] && L="$L,PAYPAL_CLIENT_SECRET"
+          echo "presents=${L#,}" >> "$GITHUB_OUTPUT"
+          [ "$A" = "true" ] && [ "$B" = "true" ] || { echo "::error::FIREBASE_SERVICE_ACCOUNT et SAUVEGARDE_CLE sont requis : pas de migration sans sauvegarde chiffrée."; exit 1; }
+
+      - name: Éprouver les scripts (fausse base)
+        run: |
+          node --test scripts/verif/mise_en_prod.test.mjs
+          node scripts/verif/sauvegarde.test.mjs
+
+      - name: Le compte de service, en fichier
+        env:
+          COMPTE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          umask 077
+          printf '%s' "$COMPTE" > "$RUNNER_TEMP/compte.json"
+          echo "FIREBASE_SERVICE_ACCOUNT=$RUNNER_TEMP/compte.json" >> "$GITHUB_ENV"
+
+      # LA SAUVEGARDE D'ABORD, chiffrée et vérifiée, comme sauvegarde.yml.
+      - name: Sauvegarder (complet, chiffré)
+        id: sauvegarde
+        env:
+          SAUVEGARDE_CLE: ${{ secrets.SAUVEGARDE_CLE }}
+        run: |
+          set -euo pipefail
+          NOM="avant-mise-en-prod-$(date -u +%F-%H%M)"
+          node scripts/sauvegarde_base.mjs --complet --dossier "$NOM"
+          tar -cf "$NOM.tar" "$NOM"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$NOM.tar" -out "$NOM.tar.enc" -pass env:SAUVEGARDE_CLE
+          A=$(sha256sum "$NOM.tar" | cut -d' ' -f1)
+          B=$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$NOM.tar.enc" -pass env:SAUVEGARDE_CLE | sha256sum | cut -d' ' -f1)
+          [ "$A" = "$B" ] || { echo "::error::L'archive chiffrée ne se déchiffre pas à l'identique."; exit 1; }
+          rm -rf "$NOM" "$NOM.tar"
+          echo "nom=$NOM" >> "$GITHUB_OUTPUT"
+
+      - name: Garder la sauvegarde (artefact, 35 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.sauvegarde.outputs.nom }}
+          path: ${{ steps.sauvegarde.outputs.nom }}.tar.enc
+          retention-days: 35
+          if-no-files-found: error
+
+      - name: Migrations à blanc
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: |
+          node scripts/migrer_boutique.mjs
+          if [ -n "$PAYPAL_CLIENT_SECRET" ]; then node cloudflare/scripts/remplir-droits.mjs; else echo "::warning::PAYPAL_CLIENT_SECRET absent : rattrapage des droits non simulé."; fi
+
+      - name: Migrations pour de vrai
+        if: inputs.ecrire == 'oui'
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: |
+          [ -n "$PAYPAL_CLIENT_SECRET" ] || { echo "::error::PAYPAL_CLIENT_SECRET requis pour écrire les droits."; exit 1; }
+          node cloudflare/scripts/remplir-droits.mjs --ecrire
+          node scripts/migrer_boutique.mjs --ecrire
+
+      - name: Les dépendances du Worker
+        if: inputs.ecrire == 'oui'
+        working-directory: cloudflare
+        run: npm ci
+
+      - name: Déployer le Worker
+        if: inputs.ecrire == 'oui'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare
+          wranglerVersion: '4'
+          command: deploy --tag mep-${{ github.run_id }} --message "mise en prod ${{ github.sha }}"
+
+      - name: Ce qui est fait, ce qui reste
+        if: always()
+        env:
+          SECRETS_PRESENTS: ${{ steps.secrets.outputs.presents }}
+          SAUVEGARDE_FAITE: ${{ steps.sauvegarde.outcome == 'success' && '1' || '0' }}
+        run: |
+          set +e
+          node scripts/mise_en_prod.mjs > etat.txt
+          S=$?
+          cat etat.txt
+          { echo '## Mise en production'; echo; echo '```'; cat etat.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/compte.json"
+          # 2 = des étapes restent : ce n'est pas une panne du travail.
+          [ $S -eq 1 ] && exit 1 || exit 0

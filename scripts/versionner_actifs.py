@@ -35,6 +35,16 @@ une assertion dont le motif finissait par « \n\s*\}\n » ne trouvait plus rien 
 l'envoi vers sante_privee semblait avoir disparu. On sort donc en LF, ce que la
 page avait toujours vu. (Gain accessoire : 102 107 octets de moins avant gzip.)
 
+Le theme clair (app/rc-theme.<build>.css) est renomme avec eux depuis le
+01/10/2026. Ensuite : python3 scripts/theme_clair.py (qui regenere son bloc
+dans rc-theme et y sort toute regle claire laissee dans rc-style).
+
+rc-core EST ASSEMBLE D'ABORD (01/10/2026) : sa source vit dans src/core/
+(scripts/assembler_core.mjs, src/core/LISEZMOI.md). Le premier geste de ce
+script est donc `node scripts/assembler_core.mjs` (avec --verifier sous
+--verifier) ; s'il echoue — rc-core modifie a la main, par exemple — on
+s'arrete avant de renommer quoi que ce soit.
+
 Usage :  python scripts/versionner_actifs.py [--verifier]
          --verifier ne change rien : il dit ce qui serait fait, et les poids.
 """
@@ -43,6 +53,7 @@ import os
 import re
 import sys
 import gzip
+import subprocess
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(RACINE, 'app', 'index.html')
@@ -90,8 +101,19 @@ def bloc(html, ouvrant, fermant, mini):
         i = fin + len(fermant)
 
 
+def assembler_core(verifier):
+    """rc-core depuis src/core/, avant tout renommage. Sans src/core/, rien."""
+    if not os.path.isdir(os.path.join(RACINE, 'src', 'core')):
+        return
+    cmd = ['node', os.path.join(RACINE, 'scripts', 'assembler_core.mjs')] + (['--verifier'] if verifier else [])
+    r = subprocess.run(cmd, cwd=RACINE)
+    if r.returncode != 0:
+        sys.exit('assembler_core.mjs a echoue : rien n\'a ete renomme.')
+
+
 def main():
     verifier = '--verifier' in sys.argv
+    assembler_core(verifier)
     html = lire(INDEX)
     crlf_avant = html.count('\r\n')
     build = build_de(html)
@@ -147,6 +169,18 @@ def main():
             html = html.replace(m.group(1), js_nom)
             faits.append('code renomme %s en %s' % (m.group(1), js_nom))
 
+    # ── LE THEME CLAIR (rc-theme.<build>.css, 01/10/2026) ───────────────
+    # Sorti de rc-style par scripts/extraire_theme_clair.py, lie juste apres
+    # elle. Renomme au meme geste, sinon la page demanderait un 404 en clair.
+    theme_nom = 'rc-theme.%s.css' % build
+    m = re.search(r'href="\./(rc-theme\.\d+\.css)"', html)
+    if m and m.group(1) != theme_nom:
+        ancien = os.path.join(RACINE, 'app', m.group(1))
+        if os.path.exists(ancien) and not verifier:
+            os.rename(ancien, os.path.join(RACINE, 'app', theme_nom))
+        html = html.replace(m.group(1), theme_nom)
+        faits.append('theme renomme %s en %s' % (m.group(1), theme_nom))
+
     # ── LES DEUX FICHIERS SORTENT EN LF ──────────────────────────────────
     # Toujours, y compris au passage de renommage : c'est ce que la page
     # voyait quand ces blocs etaient en ligne (voir l'avertissement en tete).
@@ -163,9 +197,21 @@ def main():
     sw = lire(SW)
     sw2 = re.sub(r"'\./rc-core\.\d+\.js'", "'./%s'" % js_nom, sw)
     sw2 = re.sub(r"'\./rc-style\.\d+\.css'", "'./%s'" % css_nom, sw2)
+    sw2 = re.sub(r"'\./rc-theme\.\d+\.css'", "'./%s'" % theme_nom, sw2)
     if sw2 != sw and not verifier:
         ecrire(SW, sw2)
         faits.append('sw.js : ASSETS mis a jour')
+
+    # ── version.json : CE QUE LA SONDE DE VERSION LIT (01/10/2026) ─────────
+    # index.html demandait sw.js (18 Ko en brotli) pour y lire repcore-v<n> ;
+    # il lit desormais ce fichier de quelques octets, servi en no-cache
+    # (firebase.json) et jamais mis en cache par le worker (sw.js, fetch).
+    VERSION = os.path.join(RACINE, 'app', 'version.json')
+    v_txt = '{"build":"%s"}\n' % build
+    if (lire(VERSION) if os.path.exists(VERSION) else None) != v_txt:
+        if not verifier:
+            ecrire(VERSION, v_txt)
+        faits.append('version.json : build %s' % build)
 
     if not verifier:
         if html.count('\n') - html.count('\r\n') != 0:
@@ -180,7 +226,7 @@ def main():
     print('  index.html APRES : ' + poids(apresb))
     print('  CRLF : %d -> %d' % (crlf_avant, html.count('\r\n')))
     for n in sorted(os.listdir(os.path.join(RACINE, 'app'))):
-        if re.match(r'rc-(core|style)\.\d+\.(js|css)$', n):
+        if re.match(r'rc-(core|style|theme)\.\d+\.(js|css)$', n):
             print('  app/%s : %s' % (n, poids(lire(os.path.join(RACINE, 'app', n), binaire=True))))
 
 

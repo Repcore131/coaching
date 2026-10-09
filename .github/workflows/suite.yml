@@ -1,0 +1,143 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) A CHAQUE PUSH ET PR
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI. La suite n'etait lancee qu'a la main (scripts/verif/suite.mjs par
+#  le protocole DevTools) et, sur main seulement, dans un job non bloquant de
+#  firebase.yml. Une regression pouvait donc entrer par une PR sans que rien
+#  ne rougisse. Ce workflow la joue sur chaque push et chaque PR.
+#
+#  LES ECHECS ATTENDUS : un Chrome de CI n'est pas un vrai navigateur (pas de
+#  GPU, de codecs, de polices du systeme). Les tests qui n'y echouent QUE pour
+#  cela sont figes, par leur nom, dans scripts/verif/echecs-attendus.json ;
+#  le job n'echoue que sur un echec qui n'y figure pas (SUITE_ATTENDUS).
+#
+#  LA RACINE DU DEPOT EST SERVIE, et non app/ : la suite lit
+#  ../database.rules.json.
+#
+#  LE MODE HEADLESS : --headless=new d'abord ; si Page.captureScreenshot n'y
+#  rend pas la main (scripts/verif/README.md, « Le piege qui coute une
+#  heure »), bascule en --headless=old (sonde : scripts/verif/sonde-capture.mjs).
+# ══════════════════════════════════════════════════════════════════════════
+name: Suite navigateur
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # rc-core EST ASSEMBLE DE src/core/ (01/10/2026, src/core/LISEZMOI.md).
+      # On le regenere, puis on exige que le fichier committe soit IDENTIQUE :
+      # une modification faite dans un seul des deux (src/core/ sans
+      # reassembler, ou rc-core a la main) echoue ici.
+      - name: Assembler rc-core depuis src/core et comparer au fichier committe
+        run: |
+          node scripts/assembler_core.mjs --forcer
+          if [ -n "$(git status --porcelain -- app/)" ]; then
+            git status --short -- app/
+            git diff --stat -- app/
+            echo "::error::app/rc-core.<build>.js differe de l'assemblage de src/core/ : lancer node scripts/assembler_core.mjs et committer les deux."
+            exit 1
+          fi
+          node scripts/assembler_core.mjs --verifier
+
+      # LE CONTRASTE DU THEME CLAIR (01/10/2026) : chaque texte genere par
+      # scripts/theme_clair.py tient 4,5:1 (WCAG AA) sur les fonds clairs. Le
+      # mode --verifier ne modifie rien et sort en 1 au premier texte sous le seuil.
+      - name: Verifier le contraste du theme clair
+        run: python3 scripts/theme_clair.py --verifier
+
+      # LES COULEURS PAR LEURS JETONS (01/10/2026) : le nombre de couleurs encore
+      # ecrites en dur ne doit pas depasser scripts/couleurs-plafond.txt, qui ne
+      # fait que baisser (python3 scripts/couleurs.py --baisser-plafond).
+      - name: Verifier les couleurs (palette de :root, plafond de litteraux)
+        run: python3 scripts/couleurs.py --verifier
+
+      # LES ESPACEMENTS SUR L'ECHELLE (margin, padding, gap) : aucun hors echelle.
+      - name: Verifier les espacements
+        run: python3 scripts/espacements.py --verifier
+
+      # LES RAYONS ET LES OMBRES SUR LEURS ECHELLES (01/10/2026) : aucun
+      # border-radius en px calable, aucune ombre noire simple en dur.
+      - name: Verifier les rayons et les ombres
+        run: python3 scripts/rayons.py --verifier
+
+      # LES EMOJIS DE L'INTERFACE SONT DES ICONES (01/10/2026) : il n'en reste
+      # que dans la liste blanche de scripts/emojis.py (partages, reactions).
+      - name: Verifier les emojis
+        run: python3 scripts/emojis.py --verifier
+
+      - name: Verifier que la base d'aliments se regenere a l'identique
+        run: node scripts/verif/ciqual-reproductible.mjs
+
+      - name: Servir la racine du depot
+        run: |
+          python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/app/index.html >/dev/null && break; sleep 0.5; done
+
+      - name: Demarrer Chrome (headless new, sinon old)
+        run: |
+          set -e
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then echo "::error::Pas de Chrome sur ce runner."; exit 1; fi
+          "$CHROME" --version
+          demarrer() {
+            "$CHROME" "--headless=$1" --no-sandbox --disable-gpu --no-first-run --disable-dev-shm-usage \
+              --user-data-dir="$RUNNER_TEMP/chrome-$1" --remote-debugging-port=9223 about:blank >"$RUNNER_TEMP/chrome-$1.log" 2>&1 &
+            echo $! > "$RUNNER_TEMP/chrome.pid"
+            for i in $(seq 1 30); do curl -s http://127.0.0.1:9223/json/version >/dev/null && return 0; sleep 1; done
+            return 1
+          }
+          if demarrer new && node scripts/verif/sonde-capture.mjs 9223; then
+            echo "Chrome en --headless=new."
+          else
+            echo "::warning::--headless=new ne rend pas la capture : bascule en --headless=old."
+            kill "$(cat "$RUNNER_TEMP/chrome.pid")" 2>/dev/null || true
+            sleep 2
+            demarrer old
+            node scripts/verif/sonde-capture.mjs 9223 || echo "::warning::la capture ne repond pas non plus en --headless=old (la suite n'en a pas besoin)."
+          fi
+
+      - name: Suite navigateur
+        env:
+          SUITE_ATTENDUS: scripts/verif/echecs-attendus.json
+        # La fenetre (412x4000, mobile) est fixee par suite.mjs lui-meme (lot 51).
+        run: timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
+      # LES MÊMES CONTRÔLES QUE LA LIVRAISON (firebase.yml), À CHAQUE PUSH ET PR
+      # (05/10/2026) : sans eux ici, une page qui lève ou un « undefined » à
+      # l'écran ne se verrait qu'au moment de livrer main.
+      - name: Fumée des pages
+        run: timeout 900 node scripts/verif/fumee-pages.mjs "http://127.0.0.1:8799" 9223
+
+      - name: Géométrie de la bannière
+        run: timeout 300 node scripts/verif/banniere-geometrie.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
+      # firebase-tools exige Java 21 ; le Java du runner est plus ancien.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Règles (émulateur)
+        run: |
+          npm install -g firebase-tools
+          firebase emulators:exec --only database --project demo-repcore \
+            "node cloudflare/test/regles-amis.emu.mjs && node cloudflare/test/regles-evenements.emu.mjs && node cloudflare/test/regles-sante.emu.mjs && node cloudflare/test/regles-messages.emu.mjs"

@@ -7,7 +7,8 @@ import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
 import { creerMetier, MAX_CHIFFREMENTS } from '../src/metier.js';
 import { creerPaypal } from '../src/paypal.js';
-import { minute, BUDGET, ESSAIS_MAX, VERROU_MS } from '../src/planif.js';
+import { minute, BUDGET, ESSAIS_MAX, VERROU_MS, travaux } from '../src/planif.js';
+import { paris, CLE_CREATEUR_PUSH } from '../src/metier.js';
 import worker from '../src/index.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -256,8 +257,14 @@ await test('/sante?cles=1 : 401 sans le secret d’administration, ou avec un fa
     const j = await r.json();
     assert.ok('paypal' in j && 'cloudinary' in j);
   } finally { globalThis.fetch = vrai; }
-  // /sante tout court reste public (il ne dit que oui/non).
-  assert.equal((await worker.fetch(new Request('https://s.t/sante'), ENV, CTX)).status, 200);
+  // /sante tout court reste public : le pouls et des compteurs, rien sur les clés.
+  // (Base injoignable ici : 503, et toujours aucun secret dans la réponse.)
+  globalThis.fetch = async () => { throw new Error('hors ligne'); };
+  try {
+    const s = await worker.fetch(new Request('https://s.t/sante'), ENV, CTX);
+    assert.equal(s.status, 503);
+    assert.ok(!/paypal|cloudinary|acces/.test(await s.text()));
+  } finally { globalThis.fetch = vrai; }
 });
 
 await test('/arrivee et /amb-clic : limités par adresse IP (429), les autres IP passent', async () => {
@@ -272,6 +279,74 @@ await test('/arrivee et /amb-clic : limités par adresse IP (429), les autres IP
   assert.equal((await appel('5.6.7.8', '/arrivee?src=story')).status, 204);
   const panne = Object.assign({}, ENV, { LIMITE_ARRIVEES: { async limit() { throw new Error('limiteur absent'); } } });
   assert.equal((await worker.fetch(new Request('https://s.t/arrivee?src=story'), panne, CTX)).status, 204, 'une panne du limiteur laisse passer');
+});
+
+await test('la série en danger : jeudi de 17 h à 21 h ; les travaux qui envoient sans attendre s’arrêtent à 21 h', async () => {
+  const T = travaux({ planifies: {}, abonnes: () => [] });
+  const w = (n) => T.find((x) => x.nom === n);
+  const q = (n, iso) => w(n).quand(paris(PARIS(iso)));
+  assert.equal(q('serie', '2026-10-01T16:59:00'), false);
+  assert.equal(q('serie', '2026-10-01T17:00:00'), true);
+  assert.equal(q('serie', '2026-10-01T20:59:00'), true);
+  assert.equal(q('serie', '2026-10-01T21:00:00'), false);
+  assert.equal(q('serie', '2026-10-02T17:30:00'), false, 'le jeudi seulement');
+  for (const n of ['serie', 'retour', 'bilan', 'wrapped', 'badge', 'duels']) assert.equal(w(n).fenetre, true, n);
+  assert.equal(q('retour', '2026-10-01T21:00:00'), false);
+  assert.equal(q('duels', '2026-10-01T21:10:00'), false);
+});
+
+// ══ LE POULS ET L'ALERTE DES ÉCHECS (01/10/2026) ═══════════════════════════
+// Tous les travaux faits pour la période : le jour, ou l'heure pour les travaux horaires.
+const tousFinis = (jour, heure) => Object.fromEntries(travaux({ planifies: {}, abonnes: () => [] })
+  .map((x) => [x.nom, { jour: x.heure && heure != null ? jour + 'h' + heure : jour, fini: true }]));
+await test('le pouls est écrit dans worker/verrou SANS requête de plus : une minute à vide en coûte toujours 5', async () => {
+  const t = PARIS('2026-09-29T15:00:20');   // un mardi : aucun travail horaire neuf à 15 h 00 (déjà marqués)
+  const p = paris(t);
+  const jobs = tousFinis(p.jour, p.heure);
+  const w = monde({ worker: { jobs } }, t);
+  const b = await w.minute();
+  assert.equal(b.requetes, 5, 'verrou (2), file (1), travaux (1), écriture finale (1)');
+  const v = w.F.lire('worker/verrou');
+  assert.equal(v.jusqua, 0);
+  // erreur: null n'est pas gardé par Firebase (un null efface le champ).
+  assert.deepEqual(v.pouls, { t, requetes: 4, evenements: 0, echecs: 0, source: 'cron' });
+  // Par /reveil : la source le dit.
+  w.avance(60e3);
+  const b2 = await w.minute({ source: 'reveil' });
+  assert.equal(b2.requetes, 5);
+  assert.equal(w.F.lire('worker/verrou/pouls/source'), 'reveil');
+});
+await test('un réveil trop long rend le bail par transaction, et y écrit aussi le pouls', async () => {
+  const t = PARIS('2026-09-29T15:00:20');
+  const p = paris(t);
+  const jobs = tousFinis(p.jour, p.heure);
+  const w = monde({ worker: { jobs } }, t);
+  let appels = 0;
+  // La première lecture de l'horloge vaut t, les suivantes t + 45 s.
+  const b = await w.minute({ maintenant: () => (appels++ === 0 ? t : t + 45e3) });
+  assert.equal(b.requetes, 6, 'verrou (2), file (1), travaux (1), transaction de rendu (2)');
+  const v = w.F.lire('worker/verrou');
+  assert.equal(v.jusqua, 0); assert.equal(v.pouls.t, t + 45e3); assert.equal(v.pouls.requetes, 4);
+});
+await test('un événement rangé dans evenements_ko prévient le créateur (push urgent), une fois par heure au plus', async () => {
+  const t = PARIS('2026-09-28T23:10:00');   // en pleine nuit : l'urgent passe les heures calmes
+  const w = monde({ users: { 'lea@t,fr': {} },
+    push: { [CLE_CREATEUR_PUSH]: { x: Object.assign({}, appareil('https://push.test/crea').abonnement) } },
+    evenements: { e0000000001: { type: 'message', par: 'lea@t,fr', cible: 'c1', at: t, essais: ESSAIS_MAX - 1 },
+      e0000000002: { type: 'reaction', par: 'lea@t,fr', cible: 'c2', at: t, essais: ESSAIS_MAX - 1 } } }, t);
+  w.M.evenement = async () => { throw new Error('base 500 sur canaux'); };
+  const b = await w.minute();
+  assert.equal(b.echecs, 2);
+  assert.equal(cles(w.F.lire('evenements_ko')).length, 2);
+  assert.equal(w.F.recus.length, 1, 'un seul push pour deux échecs dans la même heure');
+  assert.equal(w.F.recus[0].endpoint, 'https://push.test/crea');
+  assert.equal(w.F.lire('worker/alerte_ko'), paris(t).jour + 'h' + paris(t).heure);
+  assert.ok(b.requetes <= 50, b.requetes + ' requêtes');
+  // L'heure suivante, un nouvel échec repart.
+  w.F.ecrire('evenements/e0000000003', { type: 'message', par: 'lea@t,fr', cible: 'c3', at: t, essais: ESSAIS_MAX - 1 });
+  w.avance(3600e3);
+  await w.minute();
+  assert.equal(w.F.recus.length, 2);
 });
 
 console.log(ok + ' tests passés — budget par réveil : ' + BUDGET + ' requêtes, ' + MAX_CHIFFREMENTS + ' chiffrements');

@@ -98,12 +98,30 @@ export function cadenceValide(x) {
   if (BILAN_FREQS.indexOf(f) < 0 || !Number.isInteger(j) || j < 0 || j > 6) return null;
   return { freq: f, jour: j };
 }
-/** PURE. {jour:'AAAA-MM-JJ' (l'échéance, à Paris), freq, jourSem, source}. */
-export function echeanceBilanParis(dernierMs, cadence, freqAthlete) {
-  const cad = cadenceValide(cadence);
+// SÉRIE 6 — LE DÉFAUT DU COACH, MÊME RÈGLE QUE L'APP (cadenceEffective) :
+// le réglage propre du dossier (bilanCadence), sinon le défaut du coach
+// (defautsCoach.bilan, à défaut reglagesCoach.cadence), sinon la fréquence de
+// l'athlète et le samedi. cloudflare/test/relances.test.mjs compare les deux.
+/** PURE. Le défaut de bilan d'un coach ({ defautsCoach, reglagesCoach }) : {freq, jour} ou null. */
+export function defautBilanCoach(coach) {
+  const c = coach || {};
+  return cadenceValide(c.defautsCoach && c.defautsCoach.bilan) || cadenceValide(c.reglagesCoach && c.reglagesCoach.cadence);
+}
+/** PURE. {freq, jour, source:'athlete'|'coach'|'repcore'}. */
+export function cadenceEffective(cadence, freqAthlete, coach) {
+  const propre = cadenceValide(cadence);
+  if (propre) return { freq: propre.freq, jour: propre.jour, source: 'athlete' };
+  const def = defautBilanCoach(coach);
+  if (def) return { freq: def.freq, jour: def.jour, source: 'coach' };
   const fa = Number(freqAthlete);
-  const freq = cad ? cad.freq : (BILAN_FREQS.indexOf(fa) >= 0 ? fa : 2);
-  const jourSem = cad ? cad.jour : 6;
+  return { freq: BILAN_FREQS.indexOf(fa) >= 0 ? fa : 2, jour: 6, source: 'repcore' };
+}
+/** PURE. {jour:'AAAA-MM-JJ' (l'échéance, à Paris), freq, jourSem, source}. `coach` facultatif. */
+export function echeanceBilanParis(dernierMs, cadence, freqAthlete, coach) {
+  const ce = cadenceEffective(cadence, freqAthlete, coach);
+  const cad = ce.source !== 'repcore';
+  const freq = ce.freq;
+  const jourSem = ce.jour;
   const brut = _decaler(_jourParis(dernierMs), freq * 7);
   const [y, m, d] = brut.split('-').map(Number);
   let ecart = ((jourSem - new Date(Date.UTC(y, m - 1, d)).getUTCDay()) % 7 + 7) % 7;
@@ -111,8 +129,8 @@ export function echeanceBilanParis(dernierMs, cadence, freqAthlete) {
   return { jour: _decaler(brut, ecart), freq, jourSem, source: cad ? 'coach' : 'athlete' };
 }
 /** PURE. En retard à l'instant t ? {depuis (minuit à Paris du lendemain de l'échéance), echeance} ou null. */
-export function retardBilan(dernierMs, cadence, freqAthlete, t) {
-  const e = echeanceBilanParis(dernierMs, cadence, freqAthlete);
+export function retardBilan(dernierMs, cadence, freqAthlete, t, coach) {
+  const e = echeanceBilanParis(dernierMs, cadence, freqAthlete, coach);
   if (_jourParis(t) <= e.jour) return null;
   return { depuis: _minuitParis(_decaler(e.jour, 1)), echeance: e.jour };
 }
@@ -137,7 +155,8 @@ export function signauxRelance(d, t) {
     const dd = Number(der.date);
     // LA RÈGLE DE L'APP (needsAlert → echeanceBilan) : la cadence du coach,
     // sinon la fréquence de l'athlète et le samedi, en retard dès le lendemain.
-    const rt = retardBilan(dd, x.cadence, x.freq, t);
+    // Série 6 : x.coach = { defautsCoach, reglagesCoach } du coach, s'il est connu.
+    const rt = retardBilan(dd, x.cadence, x.freq, t, x.coach);
     if (rt) out.overdue = { depuis: rt.depuis };
     // Répondu par écrit OU de vive voix (bilanRepondu de l'app).
     if (!der.reponseCoach && !(der.reponseAudio && der.reponseAudio.url)) out.bilan = { depuis: dd, bilan: dd };

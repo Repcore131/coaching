@@ -57,7 +57,7 @@ Ce que ça résout, et qu'aucune des voies précédentes ne résolvait :
    Retenu à la place : **Tesseract auto-hébergé dans le dépôt**, exécuté sur l'appareil.
    Rien ne sort du téléphone, la garde unique reste fermée, et `LEGACY_PDF_IMPORT` n'est
    pas touché.
-2. **Écriture directe, sans écran de confirmation.** Le risque a été posé (une valeur
+2. **Écriture directe, sans écran de confirmation.** *(Revue en 09/2026 : voir « Révision 09/2026 ».)* Le risque a été posé (une valeur
    mal lue s'installe sans que personne ne la voie) et accepté au nom de la fluidité.
    Les garde-fous ci-dessous compensent sans ajouter d'étape.
 
@@ -153,6 +153,8 @@ saisie manuelle n'est ni retirée ni modifiée.
 
 ## Journées déjà renseignées
 
+*(Revu en 09/2026 : une capture ne remplace plus une journée synchronisée ni une saisie de moins de 24 h — voir « Révision 09/2026 ».)*
+
 **L'import écrase.** C'est déjà la règle de `_recordSteps`, et elle est cohérente avec
 le reste de l'app : une journée n'a qu'un total. Une valeur venue de la montre est par
 ailleurs plus fiable qu'un chiffre tapé de mémoire.
@@ -229,3 +231,38 @@ sans pari.
   d'une exécution locale. Le moteur est le même en navigateur, mais la durée sur un
   téléphone d'entrée de gamme reste à mesurer — c'est ce qui décide s'il faut un
   indicateur de progression pendant la lecture.
+
+## Révision 09/2026
+
+**Deux décisions de cette spec sont revues : l'écriture sans relecture
+(décision 2) et l'écrasement des journées déjà renseignées.** La raison est
+la synchronisation automatique, arrivée après cette spec (format
+« rc-sante-1 » : Health Connect par l'APK, Raccourci sur iPhone, Garmin).
+
+Le conflit : quand cette spec a été écrite, la seule autre source d'une
+journée était la saisie manuelle, et une valeur « venue de la montre » par
+capture était la plus fiable des deux. Ce n'est plus vrai. Une journée peut
+désormais arriver **mesurée** par la synchro, et la capture — un chiffre lu
+par un moteur de reconnaissance sur une image — devient la source la plus
+faible. Écrire sans relecture et écraser revenait à laisser la plus faible
+remplacer la plus sûre, en silence au-delà d'un compte dans un toast.
+
+Ce qui change (`_planCaptureStats`, `_appliquerCaptureStats`,
+`_relireCaptureStats`) :
+
+1. **Une entrée `sync` n'est jamais remplacée** par une capture, ni une
+   entrée `manual` dont `updatedAt` date de moins de 24 h (l'athlète vient de
+   la poser). Ces jours sont comptés dans `gardes` et dits dans le toast :
+   « 2 jours déjà synchronisés conservés ».
+2. **Une relecture précède toute écriture.** Une ligne par jour détecté, un
+   champ pré-rempli et modifiable, la valeur actuelle grisée quand elle
+   existe, les jours protégés en lecture seule, et « Enregistrer ».
+   « Annuler » n'écrit rien. Le panneau est celui de `rcConfirm`.
+3. **L'extraction des pas** écarte les entiers suivis d'une unité (m, km,
+   kcal, cal, min, bpm, %) et préfère celui que suit « pas » / « steps » ;
+   le maximum ne sert qu'en dernier recours. « 8 432 pas 6 120 m 320 kcal »
+   donne 8 432, et non 6 120 ou 8 432 par hasard.
+
+La priorité complète est décrite dans `docs/TRACKER_SOURCES.md` :
+synchronisation, puis saisie manuelle, puis capture.
+

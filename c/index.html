@@ -5,16 +5,12 @@
 <script>if(location.hostname==='repcore131.github.io')location.replace('https://repcore-sync.web.app'+location.pathname.replace(/^\/coaching/,'')+location.search+location.hash);</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>RepCore</title>
-<!-- LA VITRINE PUBLIQUE D'UN COACH : /coach/<slug> (reecriture firebase.json),
-     ou c/?s=<slug> la ou il n'y a pas de reecriture.
-     Meme cahier des charges que p/ : autonome, une requete a /vitrines/<slug>
-     (lecture publique, liste blanche de champs — database.rules.json), moins
-     d'une seconde. Ce noeud est PUBLIE par l'app du coach a chaque
-     enregistrement de son profil (publierVitrinePublique), depuis ce que
-     s-vitrine montre deja a ses athletes — sans ses coordonnees, sans ses
-     messages, sans ses images en base64 (trop lourdes pour une page web).
-     Les balises og: entre les marqueurs : l'apercu par defaut, remplace par
-     la fonction pagePublique quand elle sert ces pages (plan Blaze). -->
+<link rel="icon" href="/app/icons/icon-192x192.png">
+<!-- LA VITRINE PUBLIQUE D'UN COACH : /coach/<slug> (reecriture firebase.json) ou c/?s=<slug>.
+     Autonome, une requete a /vitrines/<slug> (lecture publique, liste blanche :
+     database.rules.json), publiee par l'app du coach (publierVitrinePublique),
+     sans coordonnees, messages ni images base64. Les og: entre les marqueurs
+     sont remplaces par pagePublique. Prix : prixPerso, libre, tarifs. -->
 <!--og:debut-->
 <meta property="og:type" content="profile">
 <meta property="og:site_name" content="RepCore">
@@ -25,60 +21,63 @@
 <!--og:fin-->
 <meta name="theme-color" content="#0b0b0c">
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
+<link rel="stylesheet" href="/charte.css">
 <style>
-:root{--rouge:#E02020;--fond:#0b0b0c;--carte:#151518;--bord:#2a2a2e;--gris:#a1a1aa}
+/* LA CHARTE (/charte.css, 01/10/2026) : polices, jetons, .cta, titres, bandeau
+   et etat vide. Ici, ce qui est propre a cette page. */
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--fond);color:#fff;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-main{max-width:520px;margin:0 auto;padding:28px 18px calc(28px + env(safe-area-inset-bottom,0px))}
+html,body{margin:0;color:#fff;font-size:15px;line-height:1.55}
+main{max-width:520px;margin:0 auto;padding:22px 18px calc(28px + env(safe-area-inset-bottom,0px))}
 .photo{display:block;width:128px;height:128px;border-radius:50%;object-fit:cover;margin:0 auto 12px;border:3px solid #3a0000;
   box-shadow:0 0 0 4px rgba(224,32,32,.25),0 12px 30px rgba(0,0,0,.5);background:#1b1b1e}
-h1{text-align:center;font-size:30px;line-height:1.1;margin:0 0 4px}
-.equipe{text-align:center;color:#ff3b3b;font-weight:800;letter-spacing:2.5px;font-size:12px;text-transform:uppercase}
+h1{text-align:center;font-size:46px;line-height:1;margin:0 0 6px}
+.equipe{text-align:center;color:var(--red-text);font-weight:800;letter-spacing:2.5px;font-size:12px;text-transform:uppercase}
 .phrase{text-align:center;color:#d4d4d8;margin:10px 0 0}
 .puces{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:14px}
-.puces span{background:#240707;border:1px solid #4a0c0c;border-radius:6px;padding:5px 11px;font-size:13px;font-weight:700}
-h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);margin:24px 0 8px}
+.puces span{background:#240707;border:1px solid #4a0c0c;border-radius:var(--r-1);padding:5px 11px;font-size:13px;font-weight:700}
+h2{font-size:22px;letter-spacing:1.5px;color:var(--sub);margin:24px 0 8px}
 .txt{white-space:pre-line;color:#d4d4d8}
-.prog{background:var(--carte);border:1px solid var(--bord);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.prog{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);overflow:hidden;margin-bottom:10px}
 .prog img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#1b1b1e}
 .prog div{padding:12px 14px}
 .prog b{display:block;font-size:16px}
-.prog p{margin:4px 0 8px;color:var(--gris);font-size:14px}
+.prog p{margin:4px 0 8px;color:var(--sub);font-size:14px}
 .prog .ligne{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .prog .prix{font-weight:800}
-.prog a{color:#fff;background:#2a0707;border:1px solid #5a0a0a;border-radius:10px;padding:8px 12px;text-decoration:none;font-weight:700;font-size:13px}
-.cta{display:block;margin:28px 0 10px;background:var(--rouge);color:#fff;text-align:center;text-decoration:none;font-weight:800;
-  letter-spacing:.5px;padding:17px 14px;border-radius:14px;font-size:17px;box-shadow:0 10px 30px rgba(224,32,32,.35)}
+.prog a{color:#fff;background:#2a0707;border:1px solid #5a0a0a;border-radius:var(--r-2);padding:8px 12px;text-decoration:none;font-weight:700;font-size:13px}
+/* Le bouton principal est celui de la charte (.cta). */
+main .cta{margin:28px 0 10px;min-height:52px}
 .pied{text-align:center;margin-top:30px;font-size:12px;color:#6b6b72}
 .pied a{color:#6b6b72}
-.vide{text-align:center;padding:60px 10px;color:var(--gris)}
+/* L'etat vide : .introuvable, dans la charte. */
 /* LOT C6 : les formules du coach, lues dans tarifs.json, et « Ça m'intéresse ». */
-.frm{background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:14px;margin-bottom:10px}
+.frm{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px}
 .frm b{display:block;font-size:16px}
 .frm p{margin:4px 0 10px;color:#d4d4d8;font-size:14px}
 .frm .ligne{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .frm .prix{font-weight:800;font-size:17px}
-.frm .duree{color:var(--gris);font-size:13px;font-weight:600}
-.frm button,.frm .env{color:#fff;background:#2a0707;border:1px solid #5a0a0a;border-radius:10px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;min-height:44px}
+.frm .duree{color:var(--sub);font-size:13px;font-weight:600}
+.frm button,.frm .env{color:#fff;background:#2a0707;border:1px solid #5a0a0a;border-radius:var(--r-2);padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;min-height:44px}
 .frm form{display:none;margin-top:12px;gap:8px;flex-direction:column}
 .frm.ouvert form{display:flex}
 .frm.ouvert .interesse{display:none}
-.frm input{width:100%;min-height:46px;padding:10px 12px;border-radius:10px;border:1px solid var(--bord);background:#0f0f11;color:#fff;font:inherit;font-size:16px}
+.frm input{width:100%;min-height:46px;padding:10px 12px;border-radius:var(--r-2);border:1px solid var(--border);background:#0f0f11;color:#fff;font:inherit;font-size:16px}
 .frm .piege{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
-.frm .note{color:var(--gris);font-size:12px;line-height:1.5;margin:0}
+.frm .note{color:var(--sub);font-size:12px;line-height:1.5;margin:0}
 .frm .err{color:#ff8a8a;font-size:13px;margin:0;min-height:0}
-.frm .env{background:var(--rouge);border-color:var(--rouge)}
+.frm .env{background:var(--red);border-color:var(--red)}
 .frm .gestes{display:flex;gap:8px;flex-wrap:wrap}
-.frm .payer{color:#fff;background:var(--rouge);border:1px solid var(--rouge);border-radius:10px;padding:10px 14px;font-weight:800;font-size:14px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.frm .payer{color:#fff;background:var(--red);border:1px solid var(--red);border-radius:var(--r-2);padding:10px 14px;font-weight:800;font-size:14px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
 .frm.ouvert .gestes{display:none}
-.merci{background:#140606;border:1px solid #4a0c0c;border-radius:12px;padding:14px;margin-top:12px;white-space:pre-line;color:#fff}
-.merci small{display:block;color:var(--gris);margin-top:8px}
+.merci{background:#140606;border:1px solid #4a0c0c;border-radius:var(--r-3);padding:14px;margin-top:12px;white-space:pre-line;color:#fff}
+.merci small{display:block;color:var(--sub);margin-top:8px}
 .sq{background:linear-gradient(90deg,#161619,#1f1f23,#161619);background-size:200% 100%;animation:s 1.2s infinite;border-radius:10px}
 @keyframes s{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.sq{animation:none}}
 </style>
 </head>
 <body>
+<a class="marque-bandeau" href="/" aria-label="RepCore, accueil"><img src="/app/img/vente/logo-72.webp" width="28" height="28" alt="">REPCORE</a>
 <main id="m" aria-busy="true">
   <div class="sq" style="width:128px;height:128px;margin:0 auto 14px;border-radius:50%"></div>
   <div class="sq" style="height:30px;width:60%;margin:0 auto 10px"></div>
@@ -97,6 +96,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   var SERVEUR='https://repcore-serveur.repcore.workers.dev';
   function euros(n){ var x=Number(n)||0; var s=(Math.round(x*100)%100===0)?String(Math.round(x)):x.toFixed(2).replace('.',','); return s+'\u00a0'+String.fromCharCode(8364); }
   function duree(k,f){
+    if(k==='libre') return f.mois+' mois';
     if(k==='revision_prog') return 'à la demande';
     if(k==='programme_perso') return 'une fois, '+f.mois+' mois d’app inclus';
     return f.mois+' mois de suivi';
@@ -130,7 +130,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
     try{ var kv='rc_vv_'+slug+'_'+new Date().toISOString().slice(0,10);
       if(!localStorage.getItem(kv)){ localStorage.setItem(kv,'1'); fetch(SERVEUR+'/vitrine-vue?s='+encodeURIComponent(slug),{mode:'no-cors',keepalive:true}).catch(function(){}); } }catch(e){}
   }
-  function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="vide"><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
+  function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="introuvable"><img src="/app/img/vente/logo-72.webp" width="64" height="64" alt="RepCore"><h1>Page introuvable</h1><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
   if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
@@ -163,14 +163,17 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
           +(https(p.lienAchat)?'<a href="'+https(p.lienAchat)+'" target="_blank" rel="noopener noreferrer">Voir le programme</a>':'')
           +'</div></div></div>';}).join('');
       var fk=v.formules?Object.keys(v.formules).map(function(k){return v.formules[k];}):[];
-      var C=(T&&T.coaching)||{};
+      var C0=(T&&T.coaching)||{},C={},PP=v.prixPerso||{},L=v.libre,n=function(x,a,b){return x>=a&&x<=b;};
+      Object.keys(C0).forEach(function(k){var f={},p=PP[k]||{};for(var x in C0[k])f[x]=C0[k][x];
+        if(n(p.prix,0,5e3))f.prix=p.prix;if(n(p.mois,1,24))f.mois=p.mois;if(p.lib)f.lib=String(p.lib).slice(0,40);C[k]=f;});
+      if(L&&L.lib&&n(L.prix,0,5e3)&&n(L.mois,1,24)){C.libre={lib:String(L.lib).slice(0,40),prix:L.prix,mois:L.mois,comprend:String(L.inclus||'').slice(0,140)};fk.push('libre');}
       fk=fk.filter(function(k){ return C[k]&&typeof C[k].prix==='number'&&C[k].lib; });
       if(fk.length){
         h+='<h2>Mes formules</h2>'+fk.map(function(k){
           var f=C[k];
           return '<div class="frm" data-f="'+esc(k)+'"><b>'+esc(f.lib)+'</b>'+(f.comprend?'<p>'+esc(f.comprend)+'</p>':'')
-            +'<div class="ligne"><span><span class="prix">'+euros(f.prix)+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
-            +'<span class="gestes">'+(v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
+            +'<div class="ligne"><span><span class="prix">'+(f.prix===0?'Gratuit':euros(f.prix))+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
+            +'<span class="gestes">'+(k==='libre'?'':v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
             +'<button type="button" class="interesse">Ça m’intéresse</button></span></div>'
             +'<form novalidate><input name="prenom" autocomplete="given-name" maxlength="30" placeholder="Ton prénom" aria-label="Ton prénom">'
             +'<input name="contact" autocomplete="tel" maxlength="120" placeholder="Ton téléphone ou ton e-mail" aria-label="Ton téléphone ou ton e-mail">'
@@ -183,8 +186,10 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
       var src=(q.get('src')||'vitrine').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
       var ref=(q.get('ref')||'').toUpperCase();
       h+='<a class="cta" href="'+racine+'i/?coach='+encodeURIComponent(slug)+'&src='+src
-        +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+'">Commencer avec '+prenom+'</a>';
-      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · le coaching, séance après séance.</div>';
+        +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+(window.rcArriveeVue?'&vu=1':'')+'">Commencer avec '+prenom+'</a>';
+      // LA PORTE DU COACH QUI VISITE (02/10/2026) : une vitrine est vue par
+      // d'autres coachs ; src=vitrine dit d'où il vient dans l'écran tunnel.
+      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · Tu es coach ? <a href="'+racine+'coachs.html?src=vitrine">Crée ta vitrine</a></div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
       brancherFormules(v,prenom);
     })
@@ -202,7 +207,9 @@ var src=(p.get('src')||'vitrine').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
 var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
-if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+// COMPTÉE (aujourd'hui, ici ou à l'instant) : le bouton vers /i porte vu=1, et /i
+// ne la recompte pas (02/10/2026 : /@pseudo → /i faisait deux clics).
+if(localStorage.getItem(k)){ window.rcArriveeVue=true; return; } localStorage.setItem(k,'1'); window.rcArriveeVue=true;
 fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
 }catch(e){}})();
 </script>

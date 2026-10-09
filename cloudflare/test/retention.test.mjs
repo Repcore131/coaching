@@ -92,4 +92,80 @@ test('la nuit : par lots dans le budget, /stats/retention publié, aucune donné
   assert.equal(s.entonnoir.total.inscrits, 120);
   const txt = JSON.stringify(s);
   assert.ok(!/athlete|exemple|@|,fr/.test(txt), 'aucune clé de compte dans les statistiques');
+  // LE RISQUE D'ABANDON (risque.js), dans le même travail : le modèle (120
+  // exemples : les poids par défaut), sans clé ; un risque par compte ;
+  // l'accumulateur vidé de ses listes une fois fini.
+  const m = F.lire('risque_modele');
+  assert.equal(m.defaut, true);
+  assert.ok(m.n > 0);
+  assert.ok(!/athlete|exemple|@|,fr/.test(JSON.stringify(m)), 'aucune clé de compte dans le modèle');
+  const r0 = F.lire('risque/athlete0@exemple,fr');
+  assert.ok(r0 && r0.p >= 0 && r0.p <= 1 && r0.t > 0, JSON.stringify(r0));
+  assert.equal(Object.keys(F.lire('risque')).length, 120);
+  assert.equal(F.lire('worker/jobs/retention/acc/rq'), null);
+});
+
+// ══ L'ACTIVATION PAR COHORTE (05/10/2026) ══════════════════════════════════
+const HH = 3600e3;
+const LUNDI = Date.parse('2026-11-02T10:00:00+01:00');     // un lundi, Paris
+const D = (canal, o, x) => Object.assign({ role: 'athlete', palier: 'aucun',
+  activation: Object.assign({ inscrit: LUNDI, canal, premiereSeance: null, premierBilan: null, premierRepas: null }, o || {}) }, x || {});
+test('activationCohortes : médiane du délai, bornes 24 h et 7 j, par canal', () => {
+  const l = [
+    D('autonome', { premiereSeance: LUNDI + 2 * HH, premierBilan: LUNDI + 6 * J }),
+    D('autonome', { premiereSeance: LUNDI + 23.9 * HH }),                      // < 24 h
+    D('autonome', { premiereSeance: LUNDI + 24 * HH, premierBilan: LUNDI + 7 * J }),   // 24 h pile : hors ; 7 j pile : hors
+    D('autonome', { premiereSeance: LUNDI + 50 * HH }),
+    D('autonome'),                                                             // jamais
+    D('coach', { premiereSeance: LUNDI + 1 * HH, premierBilan: LUNDI + 1 * J }, { palier: 'suivi' }),
+    D('ami', { inscrit: LUNDI + 2 * J }),
+  ];
+  const c = RT.activationCohortes(l, T);
+  const a = c.find((x) => x.canal === 'autonome');
+  assert.equal(a.sem, '2026-11-02');
+  assert.equal(a.n, 5);
+  assert.equal(a.seance24h, 40, '2 sur 5 avant 24 h (24 h pile n’en est pas)');
+  assert.equal(a.delaiMedH, 24, 'médiane de 2 ; 23,9 ; 24 ; 50 h = 23,95, arrondie au dixième');
+  assert.equal(a.bilan7j, 20, '1 sur 5 avant 7 j (7 j pile n’en est pas)');
+  assert.equal(a.payantJ30, null, 'cohorte de moins de 30 jours : pas de taux');
+  const co = c.find((x) => x.canal === 'coach');
+  assert.equal(co.n, 1); assert.equal(co.seance24h, 100); assert.equal(co.delaiMedH, 1);
+  assert.equal(c.find((x) => x.canal === 'ami').sem, '2026-11-02', 'mercredi : même semaine');
+  assert.deepEqual(c.map((x) => x.canal), ['autonome', 'coach', 'ami'], 'ordre fixe des canaux');
+});
+test('activationCohortes : J30 payant (palier ≠ aucun), seulement après 30 jours', () => {
+  const vieux = Date.parse('2026-10-05T09:00:00+02:00');
+  const c = RT.activationCohortes([
+    D('autonome', { inscrit: vieux }, { palier: 'ultime' }),
+    D('autonome', { inscrit: vieux }, { palier: 'aucun' }),
+    D('autonome', { inscrit: vieux }),
+    D('autonome', { inscrit: vieux + 40 * J }),            // pas encore 30 jours (ni dans le futur)
+  ], T);
+  const g = c.filter((x) => x.canal === 'autonome');
+  const v = g.find((x) => x.sem === '2026-10-05');
+  assert.equal(v.n30, 3); assert.equal(v.payantJ30, 33.3);
+  const n = g.find((x) => x.sem !== '2026-10-05');
+  assert.equal(n.n30, 0); assert.equal(n.payantJ30, null, 'aucune cohorte de 30 jours : pas de taux');
+});
+test('activationCohortes : sans activation, coach, horloge fausse, inscription future', () => {
+  const c = RT.activationCohortes([
+    { role: 'athlete', palier: 'ultime' },                                    // compte antérieur : exclu
+    D('autonome', {}, { role: 'coach' }),                                     // coach : exclu
+    D('autonome', { premiereSeance: LUNDI - 5 * HH, premierBilan: LUNDI - J }), // horloge en retard : bornée
+    D('autonome', { inscrit: T + J }),                                        // inscrit dans le futur : ignoré
+    D('inconnu'),                                                             // canal hors liste : autonome
+  ], T);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].n, 2);
+  assert.equal(c[0].delaiMedH, 0, 'une séance « avant » l’inscription compte à 0 h');
+  assert.equal(c[0].seance24h, 50); assert.equal(c[0].bilan7j, 50);
+});
+test('/stats/retention publie l’activation, depuis les résumés (act, pal)', () => {
+  let a = RT.accVide();
+  a = RT.accumuler(a, R(40, { act: { i: T - 40 * J, c: 'ami', s: T - 40 * J + 3 * HH }, pal: 'essentielle' }), T);
+  a = RT.accumuler(a, R(40, {}), T);                                          // résumé sans act
+  const r = RT.resultat(a, T);
+  assert.equal(r.activation.length, 1);
+  const x = r.activation[0];
+  assert.equal(x.canal, 'ami'); assert.equal(x.n, 1); assert.equal(x.delaiMedH, 3); assert.equal(x.payantJ30, 100);
 });

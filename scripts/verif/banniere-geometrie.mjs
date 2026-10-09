@@ -9,8 +9,16 @@
 //   1. la banniere ne descend pas sur la barre d'onglets ;
 //   2. l'ecran actif rend la place des deux bandes.
 //
-// Usage : node scripts/verif/banniere-geometrie.mjs "http://127.0.0.1:8799/app/index.html"
-const [, , url, port = '9223'] = process.argv;
+// Usage : node scripts/verif/banniere-geometrie.mjs ["http://127.0.0.1:8799/app/index.html"] [9223]
+//
+// EN CI (05/10/2026, firebase.yml) : le même Chrome que la suite intégrée
+// (--headless=new, port 9223), le même serveur. Trois choses le permettent :
+// pas de Page.enable (il ne rend jamais la main en --headless=new, voir
+// README, « Le piège qui coûte une heure ») ; une URL par défaut ; un délai
+// global, pour qu'un Chrome qui ne répond plus fasse échouer l'étape au lieu
+// de la figer ; et l'onglet refermé en sortant.
+const [, , url = 'http://127.0.0.1:8799/app/index.html', port = '9223'] = process.argv;
+setTimeout(() => { console.log('::error::banniere-geometrie : délai global dépassé (180 s)'); process.exit(1); }, 180000).unref();
 
 const t = await (await fetch(`http://127.0.0.1:${port}/json/new?` + encodeURIComponent(url),
   { method: 'PUT' })).json();
@@ -45,7 +53,6 @@ await ev(`(async()=>{ try{
   for(const r of rs) await r.unregister();
   for(const c of await caches.keys()) await caches.delete(c);
 }catch(e){} localStorage.clear(); sessionStorage.clear(); return 1; })()`);
-await cmd('Page.enable');
 await cmd('Page.reload', { ignoreCache: true });
 await new Promise(r => setTimeout(r, 6000));
 
@@ -140,4 +147,5 @@ for (const { l, h, nom } of LARGEURS) {
 console.log(dur === 0 ? '\nAucun recouvrement, a aucune largeur.' : `\n${dur} largeur(s) en defaut.`);
 await cmd('Emulation.clearDeviceMetricsOverride');
 ws.close();
+await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`).catch(() => {});
 process.exit(dur === 0 ? 0 : 1);

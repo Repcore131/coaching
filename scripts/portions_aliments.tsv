@@ -1,0 +1,155 @@
+# id_ou_motif<TAB>cle<TAB>libelle<TAB>pluriel<TAB>g<TAB>source — lu par scripts/ciqual_convert.py (champ "u").
+# Motif « ~… » : expression régulière sur le nom normalisé (f.s). Un id l'emporte sur les motifs. g entre 0 et 1500.
+-1	dose	dose	doses	30	consigne Kevin, lot 18
+-2	dose	dose	doses	30	consigne Kevin, lot 18
+-3	dose	dose	doses	30	consigne Kevin, lot 18
+-4	dose	dose	doses	30	étiquette la plus courante
+-5	dose	dose	doses	25	étiquette la plus courante
+-50	dose	dose	doses	30	consigne Kevin, lot 18
+-51	dose	dose	doses	30	consigne Kevin, lot 18
+-52	dose	dose	doses	100	étiquette la plus courante
+-53	dose	dose	doses	5	étiquette la plus courante
+-54	dose	dose	doses	5	étiquette la plus courante
+-60	dose	dose	doses	50	étiquette la plus courante
+-61	dose	dose	doses	60	étiquette la plus courante
+-6	pot	pot	pots	150	consigne Kevin, lot 18
+-7	gel	gel	gels	35	consigne Kevin, lot 18
+-8	bidon	bidon	bidons	500	étiquette la plus courante
+-9	barre	barre	barres	60	consigne Kevin, lot 18
+-58	barre	barre	barres	55	étiquette la plus courante
+-59	cookie	cookie	cookies	75	étiquette la plus courante
+-55	cas	cuillère à soupe	cuillères à soupe	15	étiquette la plus courante
+-56	pot	pot	pots	200	étiquette la plus courante
+-63	gourde	gourde	gourdes	90	étiquette la plus courante
+-82	blanc	blanc d’œuf	blancs d’œufs	33	ordre de grandeur RepCore (pas une mesure)
+~whey	dose	dose	doses	30	consigne Kevin, lot 18
+~caseine	dose	dose	doses	30	consigne Kevin, lot 18
+~isolat	dose	dose	doses	30	consigne Kevin, lot 18
+~^barre proteinee	barre	barre	barres	60	consigne Kevin, lot 18
+~^barre cerealiere	barre	barre	barres	25	consigne Kevin, lot 18
+~^gel energetique	gel	gel	gels	35	consigne Kevin, lot 18
+~^skyr	pot	pot	pots	150	consigne Kevin, lot 18
+~^yaourt|^yogourt	pot	pot	pots	125	consigne Kevin, lot 18
+~^specialite laitiere riche en proteines	pot	pot	pots	150	étiquette la plus courante
+~^fromage blanc	pot	pot	pots	100	consigne Kevin, lot 18
+~^fromage blanc	cas	cuillère à soupe	cuillères à soupe	30	consigne Kevin, lot 18
+~^faisselle	pot	pot	pots	100	étiquette la plus courante
+~^petit.suisse	pot	pot	pots	60	consigne Kevin, lot 18
+~^creme dessert	pot	pot	pots	125	étiquette la plus courante
+~^lait (entier|demi|ecreme)|^lait de chevre|^lait \(	verre	verre	verres	250	consigne Kevin, lot 18
+~^lait (entier|demi|ecreme)|^lait de chevre	bol	bol	bols	300	consigne Kevin, lot 18
+~^boisson (a l.amande|au soja|a l.avoine|au riz|a la noisette|a la noix de coco)	verre	verre	verres	250	consigne Kevin, lot 18
+~^boisson (a l.amande|au soja|a l.avoine|au riz)	bol	bol	bols	300	consigne Kevin, lot 18
+~^emmental|^comte|^beaufort|^gruyere|^cantal|^mimolette|^gouda|^edam|^tomme|^parmesan|^raclette|^morbier|^abondance	portion	portion	portions	30	consigne Kevin, lot 18
+~^emmental|^comte|^beaufort|^gruyere|^gouda|^edam|^tomme|^raclette|^morbier	tranche	tranche	tranches	20	consigne Kevin, lot 18
+~rape	poignee	poignée	poignées	20	consigne Kevin, lot 18
+~^camembert|^brie|^coulommiers|^munster|^reblochon|^roquefort|^bleu|^saint|^fromage de chevre|^feta|^mozzarella	portion	portion	portions	30	consigne Kevin, lot 18
+~^mozzarella	boule	boule	boules	125	étiquette la plus courante
+~^creme 30|^creme 12|^creme d.isigny	cas	cuillère à soupe	cuillères à soupe	15	ordre de grandeur RepCore (pas une mesure)
+~^beurre	noisette	noisette de beurre	noisettes de beurre	10	ordre de grandeur RepCore (pas une mesure)
+~^jambon cuit|^jambon de|^jambon sec|^jambon cru	tranche	tranche	tranches	45	consigne Kevin, lot 18
+~^blanc de (poulet|dinde)|^filet de (poulet|dinde).*tranche	tranche	tranche	tranches	30	consigne Kevin, lot 18
+~^boeuf, steak hache	steak	steak de 100 g	steaks de 100 g	100	consigne Kevin, lot 18
+~^boeuf, steak hache	steak125	steak de 125 g	steaks de 125 g	125	consigne Kevin, lot 18
+~^poulet, filet	filet	filet	filets	130	consigne Kevin, lot 18
+~^dinde, escalope|^veau, escalope	escalope	escalope	escalopes	120	ordre de grandeur RepCore (pas une mesure)
+~^saucisse de toulouse|^saucisse	saucisse	saucisse	saucisses	100	ordre de grandeur RepCore (pas une mesure)
+~^merguez|^chipolata	piece	pièce	pièces	50	ordre de grandeur RepCore (pas une mesure)
+~^saucisse de strasbourg|^saucisse de francfort	piece	saucisse	saucisses	35	ordre de grandeur RepCore (pas une mesure)
+~^saumon, (elevage|sauvage)|^cabillaud|^colin|^merlu|^lieu|^dorade|^bar,|^truite	pave	pavé	pavés	125	ordre de grandeur RepCore (pas une mesure)
+~^saumon fume	tranche	tranche	tranches	25	ordre de grandeur RepCore (pas une mesure)
+~^thon, au naturel	boite	petite boîte	petites boîtes	112	étiquette la plus courante
+~^sardine, a l.huile	boite	boîte	boîtes	90	étiquette la plus courante
+~^surimi	baton	bâtonnet	bâtonnets	15	ordre de grandeur RepCore (pas une mesure)
+~^oeuf cru$|^oeuf, cru$|^oeuf dur|^oeuf poche|^oeuf a la coque|^oeuf au plat|^oeuf brouille	oeuf	œuf	œufs	50	ordre de grandeur RepCore (pas une mesure)
+~^nuggets	piece	nugget	nuggets	18	ordre de grandeur RepCore (pas une mesure)
+~^cordon bleu	piece	cordon bleu	cordons bleus	100	ordre de grandeur RepCore (pas une mesure)
+~^riz .*cuit|^riz blanc, cuit|^riz complet, cuit|^riz basmati, cuit	assiette	assiette	assiettes	200	consigne Kevin, lot 18
+~^pates seches.*cuites|^pates fraiches.*cuites	assiette	assiette	assiettes	200	consigne Kevin, lot 18
+~^semoule.*cuite|^boulgour.*cuit|^quinoa, bouilli	assiette	assiette	assiettes	200	consigne Kevin, lot 18
+~^flocons d.avoine|^avoine, flocon	cas	cuillère à soupe	cuillères à soupe	10	consigne Kevin, lot 18
+~^flocons d.avoine|^avoine, flocon	bol	bol	bols	60	consigne Kevin, lot 18
+~^muesli|^cereales pour petit dejeuner|^petales de mais	bol	bol	bols	40	ordre de grandeur RepCore (pas une mesure)
+~^pain blanc|^pain de tradition|^pain courant	baguette4	1/4 de baguette	quarts de baguette	60	consigne Kevin, lot 18
+~^pain blanc|^pain de tradition|^pain complet|^pain de campagne|^pain aux cereales|^pain de seigle	tranche	tranche	tranches	30	ordre de grandeur RepCore (pas une mesure)
+~^pain de mie	tranche	tranche	tranches	25	étiquette la plus courante
+~^biscotte	piece	biscotte	biscottes	8	consigne Kevin, lot 18
+~^galette de riz	piece	galette	galettes	9	consigne Kevin, lot 18
+~^tortilla souple	piece	tortilla	tortillas	60	consigne Kevin, lot 18
+~^croissant	piece	croissant	croissants	55	consigne Kevin, lot 18
+~^pain au chocolat	piece	pain au chocolat	pains au chocolat	65	consigne Kevin, lot 18
+~^pain aux raisins	piece	pièce	pièces	90	ordre de grandeur RepCore (pas une mesure)
+~^brioche	tranche	tranche	tranches	35	ordre de grandeur RepCore (pas une mesure)
+~^pain au lait	piece	pain au lait	pains au lait	35	étiquette la plus courante
+~^crepe dentelle	piece	crêpe dentelle	crêpes dentelle	8	étiquette la plus courante
+~^madeleine	piece	madeleine	madeleines	25	étiquette la plus courante
+~^cookie	piece	cookie	cookies	25	étiquette la plus courante
+~^biscuit sec	piece	biscuit	biscuits	8	ordre de grandeur RepCore (pas une mesure)
+~^pomme de terre	piece	pomme de terre moyenne	pommes de terre moyennes	150	ordre de grandeur RepCore (pas une mesure)
+~^frites	portion	portion	portions	120	ordre de grandeur RepCore (pas une mesure)
+~^banane, chair	fruit	banane	bananes	120	ordre de grandeur RepCore (pas une mesure)
+~^pomme, chair|^pomme,	fruit	pomme	pommes	150	ordre de grandeur RepCore (pas une mesure)
+~^poire	fruit	poire	poires	150	ordre de grandeur RepCore (pas une mesure)
+~^orange, chair	fruit	orange	oranges	130	ordre de grandeur RepCore (pas une mesure)
+~^clementine|^mandarine	fruit	clémentine	clémentines	70	ordre de grandeur RepCore (pas une mesure)
+~^kiwi	fruit	kiwi	kiwis	75	ordre de grandeur RepCore (pas une mesure)
+~^peche|^nectarine|^brugnon	fruit	pêche	pêches	150	ordre de grandeur RepCore (pas une mesure)
+~^abricot	fruit	abricot	abricots	45	ordre de grandeur RepCore (pas une mesure)
+~^prune[ ,]	fruit	prune	prunes	35	ordre de grandeur RepCore (pas une mesure)
+~^figue, crue	fruit	figue	figues	50	ordre de grandeur RepCore (pas une mesure)
+~^datte	fruit	datte	dattes	8	ordre de grandeur RepCore (pas une mesure)
+~^fraise, crue	poignee	poignée	poignées	80	ordre de grandeur RepCore (pas une mesure)
+~^framboise|^myrtille|^mure	poignee	poignée	poignées	60	ordre de grandeur RepCore (pas une mesure)
+~^raisin (blanc|noir)	grappe	petite grappe	petites grappes	125	ordre de grandeur RepCore (pas une mesure)
+~^melon	tranche	tranche	tranches	150	ordre de grandeur RepCore (pas une mesure)
+~^pasteque	tranche	tranche	tranches	300	ordre de grandeur RepCore (pas une mesure)
+~^ananas	tranche	tranche	tranches	100	ordre de grandeur RepCore (pas une mesure)
+~^mangue	fruit	mangue	mangues	300	ordre de grandeur RepCore (pas une mesure)
+~^avocat, chair	fruit	avocat	avocats	150	ordre de grandeur RepCore (pas une mesure)
+~^tomate (ronde|grappe)|^tomate, crue	legume	tomate	tomates	120	ordre de grandeur RepCore (pas une mesure)
+~^tomate cerise	piece	tomate cerise	tomates cerises	15	ordre de grandeur RepCore (pas une mesure)
+~^carotte, crue	legume	carotte	carottes	80	ordre de grandeur RepCore (pas une mesure)
+~^concombre	legume	concombre	concombres	300	ordre de grandeur RepCore (pas une mesure)
+~^courgette, chair et peau, crue	legume	courgette	courgettes	250	ordre de grandeur RepCore (pas une mesure)
+~^poivron	legume	poivron	poivrons	150	ordre de grandeur RepCore (pas une mesure)
+~^oignon, cru	legume	oignon	oignons	100	ordre de grandeur RepCore (pas une mesure)
+~^ail, cru	gousse	gousse	gousses	5	ordre de grandeur RepCore (pas une mesure)
+~^salade verte|^laitue|^mache|^roquette	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^champignon de paris	poignee	poignée	poignées	50	ordre de grandeur RepCore (pas une mesure)
+~^noix, cerneau	cerneau	cerneau	cerneaux	5	ordre de grandeur RepCore (pas une mesure)
+~^amande	amande	amande	amandes	1.2	ordre de grandeur RepCore (pas une mesure)
+~^amande	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^noisette	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^noix de cajou	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^cacahuete	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^pistache	poignee	poignée	poignées	30	ordre de grandeur RepCore (pas une mesure)
+~^beurre de cacahuete	cas	cuillère à soupe	cuillères à soupe	15	consigne Kevin, lot 18
+~^puree d.amande|^puree de noisette|^puree de cacahuete	cas	cuillère à soupe	cuillères à soupe	15	ordre de grandeur RepCore (pas une mesure)
+~^olive	piece	olive	olives	4	ordre de grandeur RepCore (pas une mesure)
+~^huile	cas	cuillère à soupe	cuillères à soupe	10	ordre de grandeur RepCore (pas une mesure)
+~^huile	cac	cuillère à café	cuillères à café	5	ordre de grandeur RepCore (pas une mesure)
+~^miel	cac	cuillère à café	cuillères à café	8	ordre de grandeur RepCore (pas une mesure)
+~^confiture	cac	cuillère à café	cuillères à café	10	ordre de grandeur RepCore (pas une mesure)
+~^sucre blanc|^sucre roux|^sucre de canne	morceau	morceau	morceaux	5	ordre de grandeur RepCore (pas une mesure)
+~^sucre blanc|^sucre roux	cac	cuillère à café	cuillères à café	5	ordre de grandeur RepCore (pas une mesure)
+~^pate a tartiner	cac	cuillère à café	cuillères à café	10	ordre de grandeur RepCore (pas une mesure)
+~^ketchup|^moutarde|^mayonnaise|^sauce	cas	cuillère à soupe	cuillères à soupe	15	ordre de grandeur RepCore (pas une mesure)
+~^chocolat noir|^chocolat au lait	carre	carré	carrés	5	ordre de grandeur RepCore (pas une mesure)
+~^hamburger|^cheeseburger	piece	burger	burgers	120	ordre de grandeur RepCore (pas une mesure)
+~^pizza	part	part (1/4)	parts (1/4)	100	consigne Kevin, lot 18
+~^pizza	entiere	pizza entière	pizzas entières	400	consigne Kevin, lot 18
+~^sandwich	piece	sandwich	sandwichs	250	ordre de grandeur RepCore (pas une mesure)
+~^wrap	piece	wrap	wraps	200	ordre de grandeur RepCore (pas une mesure)
+~^quiche|^tarte	part	part	parts	150	ordre de grandeur RepCore (pas une mesure)
+~^sushi ou maki	piece	pièce	pièces	25	ordre de grandeur RepCore (pas une mesure)
+~^nem ou pate imperial	piece	nem	nems	60	ordre de grandeur RepCore (pas une mesure)
+~^lasagnes|^hachis parmentier|^couscous	assiette	assiette	assiettes	300	ordre de grandeur RepCore (pas une mesure)
+~^soupe	bol	bol	bols	250	ordre de grandeur RepCore (pas une mesure)
+~^glace ou creme glacee	boule	boule	boules	50	ordre de grandeur RepCore (pas une mesure)
+~^compote	pot	pot	pots	100	étiquette la plus courante
+~^jus d.orange|^jus de pomme|^jus de raisin|^nectar	verre	verre	verres	200	ordre de grandeur RepCore (pas une mesure)
+~^cola|^soda|^limonade|^boisson energisante|^the glace	canette	canette	canettes	330	étiquette la plus courante
+~^cafe, non instantane|^cafe expresso	tasse	tasse	tasses	100	ordre de grandeur RepCore (pas une mesure)
+~^the infuse	tasse	tasse	tasses	200	ordre de grandeur RepCore (pas une mesure)
+~^biere	demi	demi (25 cl)	demis (25 cl)	250	ordre de grandeur RepCore (pas une mesure)
+~^vin (rouge|blanc|rose)	verre	verre	verres	125	ordre de grandeur RepCore (pas une mesure)

@@ -38,6 +38,8 @@ declare const DB: { get(cle: string): any; set(cle: string, valeur: any): boolea
 declare const CLOUD: { pushOne(cle: string, dossier: any): any; [k: string]: any };
 declare let currentUser: any;
 declare function saveUser(): any;
+/** Garde l'erreur en mémoire (window._rcErreurs, 50 au plus) et la dit à la console. Aucun envoi. */
+declare function rcErreurMuette(ou: string, e: unknown): void;
 declare function segmentsVideo(v: any): any[];
 declare function segBarreValide(b: any, debutMs: number, finMs: number): any;
 declare function segPoseValide(p: any, debutMs: number, finMs: number): any;

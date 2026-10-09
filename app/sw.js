@@ -1,4 +1,19 @@
-const CACHE = 'repcore-v1794';
+const CACHE = 'repcore-v1963';
+// ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
+// Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
+// (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
+// premier passage : la page le demandait, puis l'install le redemandait. Le
+// quota Hosting du plan Spark est de 360 Mo par jour. Désormais l'install
+// cherche d'abord une copie dans les anciens caches repcore-v<n>, du plus
+// récent au plus ancien :
+//   · rc-core.<n>.js, rc-style.<n>.css, rc-theme.<n>.css : MÊME NOM = MÊME CONTENU. Recopié
+//     s'il existe ; sinon un fetch NORMAL (le cache HTTP immutable suffit) ;
+//   · index.html : toujours cache:'reload' (voir le commentaire du 27/09) ;
+//   · tout le reste (images, polices, vendor/, manifest) : recopié si la copie
+//     a moins de STATIC_TTL_MS (en-tête 'date' de la réponse rangée), sinon
+//     un fetch normal. Une image réécrite SOUS LE MÊME NOM met donc au plus
+//     trente jours à arriver — PURGE_EXERCICES reste l'outil pour l'imposer.
+const STATIC_TTL_MS = 30 * 24 * 3600 * 1000;
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1794.js', './rc-style.1794.css',
+const ASSETS = ['./index.html', './rc-core.1963.js', './rc-style.1963.css', './rc-theme.1963.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -216,10 +231,34 @@ self.addEventListener('install', e => {
     // faire échouer toute l'installation du Service Worker.
     try {
       const c = await caches.open(CACHE);
-      // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
-      // Pages sert index.html avec max-age=600 : un worker neuf installe dans
-      // ces dix minutes rangeait l'ANCIENNE page dans le cache NEUF.
-      await Promise.allSettled(ASSETS.map(a => c.add(new Request(a, { cache: 'reload' }))));
+      // LES ANCIENS CACHES, du plus récent au plus ancien (STATIC_TTL_MS, en tête).
+      const _num = k => Number((k.match(/(\d+)$/) || [])[1]) || 0;
+      const anciens = [];
+      for (const k of (await caches.keys()).filter(k => /^repcore-v\d+$/.test(k) && k !== CACHE).sort((x, y) => _num(y) - _num(x))) {
+        try { anciens.push(await caches.open(k)); } catch (err) {}
+      }
+      const _copie = async (a, accepter) => {
+        for (const v of anciens) {
+          try { const r = await v.match(a); if (r && r.ok && accepter(r)) return r; } catch (err) {}
+        }
+        return null;
+      };
+      const _fraiche = r => {
+        const d = Date.parse((r.headers && r.headers.get('date')) || '');
+        return d > 0 && Date.now() - d < STATIC_TTL_MS;
+      };
+      const _actifVersionne = a => /\/rc-(core|style|theme)\.\d+\.(js|css)$/.test(a);
+      await Promise.allSettled(ASSETS.map(async a => {
+        if (/index\.html$/.test(a)) {
+          // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
+          // Pages sert index.html avec max-age=600 : un worker neuf installe dans
+          // ces dix minutes rangeait l'ANCIENNE page dans le cache NEUF.
+          return c.add(new Request(a, { cache: 'reload' }));
+        }
+        const vieille = await _copie(a, _actifVersionne(a) ? () => true : _fraiche);
+        if (vieille) return c.put(a, vieille);
+        return c.add(a);
+      }));
     } catch (err) {}
     // Sans séance en cours, comportement inchangé : la mise à jour est
     // immédiate. Avec, on retient la bascule jusqu'à SEANCE_TERMINEE.
@@ -239,7 +278,7 @@ const CIQUAL_URL = './data/ciqual.json';
 // gardait l'ancienne pour toujours (ni whey, ni énergie calculée). Le marqueur
 // vit à côté, sous CIQUAL_VERSION_URL ; une base d'une autre version n'est
 // plus reportée, et le préchargement la retélécharge.
-const CIQUAL_VERSION = '2026-09-30';
+const CIQUAL_VERSION = '2025-11-03+18dcdd0878';
 const CIQUAL_VERSION_URL = './data/ciqual.version';
 async function _ciqualAJour(c) {
   try { const r = await c.match(CIQUAL_VERSION_URL); return !!(r && (await r.text()) === CIQUAL_VERSION); }
@@ -344,9 +383,12 @@ self.addEventListener('activate', e => {
       // et sans cette ligne le report la ferait passer de version en version,
       // indefiniment, pour un fichier que plus personne ne lira jamais.
       //
-      // motion-lab.js NON PLUS : index.html le demande avec ?v=<build>, et
-      // chaque report reconduirait la copie d'une version que plus aucune
-      // page ne demandera.
+      // motion-lab.js?v=<build> SE REPORTE DESORMAIS (01/10/2026), comme les
+      // actifs rc-* : rc-core le demande avec ?v=<build>, et la version
+      // COURANTE reportee evite 660 Ko de reseau a la premiere ouverture du
+      // Motion Lab apres chaque mise a jour. Les AUTRES versions sont gardees
+      // ou purgees par la meme regle que rc-* (_versionActif, juste en
+      // dessous) : la courante et la precedente, pas plus.
       // ══ LES ACTIFS VERSIONNES : LA COURANTE ET LA PRECEDENTE, PAS PLUS ══
       //
       // rc-core.<build>.js pese 5,5 Mo. Le report general recopie tout ce qu'un
@@ -358,8 +400,14 @@ self.addEventListener('activate', e => {
       // Un appareil qui a encore l'ancien index.html en memoire (page ouverte
       // avant la mise a jour) demande encore l'ancien nom ; le lui retirer le
       // laisserait sans code jusqu'au rechargement, hors ligne compris.
-      const _ACTIF = /\/rc-(?:core|style)\.(\d+)\.(?:js|css)$/;
-      const _versionActif = u => { const m = String(u).match(_ACTIF); return m ? Number(m[1]) : null; };
+      const _ACTIF = /\/rc-(?:core|style|theme)\.(\d+)\.(?:js|css)$/;
+      // motion-lab.js?v=<build> : meme numero, meme regle de garde.
+      // rc-schemas.js?v=<build> (build 1963) : la meme regle que motion-lab.
+      const _ML = /\/(?:motion-lab|rc-schemas)\.js\?(?:[^#]*&)?v=(\d+)(?:&|#|$)/;
+      const _versionActif = u => {
+        const m = String(u).match(_ACTIF) || String(u).match(_ML);
+        return m ? Number(m[1]) : null;
+      };
       const _versionsVues = new Set();
       { const m = CACHE.match(/(\d+)/); if (m) _versionsVues.add(Number(m[1])); }
       for (const k of anciens) {
@@ -378,7 +426,6 @@ self.addEventListener('activate', e => {
       const _exclu = u => !_actifGarde(u)
         || /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
         || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
-        || /\/motion-lab\.js(\?|$)/.test(u)
         || /\/data\/ciqual\.(json|version)$/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
@@ -555,9 +602,14 @@ self.addEventListener('fetch', e => {
         // La mise en cache est DÉTACHÉE de la réponse servie : si le quota
         // est saturé, on journalise et on sert quand même. Un put qui échoue
         // ne doit pas casser un affichage qui, lui, fonctionne.
-        const clone = r.clone();
-        caches.open(CACHE).then(c => c.put('./index.html', clone))
-          .catch(err => console.warn('[RepCore SW] put index.html:', err));
+        // SEULE UNE VRAIE PAGE REMPLACE LA COPIE (01/10/2026) : un 503 de
+        // l'hébergeur, une page d'erreur d'un portail captif ou une
+        // redirection ne doivent pas écraser l'index.html hors ligne.
+        if (r.ok && r.status === 200 && (r.headers.get('content-type') || '').includes('text/html')) {
+          const clone = r.clone();
+          caches.open(CACHE).then(c => c.put('./index.html', clone))
+            .catch(err => console.warn('[RepCore SW] put index.html:', err));
+        }
         return r;
       });
       const enCache = await caches.match('./index.html');
@@ -619,8 +671,12 @@ self.addEventListener('fetch', e => {
   // chargeur de tests.js dit déjà « il faut être en ligne » — et non répondre
   // avec une version périmée d'eux-mêmes.
   const _chemin = url.split('?')[0];
+  // ET version.json (01/10/2026) : la sonde de version d'index.html le lit a
+  // chaque ouverture. Mis en cache par la branche generique, il rendrait pour
+  // toujours le numero du jour de sa premiere lecture — et plus aucune mise a
+  // jour ne serait vue.
   if (/\/sw\.js$/.test(_chemin) || /\/tests\.js$/.test(_chemin)
-      || /\/database\.rules\.json$/.test(_chemin)) return;
+      || /\/database\.rules\.json$/.test(_chemin) || /\/version\.json$/.test(_chemin)) return;
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
   // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
   // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/

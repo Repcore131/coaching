@@ -41,14 +41,26 @@
 #    la premiere chose a regarder (l'onglet Actions le dit et propose de le
 #    reactiver d'un bouton).
 # ══════════════════════════════════════════════════════════════════════════
-name: Rapport payeur
+# ══ DESACTIVE LE 02/10/2026 ═════════════════════════════════════════════════
+#  scripts/rapport_payeur.mjs lit l'API Transaction Search, que PayPal refuse a
+#  ce compte (403 NOT_AUTHORIZED depuis le 24/09/2026) : ce travail echouait
+#  chaque mois. Son remplacant naturel, scripts/rapport_abonnements.mjs, lit
+#  les abonnements un par un et FONCTIONNE — mais il a besoin des dossiers
+#  (`firebase database:get` sur le poste de Kevin, ou un export) : les sortir
+#  de la base dans un travail GitHub, c'est copier des donnees personnelles sur
+#  une machine de passage. Il se lance donc a la main, sur le poste :
+#      node scripts/rapport_abonnements.mjs
+#  Et les chiffres du mois (MRR, abonnes, resilies, churn) sont maintenant
+#  calcules chaque jour par le serveur leger, dans indicateurs/<jour>, et
+#  affiches dans l'onglet monetisation du createur.
+#
+#  Ni programme, ni lancement a la main : le travail ne demarre plus.
+# ══════════════════════════════════════════════════════════════════════════
+name: Rapport payeur (desactive)
 
 on:
-  schedule:
-    # Le 1er de chaque mois a 06:00 UTC, soit 8 h a Paris l'ete, 7 h l'hiver.
-    - cron: '0 6 1 * *'
-  # ET A LA DEMANDE : onglet Actions > Rapport payeur > Run workflow. C'est
-  # par la qu'on l'essaie, sans attendre le mois prochain.
+  # Le 1er de chaque mois a 06:00 UTC : retire (voir l'en-tete).
+  # - cron: '0 6 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -60,6 +72,8 @@ concurrency:
 
 jobs:
   rapport:
+    # DESACTIVE (voir l'en-tete) : un lancement a la main ne fait rien.
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

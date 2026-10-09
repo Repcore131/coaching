@@ -39,13 +39,17 @@ export function fausseBase(initial) {
     const h = (init && init.headers) || {};
     if (m === 'GET') {
       let v = lire(p);
-      if (u.searchParams.get('shallow') === 'true' && v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = true; v = o; }
+      // Comme Firebase : un enfant simple garde sa valeur, un objet devient true.
+      if (u.searchParams.get('shallow') === 'true' && v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = (v[k] && typeof v[k] === 'object') ? true : v[k]; v = o; }
       // orderBy "$key" + startAt : comme Firebase, les clés entières d'abord, en ordre numérique.
       if (u.searchParams.get('orderBy') === '"$key"' && u.searchParams.has('startAt') && v && typeof v === 'object') {
         const de = JSON.parse(u.searchParams.get('startAt'));
         const num = (k) => /^-?\d+$/.test(k);
-        const ks = Object.keys(v).filter((k) => v[k] != null).sort((a, b) => (num(a) && num(b)) ? a - b : (num(a) ? -1 : num(b) ? 1 : (a < b ? -1 : 1)))
-          .filter((k) => (num(k) && num(de)) ? Number(k) >= Number(de) : k >= de);
+        // Comme Firebase : les entiers d'abord (en ordre numérique), puis les textes.
+        const cmp = (a, b) => (num(a) && num(b)) ? a - b : (num(a) ? -1 : num(b) ? 1 : (a < b ? -1 : a > b ? 1 : 0));
+        const a = u.searchParams.has('endAt') ? JSON.parse(u.searchParams.get('endAt')) : null;
+        const ks = Object.keys(v).filter((k) => v[k] != null).sort(cmp)
+          .filter((k) => cmp(String(k), String(de)) >= 0 && (a === null || cmp(String(k), String(a)) <= 0));
         const n = Number(u.searchParams.get('limitToFirst')) || Infinity;
         const o = {}; for (const k of ks.slice(0, n)) o[k] = v[k];
         v = o;
