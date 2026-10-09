@@ -16468,3 +16468,16 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .comp-disc .comp-h,.comp-disc .comp-k{flex:1 1 40%}
 .perf-carte label.ta-cons{display:flex;align-items:center}
 .perf-carte label.ta-cons .gf-x{margin-left:auto}
+
+/* ══ LOT ER1 — LES ERREURS REPÉRÉES (motion-lab, écran de lecture) ══════════
+   Une alerte par règle déclenchée : la consigne en gros, les répétitions, la
+   pire valeur et la confiance, l'image de la pire répétition (segment fautif
+   en rouge). La gravité colore le filet, jamais le fond. */
+.ml-err{margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);border-left:3px solid var(--amber);background:rgba(255,255,255,.03)}
+.ml-err-elevee{border-left-color:var(--red)}
+.ml-err-faible{border-left-color:var(--sub)}
+.ml-err-off{display:flex;align-items:center;justify-content:space-between;gap:8px;border-left-color:var(--border);font-size:var(--fs-xs);color:var(--sub)}
+.ml-err-t{font-size:var(--fs-md);font-weight:800;color:var(--text)}
+.ml-err-s{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5}
+.ml-err-img{display:block;width:100%;max-width:420px;height:auto;margin-top:8px;border-radius:8px;background:#0b0b0b}
+.ml-err-a{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}

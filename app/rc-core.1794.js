@@ -7047,7 +7047,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // LOT PF1 — LE PLAN POINT FAIBLE appliqué : une date, deux muscles, un
   // nombre d'opérations. Aucune mesure du corps n'y est recopiée : l'effet se
   // recalcule au rite depuis les séances et les bilans.
-  'planPointFaible','ordonnancePlateau','recordsTestes','competition',
+  'planPointFaible','ordonnancePlateau','recordsTestes','competition','reglesErreursOff',
   // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
   // articulation, deux angles, un repère, posés par le coach. Une consigne
   // d'exécution, comme le réglage du coach — pas une mesure du corps.
@@ -18603,6 +18603,28 @@ function compLancerRoutine(){
     if(_perfTick) clearInterval(_perfTick);
     maj(); _perfTick=setInterval(maj,1000); };
   etape();
+  return true;
+}
+
+// ══ LOT ER1 — LES RÈGLES D'ERREUR ÉTEINTES PAR LE COACH ══════════════════
+//
+// Les règles vivent dans motion-lab (ML_REGLES_ERREURS) ; le dossier ne garde
+// que celles que le coach a éteintes pour CET athlète — une morphologie
+// particulière, une consigne différente. Les clés sont recopiées ici parce
+// que motion-lab n'est chargé que dans le laboratoire ; un test vérifie que
+// les deux listes ne divergent pas.
+const REGLES_ERREURS_CLES=Object.freeze(['cou_extension','balancement_curl','kipping_traction','elevation_trop_haute','genou_rentre']);
+/** Coach seulement : éteint (ou rallume) une règle pour un athlète. */
+function basculerRegleErreur(email,cle,eteindre){
+  if(!currentUser||currentUser.role!=='coach'||REGLES_ERREURS_CLES.indexOf(cle)<0) return false;
+  const users=DB.get('users')||{}, c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)) return false;
+  const o=Object.assign({},(c.reglesErreursOff&&typeof c.reglesErreursOff==='object')?c.reglesErreursOff:{});
+  if(eteindre) o[cle]=true; else delete o[cle];
+  if(Object.keys(o).length) c.reglesErreursOff=o; else delete c.reglesErreursOff;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(email,c),eteindre?'Règle éteinte pour cet athlète ✓':'Règle rallumée ✓','la règle est');
   return true;
 }
 
@@ -117722,7 +117744,9 @@ const SEG_BARRE_ALERTES=Object.freeze(['fps_bas','disque_petit','perte_suivi','d
 // hautes, car tout ceci part dans l'enregistrement complet de l'athlète à
 // chaque sauvegarde : sept kilo-octets par répétition analysée, l'ordre de
 // grandeur de la trajectoire de barre.
-const SEG_POSE_PTS=14, SEG_POSE_MAX=72;
+// LOT ER1 : dix-sept points en v2 (la tête — nez, oreilles — en fin de
+// tableau) ; les poses v1, à quatorze, restent valides et se relisent.
+const SEG_POSE_PTS=17, SEG_POSE_PTS_V1=14, SEG_POSE_MAX=72;
 // L'APLOMB : l'angle du téléphone sur la verticale, en degrés, gardé AVEC
 // l'analyse qui s'en est servie. Au-delà de quinze degrés ce n'est plus un
 // téléphone de travers, c'est un cadrage à refaire : on borne, on ne corrige
@@ -117801,14 +117825,15 @@ function segBarreValide(b,debutMs,finMs){
 // trajectoire : la donnée vient du réseau, et une pose à moitié lisible ne
 // s'affiche pas à moitié.
 function segPoseValide(p,debutMs,finMs){
-  if(!p||typeof p!=='object'||p.v!==1) return null;
+  if(!p||typeof p!=='object'||(p.v!==1&&p.v!==2)) return null;
   if(Math.round(Number(p.debutMs))!==debutMs||Math.round(Number(p.finMs))!==finMs) return null;
   if(p.cote!=='G'&&p.cote!=='D') return null;
+  const NP=p.v===2?SEG_POSE_PTS:SEG_POSE_PTS_V1;
   const n=Math.round(Number(p.n));
   if(!(n>=2&&n<=SEG_POSE_MAX)) return null;
   // QUATRE OCTETS PAR POINT pour la position, un pour la visibilité : si les
   // longueurs ne tombent pas juste, le reste ne se lira pas non plus.
-  if(!_segB64(p.xy,n*SEG_POSE_PTS*4)||!_segB64(p.vis,n*SEG_POSE_PTS)) return null;
+  if(!_segB64(p.xy,n*NP*4)||!_segB64(p.vis,n*NP)) return null;
   const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
   const vw=num(p.vw,16,8192), vh=num(p.vh,16,8192), pasMs=num(p.pasMs,1,5000), t0Ms=num(p.t0Ms,debutMs,finMs);
   if([vw,vh,pasMs,t0Ms].some(x=>x===null)) return null;
@@ -117818,7 +117843,7 @@ function segPoseValide(p,debutMs,finMs){
   // LE HORS-PLAN de la prise de vue, quand il a été estimé : c'est lui qui dit
   // si la correction du biais de projection est dans son domaine.
   const hp=num(p.hp,0,90);
-  return {v:1,debutMs,finMs,vw:Math.round(vw),vh:Math.round(vh),cote:p.cote,n,
+  return {v:p.v,debutMs,finMs,vw:Math.round(vw),vh:Math.round(vh),cote:p.cote,n,
     t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:p.xy,vis:p.vis,
     theta:th===null?0:Math.round(th*10)/10,...(hp===null?{}:{hp:Math.round(hp)})};
 }

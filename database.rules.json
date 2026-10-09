@@ -309,6 +309,11 @@
             "$autre": { ".validate": false } } },
           "$autre": { ".validate": false }
         },
+        // LOT ER1 — LES REGLES D ERREUR VIDEO que le coach a eteintes pour cet
+        // athlete (morphologie particuliere) : une cle, la valeur true.
+        "reglesErreursOff": {
+          "$cle": { ".validate": "$cle.matches(/^(cou_extension|balancement_curl|kipping_traction|elevation_trop_haute|genou_rentre)$/) && newData.val() === true" }
+        },
         // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
         // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
         // ferait rejeter l ecriture du dossier entier.

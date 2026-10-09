@@ -113,3 +113,4 @@ declare function exKey(nom: any): string;
 declare function slugExercice(nom: any): string;
 declare function amplitudesDe(user: any): Record<string, any>;
 declare function enregistrerControleAmplitude(email: string, nomExercice: string, resume: any): boolean;
+declare function basculerRegleErreur(email: string, cle: string, eteindre: boolean): boolean;

@@ -844,10 +844,26 @@ function mlDecompacterReperes(r){
 // mais relancer une minute d'analyse parce que le coach change d'avis sur le
 // côté serait absurde. Le côté se choisit à la lecture, pas à l'analyse.
 
-/** Les indices MediaPipe conservés, dans l'ordre où ils sont stockés. */
-const ML_POSE_IDX=Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28,31,32]);
-/** Le rang du point GAUCHE de chaque membre ; le droit est le rang suivant. */
-const ML_POSE_RANG=Object.freeze({epaule:0,coude:2,poignet:4,hanche:6,genou:8,cheville:10,pointe:12});
+/**
+ * Les indices MediaPipe conservés, dans l'ordre où ils sont stockés.
+ * LOT ER1 : la TÊTE en fin de tableau — nez (0), oreille G (7), oreille D (8).
+ * ⚠ AJOUTÉE À LA FIN, JAMAIS INSÉRÉE : les quatorze premiers rangs restent
+ *   ceux d'avant, et les poses déjà enregistrées (format v1, quatorze points)
+ *   se relisent telles quelles — voir mlPointsPose.
+ */
+const ML_POSE_IDX=Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28,31,32,0,7,8]);
+/** Le nombre de points des poses du format v1 (avant la tête). */
+const ML_POSE_PTS_V1=14;
+/**
+ * Le rang du point GAUCHE de chaque membre ; le droit est le rang suivant.
+ * ⚠ LE NEZ N'A PAS DE CÔTÉ : son rang vaut pour 'G' comme pour 'D'
+ *   (ML_POSE_SANS_COTE). Les oreilles, si.
+ */
+const ML_POSE_RANG=Object.freeze({epaule:0,coude:2,poignet:4,hanche:6,genou:8,cheville:10,pointe:12,nez:14,oreille:15});
+/** Les points sans côté. */
+const ML_POSE_SANS_COTE=Object.freeze(['nez']);
+/** Les membres (paires G/D) — ce que mlCotePose compare. La tête n'y entre pas. */
+const ML_POSE_MEMBRES=Object.freeze(['epaule','coude','poignet','hanche','genou','cheville','pointe']);
 /** Les os dessinés, d'un point à l'autre. */
 const ML_POSE_OS=Object.freeze([['epaule','coude'],['coude','poignet'],['epaule','hanche'],
   ['hanche','genou'],['genou','cheville'],['cheville','pointe']]);
@@ -876,7 +892,8 @@ const ML_POSE_VIS_MIN=0.5;
  */
 function mlRangPose(nom,cote){
   const r=/** @type {Object<string,number>} */(ML_POSE_RANG)[nom];
-  return r===undefined?-1:r+(cote==='D'?1:0);
+  if(r===undefined) return -1;
+  return ML_POSE_SANS_COTE.indexOf(nom)>=0?r:r+(cote==='D'?1:0);
 }
 /**
  * PURE. L'angle en B, entre 0 et 180 degrés, null si deux points se confondent.
@@ -956,7 +973,10 @@ function mlLisserAngles(v){
  */
 function mlCotePose(ech){
   let g=0, d=0;
-  for(const e of ech||[]) for(let r=0;r<ML_POSE_IDX.length;r+=2){
+  // LES MEMBRES SEULS : un nez qui ne se partage pas entre deux côtés
+  // fausserait la comparaison (LOT ER1).
+  for(const e of ech||[]) for(const m of ML_POSE_MEMBRES){
+    const r=mlRangPose(m,'G');
     g+=Number(e.V[r])||0; d+=Number(e.V[r+1])||0;
   }
   return d>g?'D':'G';
@@ -987,12 +1007,19 @@ function mlCompacterPose(seg,ech,p){
     const v=Number(l[k].V[r]);
     vis[k*N+r]=isFinite(v)?Math.round(255*Math.max(0,Math.min(1,v))):0;
   }
-  return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,vw:p.vw,vh:p.vh,cote:p.cote,n,
+  // v2 : dix-sept points (la tête comprise). v1 : quatorze — relu par mlPointsPose.
+  return {v:2,debutMs:seg.debutMs,finMs:seg.finMs,vw:p.vw,vh:p.vh,cote:p.cote,n,
     theta:Math.round((Number(p.theta)||0)*10)/10,
     ...(p.hp==null?{}:{hp:Math.round(Number(p.hp))}),
     t0Ms:Math.round(n?l[0].tMs:seg.debutMs),pasMs:Math.round(pasMs*1000)/1000,
     xy:mlB64(new Uint8Array(xy.buffer)),vis:mlB64(vis)};
 }
+/**
+ * PURE. Le nombre de points d'une pose stockée : quatorze en v1, dix-sept en v2.
+ * @param {any} p
+ * @returns {number}
+ */
+function mlPointsPose(p){ return p&&p.v===2?ML_POSE_IDX.length:ML_POSE_PTS_V1; }
 /**
  * PURE. La pose compactée, relue : temps, positions NORMÉES (NaN pour un point
  * absent) et visibilités entre 0 et 1.
@@ -1000,7 +1027,7 @@ function mlCompacterPose(seg,ech,p){
  * @returns {{t:number[], X:number[][], Y:number[][], V:number[][]}}
  */
 function mlDecompacterPose(p){
-  const xy=new DataView(mlOctets(p.xy).buffer), vis=mlOctets(p.vis), N=ML_POSE_IDX.length;
+  const xy=new DataView(mlOctets(p.xy).buffer), vis=mlOctets(p.vis), N=mlPointsPose(p), T=ML_POSE_IDX.length;
   const t=[], X=[], Y=[], V=[];
   for(let k=0;k<p.n;k++){
     const x=[], y=[], v=[];
@@ -1011,6 +1038,9 @@ function mlDecompacterPose(p){
       y.push(yi===ML_I16_TROU?NaN:yi/32767);
       v.push(vis[k*N+r]/255);
     }
+    // UNE POSE v1 N'A PAS DE TÊTE : les rangs manquants sont des TROUS
+    // (invisibles), jamais des zéros — une règle qui lit la tête s'y abstient.
+    for(let r=N;r<T;r++){ x.push(NaN); y.push(NaN); v.push(0); }
     t.push(p.t0Ms+k*p.pasMs); X.push(x); Y.push(y); V.push(v);
   }
   return {t,X,Y,V};
@@ -9422,6 +9452,8 @@ function _mlMajLecture(){
   }
   // LOT AM1 : la cible d'amplitude, répétition par répétition.
   try{ h+=_mlHtmlControleAmplitude(); }catch(e){}
+  // LOT ER1 : les erreurs repérées, une alerte par règle déclenchée.
+  try{ h+=_mlHtmlErreurs(); }catch(e){}
   // LE TABLEAU DE LA SÉRIE. Les répétitions non analysées y sont en ligne
   // VIDE : sans elles, la série lue n'est pas celle qui a été filmée.
   if(lignes.length>1){
@@ -13109,8 +13141,9 @@ function mlExporterComparaison(){
 // ⚠ UNE RÉPÉTITION SE COMPTE ALLER ET RETOUR. Une descente qui ne remonte pas
 //   (la dernière d'une vidéo coupée trop tôt) n'est pas une répétition.
 
-/** Les points lus pour un test : ceux du lot 4, puis nez, oreille G, oreille D. */
-const ML_COMPAT_IDX=Object.freeze(ML_POSE_IDX.concat([0,7,8]));
+/** Les points lus pour un test : ceux du lot 4, puis nez, oreille G, oreille D.
+ *  LOT ER1 : ML_POSE_IDX porte désormais la tête, aux mêmes rangs (14, 15, 16). */
+const ML_COMPAT_IDX=ML_POSE_IDX;
 /** Rang des points de tête dans ML_COMPAT_IDX. */
 const ML_COMPAT_TETE=Object.freeze({nez:14,oreilleG:15,oreilleD:16});
 /** Au-delà, l'athlète a filmé autre chose qu'une série : on refuse plutôt que d'échantillonner trop large. */
@@ -13515,4 +13548,346 @@ function mlCarteAmplitude(){
     +(s.sur_etirement?' ; '+s.sur_etirement+' au-delà':'')+'.';
   try{ enregistrerControleAmplitude(_ml.email,k.x.nom,s); }catch(e){}
   return mlCarteTexte(t);
+}
+
+// ══ LOT ER1 — CINQ RÈGLES DE DÉTECTION D'ERREUR ═════════════════════════════
+//
+// Une règle = une mesure sur la pose, un seuil, une consigne courte. Elle se
+// juge répétition par répétition (une répétition = un segment analysé), et
+// dit lesquelles franchissent le seuil, la pire valeur, et sa CONFIANCE.
+//
+// ⚠ ON NE JUGE PAS CE QU'ON NE VOIT PAS. Confiance nulle quand la vue ne
+//   permet pas la mesure (le genou qui rentre ne se voit pas de profil, le
+//   cou ne se voit pas de face) ou quand les points qui la portent sont vus
+//   à moins de 0,5 (ML_POSE_VIS_MIN) : la règle s'abstient, elle ne passe pas.
+// ⚠ SEUILS DE TRAVAIL, comme ceux du lot TC1 : à confronter aux vidéos réelles
+//   du coach. Le coach peut éteindre une règle pour un athlète (morphologie
+//   particulière, consigne différente) — reglesErreursOff, dans le dossier.
+// ⚠ LES « SCHÉMAS » sont des familles de mouvement lues sur le NOM de
+//   l'exercice (mlSchemaErreurs) : dips, squat, souleve, curl, traction,
+//   elevation_laterale. Ce n'est pas la classification du catalogue, qui ne
+//   distingue pas des dips d'un développé.
+/** @typedef {{t:number[], X:number[][], Y:number[][], V:number[][], hp?:any, vw?:number, vh?:number}} RepErr */
+/** @type {ReadonlyArray<any>} */
+const ML_REGLES_ERREURS=Object.freeze([
+  Object.freeze({cle:'cou_extension',schemas:Object.freeze(['dips','squat','souleve']),vue:'profil',
+    mesure:'extension du cou au point bas, au-delà du neutre (degrés) : la droite épaule–oreille rapportée à l’axe du tronc',
+    seuil:20,message:'Regard devant, menton neutre',gravite:'moyenne',segment:Object.freeze(['epaule','oreille'])}),
+  Object.freeze({cle:'balancement_curl',schemas:Object.freeze(['curl']),vue:'profil',
+    mesure:'variation de l’inclinaison du tronc pendant la montée (degrés)',
+    seuil:10,message:'Buste immobile',gravite:'moyenne',segment:Object.freeze(['hanche','epaule'])}),
+  Object.freeze({cle:'kipping_traction',schemas:Object.freeze(['traction']),vue:'profil',
+    mesure:'oscillation horizontale des hanches, en part de la longueur de jambe ; ou flexion de hanche de plus de 30°',
+    seuil:0.15,seuilFlexion:30,message:'Jambes gainées, sans élan',gravite:'moyenne',segment:Object.freeze(['hanche','genou'])}),
+  Object.freeze({cle:'elevation_trop_haute',schemas:Object.freeze(['elevation_laterale']),vue:'face',
+    mesure:'abduction de l’épaule au sommet (degrés)',
+    seuil:100,message:'Arrête à l’horizontale',gravite:'faible',segment:Object.freeze(['epaule','coude'])}),
+  Object.freeze({cle:'genou_rentre',schemas:Object.freeze(['squat']),vue:'face',
+    mesure:'écart genou–genou rapporté à l’écart cheville–cheville pendant la montée (le plus bas)',
+    seuil:0.8,inferieur:true,message:'Pousse les genoux vers l’extérieur',gravite:'elevee',segment:Object.freeze(['genou','genou'])})
+]);
+/**
+ * PURE. La famille de mouvement d'un exercice, d'après son nom ; '' si aucune règle ne la vise.
+ * @param {string} nom
+ * @returns {string}
+ */
+function mlSchemaErreurs(nom){
+  const n=String(nom||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(/DIPS/.test(n)) return 'dips';
+  if(/SOULEVE|DEADLIFT|ROUMAIN/.test(n)) return 'souleve';
+  if(/SQUAT/.test(n)) return 'squat';
+  if(/TRACTION|PULL ?UP|CHIN ?UP/.test(n)) return 'traction';
+  if(/ELEVATION.*LATERAL|LATERAL RAISE/.test(n)) return 'elevation_laterale';
+  if(/CURL/.test(n)&&!/LEG CURL|LEG-CURL/.test(n)) return 'curl';
+  return '';
+}
+/**
+ * PURE. La vue d'après l'écart au profil (mlHorsPlan, degrés) : 'profil', 'face', ou '' entre les deux.
+ * @param {any} deg
+ * @returns {string}
+ */
+function mlVueDepuisHorsPlan(deg){
+  if(deg==null||deg==='') return '';
+  const d=Number(deg);
+  if(!isFinite(d)) return '';
+  if(d<=ML_HORSPLAN_REFAIRE) return 'profil';
+  if(d>=60) return 'face';
+  return '';
+}
+/**
+ * PURE. LES ERREURS D'UNE SÉRIE.
+ * @param {{t:number[], X:number[][], Y:number[][], V:number[][]}[]} serie  une entrée par répétition, positions EN PIXELS, dix-sept points
+ * @param {string} schema  mlSchemaErreurs
+ * @param {string} vue  'profil' | 'face' | ''
+ * @returns {{cle:string, message:string, gravite:string, repetitions:number[], valeurMax:number|null, confiance:number, declenchee:boolean, pire:{rep:number,k:number}|null, raison:string}[]}
+ */
+function detecterErreurs(serie,schema,vue){
+  const reps=Array.isArray(serie)?serie:[];
+  const out=[];
+  for(const R of ML_REGLES_ERREURS){
+    if(R.schemas.indexOf(schema)<0) continue;
+    const res={cle:R.cle,message:R.message,gravite:R.gravite,repetitions:/** @type {number[]} */([]),valeurMax:/** @type {number|null} */(null),
+      confiance:0,declenchee:false,pire:/** @type {{rep:number,k:number}|null} */(null),raison:''};
+    if(vue!==R.vue){ res.raison='vue'; out.push(res); continue; }
+    let visTot=0, visN=0;
+    reps.forEach((/** @type {RepErr} */ rep,/** @type {number} */ i)=>{
+      const m=_mlMesureRegle(R,rep,schema);
+      if(!m) return;
+      visTot+=m.vis; visN++;
+      if(m.vis<ML_POSE_VIS_MIN) return;
+      const pire=res.valeurMax==null||(R.inferieur?m.valeur<res.valeurMax:m.valeur>res.valeurMax);
+      if(pire){ res.valeurMax=Math.round(m.valeur*1000)/1000; res.pire={rep:i,k:m.k}; }
+      if(m.franchi) res.repetitions.push(i);
+    });
+    const vis=visN?visTot/visN:0;
+    if(vis<ML_POSE_VIS_MIN||res.valeurMax==null){ res.confiance=0; res.raison='visibilite'; res.repetitions=[]; res.pire=null; res.valeurMax=null; }
+    else { res.confiance=Math.round(vis*100)/100; res.declenchee=res.repetitions.length>0; }
+    out.push(res);
+  }
+  return out;
+}
+/**
+ * PURE. Un point d'une image : {x, y, v} ; v=0 pour un trou.
+ * @param {RepErr} rep @param {number} k @param {string} nom @param {string} cote
+ * @returns {{x:number,y:number,v:number}}
+ */
+function _mlPt(rep,k,nom,cote){
+  const r=mlRangPose(nom,cote);
+  const x=rep.X[k]&&rep.X[k][r], y=rep.Y[k]&&rep.Y[k][r], v=rep.V[k]&&rep.V[k][r];
+  return (r<0||!isFinite(x)||!isFinite(y))?{x:NaN,y:NaN,v:0}:{x,y,v:Number(v)||0};
+}
+/**
+ * PURE. Le côté le mieux vu d'une répétition.
+ * @param {RepErr} rep
+ * @returns {string}
+ */
+function _mlCoteRep(rep){ return mlCotePose((rep.V||[]).map(v=>({V:v}))); }
+/**
+ * PURE. La visibilité minimale d'un jeu de points.
+ * @param {{v:number}[]} l
+ * @returns {number}
+ */
+function _mlVisMin(l){ return Math.min(...l.map(p=>p.v)); }
+/**
+ * PURE. L'angle en B (degrés), null si un point manque.
+ * @param {{x:number,y:number}} a @param {{x:number,y:number}} b @param {{x:number,y:number}} c
+ * @returns {number|null}
+ */
+function _mlAng(a,b,c){ return [a,b,c].every(p=>isFinite(p.x))?mlAngleEn(a.x,a.y,b.x,b.y,c.x,c.y):null; }
+/**
+ * PURE. La mesure d'une règle sur une répétition : {valeur, franchi, vis, k}
+ * (k : l'image de la pire valeur), ou null si rien n'est mesurable.
+ * @param {any} R @param {RepErr} rep @param {string} schema
+ * @returns {{valeur:number, franchi:boolean, k:number, vis:number}|null}
+ */
+function _mlMesureRegle(R,rep,schema){
+  if(!rep||!Array.isArray(rep.t)||rep.t.length<3) return null;
+  const n=rep.t.length, cote=_mlCoteRep(rep);
+  const P=(/** @type {number} */ k,/** @type {string} */ nom,c='')=>_mlPt(rep,k,nom,c||cote);
+  const idx=[...Array(n).keys()];
+  /** @param {(k:number)=>number|null} f @returns {number} */
+  const argmin=f=>{ let b=-1, bv=Infinity; for(const k of idx){ const v=f(k); if(v!=null&&isFinite(v)&&v<bv){ bv=v; b=k; } } return b; };
+  /** @param {(k:number)=>number|null} f @returns {number} */
+  const argmax=f=>argmin(k=>{ const v=f(k); return v==null?null:-v; });
+  if(R.cle==='cou_extension'){
+    // L'extension SIGNÉE : le cou qui part en arrière du tronc, du côté opposé
+    // au regard. Le regard se lit du nez vers l'oreille ; sans nez, de la
+    // cheville vers la pointe du pied.
+    /** @param {number} k @returns {number|null} */
+    const ext=k=>{
+      const e=P(k,'epaule'), o=P(k,'oreille'), h=P(k,'hanche'), nz=P(k,'nez',cote);
+      if(![e,o,h].every(p=>isFinite(p.x))) return null;
+      const tx=e.x-h.x, ty=-(e.y-h.y), nx=o.x-e.x, ny=-(o.y-e.y);
+      let face=isFinite(nz.x)&&nz.v>=ML_POSE_VIS_MIN?Math.sign(nz.x-o.x):0;
+      if(!face){ const ch=P(k,'cheville'), pt=P(k,'pointe'); face=isFinite(ch.x)&&isFinite(pt.x)?Math.sign(pt.x-ch.x):0; }
+      if(!face) return null;
+      return Math.atan2(tx*ny-ty*nx,tx*nx+ty*ny)*180/Math.PI*face;
+    };
+    /** @param {number} k */
+    const conduite=k=>schema==='dips'?_mlAng(P(k,'epaule'),P(k,'coude'),P(k,'poignet')):_mlAng(P(k,'epaule'),P(k,'hanche'),P(k,'genou'));
+    const kb=argmin(conduite);
+    if(kb<0) return null;
+    // LE NEUTRE : la médiane de l'extension sur les images proches du haut
+    // (le cinquième supérieur de l'amplitude de la conduite).
+    const c=/** @type {number[]} */(idx.map(conduite).filter(v=>v!=null));
+    const hi=Math.max(...c), lo=Math.min(...c), seuilHaut=hi-(hi-lo)*0.2;
+    const neutres=/** @type {number[]} */(idx.filter(k=>{ const v=conduite(k); return v!=null&&v>=seuilHaut; }).map(ext).filter(v=>v!=null)).sort((a,b)=>a-b);
+    const eb=ext(kb);
+    if(!neutres.length||eb==null) return null;
+    const neutre=neutres[Math.floor(neutres.length/2)];
+    const v=eb-neutre;
+    return {valeur:v,franchi:v>R.seuil,k:kb,vis:_mlVisMin([P(kb,'epaule'),P(kb,'oreille'),P(kb,'hanche')])};
+  }
+  if(R.cle==='balancement_curl'){
+    /** @param {number} k */
+    const coude=k=>_mlAng(P(k,'epaule'),P(k,'coude'),P(k,'poignet'));
+    const kMin=argmin(coude); if(kMin<0) return null;
+    let kMax=-1, bv=-Infinity; for(let k=0;k<=kMin;k++){ const v=coude(k); if(v!=null&&v>bv){ bv=v; kMax=k; } }
+    if(kMax<0||kMax===kMin) return null;
+    /** @type {{k:number,v:number}[]} */
+    const tr=[]; let vis=1, kPire=kMax;
+    for(let k=kMax;k<=kMin;k++){ const h=P(k,'hanche'), e=P(k,'epaule'); if(!isFinite(h.x)||!isFinite(e.x)) continue;
+      const iv=mlInclinaison(h.x,h.y,e.x,e.y); if(iv==null) continue;
+      tr.push({k,v:iv}); vis=Math.min(vis,h.v,e.v); }
+    if(tr.length<2) return null;
+    const a=Math.min(...tr.map(x=>x.v)), b=Math.max(...tr.map(x=>x.v));
+    kPire=tr.reduce((m,x)=>Math.abs(x.v-tr[0].v)>Math.abs(m.v-tr[0].v)?x:m,tr[0]).k;
+    return {valeur:b-a,franchi:b-a>R.seuil,k:kPire,vis};
+  }
+  if(R.cle==='kipping_traction'){
+    /** @type {{k:number,x:number}[]} */
+    const hx=[]; /** @type {number[]} */ const jambe=[]; /** @type {number[]} */ const flex=[]; let vis=1;
+    for(const k of idx){
+      const h=P(k,'hanche'), g=P(k,'genou'), c=P(k,'cheville'), e=P(k,'epaule');
+      if(!isFinite(h.x)) continue;
+      hx.push({k,x:h.x}); vis=Math.min(vis,h.v);
+      if(isFinite(c.x)) jambe.push(Math.hypot(c.x-h.x,c.y-h.y));
+      const a=_mlAng(e,h,g); if(a!=null) flex.push(a);
+    }
+    if(hx.length<3||!jambe.length) return null;
+    jambe.sort((a,b)=>a-b);
+    const L=jambe[Math.floor(jambe.length/2)];
+    if(!(L>1e-6)) return null;
+    const x0=Math.min(...hx.map(p=>p.x)), x1=Math.max(...hx.map(p=>p.x));
+    const ratio=(x1-x0)/L, fl=flex.length?Math.max(...flex)-Math.min(...flex):0;
+    const kPire=hx.reduce((m,p)=>Math.abs(p.x-hx[0].x)>Math.abs(m.x-hx[0].x)?p:m,hx[0]).k;
+    return {valeur:ratio,franchi:ratio>R.seuil||fl>R.seuilFlexion,k:kPire,vis};
+  }
+  if(R.cle==='elevation_trop_haute'){
+    /** @type {{valeur:number,k:number,vis:number}|null} */
+    let best=null;
+    for(const c of ['G','D']) for(const k of idx){
+      const h=P(k,'hanche',c), e=P(k,'epaule',c), co=P(k,'coude',c);
+      if(Math.min(h.v,e.v,co.v)<ML_POSE_VIS_MIN) continue;
+      const a=_mlAng(h,e,co); if(a==null) continue;
+      if(!best||a>best.valeur) best={valeur:a,k,vis:Math.min(h.v,e.v,co.v)};
+    }
+    if(!best){ // rien de lisible : on rend la visibilité réelle, qui fera tomber la confiance
+      let v=0; for(const k of idx) for(const c of ['G','D']) v=Math.max(v,_mlVisMin([P(k,'hanche',c),P(k,'epaule',c),P(k,'coude',c)]));
+      return {valeur:0,franchi:false,k:0,vis:v};
+    }
+    return {valeur:best.valeur,franchi:best.valeur>R.seuil,k:best.k,vis:best.vis};
+  }
+  if(R.cle==='genou_rentre'){
+    // LE POINT BAS : les hanches au plus bas de l'image (y le plus grand).
+    /** @param {number} k @returns {number|null} */
+    const hy=k=>{ const a=P(k,'hanche','G'), b=P(k,'hanche','D'); return isFinite(a.y)&&isFinite(b.y)?(a.y+b.y)/2:null; };
+    const kb=argmax(hy); if(kb<0) return null;
+    /** @type {{valeur:number,k:number}|null} */
+    let pire=null; let vis=1;
+    for(let k=kb;k<n;k++){
+      const gG=P(k,'genou','G'), gD=P(k,'genou','D'), cG=P(k,'cheville','G'), cD=P(k,'cheville','D');
+      if(![gG,gD,cG,cD].every(p=>isFinite(p.x))) continue;
+      const den=Math.abs(cG.x-cD.x); if(!(den>1e-6)) continue;
+      const r=Math.abs(gG.x-gD.x)/den;
+      vis=Math.min(vis,gG.v,gD.v,cG.v,cD.v);
+      if(!pire||r<pire.valeur) pire={valeur:r,k};
+    }
+    if(!pire) return null;
+    return {valeur:pire.valeur,franchi:pire.valeur<R.seuil,k:pire.k,vis};
+  }
+  return null;
+}
+
+// ── L'ÉCRAN : une alerte par règle déclenchée, la preuve sur l'image ────────
+let _mlVueErreurs='';   // la vue choisie par le coach ; '' = estimée
+/** La série de l'écran : une entrée par répétition analysée, en pixels. */
+function _mlSerieErreurs(){
+  if(!_ml) return null;
+  const v=_mlVideoSource(), nom=String((v&&v.lien&&v.lien.exerciceNom)||'');
+  const schema=mlSchemaErreurs(nom);
+  if(!schema) return null;
+  const serie=[], segs=[];
+  for(const s of (_ml.segments||[])){
+    const p=/** @type {any} */(s).pose; if(!p) continue;
+    try{ const d=mlDecompacterPose(p);
+      serie.push({t:d.t,X:d.X.map(x=>x.map(u=>u*p.vw)),Y:d.Y.map(y=>y.map(u=>u*p.vh)),V:d.V,hp:p.hp,vw:p.vw,vh:p.vh});
+      segs.push(s); }catch(e){}
+  }
+  if(!serie.length) return null;
+  // LA VUE : celle du coach, sinon l'écart au profil enregistré, sinon estimé sur les images.
+  let vue=_mlVueErreurs;
+  if(!vue){
+    const hps=serie.map(r=>r.hp).filter(x=>x!=null&&isFinite(x));
+    const hp=hps.length?hps[0]:(function(){ try{ const h=mlHorsPlan(serie.flatMap(r=>r.t.map((_,k)=>({X:r.X[k],Y:r.Y[k],V:r.V[k]})))); return h&&h.deg; }catch(e){ return null; } })();
+    vue=mlVueDepuisHorsPlan(hp);
+  }
+  return {nom,schema,serie,segs,vue};
+}
+function _mlHtmlErreurs(){
+  const s=_mlSerieErreurs();
+  if(!s) return '';
+  if(!_ml) return '';
+  const c=(typeof DB!=='undefined'?(DB.get('users')||{}):{})[_ml.email]||{};
+  const off=(c.reglesErreursOff&&typeof c.reglesErreursOff==='object')?c.reglesErreursOff:{};
+  const res=detecterErreurs(s.serie,s.schema,s.vue);
+  if(!res.length) return '';
+  const E=escapeHtml, coach=typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach';
+  const fmt=(/** @type {any} */ R,/** @type {number|null} */ v)=>v==null?'—':(R.cle==='kipping_traction'?Math.round(v*100)+' % de la jambe':R.cle==='genou_rentre'?String(Math.round(v*100)/100).replace('.',','):Math.round(v)+'°');
+  let h='<div class="ml-lab" style="margin-top:14px">Erreurs repérées</div>'
+    +'<div class="ml-champ"><span>Vue</span><span class="ml-choix">'+[['','Estimée'],['profil','Profil'],['face','Face']].map(x=>'<button type="button" class="ml-b" aria-pressed="'+(_mlVueErreurs===x[0])+'" data-v="'+x[0]+'" onclick="mlVueErreurs(this.dataset.v)">'+x[1]+'</button>').join('')+'</span></div>';
+  let alertes=0;
+  for(const r of res){
+    const R=ML_REGLES_ERREURS.find(x=>x.cle===r.cle);
+    if(!R) continue;
+    if(off[r.cle]){ h+='<div class="ml-err ml-err-off"><span>'+E(R.message)+' : règle éteinte pour cet athlète.</span>'
+      +(coach?'<button type="button" class="ml-b" data-cle="'+E(r.cle)+'" onclick="mlRegleErreur(this.dataset.cle,false)">Rallumer</button>':'')+'</div>'; continue; }
+    if(!r.declenchee){
+      h+='<p class="ml-traj-aide">'+E(R.message)+' : '+(r.raison==='vue'?'non jugé, il faut une vue de '+(R.vue==='profil'?'profil':'face')+'.'
+        :r.raison==='visibilite'?'non jugé, points trop mal vus.':'rien à signaler (pire : '+fmt(R,r.valeurMax)+').')+'</p>';
+      continue;
+    }
+    alertes++;
+    const pr=r.pire, tMs=pr?s.serie[pr.rep].t[pr.k]:null;
+    h+='<div class="ml-err ml-err-'+E(r.gravite)+'" role="alert"><div class="ml-err-t">'+E(R.message)+'</div>'
+      +'<div class="ml-err-s">Répétition'+(r.repetitions.length>1?'s':'')+' '+r.repetitions.map(i=>'n° '+(i+1)).join(', ')
+      +' · pire : '+fmt(R,r.valeurMax)+' (seuil '+fmt(R,R.seuil)+') · confiance '+Math.round(r.confiance*100)+' %</div>'
+      +'<canvas class="ml-err-img" id="ml-err-'+E(r.cle)+'" width="320" height="200" aria-label="La pire répétition, segment fautif en rouge"></canvas>'
+      +'<div class="ml-err-a">'+(tMs!=null?'<button type="button" class="ml-b" onclick="mlAllerA('+Math.round(tMs)+')">Voir dans la vidéo</button>':'')
+      +(coach?'<button type="button" class="ml-b" data-cle="'+E(r.cle)+'" onclick="mlRegleErreur(this.dataset.cle,true)">Éteindre pour cet athlète</button>':'')+'</div></div>';
+  }
+  if(!alertes) h+='<p class="ml-traj-aide">Aucune règle déclenchée sur ce qui a pu être jugé.</p>';
+  setTimeout(()=>{ try{ _mlPeindrePreuves(s,res); }catch(e){} },0);
+  return h;
+}
+/** Les images de preuve : l'image de la vidéo à l'instant de la pire répétition si on peut la lire, la pose dessus, le segment fautif en rouge. */
+/** @param {{serie:RepErr[]}} s @param {any[]} res */
+async function _mlPeindrePreuves(s,res){
+  const v=_mlVideo();
+  const t0=v?v.currentTime:0;
+  for(const r of res){
+    if(!r.declenchee||!r.pire) continue;
+    const cv=document.getElementById('ml-err-'+r.cle);
+    if(!(cv instanceof HTMLCanvasElement)) continue;
+    const rep=s.serie[r.pire.rep], k=r.pire.k, R=ML_REGLES_ERREURS.find(x=>x.cle===r.cle);
+    const g=cv.getContext('2d'); if(!g||!R) continue;
+    const vw=rep.vw||1280, vh=rep.vh||720, sc=Math.min(cv.width/vw,cv.height/vh), ox=(cv.width-vw*sc)/2, oy=(cv.height-vh*sc)/2;
+    g.fillStyle='#0b0b0b'; g.fillRect(0,0,cv.width,cv.height);
+    // L'IMAGE DE LA VIDÉO, quand elle se laisse lire (même origine, déjà chargée).
+    if(v&&v.readyState>=2){
+      try{
+        await new Promise(ok=>{ const fin=()=>ok(true); v.addEventListener('seeked',fin,{once:true}); setTimeout(fin,1500); v.currentTime=rep.t[k]/1000; });
+        g.drawImage(v,ox,oy,vw*sc,vh*sc);
+      }catch(e){}
+    }
+    const P=(/** @type {string} */ nom,/** @type {string} */ c)=>{ const p=_mlPt(rep,k,nom,c); return {x:ox+p.x*sc,y:oy+p.y*sc,ok:isFinite(p.x)&&p.v>=ML_POSE_VIS_MIN}; };
+    const cote=_mlCoteRep(rep);
+    g.lineWidth=2; g.strokeStyle='rgba(255,255,255,.75)';
+    for(const c of ['G','D']) for(const [a,b] of ML_POSE_OS){ const A=P(a,c), B=P(b,c); if(A.ok&&B.ok){ g.beginPath(); g.moveTo(A.x,A.y); g.lineTo(B.x,B.y); g.stroke(); } }
+    // LE SEGMENT FAUTIF, EN ROUGE.
+    const [a,b]=R.segment;
+    const A=a===b?P(a,'G'):P(a,cote), B=a===b?P(b,'D'):P(b,cote);
+    if(A.ok&&B.ok){ g.lineWidth=5; g.strokeStyle='#ff2a2a'; g.beginPath(); g.moveTo(A.x,A.y); g.lineTo(B.x,B.y); g.stroke();
+      for(const p of [A,B]){ g.fillStyle='#ff2a2a'; g.beginPath(); g.arc(p.x,p.y,5,0,7); g.fill(); } }
+  }
+  if(v){ try{ v.currentTime=t0; }catch(e){} }
+}
+/** @param {string} v */
+function mlVueErreurs(v){ _mlVueErreurs=(v==='profil'||v==='face')?v:''; try{ _mlMajLecture(); }catch(e){} return true; }
+/** @param {string} cle @param {boolean} eteindre */
+function mlRegleErreur(cle,eteindre){
+  if(!_ml||typeof basculerRegleErreur!=='function') return false;
+  const ok=basculerRegleErreur(_ml.email,cle,!!eteindre);
+  try{ _mlMajLecture(); }catch(e){}
+  return ok;
 }

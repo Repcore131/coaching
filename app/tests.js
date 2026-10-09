@@ -62021,7 +62021,9 @@ async function testExercices(){
       // LES RANGS : la droite est toujours juste après la gauche.
       for(const nom of ['epaule','coude','poignet','hanche','genou','cheville','pointe'])
         if(mlRangPose(nom,'D')!==mlRangPose(nom,'G')+1) return _echec('rangs de '+nom);
-      if(mlRangPose('nez','G')!==-1) return _echec('un point inconnu a un rang');
+      if(mlRangPose('menton','G')!==-1) return _echec('un point inconnu a un rang');
+      // LOT ER1 : la tête en fin de tableau, le nez sans côté.
+      if(mlRangPose('nez','G')!==14||mlRangPose('nez','D')!==14||mlRangPose('oreille','G')!==15||mlRangPose('oreille','D')!==16) return _echec('rangs de la tête');
       // UNE POSE CONSTRUITE À LA MAIN : genou à 90°, tronc à 30° de la verticale.
       const X=new Array(14).fill(0), Y=new Array(14).fill(0), V=new Array(14).fill(0.9);
       const pose=(nom,x,y)=>{ const r=mlRangPose(nom,'G'); X[r]=x; Y[r]=y; };
@@ -62098,7 +62100,7 @@ async function testExercices(){
       const creux={...S,ang:{...S.ang,genou:S.ang.genou.map(()=>null)}};
       if(mlMetriquesAngles(creux).genou) return _echec('un angle jamais vu entre dans les métriques');
       // CE QUI NE SE LIT PAS TOMBE.
-      const casse=[['version',{...p,v:2}],['bornes',{...p,finMs:3999}],['côté',{...p,cote:'X'}],
+      const casse=[['version',{...p,v:3}],['v1 avec 17 points',{...p,v:1}],['bornes',{...p,finMs:3999}],['côté',{...p,cote:'X'}],
         ['n hors bornes',{...p,n:SEG_POSE_MAX+1}],['xy trop court',{...p,xy:p.xy.slice(0,-4)}],
         ['visibilités illisibles',{...p,vis:'!!!'}],['largeur absurde',{...p,vw:2}]];
       for(const [quoi,x] of casse)
@@ -74634,6 +74636,141 @@ async function testExercices(){
         for(const m of _prodSrc().matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)){ if(vus[m[1]]) doubles.push(m[1]); vus[m[1]]=1; }
         const l=[...new Set(doubles)].filter(n=>n!=='_lundiDe');
         return l.length===0||_echec('déclarées deux fois : '+l.join(', '));})());
+      // ══ LOT ER1 — CINQ RÈGLES D'ERREUR (motion-lab) ══
+      okA('ER1 — la tête suivie en fin de tableau, les poses v1 relues sans tête, le côté jugé sur les membres',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        if(ML_POSE_IDX.length!==17||ML_POSE_IDX.slice(0,14).join()!=='11,12,13,14,15,16,23,24,25,26,27,28,31,32'||ML_POSE_IDX.slice(14).join()!=='0,7,8') return _echec('ML_POSE_IDX : '+ML_POSE_IDX.join());
+        if(ML_COMPAT_TETE.nez!==mlRangPose('nez','G')||ML_COMPAT_TETE.oreilleD!==mlRangPose('oreille','D')||ML_COMPAT_IDX.length!==17) return _echec('rangs du lot TC1');
+        // UNE POSE v1 (quatorze points), telle qu'enregistrée avant ce lot.
+        const n=2, xy=new Uint8Array(n*14*4), vis=new Uint8Array(n*14).fill(230);
+        const v1={v:1,debutMs:0,finMs:500,vw:1280,vh:720,cote:'G',n,t0Ms:0,pasMs:250,xy:mlB64(xy),vis:mlB64(vis),theta:0};
+        const p=segPoseValide(v1,0,500);
+        if(!p||p.v!==1) return _echec('une pose v1 n’est plus valide');
+        const d=mlDecompacterPose(p);
+        if(d.X[0].length!==17||d.V[0][14]!==0||!isNaN(d.X[0][16])||Math.abs(d.V[0][0]-230/255)>1e-9) return _echec('relecture v1 : '+JSON.stringify(d.V[0]));
+        // LE CÔTÉ : la tête ne pèse pas (sinon nez + oreille G feraient pencher à gauche).
+        const V=new Array(17).fill(0.2); for(const m of ML_POSE_MEMBRES) V[mlRangPose(m,'D')]=0.9; V[14]=1; V[15]=1;
+        return mlCotePose([{V}])==='D'||_echec('côté faussé par la tête');
+      });
+      okA('ER1 — ML_REGLES_ERREURS gelée, cinq règles complètes ; mêmes clés que le dossier',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const R=ML_REGLES_ERREURS;
+        if(!Object.isFrozen(R)||!Object.isFrozen(R[0])||R.length!==5) return _echec('gel');
+        for(const r of R) if(!r.cle||!r.schemas.length||(r.vue!=='profil'&&r.vue!=='face')||!r.mesure||!(r.seuil>0)||!r.message||!r.gravite) return _echec('règle incomplète : '+r.cle);
+        const att={cou_extension:[20,'profil','Regard devant, menton neutre'],balancement_curl:[10,'profil','Buste immobile'],kipping_traction:[0.15,'profil','Jambes gainées, sans élan'],
+          elevation_trop_haute:[100,'face','Arrête à l’horizontale'],genou_rentre:[0.8,'face','Pousse les genoux vers l’extérieur']};
+        for(const r of R){ const a=att[r.cle]; if(!a||r.seuil!==a[0]||r.vue!==a[1]||r.message!==a[2]) return _echec(r.cle); }
+        if(R.map(r=>r.cle).join()!==REGLES_ERREURS_CLES.join()) return _echec('clés divergentes');
+        const sch=['DIPS LESTES','SQUAT BARRE','SOULEVE DE TERRE','CURL BARRE','TRACTIONS PRONATION','ÉLÉVATIONS LATÉRALES','LEG CURL ALLONGE'].map(mlSchemaErreurs).join();
+        if(sch!=='dips,squat,souleve,curl,traction,elevation_laterale,') return _echec(sch);
+        return (mlVueDepuisHorsPlan(10)==='profil'&&mlVueDepuisHorsPlan(75)==='face'&&mlVueDepuisHorsPlan(40)===''&&mlVueDepuisHorsPlan(null)==='')||_echec('vue');
+      });
+      // UNE RÉPÉTITION SYNTHÉTIQUE : n images, f(k) pose chaque point {nom_cote:[x,y,v]}.
+      const _erRep=(n,f)=>{ const r={t:[],X:[],Y:[],V:[]};
+        for(let k=0;k<n;k++){ const X=new Array(17).fill(NaN), Y=new Array(17).fill(NaN), V=new Array(17).fill(0);
+          const pts=f(k);
+          for(const key in pts){ const [nom,c]=key.split('_'); const rg=mlRangPose(nom,c||'G'); X[rg]=pts[key][0]; Y[rg]=pts[key][1]; V[rg]=pts[key][2]==null?0.9:pts[key][2]; }
+          r.t.push(k*100); r.X.push(X); r.Y.push(Y); r.V.push(V); }
+        return r; };
+      const _rad=d=>d*Math.PI/180;
+      // SQUAT DE PROFIL, regard vers +x : le tronc penche de 40° au point bas, le cou s'étend de `e` degrés.
+      const _erSquat=(e,visO)=>_erRep(13,k=>{ const p=Math.sin(Math.PI*k/12), th=_rad(40*p), ex=_rad(e*p);
+        const h=[400,500+150*p], ep=[h[0]+200*Math.sin(th),h[1]-200*Math.cos(th)];
+        const ux=Math.sin(th), uy=Math.cos(th), nx=ux*Math.cos(ex)-uy*Math.sin(ex), ny=ux*Math.sin(ex)+uy*Math.cos(ex);
+        const o=[ep[0]+60*nx,ep[1]-60*ny];
+        return {hanche_G:h,epaule_G:ep,genou_G:[520,650],cheville_G:[500,900],pointe_G:[560,900],oreille_G:[o[0],o[1],visO],nez:[o[0]+20,o[1]+5,visO],
+          hanche_D:[h[0],h[1],0.2],epaule_D:[ep[0],ep[1],0.2]}; });
+      okA('ER1 — cou en extension au point bas : 25° déclenche, 18° non ; oreille invisible ou vue de face : on ne juge pas',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const a=detecterErreurs([_erSquat(25),_erSquat(5)],'squat','profil').find(x=>x.cle==='cou_extension');
+        if(!a.declenchee||a.repetitions.join()!=='0'||Math.abs(a.valeurMax-25)>1.5||!(a.confiance>=0.5)||a.pire.rep!==0||a.pire.k!==6) return _echec(JSON.stringify(a));
+        const b=detecterErreurs([_erSquat(18)],'squat','profil').find(x=>x.cle==='cou_extension');
+        if(b.declenchee||Math.abs(b.valeurMax-18)>1.5) return _echec('18° : '+JSON.stringify(b));
+        const c=detecterErreurs([_erSquat(30,0.3)],'squat','profil').find(x=>x.cle==='cou_extension');
+        if(c.declenchee||c.confiance!==0||c.raison!=='visibilite') return _echec('invisible : '+JSON.stringify(c));
+        const d=detecterErreurs([_erSquat(30)],'squat','face').find(x=>x.cle==='cou_extension');
+        if(d.declenchee||d.confiance!==0||d.raison!=='vue') return _echec('vue : '+JSON.stringify(d));
+        return detecterErreurs([_erSquat(30)],'curl','profil').every(x=>x.cle!=='cou_extension')||_echec('règle hors de son schéma');
+      });
+      // CURL DE PROFIL : le coude de 170 à 40°, le tronc bascule de `s` degrés pendant la montée.
+      const _erCurl=(s,vis)=>_erRep(13,k=>{ const m=Math.min(k,6)/6, a=_rad(170-130*(k<=6?m:(12-k)/6)), sw=_rad(s*(k<=6?m:1));
+        const h=[400,500], ep=[h[0]-200*Math.sin(sw),h[1]-200*Math.cos(sw)], co=[ep[0],ep[1]+130], po=[co[0]+110*Math.sin(a),co[1]-110*Math.cos(a)];
+        return {hanche_G:[h[0],h[1],vis],epaule_G:[ep[0],ep[1],vis],coude_G:co,poignet_G:po}; });
+      okA('ER1 — balancement au curl : 12° de tronc pendant la montée déclenche, 9° non ; tronc mal vu : abstention',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const a=detecterErreurs([_erCurl(12)],'curl','profil')[0];
+        if(a.cle!=='balancement_curl'||!a.declenchee||Math.abs(a.valeurMax-12)>0.5) return _echec(JSON.stringify(a));
+        const b=detecterErreurs([_erCurl(9)],'curl','profil')[0];
+        if(b.declenchee||Math.abs(b.valeurMax-9)>0.5) return _echec('9° : '+JSON.stringify(b));
+        const c=detecterErreurs([_erCurl(15,0.4)],'curl','profil')[0];
+        if(c.declenchee||c.confiance!==0) return _echec('invisible');
+        return detecterErreurs([_erCurl(15)],'curl','face')[0].raison==='vue'||_echec('vue');
+      });
+      // TRACTION DE PROFIL : les hanches oscillent de ±A px, jambe de 400 px ; `fl` : le genou part devant.
+      const _erTraction=(A,fl,vis)=>_erRep(13,k=>{ const ph=Math.sin(2*Math.PI*k/12), h=[400+A*ph,500];
+        const g=[h[0]+200*Math.sin(_rad(fl*Math.abs(ph))),h[1]+200*Math.cos(_rad(fl*Math.abs(ph)))];
+        return {hanche_G:[h[0],h[1],vis],epaule_G:[h[0],h[1]-250],genou_G:g,cheville_G:[h[0],h[1]+400]}; });
+      okA('ER1 — kipping : hanches à 20 % de la jambe déclenche, 14 % non ; flexion de hanche rythmée aussi ; hanche invisible : rien',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const a=detecterErreurs([_erTraction(40,0)],'traction','profil')[0];
+        if(!a.declenchee||Math.abs(a.valeurMax-0.2)>0.01) return _echec(JSON.stringify(a));
+        const b=detecterErreurs([_erTraction(28,0)],'traction','profil')[0];
+        if(b.declenchee||Math.abs(b.valeurMax-0.14)>0.01) return _echec('14 % : '+JSON.stringify(b));
+        if(!detecterErreurs([_erTraction(0,40)],'traction','profil')[0].declenchee) return _echec('flexion rythmée');
+        if(detecterErreurs([_erTraction(0,25)],'traction','profil')[0].declenchee) return _echec('flexion sous 30°');
+        const c=detecterErreurs([_erTraction(40,0,0.3)],'traction','profil')[0];
+        return (!c.declenchee&&c.confiance===0)||_echec('invisible');
+      });
+      // ÉLÉVATIONS DE FACE : abduction des deux bras jusqu'à `a` degrés.
+      const _erElev=(a,vis)=>_erRep(9,k=>{ const ang=_rad(a*Math.sin(Math.PI*k/8)), o={};
+        for(const [c,s] of [['G',-1],['D',1]]){ const e=[640+s*80,300]; o['epaule_'+c]=[e[0],e[1],vis]; o['hanche_'+c]=[e[0],560,vis];
+          o['coude_'+c]=[e[0]+s*150*Math.sin(ang),e[1]+150*Math.cos(ang),vis]; }
+        return o; });
+      okA('ER1 — élévations : 105° d’abduction déclenche, 95° non ; de profil, on ne juge pas ; bras mal vus : rien',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const a=detecterErreurs([_erElev(105)],'elevation_laterale','face')[0];
+        if(!a.declenchee||Math.abs(a.valeurMax-105)>2) return _echec(JSON.stringify(a));
+        const b=detecterErreurs([_erElev(95)],'elevation_laterale','face')[0];
+        if(b.declenchee) return _echec('95°');
+        if(detecterErreurs([_erElev(120)],'elevation_laterale','profil')[0].raison!=='vue') return _echec('vue');
+        const c=detecterErreurs([_erElev(120,0.3)],'elevation_laterale','face')[0];
+        return (!c.declenchee&&c.confiance===0)||_echec('invisible : '+JSON.stringify(c));
+      });
+      // SQUAT DE FACE : chevilles à 120 px ; après le point bas, les genoux se rapprochent jusqu'à `d` px.
+      const _erGenou=(d,vis)=>_erRep(13,k=>{ const p=Math.sin(Math.PI*k/12), ecart=k>6?100-(100-d)*Math.sin(Math.PI*(k-6)/12):100;
+        return {hanche_G:[580,400+150*p],hanche_D:[700,400+150*p],genou_G:[640-ecart/2,600,vis],genou_D:[640+ecart/2,600,vis],cheville_G:[580,850,vis],cheville_D:[700,850,vis]}; });
+      okA('ER1 — genou qui rentre : 0,75 en montée déclenche, 0,82 non ; de profil, on ne juge pas le genou ; genoux mal vus : rien',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const a=detecterErreurs([_erGenou(100),_erGenou(90)],'squat','face').find(x=>x.cle==='genou_rentre');
+        if(!a.declenchee||a.repetitions.join()!=='1'||Math.abs(a.valeurMax-0.75)>0.01||a.pire.rep!==1) return _echec(JSON.stringify(a));
+        const b=detecterErreurs([_erGenou(98)],'squat','face').find(x=>x.cle==='genou_rentre');
+        if(b.declenchee||Math.abs(b.valeurMax-98/120)>0.01) return _echec('0,82 : '+JSON.stringify(b));
+        const c=detecterErreurs([_erGenou(80)],'squat','profil').find(x=>x.cle==='genou_rentre');
+        if(c.declenchee||c.confiance!==0||c.raison!=='vue') return _echec('profil');
+        const d=detecterErreurs([_erGenou(80,0.35)],'squat','face').find(x=>x.cle==='genou_rentre');
+        return (!d.declenchee&&d.confiance===0)||_echec('invisible');
+      });
+      okA('ER1 — l’écran : une alerte par règle déclenchée, l’image de la pire répétition, la consigne ; le coach éteint une règle',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        const svS=window._mlSerieErreurs, svMl=_ml, svU=currentUser, svDB=DB.get('users');
+        try{
+          window._mlSerieErreurs=()=>({nom:'SQUAT BARRE',schema:'squat',serie:[_erGenou(100),_erGenou(85)],segs:[],vue:'face'});
+          _ml=Object.assign({},_ml||{},{email:'er@t.fr'});
+          currentUser={id:'co',email:'co@t.fr',role:'coach',sessions:[],bilans:[],studentCodes:[]};
+          const u={'er@t.fr':{id:'a',email:'er@t.fr',role:'athlete',coachId:'co',sessions:[],bilans:[]}}; DB.set('users',u);
+          const el=document.createElement('div'); el.innerHTML=_mlHtmlErreurs();
+          const al=el.querySelectorAll('.ml-err[role=alert]');
+          if(al.length!==1||!/Pousse les genoux vers l’extérieur/.test(al[0].textContent)||!/n° 2/.test(al[0].textContent)||!al[0].querySelector('canvas#ml-err-genou_rentre')) return _echec(el.innerHTML.slice(0,400));
+          if(!/cou|Regard devant/.test(el.textContent)||!/non jugé, il faut une vue de profil/.test(el.textContent)) return _echec('règle non jugée');
+          if(basculerRegleErreur('er@t.fr','genou_rentre',true)!==true||!DB.get('users')['er@t.fr'].reglesErreursOff.genou_rentre) return _echec('extinction');
+          el.innerHTML=_mlHtmlErreurs();
+          if(el.querySelector('.ml-err[role=alert]')||!/règle éteinte pour cet athlète/.test(el.textContent)) return _echec('règle éteinte encore en alerte');
+          basculerRegleErreur('er@t.fr','genou_rentre',false);
+          if(DB.get('users')['er@t.fr'].reglesErreursOff) return _echec('rallumage');
+          if(basculerRegleErreur('er@t.fr','inventee',true)!==false) return _echec('clé inventée acceptée');
+        } finally { window._mlSerieErreurs=svS; _ml=svMl; currentUser=svU; DB.set('users',svDB||{}); }
+        return (/"reglesErreursOff"\s*:/.test(String(window._RC_RULES||''))&&/_mlHtmlErreurs\(\)/.test(String(_mlMajLecture))&&/'reglesErreursOff'/.test(_prodSrc()))||_echec('branchements');
+      });
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');
