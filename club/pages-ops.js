@@ -438,17 +438,34 @@ ACTIONS.dunPaid = el => {
 ACTIONS.dunPaidSave = () => {
   const c = S.clients[$('.modal').dataset.id]; const f = formData($('#dpf')); const canal = $('#dpf input[name=canal]:checked').value;
   const amount = Math.round(toNum(f.amount) * 100) / 100;
-  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); toast(`Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
+  const ops = markPaid(c, amount, { canal, author: ME.id, from: 'impayes' }); closeModal();
+  if (!ops.length) { toast(`${c.name} : dossier déjà soldé, rien à ajouter`); return; }
+  db.batch(ops); toast(`Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
 };
-// Un seul chemin pour « payé » (Impayés, Rétention) : dossier en Récupéré, solde
-// a 0, et UNE saisie d'id fixe dn_<client>_<jour> (deux clics = une saisie).
-// La saisie porte clientId et clientNum : l'import Incidents la reconnait et ne
-// recompte pas le meme paiement.
-function markPaidOps(c, amount, canal, by, from) {
-  const ops = [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: today(), amount, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(amount)})`)];
-  if (canal === 'equipe' && amount > 0) { const id = 'dn_' + c.id + '_' + today(); ops.push([['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: amount, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '', ...(from === 'retention' ? { needsCheck: true } : {}) }]); }
+// Un seul chemin pour « payé » (Impayés, Rétention, Relances, saisie détaillée) : markPaid.
+//  - crédit unique : au responsable du dossier (dunning.ownerId), sinon à l'auteur de l'action ;
+//  - dédoublonnage : un dossier déjà soldé ne crée plus rien (Rétention puis Impayés le même
+//    jour = une seule saisie) ; à l'import, une régularisation équipe du même client, même
+//    montant à 7 jours près, reconnaît la saisie (rsmCommitPlan) ;
+//  - la saisie porte clientId et clientNum.
+const arr2 = x => Math.round((Number(x) || 0) * 100) / 100;
+function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = '', force = false } = {}) {
+  if (!c) return [];
+  const solde = arr2(c.balance); const montant = arr2(amount);
+  if (!(montant > 0)) return [];
+  const by = dunOf(c).ownerId || author;
+  const id = 'dn_' + c.id + '_' + today();
+  if (!(solde > 0)) {
+    // Dossier déjà soldé : rien, sauf une saisie détaillée (force) qui n'a pas encore d'entrée ce jour-là.
+    if (!force || S.entries[id] || canal !== 'equipe') return [];
+    return [[['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: montant, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '' }]];
+  }
+  const ops = [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: today(), amount: montant, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
+  if (canal === 'equipe') ops.push([['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: montant, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '', ...(from === 'retention' ? { needsCheck: true } : {}) }]);
   return ops;
 }
+// Ancienne signature (le crédit suit désormais la règle unique de markPaid).
+const markPaidOps = (c, amount, canal, by, from) => markPaid(c, amount, { canal, author: by, from });
 ACTIONS.dunNew = () => openModal({ title: 'Ajouter un impayé', body: `<form id="dnf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="name" required></label><label class="field"><span>N° client Resamania</span><input class="input" name="num"></label><label class="field"><span>Montant dû (€)</span><input class="input" type="number" step="0.01" name="amount" required></label><label class="field full"><span>Téléphone</span><input class="input" name="phone"></label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="dunCreate">Ajouter</button>' });
 ACTIONS.dunCreate = () => {

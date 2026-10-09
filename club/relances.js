@@ -367,7 +367,7 @@ ACTIONS.relSave = el => {
   if (o === 'rappeler') { next = new Date(f.callbackAt).getTime(); status = 'attente'; t.callbackAt = next; }
   else if (o === 'promesse') { const a = parseMontant(f.promiseAmount); t.promiseAmount = a; t.promiseDate = f.promiseDate; next = dateOf(addDays(f.promiseDate, 1)).getTime() + 10 * 3600000; status = 'attente'; if (rl.client) ops.push(dunPatch(rl.client, { status: 'promesse', promiseBase: Number(rl.client.balance) || 0, promiseAmount: a, promiseDate: f.promiseDate, next: addDays(f.promiseDate, 1) }, `Promesse : ${fmtE(a)} le ${dm(f.promiseDate)}`)); }
   else if (o === 'rdv') { t.rdvAt = new Date(f.rdvAt).getTime(); t.rdvObj = f.rdvObj; status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'rdv' }; }
-  else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaidOps(rl.client, a, 'equipe', rl.ownerId || ME.id, 'relances')); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
+  else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaid(rl.client, a, { canal: 'equipe', author: ME.id, from: 'relances' })); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
   else if (o === 'sauve') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'sauve' }; }
   else if (o === 'ok') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'ok' }; }
   else if (o === 'maintien8' || o === 'reprise') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: o }; if (o === 'maintien8' && rl.clientId) ops.push([['clients', rl.clientId, 'maintienAt'], today()]); }

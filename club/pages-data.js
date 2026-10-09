@@ -347,7 +347,7 @@ ACTIONS.loyAct = el => {
   const { c, t, o } = el.dataset;
   const save = (note = '') => {
     const id = newId(); const ops = [[['loyalty', id], loyActRecord({ id, clientId: c, type: t, step: el.dataset.s, outcome: o, note, value: el.dataset.v })]];
-    if (o === 'paid') { const cl = S.clients[c]; ops.push(...markPaidOps(cl, Number(cl.balance) || 0, 'equipe', ME.id, 'retention')); }
+    if (o === 'paid') { const cl = S.clients[c]; ops.push(...markPaid(cl, Number(cl.balance) || 0, { canal: 'equipe', author: ME.id, from: 'retention' })); }
     if (o === 'ok' && t === 'renouvellement') ops.push([['clients', c, 'renewedAt'], today()]);
     if (o === 'maintien') ops.push([['clients', c, 'maintienAt'], today()]);
     db.batch(ops); toast(o === 'paid' ? 'Réglé : ajouté à vos impayés récupérés' : o === 'maintien' ? 'Maintien 8 semaines noté' : 'Action enregistrée');

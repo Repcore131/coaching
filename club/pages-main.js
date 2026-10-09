@@ -343,7 +343,7 @@ ACTIONS.openSaisies = () => {
           <label class="field"><span>Commercial</span><select class="input" name="userId">${members.map(u => `<option value="${u.id}" ${u.id === ME.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
           <label class="field"><span>Date</span><input class="input" type="date" name="date" value="${today()}" max="${today()}" ${minEntryDate(CLUB.id) ? `min="${minEntryDate(CLUB.id)}"` : ''}></label>
         </div>
-        ${kpiList().map(k => `<label class="row card" style="padding:9px 12px"><span class="kpi-ico">${kpiIcon(k)}</span><span class="spacer"><b>${esc(k.label)}</b><br><span class="muted small">${k.unit === 'eur' ? 'Montant TTC en €' : 'Quantité'}</span></span><input class="input sm" style="width:110px;text-align:right" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" name="k_${k.id}" placeholder="0"></label>`).join('')}
+        ${kpiList().map(k => `<label class="row card" style="padding:9px 12px"><span class="kpi-ico">${kpiIcon(k)}</span><span class="spacer"><b>${esc(k.label)}</b><br><span class="muted small">${k.unit === 'eur' ? 'Montant TTC en €' : 'Quantité'}</span></span><input class="input sm" style="width:110px;text-align:right" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" name="k_${k.id}" placeholder="0"></label>${k.id === 'impayes' ? saisieClientImpaye() : ''}`).join('')}
         <button class="btn primary" type="submit">Enregistrer</button>
       </form>
       <h3 style="margin:20px 0 8px">Mes dernières saisies</h3>
@@ -376,9 +376,17 @@ ACTIONS.openSaisies = () => {
     let reason = null;
     if (isManager() && date < lockStart(CLUB.id)) { reason = prompt('Mois clos : motif de la correction (obligatoire)'); if (!reason || !reason.trim()) { toast('Motif obligatoire pour un mois clos.'); return; } reason = reason.trim().slice(0, 200); }
     const ops = [];
+    // Impayé récupéré : toujours rattaché à un dossier client (nom ou n° Resamania).
+    const vImp = parseMontant(f.k_impayes); let cImp = null;
+    if (!Number.isNaN(vImp) && vImp > 0) { cImp = saisieClientTrouve(f.impClient); if (!cImp) { toast('Impayé récupéré : choisissez le client (nom ou n° Resamania).'); return; } }
     for (const k of kpiList()) {
       const v = parseMontant(f['k_' + k.id]);
       if (Number.isNaN(v) || !v || v < 0) continue;
+      if (k.id === 'impayes') {
+        const imp = date === today() ? markPaid(cImp, v, { canal: 'equipe', author: f.userId, from: 'saisie', force: true })
+          : S.entries['dn_' + cImp.id + '_' + date] ? [] : [[['entries', 'dn_' + cImp.id + '_' + date], { id: 'dn_' + cImp.id + '_' + date, userId: dunOf(cImp).ownerId || f.userId, clubId: CLUB.id, kpiId: 'impayes', date, value: Math.round(v * 100) / 100, source: 'manual', at: dateOf(date).getTime() + 12 * 3600000, by: ME.id, from: 'saisie', clientId: cImp.id, clientNum: cImp.num || '', ...(reason ? { reason } : {}) }]];
+        ops.push(...imp); continue;
+      }
       const id = newId();
       ops.push([['entries', id], { id, userId: f.userId, clubId: CLUB.id, kpiId: k.id, date, value: k.unit === 'qty' ? Math.round(v) : Math.round(v * 100) / 100, source: 'manual', at: date === today() ? Date.now() : dateOf(date).getTime() + 12 * 3600000, by: ME.id, ...(reason ? { reason } : {}) }]);
     }
@@ -389,6 +397,16 @@ ACTIONS.openSaisies = () => {
     draw(m);
   });
 };
+// Champ « Client » de la saisie détaillée d'un impayé récupéré : recherche par nom ou n° Resamania.
+const saisieLibelle = c => `${c.name || 'Sans nom'}${c.num ? ' · n° ' + c.num : ''}${Number(c.balance) > 0 ? ' · ' + fmtE(Number(c.balance)) + ' dus' : ''}`;
+function saisieClientImpaye() {
+  const L = Object.values(S.clients).filter(c => c.clubId === CLUB.id).sort((a, b) => (Number(b.balance) > 0) - (Number(a.balance) > 0) || String(a.name || '').localeCompare(String(b.name || ''))).slice(0, 3000);
+  return `<label class="field" style="margin:-4px 0 4px 44px"><span>Client (obligatoire pour un impayé)</span><input class="input sm" name="impClient" list="imp-clients" placeholder="Nom ou n° Resamania" autocomplete="off"><datalist id="imp-clients">${L.map(c => `<option value="${esc(saisieLibelle(c))}"></option>`).join('')}</datalist></label>`;
+}
+function saisieClientTrouve(v) {
+  const t = String(v || '').trim(); if (!t) return null; const L = Object.values(S.clients).filter(c => c.clubId === CLUB.id);
+  return L.find(c => saisieLibelle(c) === t) || L.find(c => c.num && String(c.num) === t) || (x => x.length === 1 ? x[0] : null)(L.filter(c => norm(c.name || '') === norm(t))) || null;
+}
 function tasksToday() {
   const plan = Object.values(S.tasks.plan[CLUB.id] || {}).sort((a, b) => a.hour - b.hour);
   if (!plan.length) return emptyBox({ art: 'todo', title: 'Aucune tâche prévue', text: isManager() ? 'Construisez le planning dans Équipe, onglet Tâches.' : 'Votre manager n’a pas encore construit le planning du club.', cta: isManager() ? '<a class="btn sm" href="#/team">Construire le planning</a>' : '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' });
