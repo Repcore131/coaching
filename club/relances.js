@@ -392,7 +392,7 @@ ACTIONS.relSave = el => {
   } else if (rl.kind === 'impaye' && rl.client && o !== 'paye' && o !== 'promesse') ops.push(dunPatch(rl.client, { status: 'relance', ownerId: dunOf(rl.client).ownerId || ME.id, next: next ? isoOf(new Date(next)) : null }, `${T.label}${t.note ? ' : ' + t.note : ''}`));
   else if (rl.clientId && ['suivi15', 'suivi30', 'fincontrat', 'anniversaire', 'mandat'].includes(rl.kind)) {
     const legacy = { joint: 'ok', ok: 'ok', rdv: 'rdv', messagerie: 'message', pasreponse: 'noanswer', refus: 'lost', stop: 'lost' }[o];
-    const type = { suivi15: 'suivi', suivi30: 'suivi', fincontrat: 'renouvellement' }[rl.kind] || rl.kind;
+    const type = { fincontrat: 'renouvellement' }[rl.kind] || rl.kind;
     if (legacy) { const id = newId(); ops.push([['loyalty', id], { id, clubId: CLUB.id, clientId: rl.clientId, type, ...(rl.kind === 'suivi15' ? { step: 15 } : rl.kind === 'suivi30' ? { step: 30 } : {}), outcome: legacy, userId: ME.id, at: Date.now(), note: t.note || '' }]); }
   }
   db.batch(ops); closeModal();

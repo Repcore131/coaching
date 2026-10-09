@@ -13,7 +13,10 @@ const client = (o = {}) => ({ id: 'c1', clubId: 'k', name: 'Paul Exemple', num: 
 
 test('point 3 : 80 € récupéré depuis Rétention puis depuis Impayés le même jour : une seule saisie de 80 €', () => {
   const run = appli({ clients: { c1: client() } });
-  run(`ACTIONS.loyAct({ dataset: { c: 'c1', t: 'impaye', o: 'paid', s: '', v: 80 } })`);
+  // Rétention : une carte impayé ouvre la feuille du dossier ; « Payé » y passe par markPaid.
+  run(`globalThis.OUV = null; openModal = o => { globalThis.OUV = o; }; ACTIONS.loyAct({ dataset: { c: 'c1', t: 'impaye', o: 'paid', s: '', v: 80 } })`);
+  assert.match(run('OUV.body'), /data-act="dunOut" data-o="paye"/);
+  run(`db.batch(markPaid(S.clients.c1, 80, { author: ME.id, from: 'retention' }))`);
   run(`db.batch(markPaid(S.clients.c1, 80, { author: ME.id, from: 'impayes' }))`);
   const E = J(run, `Object.values(S.entries).filter(e => e.kpiId === 'impayes')`);
   assert.equal(E.length, 1); assert.equal(E[0].value, 80); assert.equal(E[0].clientId, 'c1');
@@ -91,4 +94,30 @@ test('point 6 : migration des anciennes actions Rétention de type impayé, une 
   run(`db.batch(migrerLoyaltyImpayes())`); assert.equal(run(`S.clients.c1.dunning.migratedLoyalty`), true);
   assert.deepEqual(J(run, `S.clients.c1.dunning.history.map(h => h.outcome)`), ['pasreponse']);
   assert.equal(J(run, `migrerLoyaltyImpayes()`).length, 0);
+});
+test('point 7 : inscrit il y a 30 jours avec un J+15 joint : un J+30 à faire', () => {
+  const run = appli({}); run(`S.clients.n1 = { id: 'n1', clubId: 'k', name: 'Nina Exemple', start: addDays(today(), -30), phone: '0600000001' };
+    S.loyalty.a1 = { id: 'a1', clientId: 'n1', type: 'suivi15', step: 15, outcome: 'ok', userId: 'v', at: dateOf(addDays(today(), -15)).getTime() + 36e6 }; REV++`);
+  const T = J(run, `loyaltyTasks('k').filter(t => t.client.id === 'n1').map(t => [t.type, t.state])`);
+  assert.deepEqual(T, [['suivi30', 'todo']]);
+  assert.equal(run(`suivisRealises('k', curMonth()).j15 + suivisRealises('k', addMonths(curMonth(), -1)).j15`), 1);
+});
+test('point 7 : trois « Pas de réponse » en 2 minutes = une tentative ; bouton « Déjà tenté à »', () => {
+  const run = appli({}); run(`S.clients.n1 = { id: 'n1', clubId: 'k', name: 'Nina Exemple', start: addDays(today(), -16), phone: '0600000001' }; REV++`);
+  run(`const t0 = Date.now() - 120000; [0, 60000, 120000].forEach((d, i) => { S.loyalty['p' + i] = { id: 'p' + i, clientId: 'n1', type: 'suivi15', step: 15, outcome: 'noanswer', userId: 'v', at: t0 + d }; }); REV++`);
+  const t = J(run, `(({ failed, state, aConfirmer }) => ({ failed, state, aConfirmer }))(loyaltyTasks('k').find(t => t.client.id === 'n1'))`);
+  assert.deepEqual(t, { failed: 1, state: 'todo', aConfirmer: false });
+  let msg = ''; run(`toast = m => { globalThis.MSG = m; }`); run(`ACTIONS.loyAct({ dataset: { c: 'n1', t: 'suivi15', s: '15', o: 'noanswer', v: 0 } })`); msg = run('MSG');
+  assert.match(msg, /^Déjà tenté à \d\d h \d\d$/); assert.equal(run(`Object.keys(S.loyalty).length`), 3);
+});
+test('point 7 : aucun passage en Perdus sans la fenêtre de confirmation', () => {
+  const run = appli({}); run(`S.clients.n1 = { id: 'n1', clubId: 'k', name: 'Nina Exemple', start: addDays(today(), -16), phone: '0600000001' }; REV++`);
+  run(`[3, 2, 1].forEach((d, i) => { S.loyalty['p' + i] = { id: 'p' + i, clientId: 'n1', type: 'suivi15', step: 15, outcome: 'noanswer', userId: 'v', at: dateOf(addDays(today(), -d)).getTime() + 36e6 }; }); REV++`);
+  const t = J(run, `(({ failed, state, aConfirmer }) => ({ failed, state, aConfirmer }))(loyaltyTasks('k').find(t => t.client.id === 'n1'))`);
+  assert.deepEqual(t, { failed: 3, state: 'todo', aConfirmer: true });
+  run(`globalThis.OUV = null; openModal = o => { globalThis.OUV = o; }`);
+  run(`ACTIONS.loyAct({ dataset: { c: 'n1', t: 'suivi15', s: '15', o: 'lost', v: 0 } })`);
+  assert.equal(run(`loyaltyTasks('k').find(t => t.client.id === 'n1').state`), 'todo');
+  const body = run('OUV.body + OUV.foot'); assert.match(body, /data-essais="3"/); assert.match(body, /Programmer un SMS/); assert.match(body, /Classer perdu/);
+  run(`ACTIONS.loyPerdreOk({ dataset: { c: 'n1', t: 'suivi15', s: '15' } })`); assert.equal(run(`loyaltyTasks('k').find(t => t.client.id === 'n1').state`), 'lost');
 });

@@ -139,7 +139,7 @@ ACTIONS.qEur = el => {
 function myToDo() {
   const res = resToHandle(CLUB.id).filter(r => r.ownerId === ME.id).sort((a, b) => (a.effective || '9').localeCompare(b.effective || '9'));
   const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0 && dunOf(c).ownerId === ME.id).sort((a, b) => (dunDue(b) - dunDue(a)) || Number(b.balance) - Number(a.balance));
-  const loy = loyaltyTasks(CLUB.id).filter(t => t.state === 'todo' && ['anniversaire', 'suivi', 'renouvellement'].includes(t.type)).sort((a, b) => a.due.localeCompare(b.due));
+  const loy = loyaltyTasks(CLUB.id).filter(t => t.state === 'todo' && ['anniversaire', 'suivi15', 'suivi30', 'renouvellement'].includes(t.type)).sort((a, b) => a.due.localeCompare(b.due));
   return { res, dun, loy };
 }
 // Mes prochaines actions : la tete de MA file de relances (appeler d'abord).

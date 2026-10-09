@@ -28,7 +28,7 @@ function loyProtected(clubId, mk) {
 // ── Session d'appels : les tâches une par une, plus forte valeur d'abord ──
 const SESSION_OUT = [['ok', 'Joint OK', 0], ['rdv', 'RDV', 3], ['noanswer', 'Pas de réponse', 1], ['message', 'Message', 2], ['lost', 'Refus', 0]];
 function loySessionQueue() {
-  return loyaltyTasks(CLUB.id).filter(t => t.state === 'todo' && !t.nextDate && !(UI.loyS && UI.loyS.done.includes(t.key))).sort((a, b) => b.valeurEnJeu - a.valeurEnJeu);
+  return loyaltyTasks(CLUB.id).filter(t => t.state === 'todo' && t.type !== 'impaye' && !t.nextDate && !(UI.loyS && UI.loyS.done.includes(t.key))).sort((a, b) => b.valeurEnJeu - a.valeurEnJeu);
 }
 function loySessionBody() {
   const q = loySessionQueue(); const s = UI.loyS;

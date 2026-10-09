@@ -459,7 +459,9 @@ function challengeRanking(ch) {
 // Icone d'un trophee (nom d'icone controle, teinte or/argent/bronze pour le podium).
 const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}" title="${esc(t.label || '')}">${typeof trophyArt === 'function' ? trophyArt(t, /ico-xs/.test(cls) ? 18 : /ico-xl/.test(cls) ? 56 : 32) : ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
 const LOYALTY_TYPES = {
-  suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
+  suivi15: { label: 'Suivi J+15', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15' },
+  suivi30: { label: 'Suivi J+30', icon: 'phone', hint: 'Nouvel adhérent : appel à J+30, même si le J+15 a réussi' },
+  suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Ancien type (J+15 ou J+30 selon l’étape)' },
   renouvellement: { label: 'Fin d’engagement', icon: 'clock', hint: 'Arrive en fin d’engagement : relancer pour le renouvellement' },
   anniversaire: { label: 'Anniversaire', icon: 'cake', hint: 'Anniversaire dans les 7 jours' },
   impaye: { label: 'Impayé', icon: 'coins', hint: 'Solde débiteur' },
@@ -473,6 +475,7 @@ const OUTCOMES = {
   noanswer: { label: 'Pas de réponse', cls: 'warn', done: false },
   message: { label: 'Message laissé', cls: 'warn', done: false },
   lost: { label: 'Ne renouvelle pas', cls: 'bad', done: true, lost: true },
+  smsprog: { label: 'SMS programmé', cls: 'info', done: false, programme: true },
 };
 const MAX_ATTEMPTS = 3;
 const SUIVI_COUPURE = 22; // jours après l'inscription : avant = appel J+15, après = appel J+30
@@ -504,7 +507,7 @@ function loyaltyTasks(clubId) {
       const cand = [];
       // Suivi J+15 puis J+30 : deux appels distincts. Un J+15 réussi ne ferme plus le J+30 (audit 3.6) :
       // chaque action porte son étape (step) ; les anciennes, sans étape, sont classées par leur date.
-      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age < 28) cand.push({ type: 'suivi', step: 15, due: addDays(c.start, 15), since: c.start }); else if (age >= 28 && age <= 45) cand.push({ type: 'suivi', step: 30, due: addDays(c.start, 30), since: c.start }); }
+      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age < 28) cand.push({ type: 'suivi15', step: 15, due: addDays(c.start, 15), since: c.start }); else if (age >= 28 && age <= 45) cand.push({ type: 'suivi30', step: 30, due: addDays(c.start, 30), since: c.start }); }
       if (c.end && c.end >= t && c.end <= addDays(t, 45)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -45), amount: typeof mensualite === 'function' ? Math.round(mensualite(c) * dureeVieMois(clubId)) : 0 });
       if (c.birth) {
         const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(-5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(-5)}`;
@@ -524,17 +527,20 @@ function loyaltyTasks(clubId) {
         }
         const sinceTs = dateOf(x.since).getTime();
         const cut = x.step ? dateOf(addDays(c.start, SUIVI_COUPURE)).getTime() : 0;
-        let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs && (!x.step || (a.step ? a.step === x.step : x.step === 15 ? a.at < cut : a.at >= cut))).sort((a, b) => b.at - a.at);
+        // Suivis : type suivi15 ou suivi30 ; les anciennes actions « suivi » sont classées par leur étape, sinon par leur date.
+        let acts = actions.filter(a => a.clientId === c.id && a.at >= sinceTs && (a.type === x.type || (x.step && a.type === 'suivi' && (a.step ? a.step === x.step : x.step === 15 ? a.at < cut : a.at >= cut)))).sort((a, b) => b.at - a.at);
         // « Relancer » depuis l'onglet Perdus repart de zero
         const re = acts.findIndex(a => a.outcome === 'reopen'); if (re >= 0) acts = acts.slice(0, re);
         const closed = acts.find(a => OUTCOMES[a.outcome] && OUTCOMES[a.outcome].done);
-        const failed = acts.filter(a => !(OUTCOMES[a.outcome] || {}).done).length;
+        // Tentatives : un essai sans contact compte s'il a lieu un autre jour ou 4 h après le précédent.
+        const essais = acts.filter(a => OUTCOMES[a.outcome] && !OUTCOMES[a.outcome].done && !OUTCOMES[a.outcome].programme);
+        const failed = typeof tentativesComptees === 'function' ? tentativesComptees(essais).length : essais.length;
         let state = 'todo';
         if (closed) state = OUTCOMES[closed.outcome].lost ? 'lost' : 'done';
-        else if (failed >= MAX_ATTEMPTS) state = 'lost';
+        // 3 tentatives : la tâche attend la fenêtre de confirmation (aucun passage en Perdus sans elle).
         // Prochaine action datée (session d'appels) : la tâche revient à cette date.
         const nextDate = state === 'todo' && acts[0] && acts[0].next && acts[0].next > t ? acts[0].next : null;
-        const task = { client: c, ...x, acts, failed, state, nextDate, key: `${c.id}|${x.type}${x.step ? x.step : ''}` };
+        const task = { client: c, ...x, acts, failed, state, nextDate, aConfirmer: state === 'todo' && failed >= MAX_ATTEMPTS, key: `${c.id}|${x.type}${x.step && !/^suivi\d/.test(x.type) ? x.step : ''}` };
         task.valeurEnJeu = valueAtStake(task);
         out.push(task);
       }
