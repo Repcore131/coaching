@@ -249,3 +249,72 @@ test('couleur primaire du client : texte posé dessus au contraste AA', () => {
   assert.equal(J(run, `couleurClub()`), '#1E6FD9'); assert.equal(J(run, `entiteTexte()`), 'Entité = SAS Exemple'); assert.equal(J(run, `panierMoyen()`), 41);
   run(`S.tenant = {}; REV++;`); assert.equal(J(run, `entiteTexte()`), 'Entité = votre société d’exploitation');
 });
+
+test('réglages : décocher le samedi change le rythme et la projection', () => {
+  const run = appli();
+  run(`S.kpis.contrats.required = true; S.kpis.contrats.enabled = true; S.targets['2026-09'] = { v: { contrats: 100 } };
+    S.entries.c50 = { id: 'c50', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '2026-09-10', value: 50, source: 'manual', at: 1 }; REV++;`);
+  const avant = J(run, `(p => [p.ecoules, p.total, p.proj])(projectionMois('k', '2026-09', '2026-09-14').find(p => p.k.id === 'contrats'))`);
+  const rAvant = J(run, `elapsed(rangeOf('month', curMonth()), 'k')`);
+  run(`S.clubs.k.openDays = [1, 2, 3, 4, 5]; REV++;`);
+  const apres = J(run, `(p => [p.ecoules, p.total, p.proj])(projectionMois('k', '2026-09', '2026-09-14').find(p => p.k.id === 'contrats'))`);
+  const rApres = J(run, `elapsed(rangeOf('month', curMonth()), 'k')`);
+  assert.deepEqual(avant.slice(0, 2), [12, 26]); assert.deepEqual(apres.slice(0, 2), [10, 22]); assert.notEqual(apres[2], avant[2]);
+  assert.notEqual(rApres, rAvant);
+  run(`S.settings.panierMoyen = 50; S.resiliations.r = { id: 'r', clubId: 'k', client: 'Inconnu', date: '2026-09-01', status: 'nouvelle' }; REV++;`);
+  assert.equal(J(run, `valeurEnJeu(S.resiliations.r).euros`), 600);
+});
+
+test('réversibilité : ZIP de la démo, au moins 7 CSV en UTF-8 avec BOM, formule neutralisée, export manager', async () => {
+  const run = chargerAppli(base(), { libs: true }); run(`toast = () => {}; S = normalizeState(demoState()); REV++; CLUB = S.clubs[Object.keys(S.clubs)[0]]; ME = Object.values(S.users).find(u => u.role === 'manager');`);
+  run(`const c = Object.values(S.clients).find(x => x.clubId === CLUB.id); c.name = '=HYPERLINK("http://x","clic")'; REV++;`);
+  run(`globalThis.__z = (async () => { const z = await exportZip([CLUB.id]); const out = {}; for (const f of Object.keys(z.files)) out[f] = await z.file(f).async('string'); return JSON.stringify(out); })()`);
+  const F = JSON.parse(await run('__z'));
+  const csv = Object.keys(F).filter(f => f.endsWith('.csv')); assert.ok(csv.length >= 7, csv.join());
+  for (const f of csv) { assert.equal(F[f].charCodeAt(0), 0xFEFF, f); assert.ok(F[f].split('\r\n')[0].includes(';'), f); }
+  assert.ok(F['LISEZMOI.txt'].includes('clients.csv'));
+  assert.match(F['clients.csv'], /^﻿Numéro;Nom;Téléphone;E-mail;Club;Statut;Offre;Prix mensuel;Début;Fin d’engagement;Solde dû;Date du solde/);
+  assert.match(F['clients.csv'], /;"'=HYPERLINK\(""http:\/\/x"",""clic""\)";/);
+  assert.match(F['saisies.csv'], /\n\d{2}\/\d{2}\/\d{4};/);
+  assert.match(F['impayes.csv'], /;\d+,\d{2};/);
+  assert.equal(J(run, 'isManager() && !isCreator()'), true);
+});
+
+test('mise en route : 1 sur 7 après création, étape 4 au premier import ventes, disparaît pour de bon', () => {
+  const run = appli(); run(`S.tenant = { name: 'Club' }; REV++;`);
+  assert.equal(J(run, `miseEnRouteEtapes().filter(e => e.fait).length`), 1);
+  assert.match(run(`miseEnRouteCard()`), /1 étape sur 7/);
+  run(`S.rsm.routine = { k: { ventes: Date.now() } }; REV++;`);
+  assert.deepEqual(J(run, `miseEnRouteEtapes().filter(e => e.fait).map(e => e.cle)`), ['club', 'ventes']);
+  run(`for (const id of ['a', 'b']) S.users[id] = { id, first: id, last: id, role: 'membre', status: 'active', clubs: ['k'] };
+    S.targets[curMonth()] = { v: { contrats: 5 }, a: { contrats: 5 }, b: { contrats: 5 } }; S.kpis.contrats.required = true;
+    S.rsm.routine.k.clients = 1; S.rsm.routine.k['clients-incident'] = 1; S.rsm.nonRattaches = { k: { at: 1, n: 0 } }; REV++;`);
+  assert.equal(J(run, `miseEnRouteEtapes().filter(e => e.fait).length`), 7);
+  assert.equal(run(`miseEnRouteCard()`), '');
+  return new Promise(r => setTimeout(r, 20)).then(() => {
+    assert.equal(J(run, `pref('miseEnRouteFinie', false)`), true);
+    run(`S.rsm.routine.k = {}; REV++;`); assert.equal(run(`miseEnRouteCard()`), '');
+  });
+});
+
+test('démo vendeur : neutre, 9 résiliations ouvertes pour 2 500 à 3 500 €, identique d’un chargement à l’autre, moins de 3 Mo', () => {
+  const run = chargerAppli(base()); run(`toast = () => {}`);
+  const a = run('JSON.stringify(demoState())'), b = run('JSON.stringify(demoState())');
+  assert.equal(a, b); assert.ok(a.length < 3 * 1024 * 1024, a.length); assert.doesNotMatch(a, /Fitness Park|Niort|GUELLEC|Kévin/);
+  run(`S = normalizeState(demoState()); REV++; CLUB = S.clubs.horizon; ME = S.users.u1;`);
+  const R = J(run, `({ n: resToHandle('horizon').length, v: resToHandle('horizon').reduce((s, r) => s + resValeur(r), 0), j7: resToHandle('horizon').filter(resUrgent).length, sans: resToHandle('horizon').filter(r => !r.ownerId).length,
+    imp: dunRows('horizon').filter(c => Number(c.balance) > 0).length, du: dunRows('horizon').filter(c => Number(c.balance) > 0).reduce((s, c) => s + Number(c.balance), 0), prom: Object.values(S.clients).filter(c => c.dunning && c.dunning.status === 'promesse').length,
+    clients: Object.keys(S.clients).length, actifs: Object.values(S.clients).filter(c => c.status === 'Client').length, mois: new Set(Object.values(S.entries).map(e => e.date.slice(0, 7))).size, club: S.clubs.horizon.name + ' ' + S.clubs.horizon.city, dir: fullName(S.users.u1) })`);
+  assert.equal(R.n, 9); assert.ok(R.v >= 2500 && R.v <= 3500, R.v); assert.equal(R.j7, 3); assert.equal(R.sans, 2);
+  assert.equal(R.imp, 78); assert.ok(R.du > 3000 && R.du < 3800, R.du); assert.equal(R.prom, 6);
+  assert.equal(R.clients, 2000); assert.equal(R.actifs, 1600); assert.equal(R.mois, 13); assert.equal(R.club, 'Club Horizon Valmont'); assert.equal(R.dir, 'Directeur Démo');
+  assert.match(run(`PAGES.resiliations.render()`), /À arbitrer \(9\)/);
+  const tel = J(run, `Object.values(S.clients).every(c => /^06 39 98 \\d\\d \\d\\d$/.test(c.phone) && /@example\\.com$/.test(c.email))`); assert.ok(tel);
+});
+test('démo vendeur : les 3 exports d’exemple sont reconnus par l’import', () => {
+  const run = chargerAppli(base()); run(`toast = () => {}; S = normalizeState(demoState()); REV++; CLUB = S.clubs.horizon; ME = S.users.u1;`);
+  const defs = J(run, `['ventes', 'incidents', 'resiliations'].map(t => { const r = analyzeTable({ name: t + '.csv', ...parseCSV(demoCsv(t)) }, { clubId: 'horizon', month: curMonth() }); return [r.def && r.def.id, r.rowsCount, (r.entries || []).filter(e => e.seller && e.seller.status === 'user').length]; })`);
+  assert.equal(defs[0][0], 'ventes'); assert.ok(defs[0][2] > 0 && defs[0][2] === defs[0][1], JSON.stringify(defs[0]));
+  assert.equal(defs[1][0], 'clients-incident'); assert.equal(defs[1][1], 78);
+  assert.equal(defs[2][0], 'resil'); assert.equal(defs[2][1], 9);
+});

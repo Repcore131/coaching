@@ -194,6 +194,8 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
   const unk = unknownSellers(B);
   // 1. memoriser les correspondances choisies
   unk.forEach(u => { const ch = choices[u.key]; if (ch) u.keys.forEach(k => ops.push([['rsm', 'aliases', safeKey(k)], ch])); });
+  // vendeurs restés sans correspondance dans ce dépôt (checklist de mise en route)
+  if (B.some(r => r.def && !r.def.silent)) ops.push([['rsm', 'nonRattaches', club], { at: now, n: unk.filter(u => !choices[u.key]).length }]);
   const pick = s => { if (!s) return null; if (s.status === 'user') return s.userId; if (s.status === 'unknown') { const ch = choiceFor(s, choices, unk); return ch && ch !== 'system' && ch !== 'ignore' ? ch : null; } return null; };
   const written = new Set(); const batchImp = {};
   const clientIdx = {}; Object.values(S.clients).filter(c => c.clubId === club).forEach(c => { if (c.num) clientIdx['n:' + c.num] = c; clientIdx['t:' + tokensKey(c.name || '')] = clientIdx['t:' + tokensKey(c.name || '')] || c; });

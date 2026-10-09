@@ -119,7 +119,7 @@ function appliquerCouleurClub() {
   if (c) { r.setProperty('--club', c); r.setProperty('--club-ink', encreSur(c, clubC ? null : deepGet(tenant(), ['colors', 'onPrimary']))); } else { r.removeProperty('--club'); r.removeProperty('--club-ink'); }
 }
 // Logo : celui du club, sinon celui du client, sinon config.js (aucun par défaut). Fichier du site uniquement.
-function clubLogo() { const l = (CLUB && CLUB.logo) || tenant().logo || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) ? l : null; }
+function clubLogo() { const l = (CLUB && CLUB.logo) || tenant().logo || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && (/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) || (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(l) && l.length <= 100 * 1024)) ? l : null; }
 
 // ── Tracé de pouls : amplitude et couleur selon le rythme (statusOf) ──────
 const POULS = { ahead: [1, 'var(--ok)'], ontime: [0.8, 'var(--ok)'], done: [1, 'var(--ok)'], late: [0.5, 'var(--warn)'], verylate: [0.25, 'var(--bad)'], wait: [0.12, 'var(--muted)'], none: [0, 'var(--muted)'] };
@@ -260,6 +260,7 @@ function renderNowInner() {
   $$('button[title]:not([aria-label]),a[title]:not([aria-label])', app).forEach(b => { if (!b.textContent.trim()) b.setAttribute('aria-label', b.title); });
   $$('.hdot[title]:not([role])', app).forEach(i => { i.setAttribute('role', 'img'); i.setAttribute('aria-label', i.title); });
   tickCountdown();
+  if (typeof guideReancrer === 'function') guideReancrer();
   window.scrollTo(0, keepScroll);
   if (focusKey) { const el = $(`[data-focus="${focusKey}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
 }

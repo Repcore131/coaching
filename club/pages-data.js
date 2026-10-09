@@ -412,7 +412,7 @@ PAGES.clubs = {
   render() {
     const tab = UI.clubTab || 'clubs';
     return `<div class="page-head"><div><h1>${TXT.pages.clubs}</h1><p>${TXT.clubs.sous}</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
-      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages'], ['rgpd', 'Données et RGPD']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList, rgpd: isManager() ? clubRgpd : clubList }[tab]()}`;
+      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages'], ['rgpd', 'Données et RGPD'], ['reversibilite', 'Réversibilité']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList, rgpd: isManager() ? clubRgpd : clubList, reversibilite: isManager() ? clubReversibilite : clubList }[tab]()}`;
   },
 };
 function clubList() {
@@ -452,27 +452,51 @@ ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k]
 // Réglages communs (S.settings) : valeurs par défaut lisibles, modifiables par un manager.
 const DUN_SMS_DEFAUT = 'Bonjour {prénom}, votre club vous informe d’un solde de {montant} €. Vous pouvez le régler à l’accueil ou depuis votre espace adhérent. Merci.';
 const reglage = (k, def) => { const v = deepGet(S || {}, ['settings', k]); return v == null || v === '' ? def : v; };
-function reglagesCommunsCard() {
-  return `<div class="card" id="reglages-communs"><h3>Réglages communs</h3><div class="form-grid">
-    <label class="field"><span>Panier moyen (€ par mois)</span><input class="input" inputmode="decimal" name="panierMoyen" data-change="settingSet" data-k="panierMoyen" data-num="1" value="${esc(String(deepGet(S, ['settings', 'panierMoyen']) || ''))}" placeholder="${PANIER_DEFAUT} (par défaut)"><small class="muted">Valeur d’une résiliation quand le prix du client est inconnu.</small></label>
-    <label class="field"><span>Minutes gagnées par jour ouvré</span><input class="input" inputmode="numeric" name="minutesGagneesJour" data-change="settingSet" data-k="minutesGagneesJour" data-num="1" value="${esc(String(deepGet(S, ['settings', 'minutesGagneesJour']) || ''))}" placeholder="59 (par défaut)"><small class="muted">Temps gagné compté par le compteur « Ce que Fit Pulse a rapporté ».</small></label>
-    <label class="field"><span>Conservation des fiches (mois après la fin du contrat)</span><input class="input" inputmode="numeric" name="conservationMois" data-change="settingSet" data-k="conservationMois" data-num="1" value="${esc(String(deepGet(S, ['settings', 'conservationMois']) || ''))}" placeholder="24 (par défaut)"></label>
-    <label class="field full"><span>Message SMS des impayés</span><textarea class="input" rows="3" name="dunSms" data-change="settingSet" data-k="dunSms" placeholder="${esc(DUN_SMS_DEFAUT)}">${esc(deepGet(S, ['settings', 'dunSms']) || '')}</textarea><small class="muted">Copié par le bouton « Copier le message » de la liste des impayés. {prénom} et {montant} sont remplacés.</small></label>
+// Repères métier : panier moyen, jours ouvrés du club, heures du brief et du bilan, conservation.
+const JOURS_COURTS = [[1, 'Lun'], [2, 'Mar'], [3, 'Mer'], [4, 'Jeu'], [5, 'Ven'], [6, 'Sam'], [0, 'Dim']];
+function reperesCard() {
+  const od = openDaysOf(CLUB.id); const v = k => esc(String(deepGet(S, ['settings', k]) ?? ''));
+  return `<div class="card" id="reperes"><h3>Repères métier</h3><div class="form-grid">
+    <label class="field"><span>Panier moyen mensuel (€)</span><input class="input" inputmode="decimal" name="panierMoyen" data-change="settingSet" data-k="panierMoyen" data-num="1" value="${v('panierMoyen')}" placeholder="${PANIER_DEFAUT} (par défaut)"><small class="muted">Valeur d’une résiliation quand le prix du client est inconnu.</small></label>
+    <div class="field full"><span>Jours ouvrés</span><div class="row wrap jours-ouvres" style="gap:10px">${JOURS_COURTS.map(([d, l]) => `<label class="chk"><input type="checkbox" data-change="jourOuvre" data-d="${d}" ${od.includes(d) ? 'checked' : ''}> ${l}</label>`).join('')}</div><small class="muted">Servent au rythme attendu, aux projections et au compte à rebours (jours fériés exclus).</small></div>
+    <label class="field"><span>Heure du brief</span><input class="input" type="number" min="5" max="12" name="heureBrief" data-change="settingSet" data-k="heureBrief" data-num="1" value="${v('heureBrief')}" placeholder="8"></label>
+    <label class="field"><span>Heure du bilan</span><input class="input" type="number" min="15" max="23" name="heureBilan" data-change="settingSet" data-k="heureBilan" data-num="1" value="${v('heureBilan')}" placeholder="18"></label>
+    <label class="field"><span>Minutes gagnées par jour ouvré</span><input class="input" inputmode="numeric" name="minutesGagneesJour" data-change="settingSet" data-k="minutesGagneesJour" data-num="1" value="${v('minutesGagneesJour')}" placeholder="59"></label>
+    <label class="field"><span>Conservation des fiches (mois après la fin du contrat)</span><input class="input" inputmode="numeric" name="conservationMois" data-change="settingSet" data-k="conservationMois" data-num="1" value="${v('conservationMois')}" placeholder="24"></label>
   </div></div>`;
+}
+ACTIONS.jourOuvre = el => {
+  const d = Number(el.dataset.d); const cur = openDaysOf(CLUB.id); const next = el.checked ? [...new Set([...cur, d])] : cur.filter(x => x !== d);
+  if (!next.length) { el.checked = true; toast('Gardez au moins un jour ouvré.'); return; }
+  db.set(['clubs', CLUB.id, 'openDays'], next.sort((a, b) => a - b)); toast('Jours ouvrés enregistrés');
+};
+// Messages types : variables {prénom}, {montant}, {club}.
+const MSG_DEFAUTS = {
+  dunSms: DUN_SMS_DEFAUT,
+  messageSauvetage: 'Bonjour {prénom}, merci pour notre échange. Votre abonnement continue chez {club} : nous sommes ravis de vous garder. À très vite.',
+  messageEquipe: 'Bravo {prénom}, la plus belle contribution du jour chez {club}.',
+};
+const remplirMessage = (tpl, v) => String(tpl).replace(/\{pr[ée]nom\}/gi, v.prenom || '').replace(/\{montant\}/g, v.montant || '').replace(/\{club\}/g, v.club || (CLUB ? CLUB.name : ''));
+function messagesCard() {
+  const L = [['dunSms', 'SMS impayé', 'Copié par « Copier le message » dans la liste des impayés.'], ['messageSauvetage', 'Message de sauvetage', 'Copié depuis une demande de résiliation.'], ['messageEquipe', 'Message d’équipe', 'Deuxième ligne du message de clôture du jour ({prénom} : meilleur contributeur).']];
+  return `<div class="card" id="messages-types"><h3>Messages types</h3><p class="muted small" style="margin-top:-4px">Variables : {prénom}, {montant}, {club}.</p>
+    ${L.map(([k, l, aide]) => `<label class="field"><span>${l}</span><textarea class="input" rows="3" name="${k}" data-change="settingSet" data-k="${k}" placeholder="${esc(MSG_DEFAUTS[k])}">${esc(deepGet(S, ['settings', k]) || '')}</textarea><small class="muted">${aide}</small></label>`).join('')}</div>`;
 }
 ACTIONS.settingSet = el => { if (!isManager()) return; const k = el.dataset.k; let v = String(el.value || '').trim();
   if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (!v) v = null; else v = v.slice(0, 600);
   db.set(['settings', k], v); toast('Enregistré'); };
 // Identité du client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen, mentions légales.
 const TENANT_LEGAL = [['auteur', 'Responsable de la publication'], ['societe', 'Société (raison sociale)'], ['sigle', 'Sigle'], ['forme', 'Forme juridique'], ['capital', 'Capital'], ['rcs', 'RCS'], ['siret', 'SIRET du club'], ['tva', 'TVA intracommunautaire'], ['adresse', 'Siège social'], ['president', 'Représentant légal'], ['etablissement', 'Adresse du club'], ['tel', 'Téléphone'], ['email', 'E-mail de contact'], ['site', 'Site'], ['tribunal', 'Ville du tribunal compétent'], ['marque', 'Marque de l’enseigne']];
-function tenantCard() {
+function monClubCard() {
   const T = tenant(); const c = deepGet(T, ['colors', 'primary']) || '#12B3A8'; const on = encreSur(c, deepGet(T, ['colors', 'onPrimary'])); const ratio = contraste(c, on);
   const champ = (k, l, v, extra = '') => `<label class="field"><span>${l}</span><input class="input" data-change="tenantSet" data-k="${k}" value="${esc(v == null ? '' : String(v))}" ${extra}></label>`;
-  return `<div class="card" id="tenant-card"><h3>Identité du client</h3><p class="muted small" style="margin-top:-4px">Nom, enseigne et couleurs affichés dans Fit Pulse, et société d’exploitation reprise dans les exports et les mentions légales.</p>
-    <div class="form-grid">${champ('name', 'Nom', T.name)}${champ('brand', 'Enseigne', T.brand, 'placeholder="Facultatif"')}${champ('entity', 'Société d’exploitation', T.entity, 'placeholder="Entité = votre société d’exploitation"')}${champ('logo', 'Logo (fichier assets/…)', T.logo, 'placeholder="assets/logo-club.svg"')}
+  const logo = clubLogo();
+  return `<div class="card" id="tenant-card"><h3>Mon club</h3><p class="muted small" style="margin-top:-4px">Nom, logo et couleur affichés dans Fit Pulse ; société d’exploitation reprise dans les exports et les mentions légales.</p>
+    <div class="form-grid">${champ('name', 'Nom', T.name)}${champ('entity', 'Société d’exploitation', T.entity, 'placeholder="Entité = votre société d’exploitation"')}${champ('brand', 'Enseigne', T.brand, 'placeholder="Facultatif"')}
+      <div class="field"><span>Logo</span><div class="row" style="gap:10px">${logo ? `<img class="logo-apercu" src="${esc(logo)}" alt="Logo du club">` : '<span class="muted small">aucun</span>'}<label class="btn sm">${ico('upload')} Choisir une image<input type="file" accept="image/*" hidden data-change="logoEnvoi"></label>${T.logo ? '<button class="btn ghost sm" data-act="logoRetirer">Retirer</button>' : ''}</div><small class="muted">Réduit à 256 px, 100 Ko au plus.</small></div>
       <label class="field"><span>Couleur principale</span><input class="input" type="color" data-change="tenantSet" data-k="colors.primary" value="${esc(c)}"></label>
       <label class="field"><span>Texte sur la couleur</span><input class="input" type="color" data-change="tenantSet" data-k="colors.onPrimary" value="${esc(on)}"><small class="muted" data-contraste="${ratio.toFixed(2)}">Contraste ${ratio.toFixed(1).replace('.', ',')}:1 ${ratio >= 4.5 ? '(AA respecté)' : '(insuffisant : noir ou blanc appliqué)'}</small></label>
-      ${champ('panierMoyen', 'Panier moyen (€ par mois)', T.panierMoyen, 'inputmode="decimal" data-num="1"')}</div>
+      </div>
     <details style="margin-top:10px"><summary><b>Mentions légales</b></summary><div class="form-grid" style="margin-top:8px">${TENANT_LEGAL.map(([k, l]) => champ('legal.' + k, l, deepGet(T, ['legal', k]))).join('')}</div>
       ${backend.mode === 'firebase' ? '<button class="btn sm" style="margin-top:8px" data-act="tenantPublier">Publier les mentions légales (lisibles sans connexion)</button>' : ''}</details></div>`;
 }
@@ -482,21 +506,40 @@ ACTIONS.tenantSet = el => {
   else if (el.dataset.k === 'logo') { if (v && !/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(v)) { toast('Logo : un fichier du dossier assets/ (svg, png, jpg, webp).'); return; } v = v || null; } else v = v ? v.slice(0, 300) : null;
   db.set(path, v); toast('Enregistré');
 };
+// Logo : image redimensionnée à 256 px de côté au plus, data URL de 100 Ko au plus.
+const LOGO_MAX = 100 * 1024;
+async function reduireLogo(file, cote = 256) {
+  const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode(); URL.revokeObjectURL(url);
+  for (const c of [cote, 192, 128, 96]) {
+    const k = Math.min(1, c / Math.max(img.naturalWidth, img.naturalHeight)); const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    for (const [type, q] of [['image/png', 1], ['image/webp', 0.9], ['image/webp', 0.75], ['image/jpeg', 0.8], ['image/webp', 0.55], ['image/jpeg', 0.6]]) { const d = cv.toDataURL(type, q); if (d.length <= LOGO_MAX && d.startsWith('data:' + type)) return d; }
+  }
+  throw new Error('image trop détaillée');
+}
+ACTIONS.logoEnvoi = async el => {
+  const f = el.files && el.files[0]; el.value = ''; if (!f || !isManager()) return;
+  try { const d = await reduireLogo(f); db.set(['tenant', 'logo'], d); toast(`Logo enregistré (${Math.ceil(d.length / 1024)} Ko)`); } catch (e) { toast('Logo impossible : ' + e.message); }
+};
+ACTIONS.logoRetirer = () => db.set(['tenant', 'logo'], null);
 ACTIONS.tenantPublier = async () => {
   try { const L = deepGet(S, ['tenant', 'legal']) || {}; await backend.fb.database().ref(MULTI ? `orgs_public/${ORG}/legal` : 'pulse_public/legal').set(Object.fromEntries(Object.entries(L).filter(([, v]) => typeof v === 'string' && v))); toast('Mentions légales publiées'); }
   catch (e) { toast('Publication impossible : ' + e.message); }
 };
 function clubSettings() {
-  return `<div class="grid">
-    ${tenantCard()}
-    ${reglagesCommunsCard()}
-    ${offersCard()}
-    <div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
+  return `<div class="grid reglages">
+    ${monClubCard()}
+    ${reperesCard()}
+    ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
       <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>Le score est la moyenne de vos % d’objectif, pondérée par les points de chaque KPI, plafonnée à 150 %. Les points récompensent l’atteinte : 25, 50, 75 puis 100 % des points du KPI. En calcul continu, chaque unité rapporte sa part, sans marche. Le calcul continu est conseillé pour les petits objectifs (moins de 5).</div></div>
       ${kpiWarn()}
       <div class="table-wrap"><table class="t"><thead><tr><th>Actif</th><th>KPI</th><th>Unité</th><th class="num">Points</th><th class="num">Poids dans le score</th><th>Valeur d’une unité</th><th>Calcul continu</th><th>Obligatoire</th><th>Ordre</th></tr></thead><tbody>
       ${Object.values(S.kpis).sort((a, b) => a.order - b.order).map(k => `<tr><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="enabled" ${k.enabled ? 'checked' : ''}></td><td><input class="input sm" style="width:200px" value="${esc(k.label)}" data-change="kpiSet" data-id="${k.id}" data-k="label"></td><td>${k.unit === 'eur' ? '€' : 'Quantité'}</td><td class="num"><input class="cell" type="number" min="0" step="50" value="${k.points}" data-change="kpiSet" data-id="${k.id}" data-k="points"></td><td class="num">${kpiWeight(k) == null ? '<span class="muted">n.d.</span>' : fmtP1(kpiWeight(k))}</td><td class="small nowrap">${kpiUnitValue(k)}</td><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="linear" ${kpiLinear(k) ? 'checked' : ''} title="${typeof k.linear === 'boolean' ? 'Réglé à la main' : 'Automatique'}"></td><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="required" ${k.required ? 'checked' : ''}></td><td><input class="cell" style="width:50px" type="number" value="${k.order}" data-change="kpiSet" data-id="${k.id}" data-k="order"></td></tr>`).join('')}</tbody></table></div>
-      <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>
+      <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>` : ''}
+    ${messagesCard()}
+  </div>
+  <details class="reglages-plus card" style="margin-top:14px"><summary><b>Autres réglages</b> <span class="muted small">offres et prix, parrainage, message du lien de paiement, alertes, conservation${isCreator() ? ', sauvegarde' : ''}</span></summary><div class="grid" style="margin-top:12px">
+    ${offersCard()}
     <div class="card"><h3>Parrainage et entreprises</h3><div class="form-grid">
       <label class="field full"><span>Récompense parrain</span><input class="input" data-change="clubCfg" data-k="parrainReward" value="${esc((S.clubs[CLUB.id] || {}).parrainReward || '')}" placeholder="Un mois offert, un shaker…"></label>
       <label class="field"><span>Taux d’adhésion B2B attendu (%)</span><input class="input" inputmode="decimal" data-change="clubCfg" data-k="b2bTaux" data-pct="1" value="${Math.round((Number((S.clubs[CLUB.id] || {}).b2bTaux) || 0.08) * 100)}"></label>
@@ -507,7 +550,7 @@ function clubSettings() {
     ${alertsCard()}
     <div class="card"><h3>Confidentialité</h3><p class="small">Fit Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En ligne, seuls les membres munis d’un code valide peuvent lire la base de l’équipe (règles Firebase) ; changer ou retirer un code coupe l’accès aussitôt.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>
     ${isCreator() ? `<div class="card"><h3>Sauvegarde</h3><p class="muted small">Exportez toutes les données (clubs, équipe, saisies, imports, clients) dans un fichier, pour les archiver ou les déplacer sur un autre appareil.</p>
-      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label>${backend.mode === 'local' ? '<button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button>' : ''}</div></div>` : ''}</div>`;
+      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label>${backend.mode === 'local' ? '<button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button>' : ''}</div></div>` : ''}</div></details>`;
 }
 // Poids réel d'un KPI obligatoire dans le score, et valeur d'une unité au regard de l'objectif moyen.
 function kpiWeight(k) { if (!k.enabled || !k.required || !(k.points > 0)) return null; const tot = Object.values(S.kpis).filter(x => x.enabled && x.required && x.points > 0).reduce((t, x) => t + x.points, 0); return tot ? k.points / tot : null; }

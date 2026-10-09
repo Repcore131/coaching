@@ -10,7 +10,7 @@ const run = chargerAppli('demo'); const pulse = JSON.parse(run('JSON.stringify(S
 await fetch(`${H}/.json${ns}`, { method: 'PUT', headers: owner, body: JSON.stringify({ pulse, pulse_boot: { ['a'.repeat(40)]: 'u2', ['b'.repeat(40)]: 'a'.repeat(40) } }) });
 let fails = 0; const ok = (l, c) => { console.log(`${c ? 'OK ' : 'KO '} ${l}`); if (!c) fails++; };
 const r = await main(['--org', 'fitnessparkniort', '--nom', 'FPN Gestion', '--mois', '2026-09', '--ecrire']);
-ok(`migration écrite (${r.rapport.saisies} saisies, ${r.rapport.utilisateurs} utilisateurs), totaux de septembre identiques après relecture`, r.rapport.saisies > 100 && r.rapport.clubs >= 1 && Object.values(r.avant.centre.kpi).some(v => v > 0) && JSON.stringify(r.avant) === JSON.stringify(r.apres));
+ok(`migration écrite (${r.rapport.saisies} saisies, ${r.rapport.utilisateurs} utilisateurs), totaux de septembre identiques après relecture`, r.rapport.saisies > 100 && r.rapport.clubs >= 1 && Object.values(r.avant.horizon.kpi).some(v => v > 0) && JSON.stringify(r.avant) === JSON.stringify(r.apres));
 const boot = await (await fetch(`${H}/orgs_boot/${'a'.repeat(40)}.json${ns}`, { headers: owner })).json();
 ok('clé de connexion convertie', boot && boot.org === 'fitnessparkniort' && boot.uid === 'u2');
 ok('/pulse intact', !!(await (await fetch(`${H}/pulse/entries.json${ns}&shallow=true`, { headers: owner })).json()));

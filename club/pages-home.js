@@ -189,7 +189,7 @@ PAGES.home = {
     const top5 = rk.filter(x => x.score != null).slice(0, 5);
     const manager = isManager();
     const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; const parts = recoveredParts(CLUB.id, rg); if (parts.equipe_na) { parts.equipe += parts.equipe_na; delete parts.equipe_na; } out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: recoveredFor(CLUB.id, rg) }); } return out; })() : [];
-    return `<div class="home2">
+    return `<div class="home2">${manager ? miseEnRouteCard() : ''}
       <section class="banner" ${banner ? `style="--banner:url('${banner}')"` : ''}><div class="banner-stripe"></div>
         <div class="banner-in"><div class="eyebrow light">${esc(CLUB.name)} · ${monthLabel(mk)}</div>
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>

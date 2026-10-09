@@ -1,7 +1,7 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — données personnelles, conservation, erreurs, hors ligne ══
-const APP_VERSION = '2026.10';
+const APP_VERSION = APP.version;
 const RETENTION = { clientInactifMois: 36, impayeSoldeMois: 24, resiliationMois: 24, chatMois: 12, importsMois: 13, contactsMois: 36, logsJours: 30 };
 
 // ── Hors ligne : bandeau « N saisies en attente » ────────────────────────

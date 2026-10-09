@@ -20,6 +20,7 @@ PAGES.onboarding = {
       </form>
       <div class="row" style="margin:16px 0 0"><span class="spacer" style="height:1px;background:#2a2a2e"></span><span class="muted small">ou</span><span class="spacer" style="height:1px;background:#2a2a2e"></span></div>
       <button class="btn" style="width:100%;margin-top:14px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>
+      <a class="btn" style="width:100%;margin-top:10px" href="?demo=1&guide=1" data-guide-link>Démo guidée, 7 minutes</a>
       <p class="small" style="margin:10px 0 0;text-align:center"><a href="?demo=1">Voir la démo</a> <span class="muted">sans rien enregistrer dans ce navigateur</span></p>
       <p class="muted small" style="margin-top:14px">${backend.mode === 'local' ? 'Mode local : les données restent dans ce navigateur. Le mode partagé (toute l’équipe sur la même base) s’active dans config.js.' : 'Mode partagé : base Firebase de l’équipe.'}</p>
     </div></div>`;
@@ -75,7 +76,7 @@ PAGES.login = {
           <details class="login-help"><summary>Code perdu ?</summary><p>Votre code personnel vous a été envoyé par e-mail (regardez aussi dans les spams). Vérifiez les tirets : FP-XXXX-XXXX-XXXX. Votre manager peut vous en générer un nouveau en un clic.</p></details>
           ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
           ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
-          ${!DEMO ? '<a class="btn login-alt" href="?demo=1" data-demo-link>Voir la démo</a>' : ''}
+          ${!DEMO ? '<a class="btn login-alt" href="?demo=1&guide=1" data-guide-link>Démo guidée, 7 minutes</a><a class="btn login-alt" href="?demo=1" data-demo-link>Voir la démo</a>' : ''}
           ${DEMO ? '' : !shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}
           ${typeof legalFooter === 'function' ? legalFooter() : ''}
         </div>
@@ -223,7 +224,7 @@ function kpiCard(x, exp) {
   const { k, real, target, pct, earned, status } = x;
   const hl = healthOf(pct != null && exp ? pct / exp : null);
   return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
-    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span>${matchMedia('(pointer: coarse)').matches ? (UI.kpiReorder ? `<button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="-1" aria-label="Monter">${ico('chevL')}</button><button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="1" aria-label="Descendre">${ico('chevR')}</button>` : '') : `<span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span>`}</div>
+    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">Obligatoire</span>` : ''}<span class="spacer"></span>${matchMedia('(pointer: coarse)').matches ? (UI.kpiReorder ? `<button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="-1" aria-label="Monter">${ico('chevL')}</button><button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="1" aria-label="Descendre">${ico('chevR')}</button>` : '') : `<span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span>`}</div>
     <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val"><span class="trace-n"${x.range ? traceAttr({ t: 'kpi', club: CLUB.id, user: x.uid || null, kpi: k.id, from: x.range.from, to: x.range.to, v: real }) : ''}>${fmtV(real, k.unit)}</span> <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>

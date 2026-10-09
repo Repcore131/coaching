@@ -99,19 +99,20 @@ function journeeMarque(cle) {
 }
 function journeeBlocs(clubId, now = journeeNow()) {
   const t = today(); const jour = now.getDay(); const quantieme = now.getDate(); const h = now.getHours() + now.getMinutes() / 60;
+  const hB = Number(reglage('heureBrief', 8)) || 8, hS = Number(reglage('heureBilan', 18)) || 18;
   const B = briefJour(clubId, t); const contratsHier = (B.hier.find(x => x.k.id === 'contrats') || {}).total || 0;
   const dun = dunRows(clubId).filter(c => Number(c.balance) > 0); const dus = dun.filter(dunDue);
   const res = resToHandle(clubId); const urg = res.filter(resUrgent).length; const enJeu = res.reduce((s, r) => s + resValeur(r), 0);
   const saisies = Object.values(S.entries).filter(e => e.clubId === clubId && e.date === t && e.source === 'manual' && entryCounts(e));
   const silencieux = sansSaisie(clubId, t);
   const blocs = [
-    { cle: 'brief', titre: 'Brief 8 h', de: 0, a: 11, chiffre: fmtN(contratsHier), unite: plur(contratsHier, 'contrat', 'contrats', false) + ' ' + (B.libVeille === 'Hier' ? 'hier' : 'le ' + B.libVeille.toLowerCase()),
+    { cle: 'brief', titre: `Brief ${hB} h`, de: 0, a: 11, chiffre: fmtN(contratsHier), unite: plur(contratsHier, 'contrat', 'contrats', false) + ' ' + (B.libVeille === 'Hier' ? 'hier' : 'le ' + B.libVeille.toLowerCase()),
       phrase: `Objectif du jour : ${B.objectif.map(x => kpiCourt(x.k, x.parJour)).join(', ') || 'pas d’objectif fixé'}.`, href: '#/home', bouton: 'Ouvrir le brief' },
     { cle: 'impayes', titre: 'Impayés 11 h', de: 11, a: 14, chiffre: fmtN(dus.length), unite: plur(dus.length, 'dossier à relancer', 'dossiers à relancer', false),
       phrase: `${fmtE(dun.reduce((s, c) => s + Number(c.balance), 0))} dus au total, ${plur(dun.filter(c => !dunOf(c).ownerId).length, 'dossier', 'dossiers')} sans responsable.`, href: '#/impayes', bouton: 'Relancer les impayés' },
-    { cle: 'resiliations', titre: 'Résiliations 14 h', de: 14, a: 18, chiffre: fmtN(res.length), unite: plur(res.length, 'demande à arbitrer', 'demandes à arbitrer', false),
+    { cle: 'resiliations', titre: 'Résiliations 14 h', de: 14, a: hS, chiffre: fmtN(res.length), unite: plur(res.length, 'demande à arbitrer', 'demandes à arbitrer', false),
       phrase: `${fmtE(enJeu)} en jeu, ${plur(urg, 'échéance', 'échéances')} sous 7 jours.`, href: '#/resiliations', bouton: 'Traiter les résiliations' },
-    { cle: 'bilan', titre: 'Bilan 18 h', de: 18, a: 24, chiffre: fmtN(saisies.length), unite: plur(saisies.length, 'saisie aujourd’hui', 'saisies aujourd’hui', false),
+    { cle: 'bilan', titre: `Bilan ${hS} h`, de: hS, a: 24, chiffre: fmtN(saisies.length), unite: plur(saisies.length, 'saisie aujourd’hui', 'saisies aujourd’hui', false),
       phrase: silencieux.length ? `Sans saisie : ${silencieux.slice(0, 3).map(u => u.first).join(', ')}${silencieux.length > 3 ? ` et ${silencieux.length - 3} autres` : ''}.` : 'Toute l’équipe présente a saisi.', act: 'clotureJour', bouton: TXT.cloture.bouton },
   ];
   if (jour === 1) { const rt = routineSemaine(clubId); blocs.push({ cle: 'routine', titre: 'Routine du lundi', chiffre: `${rt.recus} sur ${rt.total}`, unite: 'exports reçus', phrase: rt.manquants.length ? `Manquent : ${rt.manquants.slice(0, 3).join(', ')}${rt.manquants.length > 3 ? '…' : ''}.` : 'Tous les exports de la semaine sont là.', href: '#/imports', bouton: 'Déposer les exports' }); }
@@ -173,7 +174,7 @@ function clotureTexte(clubId, t = today()) {
   const tot = kpiList().filter(k => k.enabled !== false).map(k => ({ k, v: sumRange(clubId, null, k.id, t, t) })).filter(x => x.v);
   const lignes = [
     `Merci à toute l’équipe pour ce ${dayLabel(t)}.`,
-    top && top.contribution ? `Bravo ${top.u.first}, la plus belle contribution du jour.` : 'Demain, chaque saisie compte.',
+    top && top.contribution ? remplirMessage(reglage('messageEquipe', MSG_DEFAUTS.messageEquipe), { prenom: top.u.first, club: S.clubs[clubId] ? S.clubs[clubId].name : '', montant: '' }) : 'Demain, chaque saisie compte.',
     tot.length ? `Aujourd’hui : ${tot.map(x => kpiCourt(x.k, x.v)).join(', ')}.` : '',
     P.length ? `Projection du mois : ${P.map(p => `${p.k.label.toLowerCase()} ${p.verdict === 'Atteint' ? 'atteint' : p.verdict === 'Juste' ? 'juste' : p.verdict.toLowerCase()}`).join(', ')}.` : '',
     'On garde le rythme demain.',

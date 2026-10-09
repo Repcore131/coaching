@@ -157,6 +157,14 @@ Détail et bascule : `docs/multi-salles.md`.
 - Les comptes, le club et l'identité du déploiement historique sont dans `club/tools/bootstrap.js`, jamais chargé par le navigateur. Le passage serveur (`fitpulse-serveur.mjs`) pose les clés de connexion, `/pulse/tenant`, `/pulse_public/legal` et le destinataire du rapport du lundi s'ils manquent ; `node club/tools/bootstrap.js --ecrire` fait de même à la main.
 - Mentions légales : celles du client (S.tenant.legal) ; un visiteur non connecté lit celles publiées dans `/pulse_public/legal` (bouton « Publier les mentions légales »).
 
+## Réglages, réversibilité, mise en route, démo (lot C)
+
+- Club et réglages > Réglages : Mon club (nom, logo envoyé puis réduit à 256 px et 100 Ko, couleur, société), Repères métier (panier moyen, jours ouvrés du club, heures du brief et du bilan), KPI suivis (créateur seulement), Messages types ({prénom}, {montant}, {club}). Les anciens réglages (offres, parrainage, alertes, conservation, sauvegarde) sont sous « Autres réglages ».
+- Les jours ouvrés du club servent au rythme, aux projections, au compte à rebours et au brief.
+- Club et réglages > Réversibilité : « Tout exporter en tableur » (ZIP : saisies, objectifs, clients, relances, impayés, résiliations, imports, équipe, LISEZMOI.txt ; UTF-8 avec BOM, « ; », JJ/MM/AAAA, virgule décimale, formules neutralisées par une apostrophe), version (APP.version), journal des versions (CHANGELOG.md, à publier avec l'appli), état du service.
+- Accueil manager : carte « Mise en route » (7 étapes cochées d'après les données, bouton Faire, durées), masquable, définitivement retirée une fois terminée.
+- Démo vendeur : `demoState()` génère « Club Horizon » (Valmont) à graine fixe : 8 personnes dont Directeur Démo, 2 000 clients, 13 mois de saisies, 9 résiliations, 78 impayés ; 1,6 Mo. `?demo=1&guide=1` (bouton « Démo guidée, 7 minutes ») lance le parcours en 8 étapes ; « Réinitialiser la démo » dans le bandeau ; « Créer mon club » efface la démo.
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

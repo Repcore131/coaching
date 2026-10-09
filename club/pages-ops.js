@@ -79,6 +79,7 @@ function resCard(r) {
       ${r.ownerId ? `<span class="small">${avatar(S.users[r.ownerId], 'xs')}</span><span class="small spacer">${mine ? '<b>Vous</b>' : esc(fullName(S.users[r.ownerId]))}</span>` : `<button class="btn sm primary" data-act="resTake" data-id="${r.id}">Je m’en occupe</button><span class="spacer"></span>`}
       <button class="btn sm" data-act="resCall" data-id="${r.id}">${ico('phone')} Noter un appel</button>
       <button class="btn sm ok-btn" data-act="resSaveIt" data-id="${r.id}">Sauvée</button>
+      <button class="btn sm" data-act="resMsgSauvetage" data-id="${r.id}">Copier le message</button>
       <button class="btn sm" data-act="resLose" data-id="${r.id}">Résiliée</button>
       <button class="btn ghost icon sm" data-act="resOpen" data-id="${r.id}" title="Détail">${ico('chevR')}</button></div></div>`;
 }
@@ -107,6 +108,8 @@ const resActions = r => [...(r.actions || []), ...Object.values(r.log || {})].so
 ACTIONS.resPickClient = el => { const r = S.resiliations[el.dataset.id]; const L = resCandidats(r);
   openModal({ title: `Fiche de ${r.client}`, body: `<div class="grid">${L.map(c => `<button class="btn" style="justify-content:flex-start" data-act="resPickOk" data-id="${r.id}" data-c="${c.id}">${esc(c.name || '')} ${c.num ? '· n° ' + esc(c.num) : ''} ${c.end ? '· fin ' + dmy(c.end) : ''} ${mensualite(c, true) ? '· ' + fmtE(mensualite(c, true)) + ' par mois' : ''}</button>`).join('')}</div>` }); };
 ACTIONS.resPickOk = el => { db.batch([[['resiliations', el.dataset.id, 'clientId'], el.dataset.c], resLogOp(S.resiliations[el.dataset.id], 'Fiche client rattachée')]); closeModal(); };
+ACTIONS.resMsgSauvetage = el => { const r = S.resiliations[el.dataset.id]; const v = valeurEnJeu(r);
+  copierTexte(remplirMessage(reglage('messageSauvetage', MSG_DEFAUTS.messageSauvetage), { prenom: String(r.client || '').trim().split(/\s+/)[0], montant: fmtE(v.prix).replace(/\s*€$/, ''), club: CLUB.name }), 'Message copié'); };
 ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
 ACTIONS.resCall = el => {
   const r = S.resiliations[el.dataset.id];
@@ -231,7 +234,7 @@ function detteTranches(open) { return DETTE_AGE.map((t, i) => { const L = open.f
 // Message SMS (réglage commun dunSms) : {prénom} et {montant} remplacés.
 function dunSmsTexte(c) {
   const tpl = reglage('dunSms', DUN_SMS_DEFAUT); const montant = fmtE(Number(c.balance)).replace(/\s*€$/, '');
-  return tpl.replace(/\{pr[ée]nom\}/gi, (c.first || c.name || '').trim().split(/\s+/)[0] || '').replace(/\{montant\}/g, montant);
+  return remplirMessage(tpl, { prenom: (c.first || c.name || '').trim().split(/\s+/)[0] || '', montant, club: CLUB ? CLUB.name : '' });
 }
 ACTIONS.dunSms = el => {
   const c = S.clients[el.dataset.id]; const txt = dunSmsTexte(c);
