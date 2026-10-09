@@ -14057,3 +14057,26 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .rmd-coach b{display:block;font-size:var(--fs-sm)}
 .rmd-coach span{display:block;font-size:var(--fs-xs);color:var(--sub)}
 .rmd-coach .btn{width:auto;margin:0;flex:none}
+/* LE PILOTE DE SÈCHE (build 1958). */
+.pl-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin:0 0 12px}
+.pl-t,.pl-lab{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.pl-lab{margin:10px 0 4px}
+.pl-svg{width:100%;height:auto;display:block;margin:4px 0 6px}
+.pl-zone{fill:color-mix(in srgb,var(--green) 18%,transparent);stroke:none}
+.pl-pt{fill:var(--sub)}
+.pl-mm{fill:none;stroke:var(--red);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pl-tx{fill:var(--sub);font-size:var(--fs-xs)}
+.pl-ligne{font-size:var(--fs-sm);color:var(--text-strong)}
+.pl-cible{font-size:var(--fs-xs);color:var(--sub);margin-top:2px}
+.pl-prop{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding-left:8px;margin:10px 0 6px;font-size:var(--fs-xs);color:var(--text)}
+.pl-prop b{font-size:var(--fs-sm);color:var(--text-strong)}
+.pl-prop.pl-remonter,.pl-prop.pl-baisser_glucides,.pl-prop.pl-cardio_plus{border-left-color:var(--red)}
+.pl-raison,.pl-alertes,.pl-histo{margin:4px 0;padding-left:18px;font-size:var(--fs-xs);line-height:1.55;color:var(--sub)}
+.pl-alertes{color:var(--orange)}
+.pl-btns{display:flex;gap:8px;margin-top:8px}
+.pl-btns .btn{flex:1;margin:0}
+.pl-ath{display:flex;flex-direction:column;gap:2px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin:0 0 12px}
+.pl-ath b{font-size:var(--fs-sm);color:var(--text-strong)}
+.pl-ath span{font-size:var(--fs-xs);color:var(--sub)}
+.pl-vol{display:flex;flex-direction:column;gap:2px;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 12px;margin:0 0 10px;font-size:var(--fs-xs);color:var(--text)}
+.pl-vol b{color:var(--text-strong)}

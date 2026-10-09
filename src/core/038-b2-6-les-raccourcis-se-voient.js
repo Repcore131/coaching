@@ -1600,6 +1600,7 @@ function renderVolumePrescrit(cfg,user){
     .sort((a,b)=>v.muscles[b]-v.muscles[a]);
   if(!lignes.length){ z.innerHTML=''; return; }
   z.innerHTML=`<div class="card card--dense" style="margin-bottom:14px">
+    ${(()=>{ try{ return htmlVolumeSeche(v.muscles,u); }catch(e){ return ''; } })()}
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:10px;line-height:1.5">
       ${v.avecConsigne

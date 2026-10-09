@@ -76406,6 +76406,123 @@ async function testExercices(){
       }finally{ z.innerHTML=av; }
       return true;
     });
+    // ══ BUILD 1958 — LE PILOTE DE SÈCHE ══════════════════════════════════════════
+    // Des pesées synthétiques : `jours` jours jusqu'à `fin`, perte de `pct` %/semaine, bruit optionnel, trous optionnels.
+    const _pls58=(fin,jours,pct,o)=>{ o=o||{}; const out=[], tf=Date.parse(fin+'T12:00:00Z');
+      for(let i=jours-1;i>=0;i--){ if(o.trous&&o.trous(i)) continue; const kg=80*(1-pct/100*(-i)/7*-1)*1; const d=new Date(tf-i*864e5).toISOString().slice(0,10);
+        const base=80*Math.pow(1-pct/100,(jours-1-i)/7); out.push({date:d,kg:Math.round((base+(o.bruit?o.bruit(i):0))*100)/100}); }
+      return out; };
+    const _ple58=(t,tp,x)=>Object.assign({tendance:t,tendancePrecedente:tp,macros:{kcal:2200,p:150,g:250,l:65},poidsKg:80,plancherKcal:1600,histo:[],maintenant:Date.parse('2027-03-01T12:00:00Z'),semaines:4,force:{}},x||{});
+    ok('1958 — PILOTE_SECHE gelée, telle que demandée',()=>{
+      const P=PILOTE_SECHE;
+      if(!Object.isFrozen(P)||!Object.isFrozen(P.ordre)||!Object.isFrozen(P.perteCible)) return _echec('gel');
+      if(P.perteCible.join()!=='0.5,1'||P.periodeAjustementJours!==14||P.phases!==3||P.semainesParPhase!==3||P.pasKcal!==100) return _echec('valeurs');
+      if(P.ordre.join()!=='cardio,glucides,lipides'||P.plancherLipides!==0.66||P.proteines.join()!=='1.8,2.2') return _echec('ordre, planchers');
+      return true;
+    });
+    ok('1958 — tendancePoids : pente par régression sur 14 jours, moyenne mobile 7 jours ; moins de 8 pesées → non fiable',()=>{
+      const s=_pls58('2027-03-01',28,0.7);
+      const t=tendancePoids(s,'2027-03-01');
+      if(!t.fiable||t.n!==14||Math.abs(t.perteSem-0.7)>0.03) return _echec(JSON.stringify({n:t.n,p:t.perteSem}));
+      if(t.mobiles.length!==14||!(t.moyenne7>0)) return _echec('mobiles');
+      const m=s.slice(-7).reduce((a,x)=>a+x.kg,0)/7;
+      if(Math.abs(t.moyenne7-m)>0.01) return _echec('moyenne 7 j');
+      // Pesées manquantes : 7 sur 14 jours.
+      const trous=_pls58('2027-03-01',14,0.7,{trous:i=>i%2===1});
+      const u=tendancePoids(trous,'2027-03-01');
+      if(u.fiable||u.n!==7||!/non fiable/.test(u.raison)||u.perteSem!==null) return _echec(JSON.stringify(u));
+      if(propositionSeche(_ple58(u,u)).action!=='rien') return _echec('proposition sans tendance');
+      // Les pesées agrégées et futures ne comptent pas.
+      if(tendancePoids(s.concat([{date:'2027-03-05',kg:10},{date:'2027-02-28',kg:10,agrege:true}]),'2027-03-01').n!==14) return _echec('futures ou agrégées comptées');
+      return true;
+    });
+    ok('1958 — bruit d’eau (±0,8 kg un jour sur deux) : la tendance reste dans la cible, rien n’est proposé',()=>{
+      const s=_pls58('2027-03-01',28,0.75,{bruit:i=>(i%2?0.8:-0.8)});
+      const t=tendancePoids(s,'2027-03-01'), tp=tendancePoids(s,'2027-02-15');
+      if(!t.fiable||!(t.perteSem>0.5&&t.perteSem<1)) return _echec('perte : '+t.perteSem);
+      const p=propositionSeche(_ple58(t,tp));
+      if(p.action!=='rien'||!/dans la cible/.test(p.phrase)) return _echec(JSON.stringify(p));
+      return true;
+    });
+    ok('1958 — perte trop rapide : remonter par les glucides, +100 kcal (+200 au-delà de 1,5 %)',()=>{
+      let t=tendancePoids(_pls58('2027-03-01',28,1.2),'2027-03-01');
+      let p=propositionSeche(_ple58(t,t));
+      if(p.action!=='remonter'||p.valeur!==100||p.apres.kcal!==2300||p.apres.g!==275||p.apres.p!==150||p.apres.l!==65) return _echec(JSON.stringify(p));
+      t=tendancePoids(_pls58('2027-03-01',28,1.8),'2027-03-01');
+      p=propositionSeche(_ple58(t,t));
+      if(p.action!=='remonter'||p.valeur!==200) return _echec('1,8 % : '+p.valeur);
+      if(!p.alertes.some(a=>/Déficit important/.test(a))) return _echec('protéines à 1,9 g/kg en déficit important : '+p.alertes.join());
+      return true;
+    });
+    ok('1958 — plateau : rien sur une période, puis cardio d’abord, puis −100 kcal de glucides ; 14 jours entre deux ajustements',()=>{
+      const plat=tendancePoids(_pls58('2027-03-01',28,0.1),'2027-03-01'), ok7=tendancePoids(_pls58('2027-02-15',28,0.7),'2027-02-15');
+      let p=propositionSeche(_ple58(plat,ok7));
+      if(p.action!=='rien'||!/deuxième période/.test(p.phrase)) return _echec('une seule période : '+p.action);
+      p=propositionSeche(_ple58(plat,plat));
+      if(p.action!=='cardio_plus'||p.valeur!==PILOTE_CARDIO_PAS_MIN) return _echec('cardio d’abord : '+p.action);
+      const t0=Date.parse('2027-03-01T12:00:00Z');
+      p=propositionSeche(_ple58(plat,plat,{histo:[{date:t0-5*864e5,action:'cardio_plus',valeur:60,decision:'applique'}]}));
+      if(p.action!=='rien'||!/moins de 14 jours/.test(p.phrase)) return _echec('verrou de 14 jours : '+p.action);
+      p=propositionSeche(_ple58(plat,plat,{histo:[{date:t0-15*864e5,action:'cardio_plus',valeur:60,decision:'applique'}]}));
+      if(p.action!=='baisser_glucides'||p.valeur!==-100||p.apres.kcal!==2100||p.apres.g!==225) return _echec('puis glucides : '+JSON.stringify(p));
+      // Un cardio refusé ne compte pas comme levier joué.
+      p=propositionSeche(_ple58(plat,plat,{histo:[{date:t0-15*864e5,action:'cardio_plus',valeur:60,decision:'refuse'}]}));
+      if(p.action!=='cardio_plus') return _echec('cardio refusé');
+      return true;
+    });
+    ok('1958 — planchers : jamais sous le plancher calorique, glucides au plus bas laissés au coach, lipides sous 0,66 g/kg signalés',()=>{
+      const plat=tendancePoids(_pls58('2027-03-01',28,0.1),'2027-03-01'), t0=Date.parse('2027-03-01T12:00:00Z');
+      const h=[{date:t0-20*864e5,action:'cardio_plus',valeur:60,decision:'applique'}];
+      let p=propositionSeche(_ple58(plat,plat,{histo:h,macros:{kcal:1650,p:150,g:120,l:55},plancherKcal:1600}));
+      if(p.action!=='rien'||!p.alertes.some(a=>/Plancher atteint/.test(a))) return _echec('plancher : '+JSON.stringify(p));
+      p=propositionSeche(_ple58(plat,plat,{histo:h,plancherKcal:null}));
+      if(p.action!=='rien'||!p.alertes.some(a=>/Plancher calorique inconnu/.test(a))) return _echec('sans plancher');
+      p=propositionSeche(_ple58(plat,plat,{histo:h,macros:{kcal:2200,p:150,g:90,l:120}}));
+      if(p.action!=='rien'||!p.alertes.some(a=>/lipides \(plancher 0.66/.test(a))) return _echec('glucides au plus bas : '+p.alertes.join());
+      p=propositionSeche(_ple58(plat,plat,{macros:{kcal:2200,p:150,g:300,l:40}}));
+      if(!p.alertes.some(a=>/Lipides sous le plancher : 40 g pour 52.8 g/.test(a))) return _echec('lipides : '+p.alertes.join());
+      p=propositionSeche(_ple58(plat,plat,{macros:{kcal:2200,p:120,g:300,l:70}}));
+      if(!p.alertes.some(a=>/Protéines à 1,5 g\/kg/.test(a))) return _echec('protéines');
+      return true;
+    });
+    ok('1958 — perte musculaire possible : e1RM en baisse sur 3 séances pendant la perte ; gardes de l’app ; 9 semaines',()=>{
+      const t=tendancePoids(_pls58('2027-03-01',28,0.7),'2027-03-01');
+      const force={Squat:[{date:'2027-02-20',e1:120},{date:'2027-02-24',e1:118},{date:'2027-02-27',e1:115}],Dips:[{date:'2027-02-20',e1:80},{date:'2027-02-24',e1:82},{date:'2027-02-27',e1:81}]};
+      let p=propositionSeche(_ple58(t,t,{force}));
+      if(!p.alertes.some(a=>/Perte musculaire possible.*Squat/.test(a))||p.alertes.some(a=>/Dips/.test(a))) return _echec(p.alertes.join());
+      if(forceEnBaisse({A:[{date:'1',e1:3},{date:'2',e1:2}]}).length) return _echec('deux séances suffisent');
+      p=propositionSeche(_ple58(t,t,{garde:'Signal de santé actif : aucune proposition automatique.'}));
+      if(p.action!=='rien'||!/Signal/.test(p.phrase)) return _echec('garde');
+      p=propositionSeche(_ple58(t,t,{semaines:10}));
+      if(!p.alertes.some(a=>/au-delà de 9/.test(a))) return _echec('9 semaines');
+      return true;
+    });
+    ok('1958 — validation du coach : cardio ou kcal, historique, phrase pour l’athlète 7 jours ; volume −20 à −30 %',()=>{
+      const c={email:'c@t',nutrition:{macros:{on:{kcal:2200,p:150,g:250,l:65},off:{kcal:2200,p:150,g:250,l:65}}}};
+      piloteAppliquer(c,{action:'cardio_plus',valeur:60,phrase:'On ajoute 60 min.'},'applique',1e12);
+      if(c.nutrition.pilote.cardioMinSem!==60||c.nutrition.pilote.histo.length!==1||c.nutrition.pilote.derniere.action!=='cardio_plus') return _echec(JSON.stringify(c.nutrition.pilote));
+      piloteAppliquer(c,{action:'baisser_glucides',valeur:-100,phrase:'On retire 100 kcal.',apres:{kcal:2100}},'applique',1e12+1);
+      if(!c.nutrition.tableur||!c.nutrition.tableur.ajust||c.nutrition.tableur.ajust.autoJ.on!==-100||c.nutrition.pilote.derniere.kcal!==2100) return _echec('kcal : '+JSON.stringify(c.nutrition.tableur));
+      piloteAppliquer(c,{action:'remonter',valeur:100,phrase:'x'},'refuse',1e12+2);
+      if(c.nutrition.tableur.ajust.autoJ.on!==-100||c.nutrition.pilote.histo[2].decision!=='refuse'||c.nutrition.pilote.derniere.action!=='baisser_glucides') return _echec('refus');
+      if(piloteAppliquer(c,{action:'rien',valeur:0,phrase:''},'applique')) return _echec('rien joué');
+      const h=htmlPiloteAthlete(c,1e12+864e5);
+      if(!/Nouvelle cible : 2 100 kcal/.test(h)||!/On retire 100 kcal/.test(h)) return _echec(h);
+      if(htmlPiloteAthlete(c,1e12+8*864e5)!=='') return _echec('affiché après 7 jours');
+      const v=volumeSecheSuggestions({pecs:20,dos:10},m=>({mavMax:m==='pecs'?16:14}));
+      if(v.length!==1||v[0].de!==14||v[0].a!==16) return _echec(JSON.stringify(v));
+      return true;
+    });
+    ok('1958 — la carte du coach : graphique, zone cible, proposition à valider, raisonnement',()=>{
+      const s=_pls58('2027-03-01',28,1.4);
+      const et=_ple58(tendancePoids(s,'2027-03-01'),tendancePoids(s,'2027-02-15'),{pesees:s,garde:''});
+      const pr=propositionSeche(et);
+      const d=document.createElement('div'); d.innerHTML=htmlPiloteSeche(et,pr,'2027-03-01');
+      if(!d.querySelector('svg.pl-svg polygon.pl-zone')||!d.querySelector('polyline.pl-mm')||d.querySelectorAll('circle.pl-pt').length<20) return _echec('graphique');
+      if(!/Zone cible : 0,5 à 1 %/.test(d.textContent)||!/Remonter \+100 kcal/.test(d.textContent)) return _echec(d.textContent.slice(0,200));
+      if(!d.querySelector('[onclick="piloteDecider(\'applique\')"]')||!d.querySelector('.pl-raison li')) return _echec('boutons, raisonnement');
+      return true;
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

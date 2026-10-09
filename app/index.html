@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1957';
+window.RC_BUILD='1958';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-09';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1957.css">
+<link rel="stylesheet" href="./rc-style.1958.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1957.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1958.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -2805,6 +2805,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Calculs <em>alimentaires</em></span></div>
         <!-- LE MODE RAMADAN (build 1957) : l'état et le réglage, au-dessus de la nutrition. -->
         <div id="ccd-ramadan"></div>
+        <!-- LE PILOTE DE SÈCHE (build 1958) : tendance, proposition, historique. -->
+        <div id="ccd-pilote"></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
       <!-- MICRO-SIGNAUX, REMONTE DE LIFESTYLE LE 26/08/2026. Ce sont des
@@ -3621,7 +3623,7 @@ const COACH_PHOTO='icons/coach.jpg';
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
       <!-- SÉRIE 7 (lot 2) : la séance en cours, en tête (rendreRepriseTete). -->
-      <div id="clh-reprise-tete" hidden></div><div id="clh-ramadan" hidden></div>
+      <div id="clh-reprise-tete" hidden></div><div id="clh-ramadan" hidden></div><div id="clh-pilote" hidden></div>
 <div id="clh-tractions" hidden></div>
       <!-- SÉRIE 6 (lot 17) : l'installation, en carte (rendreCarteInstall). -->
       <div id="clh-installer" hidden></div>
@@ -6492,5 +6494,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1957.js"></script>
+<script src="./rc-core.1958.js"></script>
 </body></html>

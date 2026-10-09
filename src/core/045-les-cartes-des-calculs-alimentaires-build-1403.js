@@ -790,6 +790,7 @@ function renderCoachNutriSection(c){
   // tout l'onglet se peint sur l'APERÇU : le tableau suit l'écart en cours.
   try{ _rendreCiblesCoach(c); }catch(e){}
   try{ if(c&&!c._apercu) renderCoachRamadan(c); }catch(e){}
+  try{ if(c&&!c._apercu) renderPiloteSeche(c); }catch(e){}
   if(c&&!c._apercu&&nutBrouillonDelta(c.id)){ try{ c=nutApercu(c,nutBrouillonDelta(c.id)); }catch(e){} }
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
