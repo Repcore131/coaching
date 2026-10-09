@@ -687,6 +687,20 @@ function _blocExo(idx,estSS){
       }
     }
   }
+  // LES GABARITS DE FORCE (build 1960) : sans programmation par exercice, la
+  // séance du gabarit pré-remplit ses séries — charges modifiables, comme
+  // la consigne ci-dessus ; une série « + » se marque (amrap) pour être relevée.
+  const _gab=_cons?null:(()=>{ try{ return consigneGabarit(currentUser,ex.name,Date.now()); }catch(e){ return null; } })();
+  if(_gab){
+    while(data.sets.length<_gab.series.length)
+      data.sets.push({weight:'',weight2:'',reps:'',rir:'',pain:'',done:false});
+    _gab.series.forEach((x,i)=>{
+      const s=data.sets[i]; if(!s||s.done) return;
+      s.reps=x.reps;
+      if(x.amrap){ s.amrap=true; s.amrapVise=x.reps; }
+      if(!s.userEdited&&!String(s.weight||'').trim()){ s.weight=x.kg; s.isAuto=true; }
+    });
+  }
   const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();

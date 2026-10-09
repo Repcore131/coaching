@@ -489,6 +489,9 @@ function _chargePrescrite(ex){
   if(!ex||typeof ex!=='object') return '';
   const c=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
   if(c&&c.kg!=null) return String(c.kg).replace('.',',')+' kg';
+  // Puis le gabarit de force de la semaine (build 1960).
+  const g=(()=>{ try{ return consigneGabarit(_dossier(),ex.name,Date.now()); }catch(e){ return null; } })();
+  if(g) return texteSeriesGabarit(g.series);
   const v=(ex.charge!=null&&String(ex.charge).trim()!=='')?ex.charge:ex.poids;
   return String(v==null?'':v).trim();
 }

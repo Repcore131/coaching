@@ -9068,7 +9068,9 @@ async function testExercices(){
           const tire=[]; let jetons=0, rafraichi=0;
           try{
             window.EventSource=FauxES;
-            CLOUD.syncUser=async(e)=>{ tire.push(e); return false; };
+            // Seuls les trois athlètes de ce test comptent : un minuteur laissé par un
+            // autre test (le compte quota@t.fr) appelait parfois syncUser dans cette fenêtre.
+            CLOUD.syncUser=async(e)=>{ if(/^a[123]@t\.fr$/.test(String(e))) tire.push(e); return false; };
             CLOUD._getToken=async function(){ if(!this._tokenExpiry) rafraichi++; this._tokenExpiry=Date.now()+3600000; return 'jeton'+(++jetons); };
             BOITE_COACH.fermer();
             currentUser={email:'coach.x@t.fr',role:'coach'};
@@ -76591,6 +76593,99 @@ async function testExercices(){
       const l=frisePeriSeance('18:00',60,{p:160,g:300},'flexible',{cafeine:{dejaMg:0,plafond:400,limite:null}});
       const d=document.createElement('div'); d.innerHTML=htmlFrise(l,'18:00',60);
       if(d.querySelectorAll('.fr-it').length!==l.length||!d.querySelector('.fr-cafeine [onclick="loadCaffeine()"]')||!d.querySelector('.fr-eau.fr-pendant')) return _echec('rendu');
+      return true;
+    });
+    // ══ BUILD 1960 — LES GABARITS DE FORCE ═══════════════════════════════════════
+    const _g60=(cle,max,o)=>genererGabarit(cle,{SQUAT:{max,fiable:true}},Date.parse('2027-03-01T12:00:00'),Object.assign({exos:['SQUAT'],pas:2.5,user:{}},o||{}));
+    const _kg60=(p,w,s)=>p.semaines[w].seances[s||0].map(x=>x.kg+(x.amrap?'+':'')).join(' ');
+    ok('1960 — TABLE_PCT_REPS (RPE 8 et 9) tirée de la table de Kevin, 4 rép. interpolée ; RPE = 10 − RIR, demi-points',()=>{
+      const t=TABLE_PCT_REPS;
+      if(!Object.isFrozen(t)||!Object.isFrozen(t['8'])) return _echec('gel');
+      if(t['8'].slice(0,8).join()!=='92.2,89.2,86.3,83.7,81.1,78.6,76.2,73.9'||t['9'][0]!==95.5) return _echec(t['8'].join());
+      if(Math.abs((t['8'][2]+t['8'][4])/2-t['8'][3])>0.01) return _echec('4 rép. hors interpolation');
+      if(rpeDeRir(2)!==8||rpeDeRir(1.5)!==8.5||rpeDeRir(0)!==10||rpeDeRir(7)!==null) return _echec('RPE/RIR');
+      if(pctReps(4,8)!==83.7||pctReps(3,8.5)!==87.8||pctReps(13,8)!==null) return _echec('pctReps');
+      return true;
+    });
+    ok('1960 — 5/3/1 : base 0,9 × 1RM, S1-S4 aux bons %, séries « + » aux semaines 1 à 3, arrondi aux disques',()=>{
+      const r=_g60('cinq_trois_un',100);
+      if(!r.ok) return _echec(r.raison);
+      const p=r.plans[0];
+      if(p.base!==90||p.semaines.length!==4) return _echec('base '+p.base);
+      if(_kg60(p,0)!=='57.5 67.5 77.5+') return _echec('S1 '+_kg60(p,0));
+      if(_kg60(p,1)!=='62.5 72.5 80+') return _echec('S2 '+_kg60(p,1));
+      if(_kg60(p,2)!=='67.5 77.5 85+') return _echec('S3 '+_kg60(p,2));
+      if(_kg60(p,3)!=='35 45 55'||p.semaines[3].phase!=='Décharge') return _echec('S4 '+_kg60(p,3));
+      if(p.semaines[2].seances[0].map(x=>x.reps).join()!=='5,3,1') return _echec('5/3/1+');
+      if(p.semaines[1].debut-p.semaines[0].debut!==604800000||new Date(p.debut).getDay()!==1) return _echec('lundis');
+      if(texteSeriesGabarit(p.semaines[0].seances[0])!=='5 × 57,5 · 5 × 67,5 · 5+ × 77,5 kg') return _echec(texteSeriesGabarit(p.semaines[0].seances[0]));
+      return true;
+    });
+    ok('1960 — fin de cycle 5/3/1 : +1-2 % (développés), +2-3 % (squat, soulevé) selon la série « + » ; sous la cible, même base',()=>{
+      const p={cle:'cinq_trois_un',exo:'DEVELOPPE COUCHE',base:90,max:100,amraps:{'2':{w:2,kg:85,reps:4,vise:1,at:3}}};
+      if(prochaineBase(p).base!==91.8) return _echec('+2 % : '+prochaineBase(p).base);
+      p.amraps['2'].reps=2;
+      if(prochaineBase(p).base!==90.9) return _echec('+1 %');
+      p.amraps={'0':{w:0,kg:77.5,reps:4,vise:5,at:1}};
+      if(prochaineBase(p).base!==90||!/même base/.test(prochaineBase(p).raison)) return _echec('sous la cible');
+      const sq={cle:'cinq_trois_un',exo:'SQUAT',base:100,amraps:{'0':{w:0,kg:85,reps:9,vise:5,at:1}}};
+      if(prochaineBase(sq).base!==103) return _echec('squat +3 %');
+      if(prochaineBase({cle:'cinq_trois_un',exo:'SQUAT',base:100}).base!==100) return _echec('sans série +');
+      return true;
+    });
+    ok('1960 — Sheiko : 6×6@70 → 10×3@85, +5 kg au cycle suivant, 2 cycles au plus ; neuf semaines SBD ; top set + back-off',()=>{
+      let r=_g60('sheiko_bloc',150);
+      const p=r.plans[0];
+      if(p.semaines.map(s=>s.seances[0].length+'×'+s.seances[0][0].reps+'@'+s.seances[0][0].kg).join()!=='6×6@105,7×5@112.5,8×4@120,10×3@127.5') return _echec(p.semaines.map(s=>s.seances[0].length+'×'+s.seances[0][0].kg).join());
+      r=_g60('sheiko_bloc',150,{cycle:1});
+      if(r.plans[0].base!==155||r.plans[0].semaines[0].seances[0][0].kg!==107.5) return _echec('cycle 2 : '+r.plans[0].base);
+      r=_g60('sheiko_bloc',150,{cycle:2});
+      if(r.ok||!/coupure/.test(r.raison)) return _echec('3e cycle accepté');
+      if(prochaineBase({cle:'sheiko_bloc',exo:'SQUAT',base:150,max:150,amraps:{'3':{w:3,kg:127.5,reps:5,e1:149,at:1}}}).base!==155) return _echec('+5');
+      r=_g60('neuf_semaines_sbd',200);
+      const n=r.plans[0].semaines;
+      if(n.length!==9||n[0].seances[0].length!==5||n[0].seances[0][0].kg!==160||n[4].seances[0][0].kg!==170||n[8].seances[0][0].kg!==210||n[7].seances[0].length!==2) return _echec('9 semaines');
+      r=_g60('top_set_backoff',200);
+      const t=r.plans[0].semaines;
+      if(t.length!==4||t[0].seances[0].map(x=>x.kg).join()!=='162.5,145,145,145') return _echec('top set : '+t[0].seances[0].map(x=>x.kg).join());
+      if(_g60('top_set_backoff',200,{params:{reps:15}}).ok) return _echec('15 rép. hors table');
+      return true;
+    });
+    ok('1960 — Smolov : 13 semaines (2/4/2/4/1), squat seulement, avertissement fort ; base +10 puis +15 kg',()=>{
+      if(genererGabarit('smolov',{'DEVELOPPE COUCHE':{max:100,fiable:true}},Date.now(),{pas:2.5}).ok) return _echec('développé accepté');
+      const r=_g60('smolov',200);
+      if(!r.ok||r.plans[0].semaines.length!==13) return _echec('13 semaines');
+      const ph=r.plans[0].semaines.map(s=>s.phase);
+      const compte=k=>ph.filter(x=>x===k).length;
+      if(compte('Préparation')!==2||compte('Base')!==4||compte('Récupération')!==2||compte('Intensification')!==4||compte('Affûtage')!==1) return _echec(ph.join());
+      if(!r.avertissements.some(a=>/avancés/.test(a)&&/squat seulement/.test(a))) return _echec('avertissement');
+      const b=r.plans[0].semaines;
+      if(b[2].seances[0].length!==4||b[2].seances[0][0].kg!==140||b[3].seances[0][0].kg!==150||b[4].seances[0][0].kg!==155) return _echec('base : '+[b[2],b[3],b[4]].map(s=>s.seances[0][0].kg).join());
+      return true;
+    });
+    ok('1960 — sans 1RM fiable : rien n’est généré, on propose de mesurer d’abord',()=>{
+      let r=genererGabarit('cinq_trois_un',{SQUAT:{max:0,fiable:false},DIPS:{max:80,fiable:true}},Date.now(),{exos:['SQUAT','DIPS']});
+      if(r.ok||!r.proposerTest1RM||r.manquants.join()!=='SQUAT'||!/rien n’est inventé/.test(r.raison)) return _echec(JSON.stringify(r));
+      r=genererGabarit('cinq_trois_un',{},Date.now(),{exos:['SQUAT']});
+      if(r.ok||!r.proposerTest1RM) return _echec('sans record');
+      if(genererGabarit('inconnu',{SQUAT:{max:100,fiable:true}},Date.now()).ok||genererGabarit('constructor',{SQUAT:{max:100,fiable:true}},Date.now()).ok) return _echec('gabarit inconnu');
+      return true;
+    });
+    ok('1960 — la séance du jour suit le plan ; la série « + » relève répétitions et e1RM',()=>{
+      const r=_g60('cinq_trois_un',100);
+      const p=Object.assign({},r.plans[0]);
+      const t2=p.debut+7*864e5+3600e3*10;
+      const u={sessions:[],gabaritsForce:{plans:{gabc123:p}}};
+      const c=consigneGabarit(u,'squat',t2);
+      if(!c||c.w!==1||c.series.map(x=>x.kg).join()!=='62.5,72.5,80') return _echec(JSON.stringify(c));
+      u.sessions.push({date:t2-3600e3,data:{SQUAT:{sets:[]}}});
+      if(consigneGabarit(u,'SQUAT',t2)!==null) return _echec('une 2e séance dans la semaine');
+      if(consigneGabarit(u,'SQUAT',p.debut+5*7*864e5)!==null) return _echec('après le cycle');
+      const sess={date:p.debut+2*864e5,data:{SQUAT:{sets:[{weight:57.5,reps:5,done:true},{weight:67.5,reps:5,done:true},{weight:77.5,reps:5,repsDone:9,done:true,amrap:true,amrapVise:5}]}}};
+      if(gabaritsApresSeance(u,sess)!==1) return _echec('rien relevé');
+      const a=p.amraps['0'];
+      if(a.reps!==9||a.kg!==77.5||a.vise!==5||a.e1!==Math.round(e1rm(77.5,9,0)*10)/10) return _echec(JSON.stringify(a));
+      if(prochaineBase(p).base!==Math.round(90*1.03*10)/10) return _echec('base suivante : '+prochaineBase(p).base);
       return true;
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════

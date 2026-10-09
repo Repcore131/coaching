@@ -1017,6 +1017,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'defisStreet',
   // L'heure de séance par jour de la semaine et le choix des rappels (build 1959).
   'frise',
+  // Les plans des gabarits de force (build 1960) : une prescription.
+  'gabaritsForce',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'

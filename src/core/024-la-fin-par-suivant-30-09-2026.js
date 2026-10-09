@@ -256,6 +256,8 @@ function finishWorkout(incomplete=false,opts){
   // LOT N7 : le jour devient un jour d'entraînement pour l'assiette, et le
   // reste une fois clos (nutrition.joursSeance).
   try{ marquerJourSeance(currentUser,sess); }catch(e){}
+  // Les séries « + » des gabarits de force (build 1960) : relevées dans le plan.
+  try{ gabaritsApresSeance(currentUser,sess); }catch(e){}
   _viderCachePlateau();
   _viderCacheSignaux();
   _viderCacheVolume();

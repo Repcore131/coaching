@@ -91,6 +91,59 @@
           },
           "$autre": { ".validate": false }
         },
+        // LES GABARITS DE FORCE (build 1960) : 6 plans au plus, chacun genere
+        // (genererGabarit) et borne : 13 semaines, 4 seances, 16 series.
+        "gabaritsForce": {
+          "plans": {
+            "$id": {
+              ".validate": "$id.matches(/^g[a-z0-9]{6,20}$/) && newData.hasChildren(['cle', 'exo', 'base', 'debut', 'semaines'])",
+              "cle":   { ".validate": "newData.isString() && newData.val().matches(/^(cinq_trois_un|sheiko_bloc|smolov|neuf_semaines_sbd|top_set_backoff)$/)" },
+              "exo":   { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+              "max":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 600" },
+              "base":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+              "cycle": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+              "debut": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "semaines": {
+                "$w": {
+                  ".validate": "$w.matches(/^([0-9]|1[0-2])$/)",
+                  "n":     { ".validate": "newData.isNumber()" },
+                  "debut": { ".validate": "newData.isNumber()" },
+                  "phase": { ".validate": "newData.isString() && newData.val().length <= 30" },
+                  "seances": {
+                    "$s": {
+                      ".validate": "$s.matches(/^[0-3]$/)",
+                      "$x": {
+                        ".validate": "$x.matches(/^([0-9]|1[0-5])$/) && newData.hasChildren(['reps', 'kg'])",
+                        "reps":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 30" },
+                        "pct":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 120" },
+                        "kg":     { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+                        "amrap":  { ".validate": "newData.isBoolean()" },
+                        "test":   { ".validate": "newData.isBoolean()" },
+                        "manuel": { ".validate": "newData.isBoolean()" },
+                        "$autre": { ".validate": false }
+                      }
+                    }
+                  },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "amraps": {
+                "$w": {
+                  ".validate": "$w.matches(/^([0-9]|1[0-2])$/) && newData.hasChildren(['kg', 'reps'])",
+                  "w":    { ".validate": "newData.isNumber()" },
+                  "kg":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 700" },
+                  "reps": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100" },
+                  "vise": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 30" },
+                  "e1":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+                  "at":   { ".validate": "newData.isNumber()" },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
         // LA FRISE AUTOUR DE LA SEANCE (build 1959) : l heure de seance par
         // jour de la semaine (0 = lundi) et les rappels de l app.
         "frise": {

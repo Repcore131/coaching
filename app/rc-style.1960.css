@@ -14096,3 +14096,23 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .fr-pied{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .fr-notif{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text);text-transform:none;letter-spacing:normal;font-weight:600}
 .fr-notif input{width:auto;margin:2px 0 0}
+/* LES GABARITS DE FORCE (build 1960). */
+.gab-feuille{max-height:92vh;overflow:auto}
+.gab-lab{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin:12px 0 6px}
+.gab-exos{display:grid;gap:6px}
+.gab-ex{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);color:var(--text);text-transform:none;letter-spacing:normal;font-weight:600}
+.gab-ex input[type=checkbox]{width:auto;margin:0}
+.gab-ex span{flex:1;min-width:0}
+.gab-max{width:84px;flex:none}
+.gab-apercu{margin-top:10px}
+.gab-err{font-size:var(--fs-sm);color:var(--orange)}
+.gab-av{font-size:var(--fs-xs);color:var(--orange);margin:0 0 6px;line-height:1.5}
+.gab-plan{border-top:1px solid var(--border);padding-top:6px;margin-top:8px}
+.gab-sem{font-size:var(--fs-xs);color:var(--text);margin:6px 0}
+.gab-sem b{display:block;color:var(--text-strong);margin-bottom:2px}
+.gab-se{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0}
+.gab-x{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.gab-kg{width:64px;padding:4px 6px}
+.gab-ligne{display:flex;flex-direction:column;gap:2px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin:0 0 8px}
+.gab-ligne b{font-size:var(--fs-sm);color:var(--text-strong)}
+.gab-ligne span{font-size:var(--fs-xs);color:var(--sub)}
