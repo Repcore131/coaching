@@ -28,6 +28,8 @@ const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN = n => nf0.format(Math.round(n || 0));
 const fmtE = n => (Number.isInteger(Math.round((n || 0) * 100) / 100) ? nf0.format(n || 0) : nf2.format(n || 0)) + ' €';
+// Montant au centime (historique des acomptes : « 50,00 € »).
+const fmtEc = n => nf2.format(Math.round((n || 0) * 100) / 100) + ' €';
 const fmtV = (v, unit) => unit === 'eur' ? fmtE(v) : fmtN(v);
 // Valeur et unité d'un KPI : « 30 contrats », « 1 avis », « 1 240 € ». Unité des KPI créés à la main : k.nom = [singulier, pluriel].
 const KPI_NOMS = { avis: ['avis', 'avis'], contrats: ['contrat', 'contrats'], b2b: ['contrat B2B', 'contrats B2B'], invites: ['invité', 'invités'], sauvetage: ['sauvetage', 'sauvetages'], prospects: ['prospect', 'prospects'] };

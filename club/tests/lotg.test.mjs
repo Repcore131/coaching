@@ -45,7 +45,7 @@ test('point 4 : 120 €, acompte de 50 € : reste 70 €, badge « Acompte reç
   const run = appli({ clients: { c1: client({ balance: 120 }), c2: client({ id: 'c2', num: '5002', balance: 120 }) } });
   run(`db.batch(markPaid(S.clients.c1, 50, { author: 'u' }))`);
   const c = J(run, `S.clients.c1`); assert.equal(c.balance, 70); assert.equal(c.dunning.status, 'partiel'); assert.equal(c.dunning.paid, 50);
-  assert.equal(c.dunning.history.slice(-1)[0].label, run(`'Acompte ' + fmtE(50) + ', reste ' + fmtE(70)`)); assert.match(c.dunning.history.slice(-1)[0].label, /^Acompte 50,00.€, reste 70,00.€$/);
+  assert.equal(c.dunning.history.slice(-1)[0].label, run(`'Acompte ' + fmtEc(50) + ', reste ' + fmtEc(70)`)); assert.match(c.dunning.history.slice(-1)[0].label, /^Acompte 50,00.€, reste 70,00.€$/);
   assert.equal(run(`DUN_STATUS.partiel.label`), 'Acompte reçu'); assert.equal(run(`dunStatus(S.clients.c1)`), 'partiel');
   run(`UI.dunFilter = 'todo'`); assert.match(run(`dunTable()`), /data-badge="acompte">Acompte reçu</);
   run(`db.batch(markPaid(S.clients.c2, 120, { author: 'u' }))`); assert.equal(run(`S.clients.c2.dunning.status`), 'recupere'); assert.equal(run(`S.clients.c2.balance`), 0);

@@ -466,7 +466,7 @@ function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = ''
   // Paiement partiel : la dette restante reste ouverte (« Acompte reçu »), le cumul encaissé est gardé.
   const reste = arr2(Math.max(0, solde - montant)); const d = dunOf(c); const cumul = arr2((Number(d.paid) || 0) + Math.min(montant, solde));
   const ops = reste > 0
-    ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtE(montant)}, reste ${fmtE(reste)}`)]
+    ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtEc(montant)}, reste ${fmtEc(reste)}`)]
     : [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
   if (canal === 'equipe') ops.push(entree());
   return ops;
