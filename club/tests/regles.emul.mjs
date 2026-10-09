@@ -63,5 +63,8 @@ await check('membre ne lit pas le suivi produit', await req('GET', 'pulse_produc
 await check('manager n’écrit pas le suivi produit', await req('PUT', 'pulse_product/p01/status', 'derriere', who('mgr')), false);
 await check('membre change le statut d’une demande reçue', await req('PUT', 'pulse/resRequests/niort/t1/status', 'contacte', who('mem')), true);
 await check('anonyme ne lit pas les demandes reçues', await req('GET', 'pulse/resRequests', undefined), false);
+await check('manager enregistre une fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-09', { date: '2026-10-09', by: 'mgr', forces: ['a', 'b'], axes: ['c', 'd'], engagement: { texte: 'x', date: '2026-10-16' } }, who('mgr')), true);
+await check('membre n’écrit pas sa fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-10', { date: '2026-10-10' }, who('mem')), false);
+await check('membre coche ses actions de coaching', await req('PUT', 'pulse/coaching/mem/actions/a1/done', true, who('mem')), true);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

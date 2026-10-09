@@ -106,7 +106,7 @@ export const REGLE = `${DEBUT}
       "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
       "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },
       "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } } } },
-      "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
+      "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} }, "$k": { ".write": ${j(MGR)} } } },
       "$autre": { ".write": ${j(MGR)} }
     },
     "pulse_product": {

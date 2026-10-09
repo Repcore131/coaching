@@ -124,6 +124,7 @@ const NAV = [
   ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
   ['team', 'Pilotage équipe', 'users', true],
+  ['equipe', 'Matrice équipe', 'chart', true],
   ['b2b', 'Entreprise', 'briefcase'],
   ['sep'],
   ['resiliations', 'Résiliations', 'door', true],
@@ -150,7 +151,7 @@ function shell(route, inner) {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr === true && !isManager()) return '';
     if (mgr === 'm' && isManager()) return '';
-    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? unseenFeed() : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
+    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenFeed()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
     const late = id === 'resiliations' ? rrqCounts(CLUB.id).late : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}${late ? `<span class="pill pill-late" title="dont ${late} sans réponse depuis 48 h" aria-label="dont ${late} sans réponse depuis 48 h">${late}</span>` : ''}</a>`;
   }).join('');

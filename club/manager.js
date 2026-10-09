@@ -246,5 +246,6 @@ function myPlanCard() {
     ${acts.map(a => `<label class="row act-row ${a.due < today() ? 'late' : ''}"><input type="checkbox" data-change="actDone" data-u="${ME.id}" data-id="${a.id}" ${a.owner === 'membre' ? '' : 'disabled'}><span class="spacer">${esc(a.label)}</span><span class="small muted">${dm(a.due)}</span></label>`).join('')}</div>`;
 }
 // Dernière connexion (signal « absent de l'appli »), au plus une écriture par heure.
-function touchSeen() { try { if (typeof ME !== 'undefined' && ME && ME.id && S.prefs && Date.now() - Number(pref('lastSeen', 0)) > 3600e3) setPref('lastSeen', Date.now()); } catch (_) { /* hors connexion */ } }
+// Jours de connexion (activité 7 jours de la page Équipe) : une clé par jour, gardée 60 jours.
+function touchSeen() { try { if (typeof ME !== 'undefined' && ME && ME.id && S.prefs) { if (Date.now() - Number(pref('lastSeen', 0)) > 3600e3) setPref('lastSeen', Date.now()); if (!(pref('seenDays', {}) || {})[today()]) { const old = Object.keys(pref('seenDays', {}) || {}).filter(d => d < addDays(today(), -60)); db.batch([[['prefs', ME.id, 'seenDays', today()], true], ...old.map(d => [['prefs', ME.id, 'seenDays', d], null])]); } } } catch (_) { /* hors connexion */ } }
 addEventListener('hashchange', touchSeen); addEventListener('focus', touchSeen); setTimeout(touchSeen, 4000);
