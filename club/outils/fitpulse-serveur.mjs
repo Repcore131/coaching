@@ -103,8 +103,11 @@ export const REGLE = `${DEBUT}
       "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },
       "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } } } },
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
-      "product": { ".write": ${j(CREATEUR)} },
       "$autre": { ".write": ${j(MGR)} }
+    },
+    "pulse_product": {
+      ".read": ${j(CREATEUR)},
+      ".write": ${j(CREATEUR)}
     },
     "pulse_boot": {
       ".read": ${j(MANAGER)},

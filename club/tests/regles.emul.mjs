@@ -56,5 +56,10 @@ await check('clé secrète illisible (créateur)', await req('GET', 'fitpulse_se
 await check('membre ne dépose pas d’invitation', await req('PUT', 'fitpulse_mail/x1', { email: 'a@b.fr', first: 'A', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mem')), false);
 await check('manager dépose une invitation', await req('PUT', 'fitpulse_mail/x2', { email: 'a@b.fr', first: 'A', last: 'MARTIN', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mgr')), true);
 await check('le créateur peut tout écrire sous /pulse', await req('PUT', 'pulse/meta/x', 1, who('crea')), true);
+await check('créateur écrit le suivi produit', await req('PUT', 'pulse_product/p01', { id: 'p01', label: 'Imports', status: 'devant' }, who('crea')), true);
+await check('créateur lit le suivi produit', await req('GET', 'pulse_product', undefined, who('crea')), true);
+await check('manager ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mgr')), false);
+await check('membre ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mem')), false);
+await check('manager n’écrit pas le suivi produit', await req('PUT', 'pulse_product/p01/status', 'derriere', who('mgr')), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

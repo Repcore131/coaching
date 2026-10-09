@@ -320,13 +320,25 @@ const firebaseBackend = {
       this.root.on('value', snap => {
         const before = S;
         S = snap.val() ? normalizeState(snap.val()) : null;
+        sideApply(S);
         REV++;
         snapSave(snap.val());
         if (first) { first = false; ok(); setTimeout(outboxReplay, 1000); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
       }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
     }).finally(() => clearTimeout(slow));
     if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
+    this.listenSide();
   },
+  // Collections rangées hors de /pulse (lisibles par les seuls créateurs, voir SIDE_PATHS).
+  listenSide() {
+    this.sideRefs.forEach(r => r.off()); this.sideRefs = [];
+    const me = S && S.users[this.userId]; if (!me || me.role !== 'createur') return;
+    for (const [k, root] of Object.entries(SIDE_PATHS)) {
+      const ref = this.fb.database().ref(root); this.sideRefs.push(ref);
+      ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; listeners.forEach(f => f()); } }, () => null);
+    }
+  },
+  sideRefs: [],
   // Reserve le compte technique des la creation du code (mot de passe = code) :
   // connaitre la cle ne suffit donc jamais, il faut le code. Passe par l'API
   // REST : la session du manager n'est pas touchee.
@@ -338,15 +350,21 @@ const firebaseBackend = {
   // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
   setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
   queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
-  async signOut() { if (this.root) this.root.off(); this.root = null; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
-  write(path, value) { const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
-  replaceAll() { this.fb.database().ref('pulse').set(S); },
+  async signOut() { if (this.root) this.root.off(); this.root = null; this.sideRefs.forEach(r => r.off()); this.sideRefs = []; for (const k of Object.keys(SIDE_CACHE)) delete SIDE_CACHE[k]; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
+  write(path, value) { if (SIDE_PATHS[path[0]]) { this.sideWrite([[path, value]]); return; } const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
+  sideWrite(ops) { const by = {}; ops.forEach(([p, v]) => { (by[p[0]] = by[p[0]] || []).push([p.slice(1), v]); }); for (const [k, list] of Object.entries(by)) { const whole = list.find(([p]) => !p.length); const ref = this.fb.database().ref(SIDE_PATHS[k]); (whole ? ref.set(fbVal(whole[1])) : ref.update(fbClean(list))).catch(e => writeFail(e)); } },
+  replaceAll() { const st = { ...S }; Object.keys(SIDE_PATHS).forEach(k => { delete st[k]; }); this.fb.database().ref('pulse').set(st); },
   wipe() { this.fb.database().ref('pulse').set(null); },
 };
 localBackend.setBoot = () => {};
 localBackend.precreate = async () => {};
 
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
+// En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
+// leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
+const SIDE_PATHS = { product: 'pulse_product' };
+const SIDE_CACHE = {};
+function sideApply(st) { if (!st) return; for (const k of Object.keys(SIDE_PATHS)) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
 // File d'écritures gardée sur l'appareil tant que la base n'a pas confirmé : une saisie faite
 // hors ligne survit à un rechargement et repart au retour du réseau.
 // Copie locale de la base (IndexedDB) pour démarrer sans réseau.
@@ -408,6 +426,7 @@ const db = {
     REV++;
     if (backend.mode === 'local') backend.write();
     else {
+      const side = ops.filter(([p]) => SIDE_PATHS[p[0]]); if (side.length) { backend.sideWrite(side); ops = ops.filter(([p]) => !SIDE_PATHS[p[0]]); }
       // Lots de 500 chemins au plus, envoyés l'un après l'autre (un import de 50 000 lignes passe).
       const all = fbClean(ops); const keys = Object.keys(all);
       const chunks = []; for (let i = 0; i < keys.length; i += 500) { const up = {}; keys.slice(i, i + 500).forEach(k => { up[k] = all[k]; }); chunks.push(up); }
