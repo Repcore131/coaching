@@ -41,6 +41,7 @@ function monthFigures(clubId, mk) {
   const resiliees = res.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).length;
   const sauveesL = res.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk); const sauvees = sauveesL.length;
   const sauveEuros = sauveesL.reduce((s, r) => s + resValeur(r), 0);
+  const RK = typeof resIndicateurs === 'function' ? resIndicateurs(clubId, mk, res) : {};
   const base = deepGet(S, ['base', clubId, mk]) || {};
   const evo = deepGet(S, ['rsm', 'controls', clubId, 'evo', mk]) || {};
   const recBy = recoveredParts(clubId, { from, to });
@@ -52,6 +53,8 @@ function monthFigures(clubId, mk) {
     entrantsSrc: evo.gained != null ? 'Resamania (Évolution clients)' : 'contrats signés',
     sorties: evo.lost != null ? Number(evo.lost) : null,
     resiliees, demandes, sauvees, sauveEuros,
+    // Délai de première réponse (heures, médiane), part répondue sous 24 h, demandes encore sans réponse, euros sauvés.
+    delaiMedianH: RK.delaiMedianMs == null ? null : Math.round(RK.delaiMedianMs / 360000) / 10, repondues24: RK.repondues24 ?? null, sansReponse: RK.sansReponse ?? 0, eurosSauves: RK.eurosSauves ?? Math.round(sauveEuros),
     tauxResil: actifs ? resiliees / actifs : null,
     tauxSauvetage: resiliees + sauvees ? sauvees / (resiliees + sauvees) : null,
     actifs,
@@ -148,6 +151,8 @@ PAGES.recap = {
           ${tile('Sans date de réception', String(RR.sansDate.length), '', 'comptées à part, exclues du calcul du préavis')}
           ${tile('Durée de vie médiane', RR.dureeMediane == null ? 'n.d.' : plur(RR.dureeMediane, 'mois', 'mois'), '', `de l’inscription à la résiliation (${plur(RR.durees.length, 'adhérent', 'adhérents')} parti${RR.durees.length > 1 ? 's' : ''} ce mois)`)}
           ${tile('Taux de sauvetage', fmtP(F.tauxSauvetage), '', `${plur(F.sauvees, 'sauvée', 'sauvées')} sur ${F.sauvees + F.resiliees} issues`)}
+          ${tile('Délai de réponse aux résiliations', F.delaiMedianH == null ? 'n.d.' : String(F.delaiMedianH).replace('.', ',') + ' h', '', `médiane de la 1re réponse · ${fmtP(F.repondues24)} sous 24 h`).replace('class="', 'data-tuile="delai-reponse" class="')}
+          ${tile('Euros sauvés', fmtE(F.eurosSauves), '', `${plur(F.sauvees, 'dossier sauvé', 'dossiers sauvés')}, valeur en jeu`).replace('class="', 'data-tuile="euros-sauves" class="')}
         </div>${RR.nonRespecte.length ? `<details style="margin-top:8px"><summary class="small">Voir les ${RR.nonRespecte.length} dossiers</summary><div class="small">${RR.nonRespecte.map(r => `${esc(r.client || 'Adhérent')} : reçue le ${esc(dmy(r.date))}, effet le ${esc(dmy(r.effective))} (${r.preavis} j)`).join('<br>')}</div></details>` : ''}</div>`; })()}
 
       <div class="g12">

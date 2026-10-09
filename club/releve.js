@@ -16,6 +16,8 @@ function reglesDepuisTexte(t) {
   const ok = L.filter(r => r && r.w && (() => { try { new RegExp(r.re); return true; } catch (e) { return false; } })());
   return { keywords: ok.filter(r => r.w > 0), negatives: ok.filter(r => r.w < 0), rejetees: L.length - ok.length };
 }
+// Résumé du matin : de 8 h 00 à 10 h 00, par quart d'heure.
+const RELEVE_HEURES = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00'];
 const lignes = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 30);
 
 function releveCard() {
@@ -25,7 +27,8 @@ function releveCard() {
   return `<div class="card" id="releve"><div class="card-head"><h3>Relève des résiliations</h3><span class="spacer"></span><button class="btn sm" data-act="releveGuide">Guide d’installation</button></div>
     <p class="muted small" style="margin-top:-4px">La boîte accueil est relevée chaque heure ; les demandes trouvées arrivent dans Résiliations. ${ms && ms.at ? `Dernière relève : ${dmy(isoOf(new Date(ms.at)))} à ${timeOf(ms.at)}.` : 'Aucune relève reçue pour l’instant.'}</p>
     <form id="relf" class="form-grid">
-      <label class="field"><span>Délai de réponse (heures)</span><input class="input" type="number" min="1" max="168" name="slaHours" value="${R.slaHours}"></label>
+      <label class="field"><span>Délai de réponse</span><select class="input" name="slaHours">${[12, 24, 48].map(h => `<option value="${h}" ${Number(R.slaHours) === h ? 'selected' : ''}>${h} h</option>`).join('')}</select><small class="muted">Le compte à rebours des cartes et l’escalade partent de ce délai.</small></label>
+      <label class="field"><span>Heure du résumé du matin</span><select class="input" name="resumeHeure">${RELEVE_HEURES.map(h => `<option value="${h}" ${(R.resumeHeure || '08:45') === h ? 'selected' : ''}>${h.replace(':', ' h ')}</option>`).join('')}</select></label>
       <label class="field"><span>Seuil</span><input class="input" type="number" min="1" max="20" name="minScore" value="${R.minScore}"><small class="muted">Score à partir duquel un e-mail devient une demande.</small></label>
       <label class="field"><span>Messagerie de l’accueil</span><select class="input" name="mailProvider"><option value="gmail" ${club.mailProvider !== 'm365' ? 'selected' : ''}>Gmail (script Apps Script)</option><option value="m365" ${club.mailProvider === 'm365' ? 'selected' : ''}>Microsoft 365 (Outlook)</option></select></label>
       <label class="field"><span>Boîte Microsoft 365</span><input class="input" type="email" name="m365Mailbox" value="${esc(club.m365Mailbox || '')}" placeholder="accueil@votreclub.fr"></label>
@@ -34,7 +37,8 @@ function releveCard() {
       <label class="field"><span>Expéditeurs ignorés</span>${ta('ignoreSenders', (R.ignoreSenders || []).join('\n'))}</label>
       <label class="field full"><span>Adresses de la boîte accueil</span>${ta('ownAddresses', (R.ownAddresses || []).join('\n'), 2)}<small class="muted">Les messages envoyés depuis ces adresses comptent comme des réponses.</small></label>
     </form>
-    <div class="row wrap" style="margin-top:10px;gap:8px"><button class="btn primary sm" data-act="releveSave">Enregistrer les règles</button><button class="btn sm" data-act="releveCopie">${ico('copy')} Copier la configuration</button><button class="btn sm" data-act="releveSecret">Générer le secret</button></div>
+    <div class="row wrap" style="margin-top:10px;gap:8px"><button class="btn primary sm" data-act="releveSave">Enregistrer les règles</button><button class="btn sm" data-act="releveCopie">${ico('copy')} Copier la configuration</button>${club.mailSecretAt ? `<button class="btn sm" data-act="releveSecret" data-rotate="1">Changer le secret</button>` : '<button class="btn sm" data-act="releveSecret">Générer le secret</button>'}</div>
+    ${club.mailSecretAt ? `<p class="muted small">Secret actif depuis le ${dmy(isoOf(new Date(club.mailSecretAt)))}${club.mailSecretPrevUntil && club.mailSecretPrevUntil > Date.now() ? `. L’ancien secret reste accepté jusqu’au ${dmy(isoOf(new Date(club.mailSecretPrevUntil)))} à ${timeOf(club.mailSecretPrevUntil).replace(':', ' h ')}` : ''}.</p>` : ''}
     <h3 style="margin-top:18px">Banc d’essai</h3>
     <label class="field"><span>Collez un e-mail anonymisé (expéditeur, objet, corps)</span><textarea class="input" rows="5" id="releve-essai" placeholder="De : Prénom Nom &lt;adresse@exemple.fr&gt;&#10;Objet : Résiliation&#10;Bonjour, je souhaite mettre fin à mon abonnement…"></textarea></label>
     <button class="btn sm" data-act="releveTest" style="margin-top:8px">Tester</button><div id="releve-resultat" aria-live="polite"></div></div>`;
@@ -42,7 +46,7 @@ function releveCard() {
 function releveLire() {
   if (!$('#relf')) { const R = releveRegles(); return { rules: R, rejetees: 0, provider: (S.clubs[CLUB.id] || {}).mailProvider || 'gmail', boite: (S.clubs[CLUB.id] || {}).m365Mailbox || '' }; }
   const f = formData($('#relf')); const r = reglesDepuisTexte(f.regles);
-  return { rules: { slaHours: Math.max(1, Math.min(168, Number(f.slaHours) || 24)), minScore: Math.max(1, Math.min(20, Number(f.minScore) || 3)), keywords: r.keywords, negatives: r.negatives,
+  return { rules: { slaHours: [12, 24, 48].includes(Number(f.slaHours)) ? Number(f.slaHours) : 24, resumeHeure: RELEVE_HEURES.includes(f.resumeHeure) ? f.resumeHeure : '08:45', minScore: Math.max(1, Math.min(20, Number(f.minScore) || 3)), keywords: r.keywords, negatives: r.negatives,
     notifSenders: lignes(f.notifSenders), ignoreSenders: lignes(f.ignoreSenders), ownAddresses: lignes(f.ownAddresses).map(x => x.toLowerCase()) }, rejetees: r.rejetees, provider: f.mailProvider === 'm365' ? 'm365' : 'gmail', boite: (f.m365Mailbox || '').trim().toLowerCase() };
 }
 ACTIONS.releveSave = () => {
@@ -62,13 +66,14 @@ ACTIONS.releveTest = () => {
     <p class="muted small">Rien n’est enregistré.</p>`;
 };
 // Secret de signature : 32 octets aléatoires, affichés une seule fois.
-ACTIONS.releveSecret = async () => {
-  if (!isManager()) return;
-  if (!(await confirmDlg('Générer un nouveau secret ? L’ancien cessera de fonctionner : il faudra le remplacer dans le script de relève.', { ok: 'Générer le secret' }))) return;
+// Changer le secret : l'ancien reste accepté 24 h, le temps de remplacer FP_SECRET dans le script.
+ACTIONS.releveSecret = async el => {
+  if (!isManager()) return; const rotation = !!(el && el.dataset && el.dataset.rotate);
+  if (!(await confirmDlg(rotation ? 'Changer le secret ? L’ancien reste accepté 24 h, le temps de le remplacer dans le script de relève.' : 'Générer un nouveau secret ? Il faudra le coller dans le script de relève.', { ok: rotation ? 'Changer le secret' : 'Générer le secret' }))) return;
   const b = crypto.getRandomValues(new Uint8Array(32)); const secret = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
   let etat;
   if (backend.mode === 'firebase' && backend.fb && typeof appelFonction === 'function') {
-    try { await appelFonction(backend, 'setMailSecret', { clubId: CLUB.id, secret }); etat = '<p class="ok small">Secret enregistré côté serveur (Secret Manager). Fit Pulse n’en garde aucune copie.</p>'; }
+    try { await appelFonction(backend, 'setMailSecret', { clubId: CLUB.id, secret, rotation }); etat = '<p class="ok small">Secret enregistré côté serveur (Secret Manager). Fit Pulse n’en garde aucune copie.</p>'; }
     catch (e) { etat = `<p class="bad small">Enregistrement impossible : ${esc(e.message)}. Ce secret n’est pas actif.</p>`; }
   } else etat = '<p class="warn small">Mode local ou démonstration : le secret n’est envoyé à aucun serveur.</p>';
   openModal({ title: 'Secret de la relève', body: `<p>Copiez ce secret maintenant dans la propriété <b>FP_SECRET</b> du script (Paramètres du projet, Propriétés du script). Il ne sera plus jamais affiché.</p>

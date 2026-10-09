@@ -5,8 +5,7 @@
 // (MAIL_ENGINE), même format de fil, puis la logique interne d'ingestion (aucun appel HTTP).
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
-import { createRequire } from 'node:module';
-import { existsSync } from 'node:fs';
+import { moteurMail } from './appli.js';
 import { ingerer, validerCorps, type Db, type Fil } from './ingestCore.js';
 import { adminDb } from './services.js';
 
@@ -17,11 +16,7 @@ const GRAPH = 'https://graph.microsoft.com/v1.0';
 type Fetch = typeof fetch;
 
 // Le moteur de détection de l'appli (moteur-mail.js), copié dans lib/app au déploiement.
-export function moteur(): any {
-  const req = createRequire(import.meta.url);
-  for (const p of ['../app/moteur-mail.js', '../../moteur-mail.js', '../../../moteur-mail.js']) { const u = new URL(p, import.meta.url); if (existsSync(u)) return req(u.pathname); }
-  throw new Error('moteur-mail.js introuvable');
-}
+export const moteur = (): any => moteurMail();
 export async function jetonGraph(f: Fetch, tenant: string, id: string, secret: string): Promise<string> {
   const r = await f(`https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: id, client_secret: secret, grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default' }) });

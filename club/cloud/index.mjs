@@ -75,6 +75,7 @@ export const totpInscrire = onCall({ region: 'europe-west1' }, appel(async c => 
 export const totpValider = onCall({ region: 'europe-west1' }, appel(async (c, d) => (await import('./lib/fitpulse-totp.mjs')).valider({ ...c, code: d.code,
   fixer: async claims => { const u = await c.auth.getUser(c.authUid); await c.auth.setCustomUserClaims(c.authUid, { ...(u.customClaims || {}), ...claims }); } })));
 
-// 5. Relève des résiliations (TypeScript, compilé dans lib/ts par « npm run build ») :
+// 5. Résiliations (TypeScript, compilé dans lib/ts par « npm run build ») : relève signée, secret,
+//    Microsoft 365, escalade (15 min), résumé du matin, clôture de nuit (2 h).
 //    ingestResiliations (HTTPS, signée), setMailSecret (appel de l'appli), graphPoll (Microsoft 365).
-export { ingestResiliations, setMailSecret, graphPoll } from './lib/ts/index.js';
+export { ingestResiliations, setMailSecret, graphPoll, resEscalate, resMorning, resNightly } from './lib/ts/index.js';

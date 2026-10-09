@@ -4,9 +4,9 @@
 // Secret Manager (FP_MAIL_SECRET_<CLUB>). Réponse 401 sans détail. Écritures par le compte de service.
 import { onRequest } from 'firebase-functions/v2/https';
 import { CLUB_RE, TAILLE_MAX, ingerer, nomSecret, signatureValide, validerCorps, type Db } from './ingestCore.js';
-import { adminDb, lireSecret } from './services.js';
+import { adminDb, secretsValides } from './services.js';
 
-export interface Dependances { secret(clubId: string): Promise<string | null>; db: Db; maintenant?: () => number; journal?: (o: Record<string, unknown>) => void }
+export interface Dependances { secret(clubId: string): Promise<string | string[] | null>; db: Db; maintenant?: () => number; journal?: (o: Record<string, unknown>) => void }
 type Req = { method: string; headers: Record<string, string | string[] | undefined>; rawBody?: Buffer; body?: unknown };
 type Res = { status(c: number): Res; json(o: unknown): void; send(s: string): void; set?(k: string, v: string): Res };
 
@@ -21,7 +21,7 @@ export function fabriquerIngestion(d: Dependances) {
     const refus = () => res.status(401).send('');
     if (!CLUB_RE.test(clubId)) return refus();
     const secret = await d.secret(clubId).catch(() => null);
-    if (!secret || !signatureValide(secret, temps, sig, brut, maintenant)) return refus();
+    if (!secret || (Array.isArray(secret) && !secret.length) || !signatureValide(secret, temps, sig, brut, maintenant)) return refus();
     let corps: unknown; try { corps = JSON.parse(brut.toString('utf8')); } catch { res.status(400).send(''); return; }
     const v = validerCorps(corps); if (!v || v.corps.clubId !== clubId) { res.status(400).send(''); return; }
     const bilan = await ingerer(d.db, v.corps, maintenant, v.ignores);
@@ -30,4 +30,4 @@ export function fabriquerIngestion(d: Dependances) {
   };
 }
 export const ingestResiliations = onRequest({ region: 'europe-west1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 60 },
-  fabriquerIngestion({ secret: clubId => lireSecret(nomSecret(clubId)), db: adminDb() }) as any);
+  fabriquerIngestion({ secret: clubId => secretsValides(adminDb(), nomSecret(clubId), clubId), db: adminDb() }) as any);

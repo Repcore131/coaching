@@ -10,17 +10,30 @@ const MAIL_ENGINE = (() => {
   // Règles par défaut d'un club (S.clubs[id].mailRules), modifiables dans Réglages > Relève des résiliations.
   const REGLES_DEFAUT = {
     slaHours: 24, minScore: 3,
-    keywords: [{ re: 'resili', w: 3 }, { re: 'mettre fin|annuler mon abonnement|arreter mon abonnement|ne plus etre preleve', w: 3 }, { re: 'preavis|fin de contrat|lettre recommandee', w: 1 }, { re: 'demenag|mutation', w: 1 }, { re: 'suspen|mettre en pause', w: 1 }],
-    negatives: [{ re: 'newsletter|se desabonner|unsubscribe|offre speciale', w: -3 }, { re: '\\bcv\\b|candidature|stage', w: -2 }],
+    keywords: [
+      { re: 'resili', w: 3, tag: 'mot resiliation' },
+      { re: 'mettre fin|annuler mon abonnement|arreter mon abonnement|stopper mon abonnement|ne plus etre preleve|arret des prelevements|cancel my (membership|subscription)|terminate my (membership|contract)', w: 3, tag: 'formule de fin' },
+      { re: 'preavis|date de fin|fin de (mon )?contrat|lettre recommandee', w: 1, tag: 'vocabulaire contrat' },
+      { re: 'demenag|mutation|quitte la region', w: 1, tag: 'demenagement' },
+      { re: 'suspen(dre|sion)|mettre en pause|geler mon|pause my membership|freeze my membership', w: 3, tag: 'suspension' },
+    ],
+    negatives: [
+      { re: 'newsletter|se desabonner|unsubscribe|offre speciale', w: -3, tag: 'publicite' },
+      { re: '\\bcv\\b|candidature|stage', w: -2, tag: 'recrutement' },
+      { re: 'facture|devis|bon de commande|montant ht', w: -3, tag: 'fournisseur' },
+      { re: 'alerte|erreur|echec|incident technique|monitoring|webhook|serveur', w: -4, tag: 'technique' },
+      { re: 'reunion|ordre du jour|point equipe|chiffres du mois|taux de resiliation', w: -4, tag: 'interne' },
+      { re: 'assurance|assureur|sinistre|multirisque|courtier', w: -4, tag: 'assurance' },
+    ],
     notifSenders: ['resamania', 'stadline', 'no-?reply@.*fitness'],
     ignoreSenders: ['github', 'paypal', 'google\\.com'],
     ownAddresses: [],
   };
   const MOTIFS = [
-    ['Déménagement', /demenag|mutation|quitte la region|nouvelle ville/],
-    ['Santé', /sante|blessure|operation|medecin|enceinte|grossesse|maladie/],
-    ['Prix', /prix|cher|budget|financ|moyens|augmentation/],
-    ['Manque de temps', /temps|horaire|travail|planning|disponib/],
+    ['Déménagement', /demenag|mutation|quitte la region|nouvelle ville|moving|relocat/],
+    ['Santé', /sante|blessure|operation|medecin|enceinte|grossesse|maladie|injur|health|pregnan/],
+    ['Prix', /prix|cher|budget|financ|moyens|augmentation|expensive|price/],
+    ['Manque de temps', /temps|horaire|travail|planning|disponib|no time|busy/],
     ['Concurrence', /autre salle|concurren|basic ?fit|keep ?cool|l'orange bleue|on air/],
     ['Insatisfaction', /insatisf|decu|sale|trop de monde|machines|accueil|propre/],
   ];
@@ -49,7 +62,7 @@ const MAIL_ENGINE = (() => {
     return { score, kind, type, signals };
   }
   function numero(txt) {
-    const m = txt.match(/(?:n(?:°|o|um(?:ero)?)\.?\s*(?:de\s+)?(?:client|adherent|membre|contrat|badge)|(?:client|adherent|membre|contrat)\s*(?:n°|no|numero|id))\s*[:#]?\s*([a-z0-9]{4,12})/);
+    const m = txt.match(/(?:n(?:°|o|um(?:ero)?)\.?\s*(?:de\s+)?(?:client|adherent|membre|contrat|badge)|(?:client|adherent|membre|contrat)\s*(?:n°|no|numero|id))\s*(?:est\s*)?[:#]?\s*([a-z0-9]{4,12})/);
     return m ? m[1].toUpperCase() : null;
   }
   function telephone(s) {
@@ -64,7 +77,7 @@ const MAIL_ENGINE = (() => {
   }
   function nom(first, brut, kind) {
     if (kind !== 'adherent') {
-      const n = brut.match(/\bnom\s*:\s*([^\n\r]{2,40})/i); const p = brut.match(/\bpr[ée]nom\s*:\s*([^\n\r]{2,40})/i);
+      const n = brut.match(/(?:^|[\n\r])[ \t]*nom\s*:\s*([^\n\r]{2,40})/i); const p = brut.match(/\bpr[ée]nom\s*:\s*([^\n\r]{2,40})/i);
       if (n) return ((p ? p[1].trim() + ' ' : '') + n[1].trim()).slice(0, 60);
     }
     const dn = (first.from && first.from.name) || '';
@@ -75,7 +88,12 @@ const MAIL_ENGINE = (() => {
     }
     return dn ? dn.trim().slice(0, 60) : null;
   }
-  function motif(txt) { for (const [l, re] of MOTIFS) if (re.test(txt)) return l; return null; }
+  // Motif : toujours une valeur de RES_REASONS (« Autre » à défaut). La santé n'est notée que « Santé », sans détail.
+  const RAISONS = ['Prix', 'Déménagement', 'Santé', 'Manque de temps', 'Insatisfaction', 'Concurrence', 'Autre'];
+  function motif(txt) { for (const [l, re] of MOTIFS) if (re.test(txt)) return l; return 'Autre'; }
+  const motifValide = m => (RAISONS.includes(m) ? m : 'Autre');
+  // Seuils : score >= minScore, demande ; score 2 (sous le seuil), fil transmis « à vérifier » (review).
+  const aVerifier = (score, minScore) => score >= 2 && score < minScore;
   // Date d'effet AAAA-MM-JJ (« à compter du 15 novembre », « date de fin : 30/11 »…), dans l'année si elle est à venir.
   function dateEffet(txt, maintenant = new Date()) {
     const re = /(?:a compter du|a partir du|au plus tard le|date (?:de fin|d'effet)\s*:?|fin (?:le|au)|resilier (?:au|le))\s*(\d{1,2})(?:er)?[/. ](\d{1,2}|[a-z]+)(?:[/. ](\d{2,4}))?/;
@@ -97,11 +115,11 @@ const MAIL_ENGINE = (() => {
     const first = entrants[0];
     if (first.pub || C.ignore.some(r => r.test(first.from.email))) return null;
     const brut = entrants.map(x => x.subject + '\n' + x.body).join('\n'); const txt = norm(brut);
-    const cls = classe(first.from.email, txt, C); if (cls.score < C.minScore) return null;
+    const cls = classe(first.from.email, txt, C); const review = aVerifier(cls.score, C.minScore); if (cls.score < C.minScore && !review) return null;
     const reponses = items.filter(x => x.out && x.at > first.at);
     const lastIn = entrants[entrants.length - 1]; const lastOut = reponses.length ? reponses[reponses.length - 1] : null;
     return {
-      threadId: id, link, subject: String(first.subject || '').slice(0, 140), kind: cls.kind, type: cls.type, score: cls.score, signals: cls.signals.slice(0, 10),
+      threadId: id, link, subject: String(first.subject || '').slice(0, 140), review, kind: cls.kind, type: cls.type, score: cls.score, signals: cls.signals.slice(0, 10),
       fromName: String(first.from.name || '').slice(0, 60), fromEmail: cls.kind === 'adherent' ? first.from.email : emailDansTexte(brut, me, C),
       name: nom(first, brut, cls.kind), clientNum: numero(txt), phone: telephone(brut), motif: motif(txt), effective: dateEffet(txt, maintenant),
       requestedAt: first.at, firstInAt: first.at, lastInAt: lastIn.at, inCount: entrants.length,
@@ -120,7 +138,8 @@ const MAIL_ENGINE = (() => {
     const first = { at: 0, out: false, from: { name: nomDe, email }, subject: objet, pub: /se d[ée]sabonner|unsubscribe/i.test(t) && /newsletter|lettre d.information/i.test(t), body: corps || t };
     const txt = norm(objet + '\n' + (corps || t)); const cls = classe(email, txt, C);
     const brut = objet + '\n' + (corps || t);
-    return { score: cls.score, retenu: cls.score >= C.minScore && !C.ignore.some(r => r.test(email)), seuil: C.minScore, signals: cls.signals, kind: cls.kind, type: cls.type,
+    const ign = C.ignore.some(r => r.test(email));
+    return { score: cls.score, retenu: cls.score >= C.minScore && !ign, review: aVerifier(cls.score, C.minScore) && !ign, seuil: C.minScore, signals: cls.signals, kind: cls.kind, type: cls.type,
       name: nom(first, brut, cls.kind), clientNum: numero(txt), phone: telephone(brut), motif: motif(txt), effective: dateEffet(txt) };
   }
   // Bloc à coller dans apps-script/Code.gs (remplace CFG et RULES) : la configuration du club en JavaScript.
@@ -129,7 +148,7 @@ const MAIL_ENGINE = (() => {
     const lignes = [...(R.keywords || []), ...(R.negatives || [])].map(r => `  { re: /${String(r.re).replace(/\//g, '\\/')}/, w: ${Number(r.w) || 0}, tag: ${JSON.stringify(etiquette(r))} }`);
     return `const CFG = {\n  ENDPOINT: ${JSON.stringify(endpoint)},\n  CLUB_ID: ${JSON.stringify(clubId)},\n  QUERIES: [\n    'label:fp-resiliations newer_than:45d',\n    '(résiliation OR résilier OR resiliation OR resilier OR "mettre fin" OR préavis) -from:me newer_than:3d -category:promotions -category:social'\n  ],\n  MAX_THREADS: 150,\n  MIN_SCORE: ${Number(R.minScore) || 3},\n  SEND_EXCERPT: false,\n  OWN_ADDRESSES: ${JSON.stringify((R.ownAddresses || []).map(x => String(x).toLowerCase()))},\n  NOTIF_SENDERS: [${(R.notifSenders || []).map(rx).join(', ')}],\n  IGNORE_SENDERS: [${(R.ignoreSenders || []).map(rx).join(', ')}]\n};\nconst RULES = [\n${lignes.join(',\n')}\n];\n`;
   }
-  return { REGLES_DEFAUT, MOTIFS, norm, compile, classe, numero, telephone, emailDansTexte, nom, motif, dateEffet, coupeCitation, analyseFil, testMailRules, blocScript };
+  return { REGLES_DEFAUT, MOTIFS, RAISONS, motifValide, aVerifier, norm, compile, classe, numero, telephone, emailDansTexte, nom, motif, dateEffet, coupeCitation, analyseFil, testMailRules, blocScript };
 })();
 const testMailRules = MAIL_ENGINE.testMailRules;
 // Côté serveur (Node) : le même moteur, par require().

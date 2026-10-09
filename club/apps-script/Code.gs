@@ -19,19 +19,22 @@ const CFG = {
 };
 const RULES = [
   { re: /resili/, w: 3, tag: 'mot resiliation' },
-  { re: /mettre fin|annuler mon abonnement|arreter mon abonnement|stopper mon abonnement|ne plus etre preleve|arret des prelevements/, w: 3, tag: 'formule de fin' },
+  { re: /mettre fin|annuler mon abonnement|arreter mon abonnement|stopper mon abonnement|ne plus etre preleve|arret des prelevements|cancel my (membership|subscription)|terminate my (membership|contract)/, w: 3, tag: 'formule de fin' },
   { re: /preavis|date de fin|fin de (mon )?contrat|lettre recommandee/, w: 1, tag: 'vocabulaire contrat' },
   { re: /demenag|mutation|quitte la region/, w: 1, tag: 'demenagement' },
-  { re: /suspen(dre|sion)|mettre en pause|geler mon/, w: 1, tag: 'suspension' },
-  { re: /abonnement|adherent|salle|fitness/, w: 1, tag: 'contexte salle' },
+  { re: /suspen(dre|sion)|mettre en pause|geler mon|pause my membership|freeze my membership/, w: 3, tag: 'suspension' },
   { re: /newsletter|se desabonner|unsubscribe|offre speciale/, w: -3, tag: 'publicite' },
-  { re: /\bcv\b|candidature|stage/, w: -2, tag: 'recrutement' }
+  { re: /\bcv\b|candidature|stage/, w: -2, tag: 'recrutement' },
+  { re: /facture|devis|bon de commande|montant ht/, w: -3, tag: 'fournisseur' },
+  { re: /alerte|erreur|echec|incident technique|monitoring|webhook|serveur/, w: -4, tag: 'technique' },
+  { re: /reunion|ordre du jour|point equipe|chiffres du mois|taux de resiliation/, w: -4, tag: 'interne' },
+  { re: /assurance|assureur|sinistre|multirisque|courtier/, w: -4, tag: 'assurance' }
 ];
 const MOTIFS = [
-  ['Déménagement', /demenag|mutation|quitte la region|nouvelle ville/],
-  ['Santé', /sante|blessure|operation|medecin|enceinte|grossesse|maladie/],
-  ['Prix', /prix|cher|budget|financ|moyens|augmentation/],
-  ['Manque de temps', /temps|horaire|travail|planning|disponib/],
+  ['Déménagement', /demenag|mutation|quitte la region|nouvelle ville|moving|relocat/],
+  ['Santé', /sante|blessure|operation|medecin|enceinte|grossesse|maladie|injur|health|pregnan/],
+  ['Prix', /prix|cher|budget|financ|moyens|augmentation|expensive|price/],
+  ['Manque de temps', /temps|horaire|travail|planning|disponib|no time|busy/],
   ['Concurrence', /autre salle|concurren|basic ?fit|keep ?cool|l'orange bleue|on air/],
   ['Insatisfaction', /insatisf|decu|sale|trop de monde|machines|accueil|propre/]
 ];
@@ -125,7 +128,9 @@ function analyseFil_(id, me) {
   const brut = entrants.map(function (x) { return x.subject + '\n' + x.body; }).join('\n');
   const txt = norm_(brut);
   const cls = classe_(first, txt);
-  if (cls.score < CFG.MIN_SCORE) return null;
+  // Score 2, sous le seuil : fil transmis avec review: true (onglet À vérifier de Fit Pulse).
+  const review = cls.score >= 2 && cls.score < CFG.MIN_SCORE;
+  if (cls.score < CFG.MIN_SCORE && !review) return null;
   const reponses = items.filter(function (x) { return x.out && x.at > first.at; });
   const lastIn = entrants[entrants.length - 1];
   const lastOut = reponses.length ? reponses[reponses.length - 1] : null;
@@ -133,6 +138,7 @@ function analyseFil_(id, me) {
     threadId: id,
     link: 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(me) + '#all/' + id,
     subject: first.subject.slice(0, 140),
+    review: review,
     kind: cls.kind,
     type: cls.type,
     score: cls.score,
@@ -215,7 +221,7 @@ function norm_(s) {
 }
 
 function numero_(txt) {
-  const m = txt.match(/(?:n(?:°|o|um(?:ero)?)\.?\s*(?:de\s+)?(?:client|adherent|membre|contrat|badge)|(?:client|adherent|membre|contrat)\s*(?:n°|no|numero|id))\s*[:#]?\s*([a-z0-9]{4,12})/);
+  const m = txt.match(/(?:n(?:°|o|um(?:ero)?)\.?\s*(?:de\s+)?(?:client|adherent|membre|contrat|badge)|(?:client|adherent|membre|contrat)\s*(?:n°|no|numero|id))\s*(?:est\s*)?[:#]?\s*([a-z0-9]{4,12})/);
   return m ? m[1].toUpperCase() : null;
 }
 
@@ -236,7 +242,7 @@ function emailDansTexte_(s, me) {
 
 function nom_(first, brut, kind) {
   if (kind !== 'adherent') {
-    const n = brut.match(/\bnom\s*:\s*([^\n\r]{2,40})/i);
+    const n = brut.match(/(?:^|[\n\r])[ \t]*nom\s*:\s*([^\n\r]{2,40})/i);
     const p = brut.match(/\bpr[ée]nom\s*:\s*([^\n\r]{2,40})/i);
     if (n) return ((p ? p[1].trim() + ' ' : '') + n[1].trim()).slice(0, 60);
   }
@@ -249,9 +255,10 @@ function nom_(first, brut, kind) {
   return dn ? dn.trim().slice(0, 60) : null;
 }
 
+/** Motif : une valeur de la liste de Fit Pulse, Autre à défaut. La santé est notée Santé, sans détail. */
 function motif_(txt) {
   for (let i = 0; i < MOTIFS.length; i++) if (MOTIFS[i][1].test(txt)) return MOTIFS[i][0];
-  return null;
+  return 'Autre';
 }
 
 function dateEffet_(txt) {

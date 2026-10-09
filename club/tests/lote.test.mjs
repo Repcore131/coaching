@@ -74,7 +74,7 @@ test('phases : rouge en attente, orange après la réponse, rouge si l’adhére
 test('dossiers de démonstration : toutes les cartes s’affichent', () => {
   const run = chargerAppli('demo'); run(`CLUB = S.clubs.horizon; ME = S.users.u1;`);
   const n = run(`resList('horizon').filter(resOpen).map(resCard).filter(h => /class="card dossier ph-(attente|encours)"/.test(h)).length`);
-  assert.ok(n >= 9, `${n} cartes`); assert.equal(run(`resList('horizon').filter(r => r.mail && resPhase(r) === 'attente').length`), 1);
+  assert.equal(n, 5, `${n} cartes`); assert.equal(run(`resList('horizon').filter(r => r.mail && resPhase(r) === 'attente').length`), 3);
 });
 test('sauvetage : déclaratif, confirmé par Resamania, « À confirmer » après 15 jours', () => {
   const run = appli({});

@@ -221,9 +221,10 @@ function shell(route, inner) {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr === true && !isManager()) return '';
     if (mgr === 'm' && isManager()) return '';
-    const n = id === 'pouls' ? unseenPouls() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenPouls()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? (isManager() ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : resList(CLUB.id).filter(r => r.ownerId === ME.id && resOpen(r)).length) : id === 'impayes' ? dunRows(CLUB.id).filter(mesDossiersDun).filter(dunDue).length : 0;
-    const late = id === 'resiliations' && isManager() ? rrqCounts(CLUB.id).late : 0;
-    return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}${late ? `<span class="pill pill-late" title="dont ${late} sans réponse depuis 48 h" aria-label="dont ${late} sans réponse depuis 48 h">${late}</span>` : ''}</a>`;
+    const n = id === 'pouls' ? unseenPouls() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenPouls()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resCompteurs(CLUB.id, mesDossiersRes).attente : id === 'impayes' ? dunRows(CLUB.id).filter(mesDossiersDun).filter(dunDue).length : 0;
+    // Résiliations : en attente de réponse, puis en cours (second compteur, discret).
+    const enc = id === 'resiliations' ? resCompteurs(CLUB.id, mesDossiersRes).encours : 0;
+    return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill" data-pill="${id}" title="${id === 'resiliations' ? 'en attente de réponse' : ''}">${n > 99 ? '99+' : n}</span>` : ''}${enc ? `<span class="pill pill-sec" data-pill-encours="${enc}" title="en cours" aria-label="${enc} en cours">${enc}</span>` : ''}</a>`;
   }).join('').replace(/(<div class="nav-sep"><\/div>)+/g, '$1').replace(/^<div class="nav-sep"><\/div>|<div class="nav-sep"><\/div>$/g, '');
   const clubs = myClubs();
   return `<div class="shell" id="shell">

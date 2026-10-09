@@ -11,7 +11,7 @@
 // Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
 const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
 CFG.assets = CFG.assets || {};
-const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.6' };
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.7' };
 // ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
 // Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
 // Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.
@@ -215,7 +215,7 @@ function etatInitial() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {}, celebrated: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
   };
   if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
   return st;
@@ -407,7 +407,7 @@ const firebaseBackend = {
     const me = avecRole ? S && S.users[this.userId] : null; if (avecRole && !me) return;
     const waits = [];
     for (const [k, root] of Object.entries(sidePaths())) {
-      if (!!SIDE_ROLE[k] !== avecRole) continue;
+      if (SIDE_SANS_ECOUTE.has(k) || !!SIDE_ROLE[k] !== avecRole) continue;
       if (SIDE_ROLE[k] && me.role !== SIDE_ROLE[k]) continue;
       const ref = this.fb.database().ref(root); this.sideRefs.push(ref);
       waits.push(new Promise(ok => { let first = true; ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; if (!first) listeners.forEach(f => f()); } if (first) { first = false; ok(); } }, () => { if (first) { first = false; ok(); } }); }));
@@ -442,7 +442,9 @@ localBackend.precreate = async () => {};
 const backend = CFG.firebase ? firebaseBackend : localBackend;
 // En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
 // leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
-const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, info: `orgs/${ORG}/info`, product: `orgs_product/${ORG}`, benchmark: 'benchmark' } : { product: 'pulse_product', benchmark: 'benchmark' };
+const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, info: `orgs/${ORG}/info`, product: `orgs_product/${ORG}`, benchmark: 'benchmark', private: `orgs_private/${ORG}` } : { product: 'pulse_product', benchmark: 'benchmark', private: 'private' };
+// Données privées (e-mail, téléphone des dossiers de résiliation) : jamais écoutées en bloc, lues dossier par dossier.
+const SIDE_SANS_ECOUTE = new Set(['private']);
 const SIDE_ROLE = { product: 'createur' }; // lecture réservée à ce rôle (sinon : tout membre)
 const SIDE_CACHE = {};
 function sideApply(st) { if (!st) return; for (const k of Object.keys(sidePaths())) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
@@ -570,7 +572,7 @@ function detectLive(before, after) {
 //    le dernier est arrivé il y a 20 jours) ;
 //  - 2 000 clients (1 600 actifs, 400 anciens), offres à 24,90, 32,90, 39,90 € ;
 //  - 13 mois de saisies (janvier et septembre +35 %, août -25 %) ;
-//  - 9 résiliations en cours, 78 impayés (4 tranches d'ancienneté, 6 promesses).
+//  - 8 dossiers de résiliation (scénario de la relève des e-mails), 78 impayés (4 tranches d'ancienneté, 6 promesses).
 const DEMO_GRAINE = 20261101;
 const DEMO_CLUB = { id: 'horizon', name: 'Club Horizon', address: '12 avenue des Tilleuls', city: 'Valmont' };
 const DEMO_OFFRES = [['Essentiel', 24.9, 0.30], ['Confort', 32.9, 0.45], ['Intégral', 39.9, 0.25]];
@@ -633,21 +635,30 @@ function demoState() {
     st.clients[id] = c; clients.push(c);
   }
   const actifs = clients.slice(0, 1600);
-  // ── 9 résiliations en cours : 3 à J-7 au plus, 2 sans responsable ──
-  const MOIS_RESTANTS = [7, 9, 9, 10, 12, 8, 11, 10, 9];
-  const RES = [['Prix', 'nouvelle', 3, null], ['Déménagement', 'nouvelle', 5, null], ['Manque de temps', 'traitement', 7, 'u3'], ['Santé', 'traitement', 21, 'u4'], ['Prix', 'traitement', 14, 'u5'],
-    ['Insatisfaction', 'traitement', 27, 'u6'], ['Concurrence', 'traitement', 18, 'u3'], ['Manque de temps', 'nouvelle', 30, 'u7'], ['Prix', 'traitement', 24, 'u4']];
-  RES.forEach(([reason, status, eff, owner], i) => {
-    const c = actifs[100 + i * 37]; const ago = 1 + (i * 2) % 9; const date = addDays(t, -ago);
-    c.end = addMonths(date.slice(0, 7), MOIS_RESTANTS[i]) + date.slice(7, 8) + pad(Math.min(28, Number(date.slice(8)) + 1));
-    const id = 'r' + (i + 1); const at = ts(date, 11);
-    st.resiliations[id] = { id, clubId: C, client: c.name, clientId: c.id, num: c.num, date, effective: addDays(t, eff), reason, status, saved: false, ownerId: owner, userId: owner, at, source: i % 3 ? 'resamania' : 'mail',
-      receivedAt: at, dueAt: at + 24 * 3600000, type: 'resiliation',
-      log: { a: { at, by: 'u1', label: 'Demande enregistrée' }, ...(owner ? { b: { at: at + 4 * 3600000, by: owner, label: 'Message laissé', note: 'Rappeler en fin de semaine' } } : {}) } };
-    // Demandes reçues par e-mail : l'une attend une réponse, l'autre a reçu la réponse de l'accueil.
-    if (i % 3 === 0) st.resiliations[id].mail = { threadId: 'demo' + i, subject: 'Résiliation de mon abonnement', firstInAt: at, lastInAt: at, inCount: 1, outCount: i ? 1 : 0, firstReplyAt: i ? at + 5 * 3600000 : null, lastOutAt: i ? at + 5 * 3600000 : null, awaitingReply: !i, kind: 'adherent', score: 7 };
-  });
-  st.clubs[C].mailSync = { at: T0 - 25 * 60000, ok: true, scanned: 12, found: 3, error: null };
+  // ── Résiliations : scénario de la relève des e-mails, 8 dossiers fictifs (noms « Exemple », téléphones 06 00 00 00 0X) ──
+  // 3 en attente de réponse (2 h, 9 h, 27 h : en retard), 1 à vérifier, 2 en cours, 1 sauvée (preuve Resamania),
+  // 1 résiliée avec confirmation envoyée. Horodatages calés sur 9 h ; recalés sur l'heure réelle au chargement (demoRecaler).
+  const Hm = 3600000; const lien = '#demo';
+  const mailDe = (at, o = {}) => ({ threadId: 'demo-' + at, link: lien, subject: 'Résiliation de mon abonnement', firstInAt: at, lastInAt: at, inCount: 1, outCount: 0, firstReplyAt: null, lastOutAt: null, awaitingReply: true, kind: 'adherent', score: 7, ...o });
+  const dossier = (id, o) => { const at = o.receivedAt; st.resiliations[id] = { id, clubId: C, date: isoOf(new Date(at)), status: 'nouvelle', saved: false, ownerId: null, userId: null, type: 'resiliation', at, dueAt: at + 24 * Hm, actions: [{ at, by: 'system', label: o.mail ? 'Demande reçue par e-mail' : 'Demande enregistrée' }], ...o }; };
+  const prive = (id, phone, email) => { st.private.resiliations = st.private.resiliations || {}; (st.private.resiliations[C] = st.private.resiliations[C] || {})[id] = { ...(phone ? { phone } : {}), ...(email ? { email } : {}) }; };
+  dossier('r1', { client: 'Camille Exemple', reason: 'Déménagement', source: 'mail', receivedAt: T0 - 2 * Hm, effective: addDays(t, 40), mail: mailDe(T0 - 2 * Hm, { subject: 'Résiliation suite à mon déménagement' }) }); prive('r1', '06 00 00 00 01', 'camille.exemple@example.com');
+  dossier('r2', { client: 'Hugo Exemple', reason: 'Prix', source: 'mail', receivedAt: T0 - 9 * Hm, mail: mailDe(T0 - 9 * Hm, { subject: 'Demande de résiliation' }), ownerId: 'u3', userId: 'u3' }); prive('r2', '06 00 00 00 02', 'hugo.exemple@example.com');
+  dossier('r3', { client: 'Léa Exemple', reason: 'Manque de temps', source: 'mail', receivedAt: T0 - 27 * Hm, effective: addDays(t, 20), mail: mailDe(T0 - 27 * Hm, { subject: 'Arrêter mon abonnement' }) }); prive('r3', null, 'lea.exemple@example.com');
+  dossier('r4', { client: 'Nadia Exemple', reason: 'Autre', source: 'mail', status: 'averifier', receivedAt: T0 - 5 * Hm, mail: mailDe(T0 - 5 * Hm, { subject: 'Question sur mon contrat', score: 2 }), actions: [{ at: T0 - 5 * Hm, by: 'system', label: 'Message à vérifier reçu par e-mail' }] });
+  dossier('r5', { client: 'Paul Exemple', reason: 'Santé', source: 'appli', channel: 'Appli adhérents', receivedAt: T0 - 50 * Hm, effective: addDays(t, 12), rsm: { state: 'accepted', at: T0 - 26 * Hm }, ownerId: 'u4', userId: 'u4', status: 'traitement',
+    log: { o1: { at: T0 - 20 * Hm, by: 'u4', label: 'Offre proposée : Suspension', offer: 'Suspension', out: 'offer' } } }); prive('r5', '06 00 00 00 05');
+  dossier('r6', { client: 'Inès Exemple', reason: 'Concurrence', source: 'resamania', receivedAt: T0 - 72 * Hm, effective: addDays(t, 25), rsm: { state: 'submitted', at: T0 - 70 * Hm }, ownerId: 'u5', userId: 'u5', status: 'traitement',
+    log: { o1: { at: T0 - 24 * Hm, by: 'u5', label: 'Réponse envoyée par e-mail' } } }); prive('r6', '06 00 00 00 06');
+  dossier('r7', { client: 'Marc Exemple', reason: 'Prix', source: 'mail', receivedAt: T0 - 96 * Hm, mail: mailDe(T0 - 96 * Hm, { awaitingReply: false, firstReplyAt: T0 - 93 * Hm, lastOutAt: T0 - 93 * Hm, outCount: 1 }), rsm: { state: 'canceled', at: T0 - 20 * Hm }, ownerId: 'u3', userId: 'u3',
+    status: 'sauvee', saved: true, outcome: 'sauvee', closedAt: T0 - 20 * Hm, closedBy: 'resamania', closedReason: 'resamania', valeur: 395,
+    log: { o1: { at: T0 - 70 * Hm, by: 'u3', label: 'Offre proposée : Changement de formule', offer: 'Changement de formule', out: 'offer' }, o2: { at: T0 - 20 * Hm, by: 'system', label: 'Sauvetage confirmé par Resamania' } } });
+  st.entries.sv_r7 = { id: 'sv_r7', userId: 'u3', clubId: C, kpiId: 'sauvetage', date: isoOf(new Date(T0 - 20 * Hm)), value: 1, source: 'manual', at: T0 - 20 * Hm, proof: 'resamania', offer: 'Changement de formule' };
+  dossier('r8', { client: 'Sophie Exemple', reason: 'Déménagement', source: 'mail', receivedAt: T0 - 120 * Hm, effective: addDays(t, -1), mail: mailDe(T0 - 120 * Hm, { awaitingReply: false, firstReplyAt: T0 - 117 * Hm, lastOutAt: T0 - 70 * Hm, outCount: 2 }), ownerId: 'u4', userId: 'u4',
+    status: 'resiliee', outcome: 'resiliee', validatedAt: T0 - 96 * Hm, closedAt: T0 - 96 * Hm, closedBy: 'u4', closedReason: 'fitpulse', dateFin: addDays(t, -1),
+    log: { o1: { at: T0 - 96 * Hm, by: 'u4', label: 'Résiliation validée, confirmation à envoyer' } } });
+  st.meta.demoT0 = T0;
+  st.clubs[C].mailSync = { at: T0 - 12 * 60000, ok: true, scanned: 12, found: 4, error: null };
   // historique : 12 mois de demandes sauvées et résiliées
   for (let i = 1; i <= 12; i++) {
     const mk = addMonths(cm, -i);

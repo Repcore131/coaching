@@ -47,8 +47,22 @@ function seedDemo() { return CFG.capture ? captureState() : demoState(); }
 function demoStart() {
   if (CFG.capture || !S || !S.meta || S.meta.demoSeed !== DEMO_GRAINE || S.meta.capture) { S = normalizeState(seedDemo()); backend.replaceAll(); }
   if (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)]) safeLS.set(SESSION_KEY, DEMO_USER);
-  // Relève de la boîte accueil : toujours récente en démonstration (heure du chargement).
-  const ms = deepGet(S, ['clubs', DEMO_CLUB.id, 'mailSync']); if (ms && !CFG.capture) ms.at = Date.now() - 25 * 60000;
+  if (!CFG.capture) demoRecaler(S);
+}
+// Démonstration : les dossiers de résiliation gardent leur âge (« reçue il y a 2 h ») et la relève date
+// de 12 minutes, quelle que soit l'heure d'ouverture. Décale tous les horodatages du même écart.
+function demoRecaler(st, maintenant = Date.now()) {
+  if (!st || !st.meta) return st; const d = maintenant - (st.meta.demoT0 || maintenant); st.meta.demoT0 = maintenant;
+  const ms = deepGet(st, ['clubs', DEMO_CLUB.id, 'mailSync']); if (ms) ms.at = maintenant - 12 * 60000;
+  if (!d) return st; const dec = (o, k) => { if (o && typeof o[k] === 'number') o[k] += d; };
+  Object.values(st.resiliations || {}).forEach(r => {
+    if (!r || !r.receivedAt) return;
+    ['receivedAt', 'at', 'dueAt', 'closedAt', 'validatedAt'].forEach(k => dec(r, k));
+    if (r.mail) ['firstInAt', 'lastInAt', 'firstReplyAt', 'lastOutAt'].forEach(k => dec(r.mail, k));
+    if (r.rsm) dec(r.rsm, 'at'); (r.actions || []).forEach(a => dec(a, 'at')); Object.values(r.log || {}).forEach(a => dec(a, 'at'));
+    const sv = (st.entries || {})['sv_' + r.id]; if (sv) dec(sv, 'at');
+  });
+  return st;
 }
 
 // ── Bandeau fixe (pas en mode capture) ────────────────────────────────────

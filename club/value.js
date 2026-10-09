@@ -65,7 +65,7 @@ function resCandidats(r) {
   const exact = L.filter(c => norm(c.name || '') === n); return exact.length ? exact : L.filter(c => tokensKey(c.name || '') === t);
 }
 // Fiche rattachée : choisie (r.clientId), sinon trouvée sans ambiguïté.
-function resClient(r) { if (r.clientId && S.clients[r.clientId]) return S.clients[r.clientId]; const L = resCandidats(r); return L.length === 1 ? L[0] : null; }
+function resClient(r) { if (r.clientId && S.clients[r.clientId]) return S.clients[r.clientId]; const m = resMatch(r); return m.clientId && ['forte', 'moyenne'].includes(m.confidence) ? S.clients[m.clientId] || null : null; }
 // Valeur en jeu d'une demande : prix mensuel x mois d'engagement restants à la date
 // de la demande (au moins 1) ; sans engagement, 12 mois de valeur future.
 // Prix : fiche client, sinon panier moyen du club (valeur alors « estimée »).

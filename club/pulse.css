@@ -1288,3 +1288,42 @@ html.capture #toasts, html.capture .toast, html.capture .step-banner { display: 
 .res-releve { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: -6px 0 12px; font-size: var(--t-13); color: var(--muted); }
 .guide-releve { margin: 12px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .guide-releve p { margin: 2px 0 0; color: var(--muted); font-size: var(--t-13); }
+/* Résiliations : carte de dossier, compte à rebours, menu Contacter, retrait visuel */
+:root { --panel: var(--surface); --panel-2: var(--surface-2); }
+.alert.bad { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: var(--bad-soft, color-mix(in srgb, var(--bad) 10%, var(--panel))); }
+.nav .pill.pill-sec { background: var(--panel-2); color: var(--text); margin-left: 4px; font-weight: 600; }
+.dossier.ph-verifier { border-left: 4px solid var(--line); }
+.dossier { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.res-l1 { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.res-qui { flex: 1 1 220px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.res-nom { font-weight: 700; font-size: var(--t-14); }
+.res-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.res-badges button.badge { cursor: pointer; border: 0; font: inherit; }
+.res-cr { white-space: nowrap; font-size: var(--t-13, 13px); }
+.res-cr.warn { color: var(--warn); } .res-cr.bad { color: var(--bad); } .res-cr.muted { color: var(--muted); }
+.res-sujet { font-style: normal; }
+.res-assoc { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.res-owner { display: flex; align-items: center; gap: 6px; }
+.res-take { align-self: flex-start; }
+.res-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center; }
+.res-menu { position: absolute; z-index: 30; bottom: 52px; left: 12px; min-width: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.res-menu > button { display: flex; align-items: center; gap: 8px; text-align: left; background: none; border: 0; padding: 10px 12px; border-radius: 8px; color: var(--text); font: inherit; cursor: pointer; min-height: 44px; }
+.res-menu > button:hover, .res-menu > button:focus-visible { background: var(--panel-2); }
+.res-addtel { padding: 8px; display: grid; gap: 6px; }
+.res-closing { background: var(--panel-2); border-left: 4px solid var(--line); transition: opacity 200ms ease; }
+.res-closing .res-issue { font-weight: 700; margin-top: 4px; }
+.res-closing.fade { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .res-closing { transition: none; } }
+.tpl-apercu { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
+.tpl-texte { font-size: var(--t-13, 13px); line-height: 1.5; margin-top: 4px; }
+mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); color: inherit; border-radius: 4px; padding: 0 3px; }
+.res-analyse { display: grid; gap: 14px; }
+@media (max-width: 520px) {
+  .res-l1 { flex-direction: column; gap: 2px; }
+  .res-qui { flex: none; }
+  .res-cr { order: 2; }
+  .res-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .res-actions .btn { min-height: 44px; white-space: normal; line-height: 1.15; justify-content: center; padding: 6px; }
+  .res-actions .btn.icon { grid-column: 1 / -1; min-height: 36px; }
+  .res-menu { left: 8px; right: 8px; bottom: 100px; }
+}

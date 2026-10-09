@@ -14,7 +14,7 @@ const GUIDE_DUREE = 7 * 60; // secondes annoncées
 const GUIDE = { i: 0, debut: 0, timer: null };
 const GUIDE_ETAPES = [
   { route: 'home', cible: '#brief-jour', titre: 'Le brief du matin', texte: 'Chaque matin, la veille, l’objectif du jour et trois actions prioritaires. Le texte se copie tel quel pour le groupe de l’équipe.' },
-  { route: 'resiliations', cible: '[data-tuile="enjeu"]', titre: 'Les résiliations en euros', texte: 'Chaque demande affiche ce qu’elle coûte si l’adhérent part. La liste est triée par échéance, puis par valeur.' },
+  { route: 'resiliations', cible: '[data-tuile="sans-reponse"]', titre: 'Les demandes de résiliation', texte: 'Les demandes reçues par e-mail, dans l’appli ou lues dans Resamania arrivent seules. Chaque carte affiche le temps restant pour répondre, puis la date d’effet.' },
   { route: 'impayes', cible: '.dette-bar', titre: 'Les impayés par ancienneté', texte: 'Quatre tranches montrent où se trouve l’argent à récupérer. Un clic filtre la liste et chaque ligne s’appelle ou se relance par SMS.' },
   { route: 'loyalty', cible: '.loy-head', titre: 'Les adhérents à garder', texte: 'Appels J+15, J+30 et fins d’engagement arrivent seuls, classés par valeur. La valeur protégée du mois se lit en tête.' },
   { route: 'imports', avant: () => { UI.impTab = 'rsm'; }, cible: '#rsm-dir-drop', titre: 'Un dépôt, tout est à jour', texte: 'Déposez les exports Resamania de la semaine en une fois. Essayez avec les fichiers d’exemple ci-dessous.', csv: true },

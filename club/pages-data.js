@@ -527,6 +527,7 @@ function clubSettings() {
     ${apparenceCard()}
     ${reperesCard()}
     ${releveCard()}
+    ${typeof resModelesCard === 'function' ? resModelesCard() : ''}
     ${ordreKpiCard()}
     ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
       <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>Le score est la moyenne de vos % d’objectif, pondérée par les points de chaque KPI, plafonnée à 150 %. Les points récompensent l’atteinte : 25, 50, 75 puis 100 % des points du KPI. En calcul continu, chaque unité rapporte sa part, sans marche. Le calcul continu est conseillé pour les petits objectifs (moins de 5).</div></div>

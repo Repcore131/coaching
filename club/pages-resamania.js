@@ -314,8 +314,23 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
       r.noMandate.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), noMandate: true, noMandateAt: (pendingClients[c0.id] || c0).noMandate ? ((pendingClients[c0.id] || c0).noMandateAt || today()) : today(), offer: (pendingClients[c0.id] || c0).offer || b.offer, name: c0.name || b.name }); });
       Object.values(S.clients).filter(c => c.clubId === club && c.noMandate && !listed.has(c.id)).forEach(c => upClient(c, { noMandate: false }));
     }
+    // Dossiers ouverts du club : un import ne crée pas de second dossier pour un client qui a déjà écrit (45 jours).
+    const ouvertsClub = Object.values(S.resiliations).filter(d => d.clubId === club && !d.hidden && resOpen(d));
     for (const x of r.resil) {
-      const id = 'rs' + hkey(club + '|' + x.key);
+      const id0 = 'rs' + hkey(club + '|' + x.key);
+      const lie = S.resiliations[id0] ? null : Object.values(S.resiliations).find(d => d.rsmId === id0) || (() => {
+        const rec0 = minuitParis(x.received || x.date); const num = String(x.clientNum || '').trim(); const tk = tokensKey(x.client || '');
+        return ouvertsClub.find(d => !d.rsmId && !String(d.id).startsWith('rs') && (num ? String(d.clientNum || '') === num : tk && tokensKey(d.client || '') === tk) && Math.abs((resReceivedAt(d) || 0) - rec0) <= 45 * 864e5) || null; })();
+      if (lie) {
+        const etatL = x.arb || (x.saved ? 'canceled' : 'submitted'); const P = k => ['resiliations', lie.id, k];
+        ops.push([P('rsm'), { ...(lie.rsm || {}), state: etatL, at: now }], [P('rsmId'), id0], [P('importIds'), { ...(lie.importIds || {}), [impId]: true }]);
+        if (x.effective) ops.push([P('effective'), x.effective]);
+        if (!lie.reason && x.reason) ops.push([P('reason'), x.reason]);
+        if (!lie.clientNum && x.clientNum) ops.push([P('clientNum'), x.clientNum]);
+        if (!(lie.log || {})['rsm' + impId]) ops.push([['resiliations', lie.id, 'log', 'rsm' + impId], { at: now, by: 'system', label: 'Lu dans Resamania' }]);
+        summary.resil++; summary.resilRattachees = (summary.resilRattachees || 0) + 1; continue;
+      }
+      const id = id0;
       const old = S.resiliations[id];
       const etat = x.arb || (x.saved ? 'canceled' : 'submitted');
       const imported = resStatutImport(etat, x.effective || (old && old.effective) || null);
@@ -333,7 +348,7 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
       const ferme = status === 'sauvee' || status === 'resiliee';
       ops.push([['resiliations', id], { ...prev, importIds: resImp, nature: prev.nature || x.nature || 'abonnement', sameDay, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee',
         ownerId: owner || null, userId: owner || null, importId: impId, source, channel: x.channel || prev.channel || null, clientNum: prev.clientNum || x.clientNum || null, receivedAt, dueAt: prev.dueAt || receivedAt + sla * 3600000,
-        rsm: { ...(prev.rsm || {}), state: etat, at: now }, at: (old && old.at) || now,
+        rsm: { ...(prev.rsm || {}), state: etat, at: now }, at: (old && old.at) || now, ...(prev.clientId ? {} : resLienAuto(club, { clientNum: x.clientNum, name: x.client })),
         ...(ferme && !prev.outcome ? { outcome: status, closedAt: now, closedBy: 'resamania', closedReason: 'resamania' } : {}) }]);
       // Sauvetage : déclaré dans Fit Pulse (« declaratif »), confirmé quand Resamania lit l'annulation (« resamania »).
       const sv = S.entries['sv_' + id];
@@ -374,6 +389,8 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
 ACTIONS.rsmCommit = () => {
   const { ops, summary } = rsmCommitPlan(UI.rsmBatch, { club: CLUB.id, choices: UI.rsmChoices || {}, by: ME.id });
   db.batch(ops);
+  // Après l'import : doublons fusionnés, dossiers fermés d'après l'état Resamania (avec « Annuler »).
+  resDedupe(CLUB.id); resAutoClose(CLUB.id);
   UI.rsmBatch = null; UI.rsmDone = summary; render();
   toast(`Import Resamania terminé : ${plur(summary.files, 'fichier', 'fichiers')}`);
 };

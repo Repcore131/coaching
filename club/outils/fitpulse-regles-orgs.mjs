@@ -104,6 +104,12 @@ export const REGLE_ORGS = `"orgs": {
     "orgs_inbox": { "$org": { "$uid": { ".read": ${j(SOIMEME)}, "$id": { "readAt": { ".write": ${j(`${SOIMEME} && data.parent().exists()`)} } } } } },
     "orgs_mail": { "$org": { ".read": false, "$id": { ".write": ${j(`${mgr(O)} && !data.exists()`)} } } },
     "orgs_product": { "$org": { ".read": ${j(crea(O))}, ".write": ${j(crea(O))} } },
+    // Données privées des dossiers de résiliation : manager, ou responsable du dossier.
+    "orgs_private": { "$org": { "resiliations": { "$club": { "$id": {
+      ".read": ${j(`${mgr(O)} || (${acces(O)} && root.child('orgs/' + $org + '/data/resiliations/' + $id).child('clubId').val() === $club && root.child('orgs/' + $org + '/data/resiliations/' + $id).child('ownerId').val() === ${UID})`)},
+      ".write": ${j(`${mgr(O)} || (${acces(O)} && root.child('orgs/' + $org + '/data/resiliations/' + $id).child('clubId').val() === $club && (root.child('orgs/' + $org + '/data/resiliations/' + $id).child('ownerId').val() === ${UID} || !root.child('orgs/' + $org + '/data/resiliations/' + $id).child('ownerId').exists()) && newData.exists())`)},
+      "email": { ".validate": "newData.isString() && newData.val().length <= 254" }, "phone": { ".validate": "newData.isString() && newData.val().length <= 30" },
+      "excerpt": { ".validate": "newData.isString() && newData.val().length <= 300" }, "$autre": { ".validate": false } } } } } },
     "orgs_public": {
       "$org": {
         ".read": true,

@@ -45,8 +45,8 @@ document.addEventListener('submit', e => {
 });
 ACTIONS.loadDemo = () => {
   const st = DEMO ? seedDemo() : demoState();
-  // Relève de démonstration toujours récente (hors mode capture) : pas de faux bandeau de panne le soir.
-  if (!CFG.capture) Object.values(st.clubs || {}).forEach(c => { if (c.mailSync) c.mailSync.at = Date.now() - 25 * 60000; });
+  // Démonstration (hors mode capture) : âges des dossiers et relève recalés sur l'heure réelle.
+  if (!CFG.capture) demoRecaler(st);
   db.replace(st); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
 
 // ── Connexion ─────────────────────────────────────────────────────────────

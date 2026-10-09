@@ -38,7 +38,9 @@ function purgePlan() {
   const add = (k, path) => { ops.push([path, null]); n[k] = (n[k] || 0) + 1; };
   Object.values(S.clients || {}).forEach(c => { const end = c.endDate || c.end; if (/ancien|perdu/.test(norm(c.status || '')) && end && dateOf(end).getTime() < M(RETENTION.clientInactifMois) && !(Number(c.balance) > 0)) add('Anciens adhérents (3 ans)', ['clients', c.id]); });
   Object.values(S.clients || {}).forEach(c => { const d = c.dunning; if (d && ['recupere', 'a_verifier', 'perdu'].includes(d.status) && d.recoveredAt && dateOf(d.recoveredAt).getTime() < M(RETENTION.impayeSoldeMois) && !(Number(c.balance) > 0)) { ops.push([['clients', c.id, 'dunning'], null]); n['Impayés soldés (2 ans)'] = (n['Impayés soldés (2 ans)'] || 0) + 1; } });
-  Object.values(S.resiliations || {}).forEach(r => { if (r.date && dateOf(r.date).getTime() < M(RETENTION.resiliationMois)) add('Résiliations (2 ans)', ['resiliations', r.id]); });
+  // Résiliations : dossiers fermés depuis plus de RETENTION.resiliationMois (date de la demande à défaut), avec leurs données privées.
+  Object.values(S.resiliations || {}).forEach(r => { const ferme = r.closedAt || (r.outcome || ['sauvee', 'resiliee', 'rejetee'].includes(resStatus(r)) ? (r.effective ? dateOf(r.effective).getTime() : r.date ? dateOf(r.date).getTime() : null) : null);
+    if (ferme && ferme < M(RETENTION.resiliationMois)) { add('Résiliations (2 ans après clôture)', ['resiliations', r.id]); ops.push([['private', 'resiliations', r.clubId, r.id], null]); } });
   Object.values(S.chat || {}).forEach(m => { if (m.at && m.at < M(RETENTION.chatMois)) add('Messages du chat (1 an)', ['chat', m.id]); });
   Object.values(S.touches || {}).forEach(x => { if (x.at && x.at < M(RETENTION.contactsMois)) add('Contacts notés (3 ans)', ['touches', x.id]); });
   Object.entries(S.logs || {}).forEach(([club, days]) => Object.keys(days || {}).forEach(d => { if (d < addDays(t, -RETENTION.logsJours)) add('Journal d’erreurs (30 jours)', ['logs', club, d]); }));

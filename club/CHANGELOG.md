@@ -1,5 +1,15 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.7 (octobre 2026)
+- Relève des résiliations : messages au score de 2 dans un onglet « À vérifier » (« C'est une demande » ou « Ignorer ») ; motif toujours pris dans la liste du club, « Santé » sans détail ; règles communes au script Gmail et à l'appli, testées sur 12 e-mails anonymisés.
+- Rattachement à la fiche client (e-mail, numéro, nom), suggestions quand plusieurs fiches se ressemblent, fusion des doublons, import Resamania rattaché au dossier ouvert du même client ; dossiers visibles dans la fiche client.
+- Clôture automatique d'après Resamania (après chaque import et la nuit), retrait visuel de la carte avec « Annuler » pendant 8 s, colonne « Fermé par » ; badge et tuile comptent les demandes en attente de réponse puis en cours.
+- Nouvelle carte de dossier : compte à rebours de réponse, Contacter (appel, SMS, réponse Gmail), Proposer une offre, Valider la résiliation ou la suspension ; version téléphone en trois boutons.
+- Escalade des demandes sans réponse (4 h, 24 h, 48 h, heures calmes 22 h à 7 h) et résumé du matin à l'heure choisie ; modèles de messages modifiables (Réglages > Modèles de résiliation).
+- E-mail et téléphone des dossiers rangés à part, lisibles par le manager et le responsable ; « Changer le secret » avec 24 h de recouvrement ; contrôle « Confirmations envoyées » ; fiche du registre des traitements.
+- Indicateurs : sans réponse, délai médian de première réponse, répondues sous 24 h, taux de sauvetage ; onglet Analyse (vendeur, offre, motif, source, six mois) ; récapitulatif : délai de réponse et euros sauvés.
+- Démonstration : scénario de relève en huit dossiers fictifs.
+
 ## 2026.10.6 (octobre 2026)
 - Résiliations : statut tiré de l'état Resamania (annulée, rejetée, acceptée, soumise) sans jamais rétrograder un dossier ; date de réception, délai de prise en charge mesuré de la réception au premier contact ; sauvetage déclaré avec offre et note, confirmé par l'import suivant (« À confirmer » après 15 jours).
 - Dossiers en trois phases (en attente de réponse, en cours, clos) avec échéance de réponse ; colonnes Resamania facultatives (canal de saisie, numéro client, date de réception, date d'effet) ; demandes faites dans l'appli signalées.

@@ -27,7 +27,8 @@ test('homonymes : choix manuel, puis rattachement gardé', () => {
   const run = appli({ clients: { a: { id: 'a', clubId: 'k', name: 'Paul Roy', price: 30, end: '2027-01-01' }, b: { id: 'b', clubId: 'k', name: 'Paul Roy', price: 45 } },
     resiliations: { r1: { id: 'r1', clubId: 'k', client: 'Paul Roy', date: '2026-10-01', status: 'nouvelle' } } });
   assert.equal(J(run, `resClient(S.resiliations.r1)`), null);
-  assert.match(run(`resCard(S.resiliations.r1)`), /Choisir la fiche \(2\)/);
+  // Deux fiches au même nom : aucun lien automatique, deux suggestions à associer.
+  const h = run(`resCard(S.resiliations.r1)`); assert.match(h, /Associer à :/); assert.equal((h.match(/data-act="resAssoc"/g) || []).length, 2);
   run(`S.resiliations.r1.clientId = 'b'; REV++`);
   assert.equal(J(run, `valeurEnJeu(S.resiliations.r1).euros`), 45 * 12);
 });
@@ -37,7 +38,8 @@ test('tuile Valeur en jeu = somme des cartes ; récap « Sauvé »', () => {
       r3: { id: 'r3', clubId: 'k', client: 'E F', date: '2026-10-03', status: 'sauvee', saved: true, valeur: 384 } } });
   run(`UI.resTab = 'todo'`); const h = run(`PAGES.resiliations.render()`);
   const cartes = [...h.matchAll(/data-valeur="(\d+)"/g)].reduce((s, m) => s + Number(m[1]), 0);
-  assert.equal(Number(h.match(/data-tuile="enjeu"><span>Valeur en jeu<\/span><b data-v="(\d+)"/)[1]), cartes);
+  run(`UI.resTab = 'analyse'`); const a = run(`PAGES.resiliations.render()`);
+  assert.equal(Number(a.match(/En jeu sur les dossiers ouverts : <b data-v="(\d+)"/)[1]), cartes);
   const mk = run('curMonth()'); run(`UI.recapMonth = '${mk}'`);
   assert.equal(J(run, `monthFigures('k', '${mk}').sauveEuros`), 384);
 });
@@ -297,7 +299,7 @@ test('mise en route : 1 sur 7 après création, étape 4 au premier import vente
   });
 });
 
-test('démo vendeur : neutre, 9 résiliations ouvertes pour 2 500 à 3 500 €, identique d’un chargement à l’autre, moins de 3 Mo', () => {
+test('démo vendeur : neutre, scénario de relève des résiliations, identique d’un chargement à l’autre, moins de 3 Mo', () => {
   const run = chargerAppli(base()); run(`toast = () => {}`);
   const a = run('JSON.stringify(demoState())'), b = run('JSON.stringify(demoState())');
   assert.equal(a, b); assert.ok(a.length < 3 * 1024 * 1024, a.length); assert.doesNotMatch(a, /Fitness Park|Niort|GUELLEC|Kévin/);
@@ -305,10 +307,10 @@ test('démo vendeur : neutre, 9 résiliations ouvertes pour 2 500 à 3 500 €, 
   const R = J(run, `({ n: resToHandle('horizon').length, v: resToHandle('horizon').reduce((s, r) => s + resValeur(r), 0), j7: resToHandle('horizon').filter(resUrgent).length, sans: resToHandle('horizon').filter(r => !r.ownerId).length,
     imp: dunRows('horizon').filter(c => Number(c.balance) > 0).length, du: dunRows('horizon').filter(c => Number(c.balance) > 0).reduce((s, c) => s + Number(c.balance), 0), prom: Object.values(S.clients).filter(c => c.dunning && c.dunning.status === 'promesse').length,
     clients: Object.keys(S.clients).length, actifs: Object.values(S.clients).filter(c => c.status === 'Client').length, mois: new Set(Object.values(S.entries).map(e => e.date.slice(0, 7))).size, club: S.clubs.horizon.name + ' ' + S.clubs.horizon.city, dir: fullName(S.users.u1) })`);
-  assert.equal(R.n, 9); assert.ok(R.v >= 2500 && R.v <= 3500, R.v); assert.equal(R.j7, 3); assert.equal(R.sans, 2);
+  assert.equal(R.n, 5); assert.ok(R.v > 0, R.v); assert.equal(R.sans, 2);
   assert.equal(R.imp, 78); assert.ok(R.du > 3000 && R.du < 3800, R.du); assert.equal(R.prom, 6);
   assert.equal(R.clients, 2000); assert.equal(R.actifs, 1600); assert.equal(R.mois, 13); assert.equal(R.club, 'Club Horizon Valmont'); assert.equal(R.dir, 'Directeur Démo');
-  assert.match(run(`PAGES.resiliations.render()`), /À arbitrer \(9\)/);
+  assert.match(run(`PAGES.resiliations.render()`), /À traiter \(5\)/); assert.match(run(`PAGES.resiliations.render()`), /À vérifier \(1\)/);
   const tel = J(run, `Object.values(S.clients).every(c => /^06 39 98 \\d\\d \\d\\d$/.test(c.phone) && /@example\\.com$/.test(c.email))`); assert.ok(tel);
 });
 test('démo vendeur : les 3 exports d’exemple sont reconnus par l’import', () => {
@@ -316,5 +318,5 @@ test('démo vendeur : les 3 exports d’exemple sont reconnus par l’import', (
   const defs = J(run, `['ventes', 'incidents', 'resiliations'].map(t => { const r = analyzeTable({ name: t + '.csv', ...parseCSV(demoCsv(t)) }, { clubId: 'horizon', month: curMonth() }); return [r.def && r.def.id, r.rowsCount, (r.entries || []).filter(e => e.seller && e.seller.status === 'user').length]; })`);
   assert.equal(defs[0][0], 'ventes'); assert.ok(defs[0][2] > 0 && defs[0][2] === defs[0][1], JSON.stringify(defs[0]));
   assert.equal(defs[1][0], 'clients-incident'); assert.equal(defs[1][1], 78);
-  assert.equal(defs[2][0], 'resil'); assert.equal(defs[2][1], 9);
+  assert.equal(defs[2][0], 'resil'); assert.equal(defs[2][1], 5);
 });

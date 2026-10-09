@@ -134,6 +134,20 @@ export const REGLE = `${DEBUT}
         }
       }
     },
+    "private": {
+      "resiliations": {
+        "$club": {
+          "$id": {
+            ".read": ${j(`${MGR} || (${MEMBRE} && root.child('pulse/resiliations/' + $id + '/clubId').val() === $club && root.child('pulse/resiliations/' + $id + '/ownerId').val() === ${SOI})`)},
+            ".write": ${j(`${MGR} || (${MEMBRE} && root.child('pulse/resiliations/' + $id + '/clubId').val() === $club && (root.child('pulse/resiliations/' + $id + '/ownerId').val() === ${SOI} || !root.child('pulse/resiliations/' + $id + '/ownerId').exists()) && newData.exists())`)},
+            "email": { ".validate": "newData.isString() && newData.val().length <= 254" },
+            "phone": { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "excerpt": { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "$autre": { ".validate": false }
+          }
+        }
+      }
+    },
     "pulse_product": {
       ".read": ${j(CREATEUR)},
       ".write": ${j(CREATEUR)}

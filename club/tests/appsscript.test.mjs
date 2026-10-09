@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 const CODE = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
 const b64 = s => Buffer.from(s, 'utf8').toString('base64url');
@@ -44,4 +45,10 @@ test('releve : envoi signé (HMAC-SHA256 de « horodatage.corps »)', () => {
 test('une newsletter n’est pas retenue', () => {
   const B = boite({ th1: [{ ...msg('m1', 1, 'News <news@marque.fr>', 'Offre spéciale', 'Résiliation offerte, se désabonner ici.'), payload: { mimeType: 'text/plain', headers: [{ name: 'From', value: 'News <news@marque.fr>' }, { name: 'Subject', value: 'Offre' }, { name: 'List-Unsubscribe', value: '<x>' }], body: { data: b64('Résiliation offerte') } } }] });
   B.ctx.apercu(); assert.equal(JSON.parse(B.logs[0]).threads.length, 0);
+});
+test('Code.gs et MAIL_ENGINE : mêmes règles par défaut', () => {
+  const src = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
+  const gs = [...src.slice(src.indexOf('const RULES'), src.indexOf('const MOTIFS')).matchAll(/re: \/(.+?)\/, w: (-?\d+)/g)].map(m => m[1] + '|' + m[2]);
+  const M = createRequire(import.meta.url)('../moteur-mail.js'); const D = M.REGLES_DEFAUT;
+  assert.deepEqual(gs, [...D.keywords, ...D.negatives].map(r => r.re + '|' + r.w));
 });

@@ -63,6 +63,32 @@ describe('ingestResiliations', () => {
   });
 });
 
+describe('ingestion : À vérifier, motif, rattachement, données privées, doublons', () => {
+  it('e-mail et téléphone dans /private seulement ; e-mail du client : lien automatique', async () => {
+    await rtdb.ref('pulse/clients/c2').set({ id: 'c2', clubId: 'niort', name: 'P Exemple', email: 'paul.exemple@mail.fr', phone: '06 00 00 00 07' });
+    await appel(corps([fil({ threadId: 't-9', fromEmail: 'paul.exemple@mail.fr', name: 'Paul X', phone: null })]));
+    const id = idDossier('niort', 't-9'); const d = await db.get(`pulse/resiliations/${id}`);
+    expect(d.clientId).toBe('c2'); expect(d.clientConfidence).toBe('forte'); expect(d).not.toHaveProperty('email'); expect(d).not.toHaveProperty('phone');
+    expect(await db.get(`private/resiliations/niort/${id}`)).toMatchObject({ email: 'paul.exemple@mail.fr', phone: '06 00 00 00 07' });
+  });
+  it('score 2 (review) : statut À vérifier ; motif hors liste : Autre', async () => {
+    await appel(corps([fil({ threadId: 't-r', review: true, score: 2, motif: 'Problème de genou' })]));
+    const d = await db.get(`pulse/resiliations/${idDossier('niort', 't-r')}`); expect(d.status).toBe('averifier'); expect(d.reason).toBe('Autre');
+  });
+  it('deux clients « Martin Durand » : aucun lien automatique', async () => {
+    await rtdb.ref('pulse/clients').update({ d1: { id: 'd1', clubId: 'niort', name: 'Martin Durand' }, d2: { id: 'd2', clubId: 'niort', name: 'Durand Martin' } });
+    await appel(corps([fil({ threadId: 't-md', name: 'Martin Durand', fromEmail: 'md@exemple.fr' })]));
+    expect((await db.get(`pulse/resiliations/${idDossier('niort', 't-md')}`)).clientId ?? null).toBeNull();
+  });
+  it('même client déjà suivi (dossier ouvert) : fusion dans le plus ancien', async () => {
+    await rtdb.ref('pulse/resiliations/rs1').set({ id: 'rs1', clubId: 'niort', client: 'Paul Exemple', clientId: 'c1', status: 'nouvelle', receivedAt: T - 5 * 864e5, date: '2026-10-07', rsm: { state: 'submitted' }, source: 'resamania' });
+    await appel(corps([fil()]));
+    const n = await db.get(`pulse/resiliations/${ID}`); const o = await db.get('pulse/resiliations/rs1');
+    expect(n.outcome).toBe('doublon'); expect(n.hidden).toBe(true); expect(o.mail.threadId).toBe('t-1');
+    expect(Object.values(o.log || {}).map((a: any) => a.label)).toContain('Dossier fusionné (source : E-mail)');
+  });
+});
+
 describe('graphPoll (Microsoft 365)', () => {
   it('une demande puis la réponse de l’accueil : dossier en phase « encours »', async () => {
     await rtdb.ref('pulse/clubs/niort').update({ mailProvider: 'm365', m365Mailbox: 'accueil@club.fr' });

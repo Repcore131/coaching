@@ -20,8 +20,8 @@ const rules = avecRegle('{\n  "rules": {\n  }\n}');
 let r = await fetch(`http://${HOST}/.settings/rules.json?ns=${NS}`, { method: 'PUT', headers: owner, body: rules });
 assert.equal(r.status, 200, 'règles refusées par le simulateur : ' + await r.text());
 // 2. Données de départ (compte de service).
-const boot = { [key('crea')]: 'crea', [key('mgr')]: 'mgr', [key('mem')]: 'mem', [key('mem2')]: 'mem2' };
-await fetch(url(''), { method: 'PATCH', headers: owner, body: JSON.stringify({ pulse_boot: boot, pulse: { users: { crea: { id: 'crea', role: 'createur', status: 'active', clubs: ['niort'] }, mgr: { id: 'mgr', role: 'manager', status: 'active', clubs: ['niort'] }, mem: { id: 'mem', role: 'membre', status: 'active', clubs: ['niort'] }, mem2: { id: 'mem2', role: 'membre', status: 'active', clubs: ['niort'] } }, clubs: { niort: { id: 'niort', name: 'Niort' } }, audit: { a1: { at: 1, by: 'mgr', action: 'test' } } }, pulse_inbox: { mem: { n1: { title: 't', at: 1 } } }, fitpulse_secret: { vapid: { privateJwk: { d: 'x' } } } }) });
+const boot = { [key('crea')]: 'crea', [key('mgr')]: 'mgr', [key('mem')]: 'mem', [key('mem2')]: 'mem2', [key('mem3')]: 'mem3' };
+await fetch(url(''), { method: 'PATCH', headers: owner, body: JSON.stringify({ pulse_boot: boot, pulse: { users: { crea: { id: 'crea', role: 'createur', status: 'active', clubs: ['niort'] }, mgr: { id: 'mgr', role: 'manager', status: 'active', clubs: ['niort'] }, mem: { id: 'mem', role: 'membre', status: 'active', clubs: ['niort'] }, mem2: { id: 'mem2', role: 'membre', status: 'active', clubs: ['niort'] }, mem3: { id: 'mem3', role: 'membre', status: 'active', clubs: ['niort'] } }, clubs: { niort: { id: 'niort', name: 'Niort' } }, audit: { a1: { at: 1, by: 'mgr', action: 'test' } } }, pulse_inbox: { mem: { n1: { title: 't', at: 1 } } }, fitpulse_secret: { vapid: { privateJwk: { d: 'x' } } } }) });
 
 const E = (uid, extra = {}) => ({ id: 'e', userId: uid, clubId: 'niort', kpiId: 'contrats', date: '2026-10-05', value: 1, source: 'manual', at: 1, ...extra });
 await check('anonyme ne lit pas /pulse', await req('GET', 'pulse'), false);
@@ -90,6 +90,17 @@ await check('membre prend en charge un dossier relevé', await req('PATCH', 'pul
 await check('membre ne modifie pas le fil e-mail d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/mail/awaitingReply', false, who('mem')), false);
 await check('membre ne modifie pas la date de réception d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/receivedAt', 2000, who('mem')), false);
 await check('membre ne supprime pas un dossier relevé', await req('DELETE', 'pulse/resiliations/ml0123456789abcdef', undefined, who('mem')), false);
+// Données privées des dossiers : manager du club et responsable du dossier seulement.
+await fetch(url('pulse/resiliations/rp1'), { method: 'PUT', headers: owner, body: JSON.stringify({ id: 'rp1', clubId: 'niort', client: 'B', status: 'traitement', ownerId: 'mem' }) });
+await fetch(url('private/resiliations/niort/rp1'), { method: 'PUT', headers: owner, body: JSON.stringify({ email: 'b@exemple.fr', phone: '06 00 00 00 01' }) });
+await check('responsable lit l’e-mail et le téléphone de son dossier', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mem')), true);
+await check('vendeur non responsable ne lit pas l’e-mail ni le téléphone', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mem3')), false);
+await check('vendeur non responsable ne lit pas le téléphone seul', await req('GET', 'private/resiliations/niort/rp1/phone', undefined, who('mem3')), false);
+await check('manager lit les données privées', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mgr')), true);
+await check('personne ne liste toutes les données privées', await req('GET', 'private', undefined, who('mem')), false);
+await check('vendeur non responsable n’écrit pas le téléphone', await req('PUT', 'private/resiliations/niort/rp1/phone', '06 00 00 00 09', who('mem3')), false);
+await check('responsable ajoute un numéro', await req('PUT', 'private/resiliations/niort/rp1/phone', '06 00 00 00 02', who('mem')), true);
+await check('champ inconnu refusé', await req('PUT', 'private/resiliations/niort/rp1/note', 'x', who('mgr')), false);
 await check('manager ne falsifie pas la dernière relève', await req('PUT', 'pulse/clubs/niort/mailSync', { at: 9999, ok: true }, who('mgr')), false);
 await check('manager règle son club sans toucher à la relève', await req('PUT', 'pulse/clubs/niort/name', 'Club Centre', who('mgr')), true);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
