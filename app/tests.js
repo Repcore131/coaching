@@ -76033,6 +76033,266 @@ async function testExercices(){
         return true;
       }finally{ _ttArreter(); currentUser=sU; window.saveUserOuDire=svS; window.go=svG; }
     });
+    // ══ BUILD 1956 — LES DÉFIS STREET ET LE DÉFI 28 JOURS ════════════════════════
+    const _dsRep=(n,extra)=>Array.from({length:n},()=>Object.assign({valeur:0.1,vis:0.9,comp:[],compVue:true},extra||{}));
+    const _dsVideo=(propres,kipping)=>({visibilite:0.9,reps:_dsRep(propres).concat(_dsRep(kipping||0,{comp:['kipping']}))});
+    const _dsU=()=>({email:'ds@t',role:'athlete',fname:'Léa',sessions:[]});
+    ok('1956 — FORMATS_DEFIS : sept formats gelés, forme {etapes, scoring, regles, videoRequise} ; The 100 tel que demandé',()=>{
+      const cles=['the100','pharaon','demiBBR','onTheBar','special6','super10','deathPyramid'];
+      if(JSON.stringify(FORMATS_DEFIS_CLES)!==JSON.stringify(cles)) return _echec(FORMATS_DEFIS_CLES.join());
+      if(!Object.isFrozen(FORMATS_DEFIS)) return _echec('constante non gelée');
+      for(const k of cles){
+        const f=FORMATS_DEFIS[k];
+        if(!Object.isFrozen(f)||!Object.isFrozen(f.etapes)||!Object.isFrozen(f.regles)||f.etapes.some(e=>!Object.isFrozen(e))) return _echec(k+' non gelé');
+        if(['temps','reps'].indexOf(f.scoring)<0||typeof f.videoRequise!=='boolean'||!f.regles.length||!f.etapes.length) return _echec(k+' : forme');
+        if(f.etapes.some(e=>!STREET_EXOS[e.exo])) return _echec(k+' : exercice inconnu');
+        if(!DUEL_STREET_RE.test('street_'+k)) return _echec(k+' : pas reconnu par les duels');
+        // Le seul format défini par la demande ; les autres sont du travail à valider.
+        if((k==='the100')===!!f.travail) return _echec(k+' : seul The 100 vient de la demande, les autres sont « travail »');
+      }
+      const t=FORMATS_DEFIS.the100;
+      if(t.scoring!=='temps'||t.videoRequise||t.etapes.map(e=>e.reps+' '+e.exo).join()!=='100 dips,100 traction,100 pompe') return _echec('the100');
+      if(!/Découpage libre/.test(t.regles[0])) return _echec('the100 : découpage libre');
+      if(FORMATS_DEFIS.onTheBar.scoring!=='reps'||!FORMATS_DEFIS.onTheBar.videoRequise) return _echec('onTheBar');
+      if(formatDefi('constructor')!==null||formatDefi({cle:'the100'})!==null) return _echec('formatDefi accepte un faux');
+      return true;
+    });
+    ok('1956 — scoreDefi : chaque format au temps, complet → valide, score = temps ; une étape manquante, trop vite, hors délai → invalide',()=>{
+      for(const k of FORMATS_DEFIS_CLES){
+        const f=FORMATS_DEFIS[k]; if(f.scoring!=='temps') continue;
+        const total=f.etapes.reduce((a,e)=>a+e.reps,0), plein=f.etapes.map(e=>e.reps);
+        let r=scoreDefi(k,{temps:total*2,reps:plein});
+        if(!r.valide||r.score!==total*2||r.statut!=='valide'||r.certifie||r.raisons.length) return _echec(k+' complet : '+JSON.stringify(r));
+        const moins=plein.slice(); moins[moins.length-1]-=12;
+        r=scoreDefi(k,{temps:total*2,reps:moins});
+        if(r.valide||r.score!==0||!/Il manque 12 /.test(r.raisons.join())) return _echec(k+' incomplet : '+JSON.stringify(r));
+        r=scoreDefi(k,{temps:total*0.3,reps:plein});
+        if(r.valide||!/Temps impossible/.test(r.raisons.join())) return _echec(k+' trop vite');
+        r=scoreDefi(k,{temps:f.tempsMax+1,reps:plein});
+        if(r.valide||!/hors délai/.test(r.raisons.join())) return _echec(k+' hors délai');
+        if(scoreDefi(k,{reps:plein}).valide) return _echec(k+' sans chrono');
+      }
+      const r=scoreDefi('inconnu',{temps:10});
+      if(r.valide||r.raisons[0]!=='Format inconnu.') return _echec('format inconnu');
+      return true;
+    });
+    ok('1956 — scoreDefi : la vidéo certifie (amplitude, pas de kipping) ; obligatoire pour On the bar',()=>{
+      // The 100 : 100 tractions propres filmées → certifié.
+      const plein=[100,100,100];
+      let r=scoreDefi('the100',{temps:900,reps:plein,video:_dsVideo(100)});
+      if(!r.valide||!r.certifie||r.statut!=='certifie') return _echec('the100 certifié : '+JSON.stringify(r));
+      // 95 propres + 5 avec kipping : valide, pas certifié, la raison dit pourquoi.
+      r=scoreDefi('the100',{temps:900,reps:plein,video:_dsVideo(95,5)});
+      if(!r.valide||r.certifie||!/95 tractions propres sur 100/.test(r.raisons.join())||!/élan/.test(r.raisons.join())) return _echec('kipping : '+JSON.stringify(r));
+      // On the bar sans vidéo : invalide.
+      r=scoreDefi('onTheBar',{reps:[20]});
+      if(r.valide||!/Vidéo obligatoire/.test(r.raisons.join())) return _echec('onTheBar sans vidéo : '+JSON.stringify(r));
+      r=scoreDefi('onTheBar',{reps:[20],video:_dsVideo(20)});
+      if(!r.valide||!r.certifie||r.score!==20) return _echec('onTheBar certifié : '+JSON.stringify(r));
+      // 25 déclarées, 20 propres (les 5 autres trop courtes) : invalide.
+      r=scoreDefi('onTheBar',{reps:[25],video:{visibilite:0.9,reps:_dsRep(20).concat(_dsRep(5,{valeur:0.6}))}});
+      if(r.valide||!/20 tractions propres sur 25/.test(r.raisons.join())||!/trop courte/.test(r.raisons.join())) return _echec('onTheBar 25/20 : '+JSON.stringify(r));
+      // Corps mal visible.
+      r=scoreDefi('onTheBar',{reps:[5],video:{visibilite:0.2,reps:_dsRep(5,{vis:0.2})}});
+      if(r.valide||!/pas assez visible/.test(r.raisons.join())) return _echec('visibilité');
+      if(scoreDefi('onTheBar',{reps:[0],video:_dsVideo(3)}).valide) return _echec('zéro rép.');
+      return true;
+    });
+    ok('1956 — équipe : le chrono s’arrête au dernier ; une équipe incomplète n’a pas de score',()=>{
+      const plein=[100,100,100];
+      let r=scoreEquipe('the100',[{nom:'Léa',temps:800,reps:plein},{nom:'Tom',temps:950,reps:plein},{nom:'Zoé',temps:700,reps:plein}]);
+      if(!r.valide||r.score!==950||r.membres.length!==3) return _echec('complète : '+JSON.stringify(r));
+      r=scoreEquipe('the100',[{nom:'Léa',temps:800,reps:plein},{nom:'Tom',temps:0,reps:[]}]);
+      if(r.valide||r.score!==0||!/Équipe incomplète : Tom n’a pas fini/.test(r.raisons.join())) return _echec('incomplète : '+JSON.stringify(r));
+      r=scoreEquipe('the100',[{nom:'Léa',temps:800,reps:plein},{nom:'Tom',temps:900,reps:[100,99,100]},{nom:'Zoé'}]);
+      if(r.valide||!/Tom, Zoé n’ont pas fini/.test(r.raisons.join())) return _echec('deux manquants : '+r.raisons.join());
+      if(scoreEquipe('the100',[{nom:'Seul',temps:800,reps:plein}]).valide) return _echec('équipe d’un');
+      if(scoreEquipe('the100',Array.from({length:11},(_,i)=>({nom:'M'+i,temps:800,reps:plein}))).valide) return _echec('onze membres');
+      if(scoreEquipe('onTheBar',[{nom:'A',reps:[10]},{nom:'B',reps:[10]}]).valide) return _echec('format filmé en équipe');
+      if(equipeStreetNoms('Léa\nTom, Zoé\n\n').noms.join()!=='Léa,Tom,Zoé'||!equipeStreetNoms('Seul').erreur) return _echec('noms');
+      return true;
+    });
+    ok('1956 — records : au temps le plus court gagne, aux reps le plus grand ; essai invalide refusé ; 30 essais au plus',()=>{
+      const u=_dsU();
+      if(!defiStreetEnregistrer(u,'the100','solo',{valide:true,score:900},1).record) return _echec('premier record');
+      if(defiStreetEnregistrer(u,'the100','solo',{valide:true,score:950},2).record) return _echec('950 > 900 battu ?');
+      if(!defiStreetEnregistrer(u,'the100','solo',{valide:true,score:850,certifie:true},3).record) return _echec('850 non record');
+      if(recordStreet(u,'the100').score!==850||!recordStreet(u,'the100').certifie) return _echec('record the100');
+      if(defiStreetEnregistrer(u,'the100','solo',{valide:false,score:10},4).ok) return _echec('invalide rangé');
+      if(defiStreetEnregistrer(u,'the100','autre',{valide:true,score:10},4).ok) return _echec('mode inconnu');
+      defiStreetEnregistrer(u,'onTheBar','solo',{valide:true,score:20},5);
+      if(defiStreetEnregistrer(u,'onTheBar','solo',{valide:true,score:18},6).record) return _echec('18 < 20 aux reps');
+      if(!defiStreetEnregistrer(u,'the100','equipe',{valide:true,score:1000,membres:3},7).record) return _echec('record équipe');
+      if(defiStreetEnregistrer(u,'the100','equipe',{valide:true,score:1000,membres:1},7).ok) return _echec('équipe d’un');
+      const e=defisStreetEtat(u);
+      if(e.records.the100.solo.score!==850||e.records.the100.equipe.membres!==3) return _echec(JSON.stringify(e.records));
+      for(let i=0;i<40;i++) defiStreetEnregistrer(u,'super10','solo',{valide:true,score:1000+i},10+i);
+      if(u.defisStreet.essais.length!==STREET_ESSAIS_MAX) return _echec('essais : '+u.defisStreet.essais.length);
+      if(streetMeilleur('the100',0,700)!==700||streetMeilleur('onTheBar',12,0)!==12) return _echec('meilleur avec 0');
+      if(texteScoreStreet('the100',754)!=='12:34'||texteScoreStreet('onTheBar',23)!=='23 rép.'||texteScoreStreet('the100',0)!=='pas de score') return _echec('textes');
+      return true;
+    });
+    ok('1956 — classement : trié selon le format, ex aequo au même rang, pseudo jamais une clé',()=>{
+      const b={'lea':{score:700,at:2},'tom__x':{score:650,at:3,certifie:true},'zoe':{score:700,at:1},'bad':{score:-3}};
+      const l=classementStreet('the100',b);
+      if(l.map(x=>x.pseudo+':'+x.rang).join()!=='tom.x:1,zoe:2,lea:2') return _echec(l.map(x=>x.pseudo+':'+x.rang).join());
+      const r=classementStreet('onTheBar',{a:{score:10},b:{score:30}});
+      if(r[0].pseudo!=='b') return _echec('reps : le plus grand d’abord');
+      const d=document.createElement('div'); d.innerHTML=htmlClassementStreet(FORMATS_DEFIS.the100,l,'zoe');
+      if(d.querySelectorAll('li').length!==3||!d.querySelector('li.moi')||/@/.test(d.querySelector('li.moi').textContent)===false) return _echec('rendu');
+      return true;
+    });
+    ok('1956 — battle : la mesure street est un duel valide, texte et score lisibles comme au Worker',()=>{
+      if(!duelMesureValide('street_the100')||duelMesureValide('street_x')||!duelMesureValide('tonnage')) return _echec('mesures');
+      if(texteDuel('street_the100',7)!=='Battle The 100 sur 7 jours') return _echec(texteDuel('street_the100',7));
+      if(texteScoreDuel('street_the100',754)!=='12:34'||texteScoreDuel('street_onTheBar',23)!=='23 rép.') return _echec('scores');
+      if(revancheParams({mesure:'street_super10',duree:7}).mesure!=='street_super10') return _echec('revanche');
+      if(texteDuel('seances',14)!=='14 jours de régularité') return _echec('mesures d’avant');
+      return true;
+    });
+    // ── Le défi 28 jours ──
+    ok('1956 — SHA-256 pur : les vecteurs FIPS, et l’UTF-8',()=>{
+      if(sha256Hex('')!=='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') return _echec('vide');
+      if(sha256Hex('abc')!=='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') return _echec('abc');
+      if(sha256Hex('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq')!=='248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1') return _echec('448 bits');
+      if(sha256Hex('é')!==sha256Hex(new Uint8Array([0xc3,0xa9]))||sha256Hex('é')===sha256Hex(new Uint8Array([0xe9]))) return _echec('utf-8');
+      if(sha256Hex('a'.repeat(1000)).length!==64) return _echec('long');
+      return true;
+    });
+    ok('1956 — tirage reproductible : même graine → même résultat, quel que soit l’ordre ; seuls les éligibles',()=>{
+      const g='00112233445566778899aabbccddeeff';
+      const l=[{cle:'a@x,fr',prenom:'Ana',total:28},{cle:'b@x,fr',prenom:'Ben',total:24},{cle:'c@x,fr',prenom:'Cléa',total:10},
+        {cle:'d@x,fr',prenom:'Dan',total:26},{cle:'e@x,fr',prenom:'Eva',total:25}];
+      const r1=tirageDefi28(g,l,24,2), r2=tirageDefi28(g,l.slice().reverse(),24,2);
+      if(JSON.stringify(r1)!==JSON.stringify(r2)) return _echec('ordre d’entrée');
+      if(r1.eligibles!==4||r1.tickets.some(x=>x.cle==='c@x,fr')) return _echec('Cléa (10 check-ins) éligible');
+      if(r1.gagnants.length!==2) return _echec('deux gagnants');
+      for(let i=1;i<r1.tickets.length;i++) if(!(r1.tickets[i-1].ticket<r1.tickets[i].ticket)) return _echec('tickets non triés');
+      if(r1.tickets[0].ticket!==sha256Hex(g+':'+r1.tickets[0].cle)) return _echec('ticket = sha256(graine:clé)');
+      // Une autre graine : d'autres tickets, et (sur 12 participants) un autre ordre.
+      const l12=Array.from({length:12},(_,i)=>({cle:'p'+i+'@x,fr',prenom:'P'+i,total:28}));
+      const o1=tirageDefi28(g,l12,24,3), o2=tirageDefi28('ffeeddccbbaa99887766554433221100',l12,24,3);
+      if(o1.tickets.some((x,i)=>x.ticket===o2.tickets[i].ticket)) return _echec('mêmes tickets avec une autre graine');
+      if(o1.tickets.map(x=>x.cle).join()===o2.tickets.map(x=>x.cle).join()) return _echec('une autre graine donne le même ordre');
+      if(tirageDefi28(g,l,24,9).gagnants.length!==4||tirageDefi28(g,[],24,1).gagnants.length) return _echec('bornes');
+      // La publication : aucune clé ; la vérification de l'athlète.
+      const pub=d28TiragePublic(r1,5);
+      if(/@/.test(JSON.stringify(pub))) return _echec('une clé publiée');
+      const def={graine:g};
+      const v=d28Verifier(def,pub,r1.gagnants[0].cle);
+      if(!v.ok||v.rang!==1||!v.gagne) return _echec('vérif gagnant : '+JSON.stringify(v));
+      const vc=d28Verifier(def,pub,'c@x,fr');
+      if(!vc.ok||vc.rang!==0||vc.gagne) return _echec('non éligible');
+      if(d28Verifier({graine:'0'.repeat(32)},pub,'a@x,fr').ok) return _echec('graine changée non vue');
+      if(d28Verifier(def,Object.assign({},pub,{tickets:pub.tickets.slice().reverse()}),'a@x,fr').ok) return _echec('tickets désordonnés non vus');
+      if(!/^[0-9a-f]{32}$/.test(d28NouvelleGraine())||!D28_ID_RE.test(d28NouvelId())) return _echec('graine et id');
+      return true;
+    });
+    ok('1956 — défi 28 jours : définition (28 jours pile, phases sans chevauchement), jour, phase, fenêtres photo',()=>{
+      const t0=Date.parse('2026-10-12T00:00:00');
+      const g='00112233445566778899aabbccddeeff';
+      let r=d28Definition({titre:' 28 jours ',debut:t0,phases:[{titre:'Volume',du:8,au:21},{titre:'Base',du:1,au:7}],regles:['Une séance par jour',''],minCheckins:24,gagnants:2},g,t0-864e5);
+      if(r.erreur) return _echec(r.erreur);
+      const d=r.def;
+      if(d.titre!=='28 jours'||d.fin!==t0+28*864e5-1||d.phases[0].titre!=='Base'||d.regles.length!==1||d.graine!==g) return _echec(JSON.stringify(d));
+      if(!d28Definition({titre:'x',debut:t0,phases:[{titre:'A',du:1,au:10},{titre:'B',du:10,au:20}],minCheckins:1,gagnants:1},g,t0).erreur) return _echec('chevauchement');
+      if(!d28Definition({titre:'x',debut:t0,minCheckins:29,gagnants:1},g,t0).erreur) return _echec('seuil 29');
+      if(!d28Definition({titre:'x',debut:t0,minCheckins:20,gagnants:1},'zz',t0).erreur) return _echec('graine');
+      if(!d28Definition({titre:'x',debut:t0-5*864e5,minCheckins:20,gagnants:1},g,t0).erreur) return _echec('passé');
+      if(d28Jour(d,t0-1)!==0||d28Jour(d,t0)!==1||d28Jour(d,t0+27*864e5+5)!==28||d28Jour(d,t0+28*864e5)!==29) return _echec('jours');
+      if(d28Phase(d,5).titre!=='Base'||d28Phase(d,25)!==null) return _echec('phases');
+      if(!d28PhotoOuverte(d,'j1',t0+2*864e5)||d28PhotoOuverte(d,'j1',t0+3*864e5)) return _echec('fenêtre J1');
+      if(d28PhotoOuverte(d,'j28',t0+24*864e5)||!d28PhotoOuverte(d,'j28',t0+26*864e5)||!d28PhotoOuverte(d,'j28',t0+28*864e5+3600e3)) return _echec('fenêtre J28');
+      if(d28LirePhases('Base ; 1 ; 7\n\nFinal;22;28').map(p=>p.titre+p.du+p.au).join()!=='Base17,Final2228') return _echec('lecture des phases');
+      if(d28TexteTampon('j1',new Date(2026,9,12,7,5).getTime(),'Léa')!=='J1 · 12/10/2026 07:05 · Léa') return _echec(d28TexteTampon('j1',new Date(2026,9,12,7,5).getTime(),'Léa'));
+      return true;
+    });
+    ok('1956 — tableau de participation (coach) et carte athlète : consentement non coché par défaut, image seulement si partagée',()=>{
+      const t0=Date.parse('2026-10-12T00:00:00');
+      const def={titre:'D',debut:t0,fin:t0+28*864e5-1,graine:'00112233445566778899aabbccddeeff',minCheckins:3,gagnants:1};
+      const parts={'a@x,fr':{inscription:{le:1,prenom:'Ana'},checkins:{1:t0,2:t0,3:t0,30:t0},photos:{j1:{at:t0,empreinte:'0'.repeat(64),consentement:true,img:'data:image/jpeg;base64,AA'}}},
+        'b@x,fr':{inscription:{le:1,prenom:'Ben'},checkins:{1:t0},photos:{j1:{at:t0,empreinte:'0'.repeat(64),consentement:false}}},
+        'c@x,fr':{checkins:{1:t0}}};
+      const gr=d28Grille(def,parts);
+      if(gr.length!==2||gr[0].prenom!=='Ana'||gr[0].total!==3||!gr[0].eligible||gr[1].eligible) return _echec(JSON.stringify(gr));
+      if(gr[0].photos.j1!=='partagee'||gr[1].photos.j1!=='privee') return _echec('photos');
+      const d=document.createElement('div');
+      d.innerHTML=htmlDefi28Coach('tabcdefgh1',def,null,parts,t0+2*864e5);
+      if(d.querySelectorAll('.d28-ligne').length!==2||d.querySelectorAll('.d28-cases span.on').length!==4) return _echec('grille coach');
+      if(d.querySelector('[onclick^="tirerDefi28"]')) return _echec('tirage avant la fin');
+      d.innerHTML=htmlDefi28Coach('tabcdefgh1',def,null,parts,t0+29*864e5);
+      if(!d.querySelector('[onclick^="tirerDefi28"]')) return _echec('tirage après la fin');
+      d.innerHTML=htmlDefi28Athlete('tabcdefgh1',def,null,{inscription:{le:1,prenom:'Zoé'}},'z@x,fr',t0+864e5);
+      const c=d.querySelector('#d28-c-tabcdefgh1-j1');
+      if(!c||c.checked) return _echec('case de consentement');
+      if(!d.querySelector('input[type=file][data-q="j1"]')||d.querySelector('input[data-q="j28"]')) return _echec('fenêtres photo');
+      if(!/Check-in du jour 2/.test(d.textContent)) return _echec('check-in');
+      if(!/Graine publiée/.test(d.textContent)) return _echec('graine affichée');
+      return true;
+    });
+    // ── L'interface ──
+    ok('1956 — galerie : sept cartes, la fiche porte règles, modes et classement',()=>{
+      const sU=currentUser, svG=window.go;
+      try{
+        window.go=()=>{};
+        currentUser=_dsU();
+        defiStreetEnregistrer(currentUser,'the100','solo',{valide:true,score:754,certifie:true},1);
+        ouvrirDefisStreet();
+        const z=document.getElementById('ds-contenu');
+        if(z.querySelectorAll('.ds-carte').length!==7) return _echec('cartes');
+        if(!/Record 12:34/.test(z.querySelector('[data-format="the100"]').textContent)) return _echec('record affiché');
+        if(!/vidéo requise/.test(z.querySelector('[data-format="onTheBar"]').textContent)) return _echec('vidéo requise');
+        ouvrirFormatStreet('the100');
+        const m=document.getElementById('modal-overlay');
+        if(!m||!/Découpage libre/.test(m.textContent)||!/Solo/.test(m.textContent)||!/En équipe/.test(m.textContent)||!/Battle/.test(m.textContent)||!m.querySelector('#ds-classement')) return _echec('fiche');
+        closeModal();
+        ouvrirFormatStreet('onTheBar');
+        if(/En équipe/.test(document.getElementById('modal-overlay').textContent)) return _echec('équipe sur un format filmé');
+        return true;
+      }finally{ try{ closeModal(); }catch(e){} currentUser=sU; window.go=svG; }
+    });
+    okA('1956 — chrono solo : départ, étapes cochées, arrêt, score, record, carte story',async()=>{
+      const sU=currentUser, svG=window.go, svS=window.saveUserOuDire;
+      try{
+        window.go=()=>{}; window.saveUserOuDire=()=>true;
+        currentUser=_dsU();
+        ouvrirChronoStreet('the100','solo');
+        chsDemarrer();
+        if(!document.getElementById('chs-temps')||!_chsEtat.minuteur) return _echec('chrono lancé');
+        _chsEtat.depart=Date.now()-600000;
+        chsEtape(0); chsEtape(1);
+        chsStop();
+        if(_chsEtat.minuteur) return _echec('chrono pas arrêté');
+        if(_chsEtat.res.valide||!/Il manque 100 pompes/.test(document.getElementById('chs-contenu').textContent)) return _echec('étape manquante');
+        _chsEtat.faits[2]=100; _chsCalculer(); rendreChronoStreet();
+        if(!_chsEtat.res.valide||Math.round(_chsEtat.res.score)!==600) return _echec('score : '+JSON.stringify(_chsEtat.res));
+        if(!/10:00/.test(document.getElementById('chs-contenu').textContent)) return _echec('score affiché');
+        await chsEnregistrer(null);
+        if(!recordStreet(currentUser,'the100')||!_chsEtat.record) return _echec('record');
+        const cv=_dessinerCarteStreet(_chsEtat,'noir');
+        if(!cv||!(cv.width>0)) return _echec('carte');
+        return true;
+      }finally{ _chsArreter(); _chsEtat=null; currentUser=sU; window.go=svG; window.saveUserOuDire=svS; }
+    });
+    ok('1956 — chrono équipe : chacun « Fini », le chrono s’arrête au dernier ; arrêté avant, l’équipe est incomplète',()=>{
+      const sU=currentUser, svG=window.go;
+      try{
+        window.go=()=>{};
+        currentUser=_dsU();
+        ouvrirChronoStreet('the100','equipe','',['Léa','Tom']);
+        chsDemarrer(); _chsEtat.depart=Date.now()-700000;
+        chsMembreFini(0);
+        if(_chsEtat.fin) return _echec('arrêté au premier');
+        chsMembreFini(1);
+        if(!_chsEtat.fin||!_chsEtat.res.valide||Math.round(_chsEtat.res.score)!==700||_chsEtat.res.membres!==2) return _echec('au dernier : '+JSON.stringify(_chsEtat.res));
+        ouvrirChronoStreet('the100','equipe','','Léa,Tom,Zoé');
+        if(_chsEtat.membres.length!==3) return _echec('membres en texte');
+        chsDemarrer(); _chsEtat.depart=Date.now()-700000;
+        chsMembreFini(0); chsStop();
+        if(_chsEtat.res.valide||!/Équipe incomplète/.test(document.getElementById('chs-contenu').textContent)) return _echec('incomplète');
+        return true;
+      }finally{ _chsArreter(); _chsEtat=null; currentUser=sU; window.go=svG; }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

@@ -369,3 +369,62 @@ test('saison, défi du Canal et trois duels : 4 écritures au plus par recalcul,
   assert.equal(p.valeur, 1); assert.equal(p.metrique, 1); assert.equal(p.srv, true);
   assert.equal(w.F.lire('canaux/' + KEV + '/defis/m1/public/n'), 1, 'le classement est recalculé (sous-tâche defi_maj)');
 });
+
+// ── LES BATTLES STREET (build 1956) ─────────────────────────────────────────
+test('battle street : textes, sens du chrono, score absent qui perd, mesure reconnue', () => {
+  assert.equal(DU.formatStreet('street_the100'), 'the100');
+  assert.equal(DU.formatStreet('street_inconnu'), null);
+  assert.equal(DU.mesureValide('street_onTheBar'), true);
+  assert.equal(DU.mesureValide('street_'), false);
+  assert.equal(DU.texteDuel('street_the100', 7), 'Battle The 100 sur 7 jours');
+  assert.equal(DU.texteScore('street_the100', 754), '12:34');
+  assert.equal(DU.texteScore('street_the100', 0), 'pas de score');
+  assert.equal(DU.texteScore('street_onTheBar', 23), '23 rép.');
+  // Au chrono, le plus petit temps gagne ; aucun score posé perd.
+  assert.equal(DU.gagnantDe({ createur: 600, invite: 540 }, 'street_the100'), 'invite');
+  assert.equal(DU.gagnantDe({ createur: 600, invite: 0 }, 'street_the100'), 'createur');
+  assert.equal(DU.gagnantDe({ createur: 0, invite: 0 }, 'street_the100'), 'egalite');
+  // Aux répétitions, le plus grand.
+  assert.equal(DU.gagnantDe({ createur: 20, invite: 25 }, 'street_onTheBar'), 'invite');
+  // Les scores viennent de street/<clé>, bornés ; la progression est ignorée.
+  assert.deepEqual(DU.scoresDe({ createur: LEA, invite: TOM, mesure: 'street_the100',
+    street: { [LEA]: { score: 612 }, [TOM]: { score: 1e9 } }, progres: { [LEA]: { valeur: 3 } } }), { createur: 612, invite: 0 });
+});
+
+test('battle street : il démarre dès que l’invité rejoint, les scores suivent, le chrono le plus court est CHAMPION', async () => {
+  const t = PARIS('2026-10-05T12:00:00');
+  const w = monde({ push: pushs, duels: { [ID]: duel({ invite: TOM, inviteNom: 'Tom', mesure: 'street_the100', duree: 7 }) },
+    evenements: ev('duel_rejoint', TOM, t) }, t);
+  await w.minute();
+  let x = w.F.lire('duels/' + ID);
+  assert.equal(x.statut, 'en_cours', 'pas d’attente de séance');
+  assert.equal(x.debut, t); assert.equal(x.fin, t + 7 * J);
+  assert.deepEqual(w.F.lire('duels_actifs/' + ID), { fin: x.fin });
+  // Chacun pose son meilleur temps ; l'événement fait suivre les scores.
+  w.F.ecrire('duels/' + ID + '/street/' + LEA, { score: 700, certifie: false, at: t });
+  w.F.ecrire('duels/' + ID + '/street/' + TOM, { score: 655, certifie: true, at: t });
+  w.F.ecrire('evenements', ev('duel_maj', LEA, t)); w.avance(60e3);
+  await w.minute();
+  assert.deepEqual(w.F.lire('duels/' + ID + '/scores'), { createur: 700, invite: 655 });
+  w.avance(8 * J);
+  w.F.ecrire('evenements', ev('duel_maj', LEA, w.t));
+  await w.minute();
+  x = w.F.lire('duels/' + ID);
+  assert.equal(x.statut, 'termine');
+  assert.equal(x.gagnant, 'invite');
+  assert.equal(w.F.lire('defis_resultats/' + TOM + '/' + ID).champion, true);
+  assert.equal(w.F.lire('defis_resultats/' + TOM + '/' + ID).mesure, 'street_the100');
+});
+
+test('battle street : les formats et leur scoring sont ceux de l’app (src/core/061), et ceux des règles', () => {
+  const src = fs.readFileSync(new URL('../../src/core/061-les-defis-street.js', import.meta.url), 'utf8');
+  const app = {};
+  for (const m of src.matchAll(/^  (\w+):_format\(\{cle:'(\w+)',nom:'([^']+)',scoring:'(temps|reps)'/mg)) { assert.equal(m[1], m[2]); app[m[2]] = [m[4], m[3]]; }
+  assert.deepEqual(Object.keys(app), Object.keys(DU.STREET_FORMATS));
+  for (const k of Object.keys(app)) { assert.equal(app[k][0], DU.STREET_FORMATS[k], k); assert.equal(app[k][1], DU.STREET_NOMS[k], k); }
+  const regles = fs.readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
+  const liste = Object.keys(app).join('|');
+  assert.equal(regles.split('street_(' + liste + ')').length - 1, 2, 'duels et duels_publics');
+  assert.equal(regles.split('(' + liste + ')$/').length - 1, 3, 'records, essais et classement');
+  assert.equal(DU.STREET_RE.source, '^street_(' + liste + ')$');
+});

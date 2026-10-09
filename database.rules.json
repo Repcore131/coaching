@@ -91,6 +91,32 @@
           },
           "$autre": { ".validate": false }
         },
+        // LES DEFIS STREET (build 1956) — records solo et equipe par format,
+        // et les derniers essais. Liste blanche fermee : l app borne avant
+        // d ecrire (defiStreetEntree). Un score est un temps (s) ou des reps.
+        "defisStreet": {
+          "records": {
+            "$format": {
+              ".validate": "$format.matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/)",
+              "solo":   { ".validate": "newData.hasChildren(['score', 'at']) && newData.child('score').isNumber() && newData.child('score').val() > 0 && newData.child('score').val() <= 100000 && newData.child('at').isNumber() && (!newData.child('certifie').exists() || newData.child('certifie').isBoolean()) && newData.child('membres').val() === null" },
+              "equipe": { ".validate": "newData.hasChildren(['score', 'at', 'membres']) && newData.child('score').isNumber() && newData.child('score').val() > 0 && newData.child('score').val() <= 100000 && newData.child('at').isNumber() && newData.child('membres').isNumber() && newData.child('membres').val() >= 2 && newData.child('membres').val() <= 10 && newData.child('certifie').val() === null" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "essais": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|[12][0-9])$/) && newData.hasChildren(['f', 'mode', 'score', 'at'])",
+              "f":        { ".validate": "newData.isString() && newData.val().matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/)" },
+              "mode":     { ".validate": "newData.isString() && newData.val().matches(/^(solo|equipe|battle)$/)" },
+              "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+              "at":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "certifie": { ".validate": "newData.isBoolean()" },
+              "membres":  { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 10" },
+              "$autre":   { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        },
         // LOT TC1 — LES TESTS DE COMPATIBILITE FILMES. Une entree par test
         // (squat, developpe, traction, souleve), ecrite par l athlete apres
         // la lecture de sa video SUR SON APPAREIL : la video ne part jamais,
@@ -1158,6 +1184,92 @@
           }
         },
 
+        // LE DEFI 28 JOURS (build 1956). Le coach le cree (dates, phases,
+        // regles, graine du tirage) ; la GRAINE est posee a la creation et ne
+        // change plus : publiee avant toute inscription, elle rend le tirage
+        // verifiable (src/core/062, tirageDefi28). Comme les defis du Canal,
+        // un athlete ne lit que SA feuille de participants : le tableau de
+        // participation est au coach. Le resultat du tirage ne nomme que des
+        // prenoms et des tickets (empreintes), jamais une cle.
+        // Ce que l athlete peut lister : l id de chaque defi 28 jours et son debut.
+        "defis28_liste": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$d28": { ".validate": "$d28.matches(/^t[a-z0-9]{8,24}$/) && newData.isNumber() && newData.val() > 0" }
+        },
+        "defis28": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$d28": {
+            "def": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey",
+              ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && (!data.exists() || (newData.exists() && newData.child('graine').val() === data.child('graine').val() && newData.child('debut').val() === data.child('debut').val()))",
+              ".validate": "$d28.matches(/^t[a-z0-9]{8,24}$/) && newData.hasChildren(['titre', 'debut', 'fin', 'graine', 'minCheckins', 'gagnants', 'creeLe'])",
+              "titre":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+              "debut":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "fin":         { ".validate": "newData.isNumber() && newData.val() === newData.parent().child('debut').val() + 28 * 86400000 - 1" },
+              "graine":      { ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{32}$/)" },
+              "minCheckins": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 28 && newData.val() % 1 === 0" },
+              "gagnants":    { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0" },
+              "creeLe":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+              "recompense":  { ".validate": "newData.isString() && newData.val().length <= 120" },
+              "phases": {
+                "$i": {
+                  ".validate": "$i.matches(/^[0-3]$/) && newData.hasChildren(['titre', 'du', 'au'])",
+                  "titre": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+                  "du":    { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 28" },
+                  "au":    { ".validate": "newData.isNumber() && newData.val() >= newData.parent().child('du').val() && newData.val() <= 28" },
+                  "$autre": { ".validate": false }
+                }
+              },
+              "regles": { "$i": { ".validate": "$i.matches(/^[0-7]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" } },
+              "$autre": { ".validate": false }
+            },
+            "tirage": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey",
+              ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && !data.exists() && now > root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('fin').val()",
+              ".validate": "newData.hasChildren(['le', 'graine', 'eligibles'])",
+              "le":        { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+              "graine":    { ".validate": "newData.val() === root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('graine').val()" },
+              "eligibles": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+              "tickets":   { "$i": { ".validate": "$i.matches(/^[0-9]{1,4}$/) && newData.isString() && newData.val().matches(/^[0-9a-f]{64}$/)" } },
+              "gagnants":  { "$i": { ".validate": "$i.matches(/^[0-9]$/) && newData.isString() && newData.val().length <= 24" } },
+              "$autre":    { ".validate": false }
+            },
+            "participants": {
+              "$athleteKey": {
+                ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+                ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').exists() && now <= root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('fin').val() + 86400000",
+                "inscription": {
+                  ".validate": "newData.hasChildren(['le', 'prenom'])",
+                  "le":     { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+                  "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+                  "$autre": { ".validate": false }
+                },
+                // Un check-in par jour (1 a 28), horodate, dans la fenetre du defi.
+                "checkins": {
+                  "$j": { ".validate": "$j.matches(/^([1-9]|1[0-9]|2[0-8])$/) && newData.isNumber() && newData.val() <= now + 60000 && newData.val() >= root.child('canaux').child($coachKey).child('defis28').child($d28).child('def').child('debut').val()" }
+                },
+                // LES PHOTOS J1 ET J28 : tamponnees dans l app, ecrites UNE
+                // fois (jamais remplacees : la regle refuse une reecriture),
+                // retirables (le retrait du consentement efface). L image ne
+                // part QU AVEC le consentement ; sans lui, seule l empreinte.
+                "photos": {
+                  "$p": {
+                    ".validate": "$p.matches(/^(j1|j28)$/) && !data.exists() && newData.hasChildren(['at', 'empreinte', 'consentement'])",
+                    "at":           { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+                    "empreinte":    { ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{64}$/)" },
+                    "consentement": { ".validate": "newData.isBoolean()" },
+                    "img":          { ".validate": "newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 300000 && newData.parent().child('consentement').val() === true" },
+                    "$autre":       { ".validate": false }
+                  }
+                },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          }
+        },
+
         "$autre": { ".validate": false }
       }
     },
@@ -1914,7 +2026,7 @@
         ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['createur', 'createurNom', 'mesure', 'duree', 'creeLe', 'statut'])",
         "createur":    { ".validate": "newData.isString() && newData.val().length <= 200" },
         "createurNom": { ".validate": "newData.isString() && newData.val().length <= 24" },
-        "mesure":      { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "mesure":      { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct|street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid))$/)" },
         "duree":       { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
         "creeLe":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
         "statut":      { ".validate": "newData.isString() && newData.val().matches(/^(attente|accepte|en_cours|termine|annule)$/)" },
@@ -1950,6 +2062,20 @@
             "$autre": { ".validate": false }
           }
         },
+        // LES BATTLES STREET (build 1956) : chacun pose SON meilleur score
+        // (src/core/061, scoreDefi), pendant le battle seulement, dans un duel
+        // dont la mesure est un format street. Le Worker compare (duels.js).
+        // ⚠ Un score déclaré : seul « certifie » dit qu'une vidéo l'a lu.
+        "street": {
+          "$k": {
+            ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours' && now <= root.child('duels').child($id).child('fin').val() && root.child('duels').child($id).child('mesure').val().beginsWith('street_')",
+            ".validate": "newData.hasChildren(['score', 'at'])",
+            "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+            "at":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "certifie": { ".validate": "newData.isBoolean()" },
+            "$autre":   { ".validate": false }
+          }
+        },
         // debut, fin, scores, gagnant, rejointLe, termineLe, rappel, maj : le
         // Worker seul (il passe outre les regles) ; un client ne les ecrit pas.
         "$autre": { ".validate": false }
@@ -1958,13 +2084,31 @@
     // Ce que l invite voit AVANT de rejoindre (arrivee nominative, /i) :
     // le prenom du createur, la mesure, la duree. Lecture publique, ecrit une
     // fois par le createur, avec le duel.
+    // LE CLASSEMENT STREET (build 1956) : par format, le meilleur score de
+    // chacun sous son PSEUDO public (jamais une cle). Opt-in : l app n y
+    // ecrit que sur « Publier au classement ». Score declare ; « certifie »
+    // dit qu une video l a lu sur le telephone.
+    "classements_street": {
+      ".read": "auth != null",
+      "$format": {
+        ".indexOn": ["score"],
+        "$pseudo": {
+          ".write": "auth != null && root.child('pseudos').child($pseudo).val() === auth.token.email.replace('.', ',')",
+          ".validate": "$format.matches(/^(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/) && newData.hasChildren(['score', 'at'])",
+          "score":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000" },
+          "at":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "certifie": { ".validate": "newData.isBoolean()" },
+          "$autre":   { ".validate": false }
+        }
+      }
+    },
     "duels_publics": {
       "$id": {
         ".read": true,
         ".write": "auth != null && !data.exists() && newData.parent().parent().child('duels').child($id).child('createur').val() === auth.token.email.replace('.', ',')",
         ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['prenom', 'mesure', 'duree'])",
         "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
-        "mesure": { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "mesure": { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct|street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid))$/)" },
         "duree":  { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
         "$autre": { ".validate": false }
       }

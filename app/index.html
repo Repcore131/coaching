@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1955';
+window.RC_BUILD='1956';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-09';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1955.css">
+<link rel="stylesheet" href="./rc-style.1956.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1955.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1956.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -4165,6 +4165,21 @@ const COACH_PHOTO='icons/coach.jpg';
         </span>
         <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
       </button>
+      <!-- LES DÉFIS STREET ET LE DÉFI 28 JOURS (build 1956). -->
+      <button type="button" class="card tc-entree" onclick="ouvrirDefisStreet()">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Défis street</span>
+          <span class="tc-entree-d">The 100 et six autres formats : solo, en équipe ou en battle, au chrono</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
+      <button type="button" class="card tc-entree" onclick="ouvrirDefis28()">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Défi 28 jours</span>
+          <span class="tc-entree-d">Le défi de ton coach : check-in quotidien, photos J1 et J28, tirage au sort</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
       <button type="button" class="card tc-entree" onclick="ouvrirTestsCompat()">
         <span style="flex:1;min-width:0">
           <span class="tc-entree-t">Tests de compatibilité</span>
@@ -5540,6 +5555,21 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1"><div class="pad"><div id="arb-contenu"></div></div></div>
 </div>
 
+<!-- LES DÉFIS STREET (build 1956) : la galerie, le chrono plein écran. -->
+<div id="s-defis-street" class="screen">
+  <div class="topbar"><button class="back-btn" aria-label="Retour au profil" onclick="retourDe('s-defis-street','s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Défis street</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="ds-contenu"></div></div></div>
+</div>
+<div id="s-chrono-street" class="screen chs-ecran">
+  <!-- R21 — quitter arrête le chrono et sort du plein écran (quitterChronoStreet). -->
+  <div class="topbar"><button class="back-btn" aria-label="Quitter le chrono" onclick="quitterChronoStreet()"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Chrono</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="chs-contenu"></div></div></div>
+</div>
+<div id="s-defi28" class="screen">
+  <div class="topbar"><button class="back-btn" aria-label="Retour" onclick="retourDe('s-defi28',currentUser&amp;&amp;currentUser.role==='coach'?'s-coach-canal':'s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Défi 28 jours</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="d28-contenu"></div></div></div>
+</div>
+
 <div id="s-tests-compat" class="screen">
   <div class="topbar"><button class="back-btn" aria-label="Retour au profil" onclick="retourDe('s-tests-compat','s-athlete-profile')"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button><span class="topbar-title">Tests de compatibilité</span><span></span></div>
   <div class="scroll-area" style="flex:1">
@@ -5653,6 +5683,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- LES DÉFIS : la feuille à trois champs et ses modèles (openDefiCanal). R31 : btn-casse. -->
         <button class="btn btn-outline btn-sm btn-casse" style="flex:1;margin:0;min-height:46px" onclick="openDefiCanal('')">Créer un défi</button>
       </div>
+      <!-- LE DÉFI 28 JOURS (build 1956) : création, participation, tirage. -->
+      <button class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 16px;min-height:46px" onclick="ouvrirDefis28()">Défi 28 jours</button>
       <!-- LOT C5 : la proposition de la semaine et les messages programmés. -->
       <div id="canal-propositions"></div>
       <div id="canal-programmes"></div>
@@ -6450,5 +6482,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1955.js"></script>
+<script src="./rc-core.1956.js"></script>
 </body></html>

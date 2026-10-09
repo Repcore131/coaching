@@ -1861,6 +1861,8 @@ export function creerMetier(deps) {
         ['duels_joueur/' + d.createur + '/' + id]: true, ['duels_joueur/' + invite + '/' + id]: true,
         ['duels_recus/' + invite + '/' + id]: { le: t, de: String(d.createurNom || '').slice(0, 24) || null } });
       Object.assign(d, { invite, inviteNom: nom });
+      // UN BATTLE STREET (build 1956) part tout de suite : rien à tirer des séances.
+      if (DU.formatStreet(d.mesure)) await duelStreetDemarrer(d, t);
       await pousserA([{ uid: invite, message: DU.pushRevanche(d) }], { attendre: false });
       return 'revanche';
     }
@@ -1872,10 +1874,19 @@ export function creerMetier(deps) {
       await db.ref().update({ ['duels/' + id + '/statut']: 'accepte', ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
         ['duels_actifs/' + id]: { fin: 0, depuis: t },
         ['duels_joueur/' + d.createur + '/' + id]: true, ['duels_joueur/' + d.invite + '/' + id]: true });
+      if (DU.formatStreet(d.mesure)) await duelStreetDemarrer(d, t);
       await pousserA([{ uid: d.createur, message: DU.pushRejoint(d) }], { attendre: false });
-      return 'accepte';
+      return DU.formatStreet(d.mesure) ? 'demarre' : 'accepte';
     }
     // duel_maj : une séance terminée (ou une progression réécrite).
+    // Un battle street : un score posé dans street/<clé> ; les scores suivent.
+    if (DU.formatStreet(d.mesure)) {
+      if (d.statut === 'accepte') { await duelStreetDemarrer(d, t); return 'demarre'; }
+      if (d.statut !== 'en_cours') return 'clos';
+      if (t > Number(d.fin)) return duelCloturer(d, t);
+      await db.ref().update({ ['duels/' + id + '/scores']: DU.scoresDe(d), ['duels/' + id + '/maj']: t });
+      return 'scores';
+    }
     if (d.statut === 'accepte') {
       if (par !== d.invite) return 'pas_commence';
       const { debut, fin } = DU.demarrage(d, t, e.at);
@@ -1905,9 +1916,18 @@ export function creerMetier(deps) {
     if (!(p && p.srv === true)) await differer([{ quoi: 'progres', cle: par, cibles: [{ g: 'duel', id, coach: null }] }]);
     return 'scores';
   }
+  // Un battle street démarre au « oui » : debut maintenant, fin dans `duree` jours.
+  async function duelStreetDemarrer(d, t) {
+    const duree = DU.DUEL_DUREES.indexOf(Number(d.duree)) >= 0 ? Number(d.duree) : 7;
+    const debut = t, fin = t + duree * DU.DUEL_J;
+    await db.ref().update({ ['duels/' + d.id + '/statut']: 'en_cours', ['duels/' + d.id + '/debut']: debut,
+      ['duels/' + d.id + '/fin']: fin, ['duels/' + d.id + '/scores']: { createur: 0, invite: 0 },
+      ['duels/' + d.id + '/maj']: t, ['duels_actifs/' + d.id]: { fin } });
+    Object.assign(d, { statut: 'en_cours', debut, fin, scores: { createur: 0, invite: 0 } });
+  }
   async function duelCloturer(d, t) {
     const scores = DU.scoresDe(d);
-    const gagnant = DU.gagnantDe(scores);
+    const gagnant = DU.gagnantDe(scores, d.mesure);
     Object.assign(d, { scores });
     const maj = { ['duels/' + d.id + '/statut']: 'termine', ['duels/' + d.id + '/scores']: scores,
       ['duels/' + d.id + '/gagnant']: gagnant, ['duels/' + d.id + '/termineLe']: t, ['duels/' + d.id + '/maj']: t,
@@ -2341,7 +2361,7 @@ export function creerMetier(deps) {
     for (const id of duels.filter((x) => DU.DUEL_ID_RE.test(x))) {
       const d = await _val('duels/' + id);
       if (!d || d.statut === 'termine' || d.statut === 'annule' || (d.createur !== k && d.invite !== k)) { oublis['duels_joueur/' + k + '/' + id] = null; continue; }
-      if (d.statut !== 'en_cours') continue;
+      if (d.statut !== 'en_cours' || DU.formatStreet(d.mesure)) continue;
       out.push({ g: 'duel', id, mesure: d.mesure, debut: Number(d.debut), fin: Number(d.fin), d });
     }
     if (Object.keys(oublis).length) await db.ref().update(oublis);

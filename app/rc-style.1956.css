@@ -13972,3 +13972,62 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .arb-propre input{width:auto;margin:2px 0 0}
 .arb-err{font-size:var(--fs-xs);color:var(--orange);margin-top:8px}
 .tt-ex .sub{font-size:inherit}
+/* LES DÉFIS STREET (build 1956) : galerie, fiche, chrono plein écran, classement. */
+.ds-intro{font-size:var(--fs-sm);line-height:1.6;margin:0 0 14px}
+.ds-galerie{display:grid;grid-template-columns:1fr;gap:10px}
+.ds-carte{display:flex;flex-direction:column;gap:4px;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;color:var(--text);cursor:pointer}
+.ds-nom{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text-strong);letter-spacing:1px}
+.ds-etapes{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.ds-pied{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.ds-tag{font-size:var(--fs-xs);font-weight:700;border:1px solid var(--border);border-radius:var(--r-full);padding:2px 8px;color:var(--sub)}
+.ds-tag.ds-video{border-color:var(--red);color:var(--text)}
+.ds-record{font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);margin-left:auto}
+.ds-fiche{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto}
+.ds-fiche-t{font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text-strong);margin-bottom:4px}
+.ds-regles{margin:10px 0;padding-left:18px;font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
+.ds-rec{font-size:var(--fs-sm);color:var(--text);margin:6px 0 10px}
+.ds-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:12px 0}
+.ds-modes .btn{margin:0;width:100%}
+.ds-lab{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin:12px 0 6px}
+.ds-cl{list-style:none;margin:0;padding:0}
+.ds-cl li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--fs-sm)}
+.ds-cl li.moi{color:var(--text-strong);font-weight:800}
+.ds-rang{width:24px;text-align:right;color:var(--sub)}
+.ds-ps{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.chs-ecran .scroll-area{display:flex;flex-direction:column}
+.chs-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);text-align:center;margin-top:8px}
+.chs-temps{font-family:var(--pile-titre);font-size:var(--fs-3xl);color:var(--text-strong);text-align:center;margin:18px 0;font-variant-numeric:tabular-nums}
+.chs-c{text-align:center}
+.chs-go{width:100%;margin:8px 0 0}
+.chs-etapes,.chs-membres{display:grid;gap:8px;margin:0 0 12px}
+.chs-e,.chs-m{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;color:var(--text);font-size:var(--fs-sm);font-weight:700}
+.chs-e.fait,.chs-m.fini{border-color:var(--red);color:var(--text-strong)}
+.chs-res{text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px}
+.chs-res.chs-certifie{border-color:var(--red)}
+.chs-score{font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text-strong)}
+.chs-statut{font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub);margin-top:4px}
+.chs-raisons{text-align:left;font-size:var(--fs-xs);color:var(--orange);margin:8px 0 0;padding-left:18px}
+/* LE DÉFI 28 JOURS (build 1956). */
+.d28-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px}
+.d28-t{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text-strong)}
+.d28-etat{font-size:var(--fs-xs);color:var(--sub);margin:4px 0 8px}
+.d28-graine{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}
+.d28-graine code,.d28-verif code{font-size:inherit}
+.d28-cases{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin:6px 0}
+.d28-cases span{aspect-ratio:1;border-radius:var(--r-1);background:var(--surface-2);border:1px solid var(--border)}
+.d28-cases span.on{background:var(--red);border-color:var(--red)}
+.d28-cases span.auj{outline:1px solid var(--text-strong)}
+.d28-grille{display:grid;gap:6px}
+.d28-ligne{display:grid;grid-template-columns:72px 1fr 24px 44px;gap:6px;align-items:center;font-size:var(--fs-xs)}
+.d28-ligne.elig .d28-p{color:var(--text-strong);font-weight:800}
+.d28-p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d28-n{text-align:right;font-weight:800}
+.d28-ph{color:var(--sub)}
+.d28-photo{margin-top:10px;font-size:var(--fs-xs);display:flex;flex-direction:column;gap:6px}
+.d28-consent{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text);text-transform:none;letter-spacing:normal;font-weight:600}
+.d28-consent input{width:auto;margin:2px 0 0}
+.d28-tirage{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+.d28-g{font-size:var(--fs-sm);font-weight:800;color:var(--text-strong)}
+.d28-verif{font-size:var(--fs-xs);color:var(--text);overflow-wrap:anywhere}
+.d28-verif.ko{color:var(--orange)}
+.d28-photo .btn{color:var(--text)}

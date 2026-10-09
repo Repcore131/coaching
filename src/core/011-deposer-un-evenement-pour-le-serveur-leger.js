@@ -453,15 +453,31 @@ const DUEL_ECUSSON='<svg viewBox="0 0 120 120" aria-hidden="true"><defs>'
   +'<g transform="translate(60 62) rotate(-40) scale(-1 1)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
   +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g></svg>');
 const DUEL_INVITE_CLE='rc_duel_invite';
+// LES BATTLES STREET (build 1956) : un duel sur un format de défi street
+// (FORMATS_DEFIS, chunk 061). La mesure porte le format : « street_the100 ».
+// Il démarre dès que l'invité rejoint ; chacun pose son meilleur essai.
+const DUEL_STREET_RE=/^street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/;
+/** PURE. Le format d'une mesure de battle street, ou ''. */
+function duelFormatStreet(mesure){ const x=DUEL_STREET_RE.exec(String(mesure||'')); return x?x[1]:''; }
+/** PURE. Une mesure de duel que l'app propose, ou un battle street. */
+function duelMesureValide(mesure){ return DUEL_MESURES.some(x=>x.cle===mesure)||!!duelFormatStreet(mesure); }
 /** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
 function texteDuel(mesure,duree){
   const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const f=duelFormatStreet(mesure);
+  if(f) return 'Battle '+((typeof FORMATS_DEFIS!=='undefined'&&FORMATS_DEFIS[f])?FORMATS_DEFIS[f].nom:f)+' sur '+d+' jours';
   const m={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'}[mesure]||'régularité';
   return d+' jours de '+m;
 }
 /** PURE. Un score lisible (le Worker a le même). */
 function texteScoreDuel(mesure,v){
   const n=Number(v)||0;
+  const f=duelFormatStreet(mesure);
+  if(f){
+    if(!(n>0)) return 'pas de score';
+    if(typeof FORMATS_DEFIS!=='undefined'&&FORMATS_DEFIS[f]&&FORMATS_DEFIS[f].scoring==='reps') return Math.round(n)+' rép.';
+    const s=Math.round(n); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  }
   if(mesure==='tonnage') return n>=10000?String(Math.round(n/100)/10).replace('.',',')+' t':Math.round(n)+' kg';
   if(mesure==='progressionPct') return String(Math.round(n*10)/10).replace('.',',')+' %';
   if(mesure==='serie') return Math.round(n)+' sem.';
@@ -506,7 +522,7 @@ async function creerDuel(mesure,duree){
   const u=currentUser;
   if(!u||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
   if(!CLOUD.ok()) return {ok:false,erreur:'Impossible hors connexion.'};
-  const m=DUEL_MESURES.find(x=>x.cle===mesure)?mesure:'seances';
+  const m=duelMesureValide(mesure)?mesure:'seances';
   const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
   const id=duelNouvelId(), moi=_moiCle();
   const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
@@ -591,6 +607,7 @@ function duelLigne(d,moi,maintenant){
   const lui=d.createur===moi?(d.inviteNom||'ton pote'):(d.createurNom||'ton adversaire');
   const txt=texteDuel(d.mesure,d.duree);
   if(d.statut==='attente') return txt+' · en attente de ton pote';
+  if(d.statut==='accepte'&&duelFormatStreet(d.mesure)) return txt+' contre '+lui+' · le battle se lance';
   if(d.statut==='accepte'&&d.invite===moi&&d.createurPseudo) return (d.createurNom||'Ton pote')+' te défie : '+txt+' · ta prochaine séance lance le compte';
   if(d.statut==='accepte') return txt+' contre '+lui+' · démarre à '+(d.invite===moi?'ta':'sa')+' première séance';
   if(d.statut==='en_cours'){
@@ -1187,7 +1204,7 @@ function duelsGardeFou(enCours,cleAmi,prenom){
 }
 // PURE. Ce que « Revanche » reprend du duel précédent : la mesure et la durée.
 function revancheParams(d){
-  const m=d&&DUEL_MESURES.some(x=>x.cle===d.mesure)?d.mesure:'seances';
+  const m=d&&duelMesureValide(d.mesure)?d.mesure:'seances';
   const j=d&&DUEL_DUREES.indexOf(Number(d.duree))>=0?Number(d.duree):14;
   return {mesure:m,duree:j};
 }
@@ -1374,6 +1391,8 @@ async function ouvrirDuel(id){
   f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
     +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
     +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    // UN BATTLE STREET EN COURS : l'essai se fait au chrono plein écran (chunk 061).
+    +(d.statut==='en_cours'&&duelFormatStreet(d.mesure)&&Date.now()<=Number(d.fin)?'<button type="button" class="btn btn-red du-go" onclick="fermerDuelFeuille();ouvrirChronoStreet(\''+duelFormatStreet(d.mesure)+'\',\'battle\',\''+id+'\')">Faire mon essai</button>':'')
     +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):'', dk=ap?pseudoPublicCle(ap):'';
       if(!ap||amisLocal().amis[dk]) return '';
       const nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));

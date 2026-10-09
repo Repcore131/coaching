@@ -1010,6 +1010,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // vidéo) et les totaux du test de tractions. Une performance, comme les
   // séances, pas une donnée de santé.
   'arbreTractions',
+  'defisStreet',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'

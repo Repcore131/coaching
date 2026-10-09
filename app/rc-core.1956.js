@@ -8213,6 +8213,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // vidéo) et les totaux du test de tractions. Une performance, comme les
   // séances, pas une donnée de santé.
   'arbreTractions',
+  'defisStreet',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'
@@ -27267,15 +27268,31 @@ const DUEL_ECUSSON='<svg viewBox="0 0 120 120" aria-hidden="true"><defs>'
   +'<g transform="translate(60 62) rotate(-40) scale(-1 1)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
   +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g></svg>');
 const DUEL_INVITE_CLE='rc_duel_invite';
+// LES BATTLES STREET (build 1956) : un duel sur un format de défi street
+// (FORMATS_DEFIS, chunk 061). La mesure porte le format : « street_the100 ».
+// Il démarre dès que l'invité rejoint ; chacun pose son meilleur essai.
+const DUEL_STREET_RE=/^street_(the100|pharaon|demiBBR|onTheBar|special6|super10|deathPyramid)$/;
+/** PURE. Le format d'une mesure de battle street, ou ''. */
+function duelFormatStreet(mesure){ const x=DUEL_STREET_RE.exec(String(mesure||'')); return x?x[1]:''; }
+/** PURE. Une mesure de duel que l'app propose, ou un battle street. */
+function duelMesureValide(mesure){ return DUEL_MESURES.some(x=>x.cle===mesure)||!!duelFormatStreet(mesure); }
 /** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
 function texteDuel(mesure,duree){
   const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const f=duelFormatStreet(mesure);
+  if(f) return 'Battle '+((typeof FORMATS_DEFIS!=='undefined'&&FORMATS_DEFIS[f])?FORMATS_DEFIS[f].nom:f)+' sur '+d+' jours';
   const m={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'}[mesure]||'régularité';
   return d+' jours de '+m;
 }
 /** PURE. Un score lisible (le Worker a le même). */
 function texteScoreDuel(mesure,v){
   const n=Number(v)||0;
+  const f=duelFormatStreet(mesure);
+  if(f){
+    if(!(n>0)) return 'pas de score';
+    if(typeof FORMATS_DEFIS!=='undefined'&&FORMATS_DEFIS[f]&&FORMATS_DEFIS[f].scoring==='reps') return Math.round(n)+' rép.';
+    const s=Math.round(n); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  }
   if(mesure==='tonnage') return n>=10000?String(Math.round(n/100)/10).replace('.',',')+' t':Math.round(n)+' kg';
   if(mesure==='progressionPct') return String(Math.round(n*10)/10).replace('.',',')+' %';
   if(mesure==='serie') return Math.round(n)+' sem.';
@@ -27320,7 +27337,7 @@ async function creerDuel(mesure,duree){
   const u=currentUser;
   if(!u||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
   if(!CLOUD.ok()) return {ok:false,erreur:'Impossible hors connexion.'};
-  const m=DUEL_MESURES.find(x=>x.cle===mesure)?mesure:'seances';
+  const m=duelMesureValide(mesure)?mesure:'seances';
   const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
   const id=duelNouvelId(), moi=_moiCle();
   const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
@@ -27405,6 +27422,7 @@ function duelLigne(d,moi,maintenant){
   const lui=d.createur===moi?(d.inviteNom||'ton pote'):(d.createurNom||'ton adversaire');
   const txt=texteDuel(d.mesure,d.duree);
   if(d.statut==='attente') return txt+' · en attente de ton pote';
+  if(d.statut==='accepte'&&duelFormatStreet(d.mesure)) return txt+' contre '+lui+' · le battle se lance';
   if(d.statut==='accepte'&&d.invite===moi&&d.createurPseudo) return (d.createurNom||'Ton pote')+' te défie : '+txt+' · ta prochaine séance lance le compte';
   if(d.statut==='accepte') return txt+' contre '+lui+' · démarre à '+(d.invite===moi?'ta':'sa')+' première séance';
   if(d.statut==='en_cours'){
@@ -28001,7 +28019,7 @@ function duelsGardeFou(enCours,cleAmi,prenom){
 }
 // PURE. Ce que « Revanche » reprend du duel précédent : la mesure et la durée.
 function revancheParams(d){
-  const m=d&&DUEL_MESURES.some(x=>x.cle===d.mesure)?d.mesure:'seances';
+  const m=d&&duelMesureValide(d.mesure)?d.mesure:'seances';
   const j=d&&DUEL_DUREES.indexOf(Number(d.duree))>=0?Number(d.duree):14;
   return {mesure:m,duree:j};
 }
@@ -28188,6 +28206,8 @@ async function ouvrirDuel(id){
   f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
     +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
     +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    // UN BATTLE STREET EN COURS : l'essai se fait au chrono plein écran (chunk 061).
+    +(d.statut==='en_cours'&&duelFormatStreet(d.mesure)&&Date.now()<=Number(d.fin)?'<button type="button" class="btn btn-red du-go" onclick="fermerDuelFeuille();ouvrirChronoStreet(\''+duelFormatStreet(d.mesure)+'\',\'battle\',\''+id+'\')">Faire mon essai</button>':'')
     +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):'', dk=ap?pseudoPublicCle(ap):'';
       if(!ap||amisLocal().amis[dk]) return '';
       const nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
@@ -150689,5 +150709,1027 @@ function partagerNoeudTractions(cle){
   try{ ok=_storySortirPartage(_dessinerCarteNoeud(cle,fond),nom,undefined,fmt)||_storySortirTelechargement(_dessinerCarteNoeud(cle,fond),nom,fmt); }
   catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
+  return ok;
+}
+// ══ LES DÉFIS STREET (build 1956) ═════════════════════════════════════════
+// Sept formats de défis de rue, branchés sur ce qui existe déjà :
+//   solo     le record personnel (u.defisStreet, synchronisé avec le dossier) ;
+//   équipe   un seul téléphone chronomètre tout le monde, et le chrono
+//            s'arrête quand le DERNIER finit ;
+//   battle   un duel existant (chunk 011, cloudflare/src/duels.js) dont la
+//            mesure porte le format : « street_the100 ». Chacun pose son
+//            meilleur essai dans duels/<id>/street/<sa clé>, le Worker compare.
+// La vidéo est facultative (sauf « videoRequise ») : lue SUR LE TÉLÉPHONE par
+// le motion-lab, elle compte les tractions propres (amplitude, sans kipping :
+// arbreRepsPropresVideo, chunk 060) et donne le statut « certifié ».
+//
+// ⚠ CONTENU DE TRAVAIL À VALIDER PAR KEVIN : seul « The 100 » vient de la
+//   demande (100 dips + 100 tractions + 100 pompes, au temps, découpage
+//   libre). Les six autres définitions (étapes, règles) sont des propositions
+//   de travail, marquées `travail:true`, à remplacer par les siennes.
+
+/** Les exercices d'un défi : le libellé, et si la vidéo sait les lire. */
+const STREET_EXOS=Object.freeze({
+  traction:Object.freeze({lib:'tractions',video:true}),
+  dips:Object.freeze({lib:'dips',video:false}),
+  pompe:Object.freeze({lib:'pompes',video:false}),
+  squat:Object.freeze({lib:'squats',video:false}),
+  releve:Object.freeze({lib:'relevés de jambes',video:false}),
+  burpee:Object.freeze({lib:'burpees',video:false})
+});
+// Un temps plus court que 0,6 s par répétition n'est pas humain.
+const STREET_S_PAR_REP_MIN=0.6;
+const STREET_SCORE_MAX=100000;
+const STREET_ESSAIS_MAX=30;
+const STREET_EQUIPE_MIN=2, STREET_EQUIPE_MAX=10;
+const _etape=(exo,reps)=>Object.freeze({exo,reps});
+const _format=(o)=>Object.freeze(Object.assign({},o,{etapes:Object.freeze(o.etapes),regles:Object.freeze(o.regles)}));
+/**
+ * Les sept formats. Chacun : {cle, nom, etapes[{exo, reps}], scoring
+ * 'temps'|'reps', regles[], videoRequise, tempsMax (s), travail?}.
+ * En « reps », l'unique étape a reps:0 : le maximum.
+ */
+const FORMATS_DEFIS=Object.freeze({
+  the100:_format({cle:'the100',nom:'The 100',scoring:'temps',videoRequise:false,tempsMax:7200,
+    etapes:[_etape('dips',100),_etape('traction',100),_etape('pompe',100)],
+    regles:['Découpage libre : fractionne comme tu veux, dans l’ordre que tu veux.',
+      'Une répétition incomplète ne compte pas : elle se refait.',
+      'Le chrono tourne du départ à la dernière répétition, repos compris.']}),
+  pharaon:_format({cle:'pharaon',nom:'Pharaon',scoring:'temps',videoRequise:false,tempsMax:7200,travail:true,
+    etapes:[_etape('traction',55),_etape('dips',55),_etape('pompe',55)],
+    regles:['Tours descendants de 10 à 1 : 10 tractions, 10 dips, 10 pompes, puis 9, 9, 9… jusqu’à 1.',
+      'Chaque tour dans l’ordre, sans découper un tour.',
+      'Chrono continu, repos compris.']}),
+  demiBBR:_format({cle:'demiBBR',nom:'Demi-BBR',scoring:'temps',videoRequise:false,tempsMax:5400,travail:true,
+    etapes:[_etape('traction',50),_etape('dips',50),_etape('pompe',50),_etape('squat',50)],
+    regles:['Découpage libre, dans l’ordre des étapes.',
+      'Une répétition incomplète ne compte pas.',
+      'Chrono continu, repos compris.']}),
+  onTheBar:_format({cle:'onTheBar',nom:'On the bar',scoring:'reps',videoRequise:true,tempsMax:1800,travail:true,
+    etapes:[_etape('traction',0)],
+    regles:['Le maximum de tractions sans lâcher la barre.',
+      'Départ bras tendus, menton au-dessus de la barre à chaque répétition.',
+      'Pas de kipping : une répétition avec élan ne compte pas.',
+      'Vidéo obligatoire : elle compte les répétitions propres.']}),
+  special6:_format({cle:'special6',nom:'Spécial 6',scoring:'temps',videoRequise:false,tempsMax:5400,travail:true,
+    etapes:[_etape('traction',30),_etape('dips',30),_etape('pompe',60),_etape('squat',90),_etape('releve',30),_etape('burpee',30)],
+    regles:['3 tours de 6 exercices : 10 tractions, 10 dips, 20 pompes, 30 squats, 10 relevés de jambes, 10 burpees.',
+      'Chaque tour dans l’ordre.',
+      'Chrono continu, repos compris.']}),
+  super10:_format({cle:'super10',nom:'Super 10',scoring:'temps',videoRequise:false,tempsMax:5400,travail:true,
+    etapes:[_etape('traction',100),_etape('dips',100),_etape('pompe',100)],
+    regles:['10 tours de 10 tractions, 10 dips, 10 pompes.',
+      'Chaque tour dans l’ordre, sans découper un tour.',
+      'Chrono continu, repos compris.']}),
+  deathPyramid:_format({cle:'deathPyramid',nom:'Death pyramid',scoring:'temps',videoRequise:false,tempsMax:5400,travail:true,
+    etapes:[_etape('traction',100)],
+    regles:['Pyramide de tractions : 1, 2, 3… 10, puis 9, 8… 1.',
+      'Chaque palier d’un seul tenant, sans lâcher la barre.',
+      'Repos libre entre les paliers, chrono continu.']})
+});
+const FORMATS_DEFIS_CLES=Object.freeze(Object.keys(FORMATS_DEFIS));
+
+/** PURE. Le format, depuis sa clé ou l'objet lui-même ; null s'il est inconnu. */
+function formatDefi(f){
+  if(f&&typeof f==='object') return FORMATS_DEFIS[f.cle]===f?f:null;
+  return Object.prototype.hasOwnProperty.call(FORMATS_DEFIS,String(f))?FORMATS_DEFIS[String(f)]:null;
+}
+/** PURE. Combien de tractions le format demande (la vidéo n'en lit pas d'autre). */
+function formatTractions(f){
+  const x=formatDefi(f); if(!x) return 0;
+  return x.etapes.filter(e=>e.exo==='traction').reduce((s,e)=>s+e.reps,0);
+}
+/** PURE. Un score lisible : « 12:34 », « 23 rép. ». */
+function texteScoreStreet(f,v){
+  const x=formatDefi(f), n=Number(v)||0;
+  if(!(n>0)) return 'pas de score';
+  if(x&&x.scoring==='reps') return Math.round(n)+' rép.';
+  const s=Math.round(n); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}
+/** PURE. Le meilleur de deux scores (0 ou absent : jamais meilleur). */
+function streetMeilleur(f,a,b){
+  const x=formatDefi(f), A=Number(a)||0, B=Number(b)||0;
+  if(!(A>0)) return B>0?B:0;
+  if(!(B>0)) return A;
+  return x&&x.scoring==='reps'?Math.max(A,B):Math.min(A,B);
+}
+/**
+ * PURE. Le score d'un essai.
+ * @param {string|object} format
+ * @param {{temps?:number, reps?:number[], video?:any}} saisies
+ *   temps : secondes (format au temps) ; reps : une valeur par étape (faites) ;
+ *   video : les mesures du motion-lab (mlTestCompatVideo), facultatives.
+ * @returns {{score:number, valide:boolean, certifie:boolean, statut:'certifie'|'valide'|'invalide', raisons:string[]}}
+ */
+function scoreDefi(format,saisies){
+  const f=formatDefi(format);
+  const raisons=[];
+  const fin=(score,valide,certifie)=>({score:valide?score:0,valide,certifie:!!(valide&&certifie),
+    statut:valide?(certifie?'certifie':'valide'):'invalide',raisons});
+  if(!f){ raisons.push('Format inconnu.'); return fin(0,false,false); }
+  const s=(saisies&&typeof saisies==='object')?saisies:{};
+  const reps=Array.isArray(s.reps)?s.reps.map(x=>Math.max(0,Math.floor(Number(x)||0))):[];
+  let score=0, valide=true;
+  if(f.scoring==='temps'){
+    const t=Number(s.temps);
+    if(!(isFinite(t)&&t>0)){ raisons.push('Le chrono n’a pas de temps.'); valide=false; }
+    else if(t>f.tempsMax){ raisons.push('Plus de '+Math.round(f.tempsMax/60)+' minutes : l’essai est hors délai.'); valide=false; }
+    f.etapes.forEach((e,i)=>{
+      const fait=reps[i]||0;
+      if(fait<e.reps){ raisons.push('Il manque '+(e.reps-fait)+' '+STREET_EXOS[e.exo].lib+'.'); valide=false; }
+    });
+    const total=f.etapes.reduce((a,e)=>a+e.reps,0);
+    if(valide&&t<total*STREET_S_PAR_REP_MIN){ raisons.push('Temps impossible pour '+total+' répétitions.'); valide=false; }
+    score=valide?Math.round(t*10)/10:0;
+  } else {
+    score=reps[0]||0;
+    if(!(score>=1)){ raisons.push('Aucune répétition saisie.'); valide=false; }
+    if(score>1000){ raisons.push('Plus de 1000 répétitions : à vérifier.'); valide=false; }
+  }
+  // LA VIDÉO : seules les tractions se lisent. Il en faut autant de propres
+  // que le format en demande (au temps) ou que l'essai en déclare (aux reps).
+  let certifie=false;
+  const besoin=f.scoring==='reps'?score:formatTractions(f);
+  if(s.video&&besoin>0){
+    const r=arbreRepsPropresVideo(s.video,ARBRE_AMPLITUDE_PROPRE);
+    if(r.vis<COMPAT_VIS_MIN) raisons.push('Vidéo : le corps n’est pas assez visible.');
+    else if(r.n<besoin) raisons.push('Vidéo : '+r.n+' traction'+(r.n>1?'s':'')+' propre'+(r.n>1?'s':'')+' sur '+besoin+(r.raisons.length?' ('+r.raisons.join(', ')+')':'')+'.');
+    else certifie=true;
+  }
+  if(f.videoRequise&&!certifie){
+    if(!s.video) raisons.push('Vidéo obligatoire pour ce format.');
+    valide=false;
+  }
+  return fin(score,valide,certifie);
+}
+/**
+ * PURE. Le score d'une équipe : chaque membre fait le format entier ; au
+ * temps, le chrono s'arrête quand le DERNIER finit (le plus long des temps) ;
+ * aux répétitions, elles s'additionnent. Un membre sans essai valide rend
+ * l'équipe incomplète : pas de score.
+ * @param {string|object} format
+ * @param {{nom:string, temps?:number, reps?:number[]}[]} membres
+ */
+function scoreEquipe(format,membres){
+  const f=formatDefi(format);
+  const raisons=[];
+  if(!f) return {score:0,valide:false,raisons:['Format inconnu.'],membres:[]};
+  const l=Array.isArray(membres)?membres:[];
+  // Un format filmé ne se joue pas en équipe : un téléphone ne filme pas dix barres.
+  if(f.videoRequise) return {score:0,valide:false,raisons:['Format filmé : pas de mode équipe.'],membres:[]};
+  if(l.length<STREET_EQUIPE_MIN) raisons.push('Une équipe, c’est au moins '+STREET_EQUIPE_MIN+' membres.');
+  if(l.length>STREET_EQUIPE_MAX) raisons.push('Une équipe, c’est '+STREET_EQUIPE_MAX+' membres au plus.');
+  const res=l.map(m=>Object.assign({nom:String((m&&m.nom)||'').slice(0,24)},scoreDefi(f,{temps:m&&m.temps,reps:m&&m.reps})));
+  const manquants=res.filter(r=>!r.valide);
+  if(manquants.length) raisons.push('Équipe incomplète : '+manquants.map(r=>r.nom||'un membre').join(', ')+' n’'+(manquants.length>1?'ont':'a')+' pas fini.');
+  const valide=!raisons.length;
+  let score=0;
+  if(valide) score=f.scoring==='reps'?res.reduce((a,r)=>a+r.score,0):Math.max(...res.map(r=>r.score));
+  return {score,valide,raisons,membres:res};
+}
+// ── Le dossier : records et derniers essais ──────────────────────────────────
+/** PURE. L'état street du dossier, nettoyé. */
+function defisStreetEtat(u){
+  const x=(u&&u.defisStreet&&typeof u.defisStreet==='object')?u.defisStreet:{};
+  const rec=(x.records&&typeof x.records==='object')?x.records:{};
+  const records={};
+  for(const k of FORMATS_DEFIS_CLES){
+    const r=rec[k]; if(!r||typeof r!=='object') continue;
+    const o={};
+    if(r.solo&&Number(r.solo.score)>0) o.solo=r.solo;
+    if(r.equipe&&Number(r.equipe.score)>0) o.equipe=r.equipe;
+    if(o.solo||o.equipe) records[k]=o;
+  }
+  const essais=(Array.isArray(x.essais)?x.essais:Object.values(x.essais||{})).filter(e=>e&&formatDefi(e.f)&&Number(e.score)>0);
+  return {records,essais};
+}
+/**
+ * PURE (sur u). Range un essai VALIDE : le record du mode s'il est battu, et
+ * l'essai dans les derniers (30). Les bornes sont celles des règles.
+ * @returns {{ok:boolean, record:boolean, raison?:string}}
+ */
+function defiStreetEnregistrer(u,format,mode,res,t){
+  const f=formatDefi(format);
+  if(!u||!f) return {ok:false,record:false,raison:'Format inconnu.'};
+  if(['solo','equipe','battle'].indexOf(mode)<0) return {ok:false,record:false,raison:'Mode inconnu.'};
+  if(!res||!res.valide||!(res.score>0)||res.score>STREET_SCORE_MAX) return {ok:false,record:false,raison:'Essai non valide.'};
+  const at=Number(t)||Date.now();
+  const e=defisStreetEtat(u);
+  const essai={f:f.cle,mode,score:res.score,at,certifie:!!res.certifie};
+  const nm=Math.floor(Number(res.membres)||0);
+  if(mode==='equipe'){ if(nm<STREET_EQUIPE_MIN||nm>STREET_EQUIPE_MAX) return {ok:false,record:false,raison:'Équipe hors bornes.'}; essai.membres=nm; }
+  const champ=mode==='equipe'?'equipe':'solo';
+  const avant=e.records[f.cle]&&e.records[f.cle][champ];
+  const record=!avant||streetMeilleur(f,avant.score,res.score)!==Number(avant.score);
+  if(record){
+    const r=Object.assign({},e.records[f.cle]||{});
+    r[champ]=champ==='equipe'?{score:res.score,at,membres:nm}:{score:res.score,at,certifie:!!res.certifie};
+    e.records[f.cle]=r;
+  }
+  e.essais.push(essai);
+  u.defisStreet={records:e.records,essais:e.essais.slice(-STREET_ESSAIS_MAX)};
+  return {ok:true,record};
+}
+/** PURE. Le record solo d'un format, ou null. */
+function recordStreet(u,format){
+  const f=formatDefi(format); if(!f) return null;
+  const r=defisStreetEtat(u).records[f.cle];
+  return (r&&r.solo)||null;
+}
+// ── Le classement ────────────────────────────────────────────────────────────
+/** PURE. /classements_street/<format> → [{pseudo, score, certifie, rang}], du meilleur au moins bon. */
+function classementStreet(format,brut){
+  const f=formatDefi(format); if(!f) return [];
+  const l=Object.keys(brut||{}).map(p=>({pseudo:amiPseudoDeCle(p),score:Number(brut[p]&&brut[p].score)||0,certifie:!!(brut[p]&&brut[p].certifie),at:Number(brut[p]&&brut[p].at)||0}))
+    .filter(x=>x.score>0&&x.score<=STREET_SCORE_MAX);
+  l.sort((a,b)=>(f.scoring==='reps'?b.score-a.score:a.score-b.score)||(b.certifie-a.certifie)||(a.at-b.at));
+  let rang=0, prec=null;
+  l.forEach((x,i)=>{ if(x.score!==prec){ rang=i+1; prec=x.score; } x.rang=rang; });
+  return l;
+}
+async function lireClassementStreet(format){
+  const f=formatDefi(format); if(!f||!CLOUD.ok()) return null;
+  try{
+    const token=await CLOUD._getToken(); if(!token) return null;
+    const q='&orderBy=%22score%22&'+(f.scoring==='reps'?'limitToLast':'limitToFirst')+'=50';
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','classements_street/'+f.cle+'.json')+'?auth='+token+q);
+    return r.ok?classementStreet(f,await r.json()):null;
+  }catch(e){ return null; }
+}
+/** Publie le record solo sous le pseudo public (opt-in, un geste). */
+async function publierClassementStreet(format){
+  const f=formatDefi(format), u=currentUser;
+  const rec=recordStreet(u,f), mp=_monPseudo(u);
+  if(!f||!rec) return false;
+  if(!mp){ toast('Choisis d’abord ton nom public dans Mon profil.','var(--orange)'); return false; }
+  const ok=await CLOUD.racinePatch({['classements_street/'+f.cle+'/'+pseudoPublicCle(mp)]:{score:Number(rec.score),at:Number(rec.at)||Date.now(),certifie:!!rec.certifie}}).catch(()=>false);
+  toast(ok?'Ton record est au classement.':'Publication impossible pour l’instant.',ok?'var(--green)':'var(--orange)');
+  if(ok) ouvrirFormatStreet(f.cle);
+  return ok;
+}
+
+// ══ L'ÉCRAN : LA GALERIE ════════════════════════════════════════════════════
+function ouvrirDefisStreet(){
+  rendreDefisStreet();
+  go('s-defis-street');
+  return true;
+}
+/** PURE. Les étapes en une ligne : « 100 dips · 100 tractions · 100 pompes ». */
+function etapesTexte(f){
+  const x=formatDefi(f); if(!x) return '';
+  return x.etapes.map(e=>(e.reps?e.reps+' ':'max ')+STREET_EXOS[e.exo].lib).join(' · ');
+}
+/** PURE. La galerie des formats, avec le record de chacun. */
+function htmlGalerieStreet(u){
+  return '<div class="ds-galerie">'+FORMATS_DEFIS_CLES.map(k=>{
+    const f=FORMATS_DEFIS[k], r=recordStreet(u,f);
+    return '<button type="button" class="ds-carte" data-format="'+k+'" onclick="ouvrirFormatStreet('+jsArg(k)+')">'
+      +'<span class="ds-nom">'+escapeHtml(f.nom)+'</span>'
+      +'<span class="ds-etapes">'+escapeHtml(etapesTexte(f))+'</span>'
+      +'<span class="ds-pied"><span class="ds-tag">'+(f.scoring==='temps'?'au temps':'aux répétitions')+'</span>'
+      +(f.videoRequise?'<span class="ds-tag ds-video">vidéo requise</span>':'')
+      +(r?'<span class="ds-record">Record '+escapeHtml(texteScoreStreet(f,r.score))+(r.certifie?' '+icon('check',12):'')+'</span>':'')+'</span>'
+      +'</button>';
+  }).join('')+'</div>';
+}
+function rendreDefisStreet(){
+  const z=document.getElementById('ds-contenu'); if(!z) return false;
+  z.innerHTML='<p class="sub ds-intro">Sept formats de rue. Seul, en équipe, ou en battle contre un pote : choisis, lance le chrono.</p>'
+    +htmlGalerieStreet(currentUser);
+  return true;
+}
+/** La fiche d'un format : étapes, règles, les trois modes, le classement. */
+function ouvrirFormatStreet(cle){
+  const f=formatDefi(cle); if(!f) return false;
+  const E=escapeHtml, r=recordStreet(currentUser,f);
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="ds-f-t" class="ds-fiche">'
+    +'<div class="ds-fiche-t" id="ds-f-t">'+E(f.nom)+'</div>'
+    +'<div class="ds-etapes">'+E(etapesTexte(f))+' · '+(f.scoring==='temps'?'score au temps':'score aux répétitions')+'</div>'
+    +'<ul class="ds-regles">'+f.regles.map(x=>'<li>'+E(x)+'</li>').join('')+'</ul>'
+    +(r?'<div class="ds-rec">Ton record : <b>'+E(texteScoreStreet(f,r.score))+'</b>'+(r.certifie?' · certifié en vidéo':'')+'</div>':'')
+    +'<div class="ds-modes">'
+    +'<button type="button" class="btn btn-red" onclick="ouvrirChronoStreet('+jsArg(f.cle)+',\'solo\')">Solo</button>'
+    +(f.videoRequise?'':'<button type="button" class="btn btn-outline" onclick="ouvrirEquipeStreet('+jsArg(f.cle)+')">En équipe</button>')
+    +'<button type="button" class="btn btn-outline" onclick="lancerBattleStreet('+jsArg(f.cle)+',this)">Battle</button></div>'
+    +'<div class="ds-lab">Classement</div><div id="ds-classement" class="ds-classement"><p class="sub">Chargement…</p></div>'
+    +(r?'<button type="button" class="rb-lien" onclick="publierClassementStreet('+jsArg(f.cle)+')">Publier mon record au classement</button>':'')
+    +'</div></div>');
+  lireClassementStreet(f).then(l=>{
+    const z=document.getElementById('ds-classement'); if(!z) return;
+    z.innerHTML=htmlClassementStreet(f,l,_monPseudo(currentUser));
+  });
+  return true;
+}
+/** PURE. Le classement rendu ; `moi` en surbrillance. */
+function htmlClassementStreet(f,l,moi){
+  if(l==null) return '<p class="sub">Classement indisponible hors connexion.</p>';
+  if(!l.length) return '<p class="sub">Personne encore : sois le premier à publier ton record.</p>';
+  return '<ol class="ds-cl">'+l.slice(0,50).map(x=>'<li class="'+(moi&&x.pseudo===moi?'moi':'')+'"><span class="ds-rang">'+x.rang+'</span>'
+    +'<span class="ds-ps">@'+escapeHtml(x.pseudo)+'</span><span class="ds-sc">'+escapeHtml(texteScoreStreet(f,x.score))+(x.certifie?' '+icon('check',12):'')+'</span></li>').join('')+'</ol>';
+}
+/** Le battle : un duel au format street, lien à envoyer (chunk 011). */
+async function lancerBattleStreet(cle,btn){
+  const f=formatDefi(cle); if(!f) return false;
+  if(btn) btn.disabled=true;
+  const garde=duelsGardeFou(_duelsEnCours());
+  if(garde){ toast(garde,'var(--orange)'); if(btn) btn.disabled=false; return false; }
+  const r=await creerDuel('street_'+f.cle,7);
+  if(btn) btn.disabled=false;
+  if(!r.ok){ toast(r.erreur,'var(--orange)'); return false; }
+  closeModal();
+  toast('Battle '+f.nom+' créé : envoie le lien à ton pote. 7 jours pour poser vos essais.','var(--green)',5000);
+  envoyerDuel(r.id,null);
+  return true;
+}
+
+// ══ LE CHRONO PLEIN ÉCRAN ═══════════════════════════════════════════════════
+// _chsEtat : {f, mode, duel?, depart, fin, membres:[{nom, fin}], faits:[n], minuteur}
+let _chsEtat=null;
+function _chsArreter(){ if(_chsEtat&&_chsEtat.minuteur){ clearInterval(_chsEtat.minuteur); _chsEtat.minuteur=null; } }
+function _chsPleinEcran(oui){
+  try{
+    if(oui&&document.documentElement.requestFullscreen&&!document.fullscreenElement){ const p=document.documentElement.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); }
+    if(!oui&&document.fullscreenElement&&document.exitFullscreen){ const p=document.exitFullscreen(); if(p&&p.catch) p.catch(()=>{}); }
+  }catch(e){}
+}
+function quitterChronoStreet(){
+  _chsArreter(); _chsPleinEcran(false);
+  _chsEtat=null;
+  retourDe('s-chrono-street','s-defis-street');
+  return true;
+}
+/** PURE. « 12:34,5 » : le chrono à la dixième. */
+function chronoTexte(ms){
+  const d=Math.max(0,Math.floor(Number(ms)/100)||0), s=Math.floor(d/10);
+  return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+','+(d%10);
+}
+function ouvrirChronoStreet(cle,mode,duelId,membres){
+  const f=formatDefi(cle); if(!f) return false;
+  closeModal();
+  _chsArreter();
+  const m=mode==='equipe'?'equipe':(mode==='battle'?'battle':'solo');
+  _chsEtat={f:f.cle,mode:m,duel:m==='battle'?String(duelId||''):'',depart:0,fin:0,minuteur:null,
+    membres:m==='equipe'?(Array.isArray(membres)?membres:String(membres||'').split(',')).map(n=>String(n).trim().slice(0,24)).filter(Boolean).map(nom=>({nom,fin:0})):[],
+    faits:f.etapes.map(()=>0),res:null,video:null};
+  rendreChronoStreet();
+  go('s-chrono-street');
+  return true;
+}
+function chsDemarrer(){
+  if(!_chsEtat||_chsEtat.depart) return false;
+  _chsEtat.depart=Date.now();
+  _chsPleinEcran(true);
+  try{ arcHaptique('finRepos'); }catch(e){}
+  _chsEtat.minuteur=setInterval(_chsTic,100);
+  rendreChronoStreet();
+  return true;
+}
+function _chsTic(){
+  const z=document.getElementById('chs-temps');
+  if(!_chsEtat||!_chsEtat.depart||_chsEtat.fin) return _chsArreter();
+  if(z) z.textContent=chronoTexte(Date.now()-_chsEtat.depart);
+}
+/** Une étape faite (solo, battle) : coche ou décoche. */
+function chsEtape(i){
+  if(!_chsEtat) return false;
+  const f=formatDefi(_chsEtat.f), e=f.etapes[i]; if(!e) return false;
+  _chsEtat.faits[i]=_chsEtat.faits[i]>=e.reps?0:e.reps;
+  rendreChronoStreet();
+  return true;
+}
+/** Un membre a fini (équipe) : le chrono s'arrête au dernier. */
+function chsMembreFini(i){
+  const s=_chsEtat; if(!s||!s.depart||s.fin) return false;
+  const m=s.membres[i]; if(!m||m.fin) return false;
+  m.fin=Date.now();
+  if(s.membres.every(x=>x.fin)) return chsStop();
+  rendreChronoStreet();
+  return true;
+}
+function chsStop(){
+  const s=_chsEtat; if(!s||!s.depart||s.fin) return false;
+  s.fin=Date.now();
+  _chsArreter(); _chsPleinEcran(false);
+  try{ arcHaptique('finRepos'); }catch(e){}
+  const f=formatDefi(s.f);
+  if(f.scoring==='temps') _chsCalculer();
+  rendreChronoStreet();
+  return true;
+}
+/** Le score de l'essai, depuis l'état du chrono. */
+function _chsCalculer(){
+  const s=_chsEtat, f=formatDefi(s.f);
+  const temps=(s.fin-s.depart)/1000;
+  if(s.mode==='equipe'){
+    const r=scoreEquipe(f,s.membres.map(m=>({nom:m.nom,temps:m.fin?(m.fin-s.depart)/1000:0,reps:m.fin?f.etapes.map(e=>e.reps):[]})));
+    s.res=Object.assign({certifie:false,statut:r.valide?'valide':'invalide'},r,{membres:s.membres.length});
+  } else {
+    const reps=f.scoring==='reps'?[Math.floor(Number(s.repsSaisies)||0)]:s.faits;
+    s.res=scoreDefi(f,{temps,reps,video:s.video});
+  }
+  return s.res;
+}
+function chsValiderReps(){
+  const i=document.getElementById('chs-reps');
+  if(!_chsEtat) return false;
+  _chsEtat.repsSaisies=Math.max(0,Math.floor(Number(i&&i.value)||0));
+  _chsCalculer();
+  rendreChronoStreet();
+  return true;
+}
+async function chsVideo(input){
+  const fl=input&&input.files&&input.files[0];
+  try{ if(input) input.value=''; }catch(e){}
+  if(!fl||!_chsEtat) return false;
+  toast('Analyse de la vidéo…','var(--sub)',2500);
+  let r=null;
+  try{
+    await chargerMotionLab();
+    if(typeof window.mlTestCompatVideo!=='function') throw new Error('indisponible');
+    r=await window.mlTestCompatVideo(fl,'traction',{});
+  }catch(e){ r={ok:false}; }
+  if(!r||!r.ok){ toast('La vidéo n’a pas pu être lue.','var(--orange)'); return false; }
+  _chsEtat.video=r.mesures;
+  _chsCalculer();
+  rendreChronoStreet();
+  return true;
+}
+/** Range l'essai : dossier, et duel en battle. */
+async function chsEnregistrer(btn){
+  const s=_chsEtat; if(!s||!s.res||!s.res.valide||s.enregistre) return false;
+  if(btn) btn.disabled=true;
+  const r=defiStreetEnregistrer(currentUser,s.f,s.mode,s.res,s.fin);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); if(btn) btn.disabled=false; return false; }
+  s.enregistre=true; s.record=r.record;
+  saveUserOuDire('Ton essai');
+  if(s.mode==='battle'&&s.duel) await _chsPoserBattle(s);
+  rendreChronoStreet();
+  toast(r.record?'Nouveau record : '+texteScoreStreet(s.f,s.res.score):'Essai enregistré.','var(--green)',5000,{lib:'Partager',fn:()=>partagerResultatStreet()});
+  return true;
+}
+/** Le meilleur essai du battle, posé dans duels/<id>/street/<moi>. */
+async function _chsPoserBattle(s){
+  const id=s.duel; if(!DUEL_ID_RE.test(id)) return false;
+  let d=_duelsCache[id]; try{ const x=await _duelLire(id); if(x){ d=x; _duelsCache[id]=x; } }catch(e){}
+  const moi=_moiCle();
+  const avant=d&&d.street&&d.street[moi];
+  const best=streetMeilleur(s.f,avant&&avant.score,s.res.score);
+  if(avant&&best===Number(avant.score)&&!(s.res.certifie&&!avant.certifie&&best===s.res.score)){ toast('Ton meilleur essai du battle reste '+texteScoreStreet(s.f,avant.score)+'.','var(--sub)'); return true; }
+  const ok=await CLOUD.racinePatch({['duels/'+id+'/street/'+moi]:{score:s.res.score,at:Date.now(),certifie:!!s.res.certifie}}).catch(()=>false);
+  if(!ok){ toast('Le battle n’a pas reçu ton score (fini, ou hors connexion).','var(--orange)'); return false; }
+  deposerEvenement({type:'duel_maj',id}).catch(()=>{});
+  return true;
+}
+function rendreChronoStreet(){
+  const z=document.getElementById('chs-contenu'); if(!z) return false;
+  const s=_chsEtat; if(!s){ z.innerHTML=''; return false; }
+  const f=formatDefi(s.f), E=escapeHtml;
+  const titre='<div class="chs-t">'+E(f.nom)+' · '+(s.mode==='equipe'?'en équipe':s.mode==='battle'?'battle':'solo')+'</div>';
+  let h=titre;
+  const ecoule=s.depart?((s.fin||Date.now())-s.depart):0;
+  h+='<div class="chs-temps" id="chs-temps" role="timer" aria-live="off">'+chronoTexte(ecoule)+'</div>';
+  if(!s.depart){
+    h+='<div class="ds-etapes chs-c">'+E(etapesTexte(f))+'</div>'
+      +'<button type="button" class="btn btn-red chs-go" onclick="chsDemarrer()">Partez</button>';
+  } else if(!s.fin){
+    if(s.mode==='equipe'){
+      h+='<div class="chs-membres">'+s.membres.map((m,i)=>'<button type="button" class="chs-m'+(m.fin?' fini':'')+'" '+(m.fin?'disabled':'')+' onclick="chsMembreFini('+i+')">'
+        +'<span>'+E(m.nom)+'</span><span>'+(m.fin?chronoTexte(m.fin-s.depart):'Fini')+'</span></button>').join('')+'</div>'
+        +'<p class="sub chs-c">Le chrono s’arrête quand le dernier a fini.</p>'
+        +'<button type="button" class="rb-lien" onclick="chsStop()">Arrêter (équipe incomplète)</button>';
+    } else {
+      if(f.scoring==='temps') h+='<div class="chs-etapes">'+f.etapes.map((e,i)=>'<button type="button" class="chs-e'+(s.faits[i]>=e.reps?' fait':'')+'" aria-pressed="'+(s.faits[i]>=e.reps)+'" onclick="chsEtape('+i+')">'
+        +e.reps+' '+E(STREET_EXOS[e.exo].lib)+'</button>').join('')+'</div>';
+      h+='<button type="button" class="btn btn-red chs-go" onclick="chsStop()">'+(f.scoring==='temps'?'Terminé':'J’ai lâché la barre')+'</button>';
+    }
+  } else if(f.scoring==='reps'&&!s.res){
+    h+='<label for="chs-reps">Combien de tractions propres ?</label>'
+      +'<input id="chs-reps" type="number" inputmode="numeric" min="0" max="1000" style="width:100%;margin:6px 0 12px">'
+      +'<button type="button" class="btn btn-red chs-go" onclick="chsValiderReps()">Voir mon score</button>';
+  } else if(s.res){
+    const r=s.res;
+    h+='<div class="chs-res chs-'+r.statut+'">'
+      +'<div class="chs-score">'+(r.valide?E(texteScoreStreet(f,r.score)):'Non valide')+'</div>'
+      +(r.valide?'<div class="chs-statut">'+(r.statut==='certifie'?'Certifié en vidéo':'Valide')+(s.record?' · nouveau record':'')+'</div>':'')
+      +(r.raisons.length?'<ul class="chs-raisons">'+r.raisons.map(x=>'<li>'+E(x)+'</li>').join('')+'</ul>':'')
+      +'</div>';
+    if(s.mode!=='equipe'&&formatTractions(f)+(f.scoring==='reps'?1:0)>0&&!r.certifie&&!s.enregistre)
+      h+='<label class="btn btn-outline chs-go" style="display:block;text-align:center">Certifier en vidéo'
+        +'<input type="file" accept="video/*" capture="environment" hidden onchange="chsVideo(this)"></label>'
+        +'<p class="sub chs-c">Filme les tractions de profil, à 3 m, barre et corps entier dans l’image. Lue sur ton téléphone, jamais envoyée.</p>';
+    if(r.valide&&!s.enregistre) h+='<button type="button" class="btn btn-red chs-go" onclick="chsEnregistrer(this)">'+(s.mode==='battle'?'Poser mon score au battle':'Enregistrer')+'</button>';
+    if(s.enregistre) h+='<button type="button" class="btn btn-red chs-go" onclick="partagerResultatStreet()">'+icon('share',16)+' <span>Partager en story</span></button>';
+    h+='<button type="button" class="btn btn-outline chs-go" onclick="ouvrirChronoStreet('+jsArg(f.cle)+','+jsArg(s.mode)+','+jsArg(s.duel)+','+jsArg(s.membres.map(m=>m.nom))+')">Recommencer</button>';
+  }
+  z.innerHTML=h;
+  return true;
+}
+// ── L'équipe : les prénoms avant le départ ───────────────────────────────────
+function ouvrirEquipeStreet(cle){
+  const f=formatDefi(cle); if(!f||f.videoRequise) return false;
+  closeModal();
+  const moi=String((currentUser&&(currentUser.fname||currentUser.pseudo))||'Moi').slice(0,24);
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="ds-eq-t" class="ds-fiche">'
+    +'<div class="ds-fiche-t" id="ds-eq-t">'+escapeHtml(f.nom)+' en équipe</div>'
+    +'<p class="sub">Un prénom par ligne, '+STREET_EQUIPE_MIN+' à '+STREET_EQUIPE_MAX+'. Chacun fait le format entier ; ce téléphone chronomètre tout le monde.</p>'
+    +'<label for="ds-eq">L’équipe</label><textarea id="ds-eq" rows="4" maxlength="260" style="width:100%">'+escapeHtml(moi)+'\n</textarea>'
+    +'<div id="ds-eq-err" class="arb-err" hidden></div>'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin-top:10px" onclick="equipeStreetPartir('+jsArg(f.cle)+')">Au chrono</button>'
+    +'</div></div>');
+  return true;
+}
+/** PURE. Les prénoms d'une équipe, nettoyés ; {noms} ou {erreur}. */
+function equipeStreetNoms(texte){
+  const noms=String(texte||'').split(/\n|,/).map(x=>x.trim().slice(0,24)).filter(Boolean);
+  if(noms.length<STREET_EQUIPE_MIN) return {erreur:'Il faut au moins '+STREET_EQUIPE_MIN+' prénoms.'};
+  if(noms.length>STREET_EQUIPE_MAX) return {erreur:STREET_EQUIPE_MAX+' prénoms au plus.'};
+  return {noms};
+}
+function equipeStreetPartir(cle){
+  const r=equipeStreetNoms((document.getElementById('ds-eq')||{}).value);
+  if(r.erreur){ const z=document.getElementById('ds-eq-err'); if(z){ z.textContent=r.erreur; z.hidden=false; } return false; }
+  return ouvrirChronoStreet(cle,'equipe','',r.noms);
+}
+// ── La carte story du résultat ───────────────────────────────────────────────
+function _dessinerCarteStreet(s,fond,format){
+  const f=formatDefi(s.f), r=s.res;
+  const F=visuelFormat(format), W=F.w, H=F.h;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  _visuelPeindreFond(g,W,H,fond||'transparent');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif"), MONT="Montserrat,'Segoe UI',sans-serif";
+  const o=_visuelOutils(g), cx=W/2, LARG=W-144;
+  const rouge=fond==='rouge';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  let y=Math.round(H*0.3);
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 34px '+MONT;
+  o.ecrireEspace((s.mode==='equipe'?'DÉFI STREET · ÉQUIPE':s.mode==='battle'?'DÉFI STREET · BATTLE':'DÉFI STREET'),cx,y,10,true);
+  const t=String(f.nom).toUpperCase(), cs=o.ajuste(t,'700',180,BEBAS,LARG,90);
+  g.fillStyle='#fff'; g.font='700 '+cs+'px '+BEBAS; o.ecrire(t,cx,y+40+cs*0.82);
+  y+=40+cs*0.82+40;
+  const sc=texteScoreStreet(f,r.score), cs2=o.ajuste(sc,'700',260,BEBAS,LARG,120);
+  g.font='700 '+cs2+'px '+BEBAS; o.ecrire(sc,cx,y+cs2*0.82);
+  y+=cs2*0.82+70;
+  g.font='800 36px '+MONT;
+  o.ecrireEspace(etapesTexte(f).toUpperCase(),cx,y,4,true);
+  if(r.certifie){ g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 36px '+MONT; o.ecrireEspace('CERTIFIÉ EN VIDÉO',cx,y+70,8,true); }
+  else if(s.record){ g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 36px '+MONT; o.ecrireEspace('RECORD PERSONNEL',cx,y+70,8,true); }
+  o.ombre(false);
+  return cv;
+}
+function partagerResultatStreet(){
+  const s=_chsEtat;
+  if(!s||!s.res||!s.res.valide||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond), nom=visuelNomFichier('repcore-street',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{ ok=_storySortirPartage(_dessinerCarteStreet(s,fond),nom,undefined,fmt)||_storySortirTelechargement(_dessinerCarteStreet(s,fond),nom,fmt); }
+  catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  return ok;
+}
+// ══ LE DÉFI 28 JOURS (build 1956) ═════════════════════════════════════════
+// Créé par le coach : dates (28 jours pile), phases, règles, seuil de
+// check-ins, nombre de gagnants. Chaque athlète inscrit fait son check-in
+// quotidien, et peut poser une photo J1 et une photo J28, TAMPONNÉES dans
+// l'app (date, heure, jour du défi, prénom, dessinés dans l'image par le
+// canvas). Une photo posée ne se remplace jamais (règles : écrite une fois) ;
+// elle se retire (retrait du consentement).
+//   ⚠ CONSENTEMENT EXPLICITE : l'image ne part chez le coach que si la case
+//     « Je partage cette photo avec mon coach » est cochée. Sans elle, seule
+//     l'empreinte SHA-256 part (la preuve qu'une photo datée existe) ; la
+//     photo tamponnée reste sur le téléphone (téléchargement proposé).
+// LE TIRAGE AU SORT, ÉQUITABLE ET VÉRIFIABLE : la graine (32 hexa) est tirée
+// et PUBLIÉE à la création, avant toute inscription, et les règles la gèlent.
+// Le ticket de chacun vaut SHA-256(graine + ':' + sa clé) ; les éligibles
+// sont rangés par ticket croissant, les N premiers gagnent. Le résultat
+// publié donne la graine et tous les tickets, jamais une clé : chacun recalcule
+// le sien (sur n'importe quel outil SHA-256) et vérifie son rang.
+// Stockage : canaux/<coach>/defis28/<id>/{def, tirage, participants/<clé>}
+// (database.rules.json), et canaux/<coach>/defis28_liste/<id> = debut (ce
+// que l'athlète peut lister).
+
+const D28_JOURS=28;
+const D28_J=864e5;
+const D28_PHOTO_FENETRE=3;          // J1 : jours 1 à 3 ; J28 : jours 26 à 28 (+ le lendemain)
+const D28_PHOTO_COTE=720;           // le grand côté de la photo tamponnée
+const D28_ID_RE=/^t[a-z0-9]{8,24}$/;
+
+// ── SHA-256, PUR ET SYNCHRONE ────────────────────────────────────────────────
+// Le même résultat que tout outil SHA-256 (FIPS 180-4) : c'est ce qui rend
+// le tirage vérifiable hors de l'app. Entrée : une chaîne, encodée en UTF-8.
+const _SHA_K=Object.freeze([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+/** PURE. SHA-256 d'une chaîne (UTF-8) ou d'octets, en 64 hexa minuscules. */
+function sha256Hex(entree){
+  const o=(entree instanceof Uint8Array)?entree:new TextEncoder().encode(String(entree==null?'':entree));
+  const l=o.length, nb=((l+9+63)>>6)<<6;
+  const m=new Uint8Array(nb); m.set(o); m[l]=0x80;
+  const bits=l*8, dv=new DataView(m.buffer);
+  dv.setUint32(nb-8,Math.floor(bits/0x100000000)); dv.setUint32(nb-4,bits>>>0);
+  const h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const w=new Uint32Array(64);
+  const r=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let p=0;p<nb;p+=64){
+    for(let i=0;i<16;i++) w[i]=dv.getUint32(p+i*4);
+    for(let i=16;i<64;i++){
+      const s0=r(w[i-15],7)^r(w[i-15],18)^(w[i-15]>>>3), s1=r(w[i-2],17)^r(w[i-2],19)^(w[i-2]>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,k]=h;
+    for(let i=0;i<64;i++){
+      const t1=(k+(r(e,6)^r(e,11)^r(e,25))+((e&f)^(~e&g))+_SHA_K[i]+w[i])>>>0;
+      const t2=((r(a,2)^r(a,13)^r(a,22))+((a&b)^(a&c)^(b&c)))>>>0;
+      k=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    h[0]=(h[0]+a)>>>0; h[1]=(h[1]+b)>>>0; h[2]=(h[2]+c)>>>0; h[3]=(h[3]+d)>>>0;
+    h[4]=(h[4]+e)>>>0; h[5]=(h[5]+f)>>>0; h[6]=(h[6]+g)>>>0; h[7]=(h[7]+k)>>>0;
+  }
+  return h.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+
+// ── LE CALCUL, PUR ───────────────────────────────────────────────────────────
+/** Une graine neuve : 16 octets aléatoires, 32 hexa. */
+function d28NouvelleGraine(){
+  const b=new Uint8Array(16);
+  try{ crypto.getRandomValues(b); }catch(e){ for(let i=0;i<16;i++) b[i]=Math.floor(Math.random()*256); }
+  return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
+}
+function d28NouvelId(){
+  const a='abcdefghijklmnopqrstuvwxyz0123456789';
+  let s='t';
+  try{ const b=new Uint8Array(14); crypto.getRandomValues(b); for(const x of b) s+=a[x%36]; }
+  catch(e){ for(let i=0;i<14;i++) s+=a[Math.floor(Math.random()*36)]; }
+  return s;
+}
+/**
+ * PURE. Le défi tiré du formulaire du coach.
+ * @param {{titre:string, debut:number, phases:{titre,du,au}[], regles:string[], minCheckins:number, gagnants:number, recompense?:string}} x
+ * @returns {{def?:object, erreur?:string}}
+ */
+function d28Definition(x,graine,maintenant){
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  const titre=String((x&&x.titre)||'').trim().slice(0,80);
+  if(!titre) return {erreur:'Donne un titre au défi.'};
+  const debut=Number(x&&x.debut);
+  if(!(debut>0)) return {erreur:'Choisis la date de début.'};
+  if(debut<t-D28_J) return {erreur:'Le défi ne peut pas commencer dans le passé.'};
+  if(!/^[0-9a-f]{32}$/.test(String(graine||''))) return {erreur:'Graine du tirage invalide.'};
+  const phases=(Array.isArray(x.phases)?x.phases:[]).map(p=>({titre:String((p&&p.titre)||'').trim().slice(0,40),du:Math.floor(Number(p&&p.du)),au:Math.floor(Number(p&&p.au))}))
+    .filter(p=>p.titre);
+  if(phases.length>4) return {erreur:'Quatre phases au plus.'};
+  for(const p of phases) if(!(p.du>=1&&p.au>=p.du&&p.au<=D28_JOURS)) return {erreur:'La phase « '+p.titre+' » doit tenir entre J1 et J28.'};
+  const tri=phases.slice().sort((a,b)=>a.du-b.du);
+  for(let i=1;i<tri.length;i++) if(tri[i].du<=tri[i-1].au) return {erreur:'Les phases se chevauchent.'};
+  const regles=(Array.isArray(x.regles)?x.regles:[]).map(r=>String(r||'').trim().slice(0,120)).filter(Boolean);
+  if(regles.length>8) return {erreur:'Huit règles au plus.'};
+  const minCheckins=Math.floor(Number(x.minCheckins));
+  if(!(minCheckins>=1&&minCheckins<=D28_JOURS)) return {erreur:'Le seuil de check-ins va de 1 à 28.'};
+  const gagnants=Math.floor(Number(x.gagnants));
+  if(!(gagnants>=1&&gagnants<=10)) return {erreur:'De 1 à 10 gagnants.'};
+  const def={titre,debut,fin:debut+D28_JOURS*D28_J-1,graine,minCheckins,gagnants,creeLe:t};
+  if(tri.length) def.phases=tri;
+  if(regles.length) def.regles=regles;
+  const rec=String(x.recompense||'').trim().slice(0,120);
+  if(rec) def.recompense=rec;
+  return {def};
+}
+/** PURE. Le jour du défi à l'instant t : 1 à 28, 0 avant, 29 après. */
+function d28Jour(def,t){
+  const d=Number(def&&def.debut); if(!(d>0)) return 0;
+  if(t<d) return 0;
+  const j=Math.floor((t-d)/D28_J)+1;
+  return j>D28_JOURS?D28_JOURS+1:j;
+}
+/** PURE. La phase d'un jour, ou null. */
+function d28Phase(def,j){
+  const l=(def&&Array.isArray(def.phases))?def.phases:Object.values((def&&def.phases)||{});
+  return l.find(p=>p&&j>=p.du&&j<=p.au)||null;
+}
+/** PURE. La photo `quelle` (j1, j28) peut-elle se prendre à l'instant t ? */
+function d28PhotoOuverte(def,quelle,t){
+  const j=d28Jour(def,t);
+  if(quelle==='j1') return j>=1&&j<=D28_PHOTO_FENETRE;
+  if(quelle==='j28') return (j>D28_JOURS-D28_PHOTO_FENETRE&&j<=D28_JOURS)||(j===D28_JOURS+1&&t<=Number(def.fin)+D28_J);
+  return false;
+}
+/** PURE. Les jours cochés d'un participant (1 à 28), triés. */
+function d28Checkins(p){
+  const c=(p&&p.checkins&&typeof p.checkins==='object')?p.checkins:{};
+  return Object.keys(c).map(Number).filter(j=>j>=1&&j<=D28_JOURS&&Number(c[j])>0).sort((a,b)=>a-b);
+}
+/**
+ * PURE. Le tableau de participation (vue coach) : une ligne par inscrit.
+ * @returns {{cle, prenom, jours:boolean[], total:number, photos:{j1:string, j28:string}, eligible:boolean}[]}
+ */
+function d28Grille(def,participants){
+  const min=Number(def&&def.minCheckins)||D28_JOURS;
+  return Object.keys(participants||{}).map(cle=>{
+    const p=participants[cle]||{};
+    if(!p.inscription) return null;
+    const faits=d28Checkins(p);
+    const jours=Array.from({length:D28_JOURS},(_,i)=>faits.indexOf(i+1)>=0);
+    const ph=p.photos||{};
+    const etat=x=>!x?'':(x.img?'partagee':'privee');
+    return {cle,prenom:String(p.inscription.prenom||'').slice(0,24)||'Athlète',jours,total:faits.length,
+      photos:{j1:etat(ph.j1),j28:etat(ph.j28)},eligible:faits.length>=min};
+  }).filter(Boolean).sort((a,b)=>b.total-a.total||a.prenom.localeCompare(b.prenom,'fr'));
+}
+/** PURE. Le ticket d'un participant : SHA-256(graine:clé). */
+function d28Ticket(graine,cle){ return sha256Hex(String(graine)+':'+String(cle)); }
+/**
+ * PURE. LE TIRAGE : les éligibles rangés par ticket croissant, les `n`
+ * premiers gagnent. Même graine, mêmes éligibles → même résultat, quel que
+ * soit l'ordre d'entrée.
+ * @param {string} graine
+ * @param {{cle:string, prenom:string, total:number}[]} lignes
+ * @param {number} minCheckins
+ * @param {number} n
+ */
+function tirageDefi28(graine,lignes,minCheckins,n){
+  const el=(lignes||[]).filter(l=>l&&l.cle&&Number(l.total)>=Number(minCheckins));
+  const tickets=el.map(l=>({ticket:d28Ticket(graine,l.cle),cle:l.cle,prenom:l.prenom}))
+    .sort((a,b)=>a.ticket<b.ticket?-1:a.ticket>b.ticket?1:0);
+  const k=Math.max(0,Math.min(Math.floor(Number(n)||0),tickets.length));
+  return {graine,eligibles:tickets.length,tickets,gagnants:tickets.slice(0,k)};
+}
+/** PURE. Ce que le coach publie : graine, tickets et prénoms des gagnants — aucune clé. */
+function d28TiragePublic(r,t){
+  return {le:t,graine:r.graine,eligibles:r.eligibles,tickets:r.tickets.map(x=>x.ticket),gagnants:r.gagnants.map(x=>String(x.prenom||'').slice(0,24))};
+}
+/**
+ * PURE. La vérification par l'athlète : son ticket recalculé, son rang dans
+ * les tickets publiés, et si la publication est bien triée et tirée de LA graine.
+ */
+function d28Verifier(def,tirage,cle){
+  if(!def||!tirage) return {ok:false,raison:'Pas encore de tirage.'};
+  if(tirage.graine!==def.graine) return {ok:false,raison:'La graine du tirage n’est pas celle publiée à la création.'};
+  const l=Array.isArray(tirage.tickets)?tirage.tickets:Object.values(tirage.tickets||{});
+  for(let i=1;i<l.length;i++) if(!(l[i-1]<l[i])) return {ok:false,raison:'Les tickets publiés ne sont pas dans l’ordre.'};
+  const mien=d28Ticket(def.graine,cle);
+  const i=l.indexOf(mien);
+  const ng=(Array.isArray(tirage.gagnants)?tirage.gagnants:Object.values(tirage.gagnants||{})).length;
+  return {ok:true,ticket:mien,rang:i>=0?i+1:0,total:l.length,gagne:i>=0&&i<ng};
+}
+/** PURE. Le texte du tampon : « J1 · 09/10/2026 14:32 · Léa ». */
+function d28TexteTampon(quelle,t,prenom){
+  const d=new Date(t);
+  const z=x=>String(x).padStart(2,'0');
+  return (quelle==='j1'?'J1':'J28')+' · '+z(d.getDate())+'/'+z(d.getMonth()+1)+'/'+d.getFullYear()+' '+z(d.getHours())+':'+z(d.getMinutes())
+    +(prenom?' · '+String(prenom).slice(0,24):'');
+}
+
+// ── LA PHOTO TAMPONNÉE ───────────────────────────────────────────────────────
+/** Lit l'image, la réduit, dessine le tampon. Rend {dataUrl, empreinte, at}. */
+function d28Tamponner(fichier,quelle,prenom,titre){
+  return new Promise((ok,ko)=>{
+    const url=URL.createObjectURL(fichier);
+    const im=new Image();
+    im.onerror=()=>{ URL.revokeObjectURL(url); ko(new Error('Image illisible.')); };
+    im.onload=()=>{
+      try{
+        const k=Math.min(1,D28_PHOTO_COTE/Math.max(im.width,im.height));
+        const W=Math.round(im.width*k), H=Math.round(im.height*k);
+        const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+        const g=cv.getContext('2d');
+        g.drawImage(im,0,0,W,H);
+        URL.revokeObjectURL(url);
+        const at=Date.now();
+        const bande=Math.max(34,Math.round(H*0.075));
+        g.fillStyle='rgba(0,0,0,.72)'; g.fillRect(0,H-bande,W,bande);
+        g.fillStyle=ROUGE_MARQUE; g.fillRect(0,H-bande,6,bande);
+        g.fillStyle='#fff'; g.textBaseline='middle';
+        g.font='700 '+Math.round(bande*0.42)+"px Montserrat,'Segoe UI',sans-serif";
+        g.fillText('REPCORE · '+d28TexteTampon(quelle,at,prenom),16,H-bande/2,W-24);
+        if(titre){ g.font='600 '+Math.round(bande*0.32)+"px Montserrat,'Segoe UI',sans-serif"; g.fillText(String(titre).slice(0,60),16,H-bande-bande*0.4,W-24); }
+        let q=0.8, d=cv.toDataURL('image/jpeg',q);
+        while(d.length>290000&&q>0.4){ q-=0.1; d=cv.toDataURL('image/jpeg',q); }
+        cv.width=0; cv.height=0;
+        ok({dataUrl:d,empreinte:sha256Hex(d),at});
+      }catch(e){ ko(e); }
+    };
+    im.src=url;
+  });
+}
+
+// ── LA BASE ──────────────────────────────────────────────────────────────────
+async function _d28Get(chemin,q){
+  const token=await CLOUD._getToken(); if(!token) return null;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json',chemin+'.json')+'?auth='+token+(q||''));
+  return r.ok?await r.json():null;
+}
+const _d28Base=(coach,id)=>'canaux/'+coach+'/defis28/'+id;
+let _d28Cache={};
+
+// ══ LE COACH : CRÉER, SUIVRE, TIRER ══════════════════════════════════════════
+function ouvrirCreerDefi28(){
+  if(currentUser?.role!=='coach') return false;
+  closeModal();
+  const auj=localISODate(new Date(Date.now()+D28_J));
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="d28-h" class="dfm-feuille">'
+    +'<h2 id="d28-h" style="margin-bottom:4px">Défi 28 jours</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Check-in quotidien, photos J1 et J28 tamponnées, tirage au sort vérifiable entre ceux qui tiennent le rythme.</p>'
+    +'<label for="d28-titre">Titre</label><input id="d28-titre" type="text" maxlength="80" placeholder="28 jours sans lâcher">'
+    +'<label for="d28-debut" style="margin-top:12px">Début (fin 28 jours plus tard)</label><input id="d28-debut" type="date" value="'+auj+'" min="'+localISODate(new Date())+'">'
+    +'<label for="d28-phases" style="margin-top:12px">Phases (une par ligne : titre ; du ; au)</label>'
+    +'<textarea id="d28-phases" rows="3" maxlength="300" placeholder="Fondations ; 1 ; 7&#10;Volume ; 8 ; 21&#10;Final ; 22 ; 28"></textarea>'
+    +'<label for="d28-regles" style="margin-top:12px">Règles (une par ligne)</label>'
+    +'<textarea id="d28-regles" rows="3" maxlength="960" placeholder="Une séance ou 20 min de marche par jour"></textarea>'
+    +'<div class="dfm-ligne" style="margin-top:12px"><div style="flex:1"><label for="d28-min">Check-ins pour le tirage</label><input id="d28-min" type="number" inputmode="numeric" min="1" max="28" value="24"></div>'
+    +'<div style="flex:1"><label for="d28-n">Gagnants</label><input id="d28-n" type="number" inputmode="numeric" min="1" max="10" value="1"></div></div>'
+    +'<label for="d28-rec" style="margin-top:12px">Récompense (optionnel)</label><input id="d28-rec" type="text" maxlength="120">'
+    +'<div id="d28-err" class="arb-err" hidden></div>'
+    +'<div style="display:flex;gap:8px;margin-top:16px">'
+    +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
+    +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerDefi28(this)">Lancer le défi</button></div>'
+    +'</div></div>');
+  return true;
+}
+/** PURE. Les phases écrites « titre ; du ; au », une par ligne. */
+function d28LirePhases(texte){
+  return String(texte||'').split('\n').map(l=>l.split(';').map(x=>x.trim())).filter(p=>p[0])
+    .map(p=>({titre:p[0],du:Number(p[1]),au:Number(p[2])}));
+}
+async function enregistrerDefi28(btn){
+  const g=id=>(document.getElementById(id)||{}).value||'';
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(g('d28-debut'));
+  const debut=m?new Date(+m[1],+m[2]-1,+m[3],0,0,0).getTime():0;
+  const r=d28Definition({titre:g('d28-titre'),debut,phases:d28LirePhases(g('d28-phases')),regles:g('d28-regles').split('\n'),
+    minCheckins:g('d28-min'),gagnants:g('d28-n'),recompense:g('d28-rec')},d28NouvelleGraine());
+  const err=document.getElementById('d28-err');
+  if(r.erreur){ if(err){ err.textContent=r.erreur; err.hidden=false; } return false; }
+  const cle=canalCle(currentUser);
+  if(!cle||!CLOUD.ok()){ toast('Création impossible hors connexion.','var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const id=d28NouvelId();
+  const ok=await CLOUD.racinePatch({[_d28Base(cle,id)+'/def']:r.def,['canaux/'+cle+'/defis28_liste/'+id]:r.def.debut}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  if(!ok){ if(err){ err.textContent='Création refusée pour l’instant (règles pas encore déployées ?).'; err.hidden=false; } return false; }
+  closeModal();
+  toast('Défi 28 jours lancé. Graine du tirage publiée : '+r.def.graine.slice(0,8)+'…','var(--green)',5000);
+  ouvrirDefis28();
+  return true;
+}
+// ══ L'ÉCRAN, COACH ET ATHLÈTE ════════════════════════════════════════════════
+function ouvrirDefis28(){
+  rendreDefis28();
+  go('s-defi28');
+  return true;
+}
+async function rendreDefis28(){
+  const z=document.getElementById('d28-contenu'); if(!z) return false;
+  const u=currentUser; if(!u) return false;
+  const coach=u.role==='coach'?canalCle(u):String(u.coachEmailKey||'');
+  if(!coach){ z.innerHTML='<p class="sub">Le défi 28 jours se lance par ton coach.</p>'; return false; }
+  z.innerHTML=(u.role==='coach'?'<button type="button" class="btn btn-red" style="width:100%;margin-bottom:14px" onclick="ouvrirCreerDefi28()">Créer un défi 28 jours</button>':'')
+    +'<div id="d28-liste"><p class="sub">Chargement…</p></div>';
+  let liste=null;
+  try{ liste=await _d28Get('canaux/'+coach+'/defis28_liste'); }catch(e){ liste=null; }
+  const ids=Object.keys(liste||{}).filter(id=>D28_ID_RE.test(id)).sort((a,b)=>Number(liste[b])-Number(liste[a])).slice(0,6);
+  const moi=_moiCle(), t=Date.now();
+  let h='';
+  for(const id of ids){
+    const base=_d28Base(coach,id);
+    const [def,tirage]=await Promise.all([_d28Get(base+'/def').catch(()=>null),_d28Get(base+'/tirage').catch(()=>null)]);
+    if(!def) continue;
+    const parts=u.role==='coach'?(await _d28Get(base+'/participants').catch(()=>null)||{})
+      :{[moi]:await _d28Get(base+'/participants/'+moi).catch(()=>null)};
+    _d28Cache[id]={coach,def,tirage,parts};
+    h+=u.role==='coach'?htmlDefi28Coach(id,def,tirage,parts,t):htmlDefi28Athlete(id,def,tirage,parts[moi],moi,t);
+  }
+  const zl=document.getElementById('d28-liste');
+  if(zl) zl.innerHTML=h||'<p class="sub">'+(u.role==='coach'?'Aucun défi 28 jours pour l’instant.':'Ton coach n’a pas lancé de défi 28 jours.')+'</p>';
+  return true;
+}
+/** PURE. L'en-tête d'un défi : titre, jour, phase, règles, graine. */
+function htmlDefi28Tete(def,t){
+  const E=escapeHtml, j=d28Jour(def,t), ph=j>=1&&j<=D28_JOURS?d28Phase(def,j):null;
+  const regles=Array.isArray(def.regles)?def.regles:Object.values(def.regles||{});
+  return '<div class="d28-t">'+E(def.titre)+'</div>'
+    +'<div class="d28-etat">'+(j===0?'Commence le '+E(new Date(def.debut).toLocaleDateString('fr-FR')):j>D28_JOURS?'Terminé':'Jour '+j+' / '+D28_JOURS+(ph?' · '+E(ph.titre):''))+'</div>'
+    +(regles.length?'<ul class="ds-regles">'+regles.map(r=>'<li>'+E(r)+'</li>').join('')+'</ul>':'')
+    +'<div class="d28-graine">Tirage : '+def.gagnants+' gagnant'+(def.gagnants>1?'s':'')+' parmi ceux qui ont au moins '+def.minCheckins+' check-ins'
+    +(def.recompense?' · '+E(def.recompense):'')+'. Graine publiée : <code>'+E(def.graine)+'</code></div>';
+}
+/** PURE. Les 28 cases. */
+function htmlCases28(jours,auj){
+  return '<div class="d28-cases" role="img" aria-label="'+jours.filter(Boolean).length+' check-ins sur 28">'
+    +jours.map((x,i)=>'<span class="'+(x?'on':'')+(i+1===auj?' auj':'')+'"></span>').join('')+'</div>';
+}
+function htmlDefi28Coach(id,def,tirage,parts,t){
+  const E=escapeHtml, gr=d28Grille(def,parts), j=d28Jour(def,t);
+  let h='<div class="d28-carte">'+htmlDefi28Tete(def,t)
+    +'<div class="ds-lab">Participation · '+gr.length+' inscrit'+(gr.length>1?'s':'')+'</div>';
+  h+=gr.length?'<div class="d28-grille">'+gr.map(l=>'<div class="d28-ligne'+(l.eligible?' elig':'')+'"><span class="d28-p">'+E(l.prenom)+'</span>'
+    +htmlCases28(l.jours,j)+'<span class="d28-n">'+l.total+'</span>'
+    +'<span class="d28-ph">'+(l.photos.j1==='partagee'?'J1':'')+(l.photos.j28==='partagee'?' J28':'')+'</span></div>').join('')+'</div>'
+    :'<p class="sub">Personne encore.</p>';
+  if(tirage) h+=htmlTirage28(tirage);
+  else if(t>Number(def.fin)) h+='<button type="button" class="btn btn-red" style="width:100%;margin-top:10px" onclick="tirerDefi28('+jsArg(id)+',this)">Faire le tirage</button>';
+  return h+'</div>';
+}
+/** PURE. Le résultat publié. */
+function htmlTirage28(tirage,verif){
+  const E=escapeHtml;
+  const g=Array.isArray(tirage.gagnants)?tirage.gagnants:Object.values(tirage.gagnants||{});
+  return '<div class="d28-tirage"><div class="ds-lab">Tirage du '+E(new Date(tirage.le).toLocaleDateString('fr-FR'))+'</div>'
+    +(g.length?'<div class="d28-g">'+g.map((p,i)=>(i+1)+'. '+E(p)).join(' · ')+'</div>':'<p class="sub">Aucun éligible.</p>')
+    +'<p class="sub">'+tirage.eligibles+' éligible'+(tirage.eligibles>1?'s':'')+'. Chaque ticket = SHA-256(graine:clé), rangés par ordre croissant.</p>'
+    +(verif?(verif.ok?'<p class="d28-verif">Ton ticket <code>'+E(verif.ticket.slice(0,12))+'…</code> '+(verif.rang?'est '+verif.rang+'e sur '+verif.total+(verif.gagne?' : gagnant':''):'n’est pas dans le tirage (moins de check-ins que le seuil)')+'. Vérifié.</p>'
+      :'<p class="d28-verif ko">'+E(verif.raison)+'</p>'):'')
+    +'</div>';
+}
+async function tirerDefi28(id,btn){
+  const c=_d28Cache[id]; if(!c||currentUser?.role!=='coach') return false;
+  if(btn) btn.disabled=true;
+  const r=tirageDefi28(c.def.graine,d28Grille(c.def,c.parts),c.def.minCheckins,c.def.gagnants);
+  const pub=d28TiragePublic(r,Date.now());
+  const ok=await CLOUD.racinePatch({[_d28Base(c.coach,id)+'/tirage']:pub}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  toast(ok?'Tirage publié.':'Tirage refusé (déjà fait, ou défi pas terminé).',ok?'var(--green)':'var(--orange)');
+  if(ok) rendreDefis28();
+  return ok;
+}
+function htmlDefi28Athlete(id,def,tirage,p,moi,t){
+  const j=d28Jour(def,t), ins=!!(p&&p.inscription), faits=d28Checkins(p);
+  const jours=Array.from({length:D28_JOURS},(_,i)=>faits.indexOf(i+1)>=0);
+  let h='<div class="d28-carte">'+htmlDefi28Tete(def,t);
+  if(!ins){
+    if(j<=D28_JOURS) h+='<button type="button" class="btn btn-red" style="width:100%" onclick="rejoindreDefi28('+jsArg(id)+',this)">Je participe</button>';
+    return h+(tirage?htmlTirage28(tirage):'')+'</div>';
+  }
+  h+=htmlCases28(jours,j)+'<div class="d28-etat">'+faits.length+' check-in'+(faits.length>1?'s':'')+' sur '+def.minCheckins+' pour le tirage</div>';
+  if(j>=1&&j<=D28_JOURS&&!jours[j-1]) h+='<button type="button" class="btn btn-red" style="width:100%;margin-top:8px" onclick="checkinDefi28('+jsArg(id)+',this)">Check-in du jour '+j+'</button>';
+  const ph=(p&&p.photos)||{};
+  for(const q of ['j1','j28']){
+    const x=ph[q], lib=q==='j1'?'Photo J1':'Photo J28';
+    if(x) h+='<div class="d28-photo"><span>'+lib+' tamponnée le '+escapeHtml(new Date(x.at).toLocaleDateString('fr-FR'))+(x.consentement?' · partagée avec ton coach':' · gardée sur ton téléphone')+'</span>'
+      +'<button type="button" class="rb-lien" onclick="retirerPhotoDefi28('+jsArg(id)+','+jsArg(q)+')">Retirer</button></div>';
+    else if(d28PhotoOuverte(def,q,t)) h+='<div class="d28-photo"><label class="d28-consent"><input type="checkbox" id="d28-c-'+id+'-'+q+'"> Je partage cette photo avec mon coach</label>'
+      +'<label class="btn btn-outline btn-sm" style="display:block;text-align:center">'+lib+'<input type="file" accept="image/*" capture="user" hidden data-id="'+id+'" data-q="'+q+'" onchange="photoDefi28(this)"></label>'
+      +'<p class="sub" style="font-size:var(--fs-xs)">La date et l’heure sont dessinées dans la photo par l’app ; une photo posée ne se remplace pas. Sans la case, seule son empreinte part.</p></div>';
+  }
+  if(tirage) h+=htmlTirage28(tirage,d28Verifier(def,tirage,moi));
+  return h+'</div>';
+}
+async function rejoindreDefi28(id,btn){
+  const c=_d28Cache[id], u=currentUser; if(!c||!u) return false;
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({[_d28Base(c.coach,id)+'/participants/'+_moiCle()+'/inscription']:{le:Date.now(),prenom:String(u.fname||'').trim().slice(0,24)||'Athlète'}}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  toast(ok?'Inscrit. Un check-in par jour !':'Inscription impossible pour l’instant.',ok?'var(--green)':'var(--orange)');
+  if(ok) rendreDefis28();
+  return ok;
+}
+async function checkinDefi28(id,btn){
+  const c=_d28Cache[id]; if(!c) return false;
+  const t=Date.now(), j=d28Jour(c.def,t);
+  if(!(j>=1&&j<=D28_JOURS)) return false;
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({[_d28Base(c.coach,id)+'/participants/'+_moiCle()+'/checkins/'+j]:t}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  toast(ok?'Check-in du jour '+j+' '+ICO.coche:'Check-in impossible pour l’instant.',ok?'var(--green)':'var(--orange)');
+  if(ok) rendreDefis28();
+  return ok;
+}
+async function photoDefi28(input){
+  const id=String(input&&input.dataset&&input.dataset.id||''), q=String(input&&input.dataset&&input.dataset.q||'');
+  const fl=input&&input.files&&input.files[0];
+  try{ if(input) input.value=''; }catch(e){}
+  const c=_d28Cache[id]; if(!fl||!c||!d28PhotoOuverte(c.def,q,Date.now())) return false;
+  const consent=!!(document.getElementById('d28-c-'+id+'-'+q)||{}).checked;
+  let r;
+  try{ r=await d28Tamponner(fl,q,String(currentUser.fname||'').slice(0,24),c.def.titre); }
+  catch(e){ toast('Photo illisible.','var(--orange)'); return false; }
+  const entree={at:r.at,empreinte:r.empreinte,consentement:consent};
+  if(consent) entree.img=r.dataUrl;
+  const ok=await CLOUD.racinePatch({[_d28Base(c.coach,id)+'/participants/'+_moiCle()+'/photos/'+q]:entree}).catch(()=>false);
+  if(!ok){ toast('Photo non enregistrée (déjà posée, ou hors connexion).','var(--orange)'); return false; }
+  // Sans partage, la photo tamponnée reste à l'athlète : on la lui donne.
+  if(!consent){ try{ const a=document.createElement('a'); a.href=r.dataUrl; a.download='repcore-defi28-'+q+'.jpg'; a.click(); }catch(e){} }
+  toast(consent?'Photo tamponnée et partagée avec ton coach.':'Photo tamponnée, gardée sur ton téléphone.','var(--green)',4000);
+  rendreDefis28();
+  return true;
+}
+async function retirerPhotoDefi28(id,q){
+  const c=_d28Cache[id]; if(!c) return false;
+  const ok=await CLOUD.racinePatch({[_d28Base(c.coach,id)+'/participants/'+_moiCle()+'/photos/'+q]:null}).catch(()=>false);
+  toast(ok?'Photo retirée.':'Retrait impossible pour l’instant.',ok?'var(--green)':'var(--orange)');
+  if(ok) rendreDefis28();
   return ok;
 }
