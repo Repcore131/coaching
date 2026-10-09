@@ -109,6 +109,19 @@ export const REGLE = `${DEBUT}
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} }, "$k": { ".write": ${j(MGR)} } } },
       "$autre": { ".write": ${j(MGR)} }
     },
+    "benchmark": {
+      ".read": ${j(MEMBRE)},
+      "$mois": {
+        "$h": {
+          ".write": ${j(MGR)},
+          ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && $h.matches(/^[0-9a-f]{32}$/) && newData.hasChildren(['v', 'at', 'realisation'])",
+          "v": { ".validate": "newData.isNumber()" }, "at": { ".validate": "newData.isNumber()" },
+          "realisation": { "$k": { ".validate": "$k.matches(/^[a-z0-9_]{1,20}$/) && newData.isNumber()" } },
+          "delaiImpaye": { ".validate": "newData.isNumber()" }, "sauvetage": { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
     "pulse_product": {
       ".read": ${j(CREATEUR)},
       ".write": ${j(CREATEUR)}

@@ -166,6 +166,7 @@ function shell(route, inner) {
       <div class="side-foot nav">
         <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>Mon profil</span></a>
         <a href="#/legal" class="${route === 'legal' ? 'on' : ''}">${ico('shield')}<span>Informations légales</span></a>
+        <a href="#/confidentialite" class="${route === 'confidentialite' ? 'on' : ''}">${ico('lock')}<span>Confidentialité</span></a>
         <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${roleLabel(ME.role)}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
       </div>
     </aside>
@@ -203,6 +204,7 @@ function renderNowInner() {
   const app = $('#app'); if (!app) return;
   // Pages légales : lisibles sans être connecté
   if (currentRoute().r === 'legal' && ((backend.mode === 'firebase' && !backend.user) || !S || !ME)) { app.innerHTML = legalStandalone(currentRoute().args[0]); window.scrollTo(0, 0); return; }
+  if (currentRoute().r === 'confidentialite' && ((backend.mode === 'firebase' && !backend.user) || !S || !ME)) { app.innerHTML = confidentialiteStandalone(); window.scrollTo(0, 0); return; }
   if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   if (!S) { app.innerHTML = PAGES.onboarding.render(); return; }
   if (!ME) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }

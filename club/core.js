@@ -181,7 +181,7 @@ function emptyState() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, benchmark: {},
   };
   if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
   return st;
@@ -332,8 +332,9 @@ const firebaseBackend = {
   // Collections rangées hors de /pulse (lisibles par les seuls créateurs, voir SIDE_PATHS).
   listenSide() {
     this.sideRefs.forEach(r => r.off()); this.sideRefs = [];
-    const me = S && S.users[this.userId]; if (!me || me.role !== 'createur') return;
+    const me = S && S.users[this.userId]; if (!me) return;
     for (const [k, root] of Object.entries(SIDE_PATHS)) {
+      if (SIDE_ROLE[k] && me.role !== SIDE_ROLE[k]) continue;
       const ref = this.fb.database().ref(root); this.sideRefs.push(ref);
       ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; listeners.forEach(f => f()); } }, () => null);
     }
@@ -362,7 +363,8 @@ localBackend.precreate = async () => {};
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
 // En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
 // leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
-const SIDE_PATHS = { product: 'pulse_product' };
+const SIDE_PATHS = { product: 'pulse_product', benchmark: 'benchmark' };
+const SIDE_ROLE = { product: 'createur' }; // lecture réservée à ce rôle (sinon : tout membre)
 const SIDE_CACHE = {};
 function sideApply(st) { if (!st) return; for (const k of Object.keys(SIDE_PATHS)) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
 // File d'écritures gardée sur l'appareil tant que la base n'a pas confirmé : une saisie faite

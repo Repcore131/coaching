@@ -66,5 +66,13 @@ await check('anonyme ne lit pas les demandes reçues', await req('GET', 'pulse/r
 await check('manager enregistre une fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-09', { date: '2026-10-09', by: 'mgr', forces: ['a', 'b'], axes: ['c', 'd'], engagement: { texte: 'x', date: '2026-10-16' } }, who('mgr')), true);
 await check('membre n’écrit pas sa fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-10', { date: '2026-10-10' }, who('mem')), false);
 await check('membre coche ses actions de coaching', await req('PUT', 'pulse/coaching/mem/actions/a1/done', true, who('mem')), true);
+const BENCH = { v: 1, at: 1, realisation: { contrats: 0.93, avis: 1.1 }, delaiImpaye: 5, sauvetage: 0.2 };
+await check('manager envoie les agrégats anonymes', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', BENCH, who('mgr')), true);
+await check('membre n’envoie pas d’agrégats', await req('PUT', 'benchmark/2026-09/fedcba9876543210fedcba9876543210', BENCH, who('mem')), false);
+await check('aucun nom dans /benchmark (champ texte refusé)', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', { ...BENCH, club: 'Niort' }, who('mgr')), false);
+await check('aucun nom dans /benchmark (valeur texte refusée)', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', { ...BENCH, realisation: { contrats: 'Kévin' } }, who('mgr')), false);
+await check('empreinte du club obligatoire (pas un nom en clé)', await req('PUT', 'benchmark/2026-09/Niort', BENCH, who('mgr')), false);
+await check('membre lit les agrégats', await req('GET', 'benchmark/2026-09', undefined, who('mem')), true);
+await check('anonyme ne lit pas les agrégats', await req('GET', 'benchmark', undefined), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

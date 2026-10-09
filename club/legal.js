@@ -124,7 +124,7 @@ function legalStandalone(tab) {
   return `<div class="legal-solo"><div class="row" style="margin-bottom:12px"><a class="btn ghost" href="#/">${ico('chevL')} Retour</a><span class="spacer"></span>${brandBlock()}</div><h1 class="title">Informations légales</h1>${legalPage(tab)}</div>`;
 }
 // Pied de page : liens légaux et copyright (écran de connexion, menu).
-const legalFooter = () => `<div class="legal-foot"><a href="#/legal/mentions">Mentions légales</a> · <a href="#/legal/confidentialite">Confidentialité</a> · <a href="#/legal/cgu">Conditions</a> · <a href="#/legal/propriete">Copyright</a><div>${esc(LEGAL_COPY)}</div></div>`;
+const legalFooter = () => `<div class="legal-foot"><a href="#/legal/mentions">Mentions légales</a> · <a href="#/confidentialite">Confidentialité</a> · <a href="#/legal/cgu">Conditions</a> · <a href="#/legal/propriete">Copyright</a><div>${esc(LEGAL_COPY)}</div></div>`;
 
 // ── Acceptation des conditions (base partagée) ────────────────────────────
 function cguNeeded() { return backend.mode === 'firebase' && ME && pref('cguVersion', null) !== LEGAL.version; }

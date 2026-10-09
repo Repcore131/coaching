@@ -51,6 +51,19 @@
       "coaching": { "$uid": { "actions": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" }, "$k": { ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" } } },
       "$autre": { ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))" }
     },
+    "benchmark": {
+      ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()",
+      "$mois": {
+        "$h": {
+          ".write": "(auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'))",
+          ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && $h.matches(/^[0-9a-f]{32}$/) && newData.hasChildren(['v', 'at', 'realisation'])",
+          "v": { ".validate": "newData.isNumber()" }, "at": { ".validate": "newData.isNumber()" },
+          "realisation": { "$k": { ".validate": "$k.matches(/^[a-z0-9_]{1,20}$/) && newData.isNumber()" } },
+          "delaiImpaye": { ".validate": "newData.isNumber()" }, "sauvetage": { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
     "pulse_product": {
       ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'",
       ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur'"

@@ -1187,3 +1187,7 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .fp-tests-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .fp-tests-h b { flex: 1; }
 #fp-tests li.ok { color: var(--ok); } #fp-tests li.bad { color: var(--bad); font-weight: 700; }
+
+/* ── Confidentialité ── */
+.conf h2 { margin-top: 22px; } .conf h2:first-child { margin-top: 0; }
+.conf-res { max-width: 560px; margin-top: 6px; }
