@@ -16481,3 +16481,17 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .ml-err-s{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5}
 .ml-err-img{display:block;width:100%;max-width:420px;height:auto;margin-top:8px;border-radius:8px;background:#0b0b0b}
 .ml-err-a{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+
+/* ══ LOT PR1 — PROLONGER L'ACCÈS GRATUIT (carte d'identité de l'athlète) ════
+   Le jumeau du bouton bilan, sur la même ligne ; la feuille propose quatre
+   durées, chacune avec la date qu'elle donne. */
+.ccd-tete-a{gap:10px;flex-wrap:wrap}
+.pro-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 14px 20px;width:100%;max-width:520px}
+.pro-feuille h2{margin:0 0 6px;font-size:var(--fs-lg)}
+.pro-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin:0 0 12px}
+.pro-choix{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.pro-b{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:58px;padding:10px 12px;border-radius:var(--r-2);
+  border:1px solid var(--border);background:var(--surface-1);color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer;text-align:left}
+.pro-b b{font-size:var(--fs-md)}
+.pro-b span{font-size:var(--fs-2xs);color:var(--sub)}
+.pro-b:hover,.pro-b:focus-visible{border-color:var(--red)}

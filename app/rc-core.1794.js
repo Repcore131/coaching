@@ -7047,7 +7047,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // LOT PF1 — LE PLAN POINT FAIBLE appliqué : une date, deux muscles, un
   // nombre d'opérations. Aucune mesure du corps n'y est recopiée : l'effet se
   // recalcule au rite depuis les séances et les bilans.
-  'planPointFaible','ordonnancePlateau','recordsTestes','competition','reglesErreursOff',
+  'planPointFaible','ordonnancePlateau','recordsTestes','competition','reglesErreursOff','prolongationsAcces',
   // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
   // articulation, deux angles, un repère, posés par le coach. Une consigne
   // d'exécution, comme le réglage du coach — pas une mesure du corps.
@@ -36266,8 +36266,10 @@ function _ccdCalerAncres(){
 function _majBoutonBilan(c){
   const z=document.getElementById('ccd-tete-act');
   if(!z) return false;
+  // LOT PR1 : le bouton « Prolonger l'accès gratuit », sur la même ligne.
+  let pro=''; try{ pro=_htmlBoutonProlonger(c); }catch(e){ pro=''; }
   const n=(c&&!c._fromCode&&Array.isArray(c.bilans))?c.bilans.length:0;
-  if(!n){ z.innerHTML=''; return false; }
+  if(!n){ z.innerHTML=pro?'<div class="ccd-tete-a">'+pro+'</div>':''; return false; }
   let neuf=false;
   try{ neuf=hasNewBilan(c); }catch(e){ neuf=false; }
   // LA DATE DU DERNIER BILAN. Elle ne sort QUE lorsqu'il y en a un a lire :
@@ -36280,12 +36282,97 @@ function _majBoutonBilan(c){
     if(d>0){ try{ quand=new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }
              catch(e){ quand=''; } }
   }
-  z.innerHTML='<div class="ccd-tete-a">'
+  z.innerHTML='<div class="ccd-tete-a">'+pro
     +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans()">'
     +(neuf?'<span class="ccd-tete-pt"></span>':'')
     +'<span class="ccd-tete-bt">'+(neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
     +(quand?('<small>reçu le '+escapeHtml(quand)+'</small>'):'')
     +'</span></button></div>';
+  return true;
+}
+// ══ LOT PR1 — PROLONGER L'ACCÈS GRATUIT, DEPUIS LA CARTE DE L'ATHLÈTE ═════
+//
+// Kevin, 09/10/2026 : « sur la même ligne que nouveau bilan à checker, un
+// prolonger l'utilisation gratuite : un, deux, trois ou six mois. Il y a
+// tendance à perdre son code, ça permet de relancer son utilisation. »
+//
+// ⚠ ON ÉCRIT DANS LE DOSSIER DE L'ATHLÈTE, PAS DANS UN CODE. Un code perdu
+//   ne doit plus être un détour : la prolongation pose accessExpiry
+//   directement (le coach écrit déjà ce dossier). Si l'athlète ressaisit un
+//   jour son ancien code, _appliquerPayloadCode garde la date la plus
+//   lointaine : rien ne recule.
+// ⚠ ELLE PART DU PLUS TARD DES DEUX : l'échéance en cours, ou aujourd'hui.
+//   Un accès expiré depuis trois mois repart d'aujourd'hui — sinon « un mois
+//   de plus » ne rouvrirait rien.
+// ⚠ PAS POUR UN ABONNÉ PAYANT : son accès suit son abonnement, il n'y a rien
+//   de gratuit à prolonger, et le bouton ne s'affiche pas.
+// ⚠ UN ACCÈS POSÉ À LA MAIN DANS droits/ PRIME (palierDe) : la prolongation
+//   n'y peut rien, et c'est voulu — c'est la seule barrière qui ne se
+//   trafique pas depuis un navigateur.
+const PROLONGATION_MOIS=Object.freeze([1,2,3,6]);
+/**
+ * PURE. La nouvelle échéance : le plus tard de (échéance, maintenant), plus
+ * `mois` MOIS DU CALENDRIER — le 15 octobre + 1 mois tombe le 15 novembre,
+ * pas le 14 (les codes, eux, comptent 30 jours : _MONTH_MS). Un 31 qui n'existe
+ * pas le mois d'arrivée retombe sur le dernier jour de ce mois.
+ */
+function dateProlongation(fin,mois,maintenant){
+  const now=Number(maintenant)||Date.now(), m=Number(mois);
+  if(PROLONGATION_MOIS.indexOf(m)<0) return null;
+  const d=new Date(Math.max(Number(fin)||0,now)), j=d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth()+m);
+  const dernier=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  d.setDate(Math.min(j,dernier));
+  return d.getTime();
+}
+/** PURE. Le dossier peut-il recevoir une prolongation gratuite ? */
+function prolongeable(c){
+  if(!c||c._fromCode||!c.email||c.role==='coach') return false;
+  if(c.paymentStatus==='active'||c.status==='AUTONOMIE_PREMIUM') return false;
+  return true;
+}
+function _htmlBoutonProlonger(c){
+  if(!prolongeable(c)) return '';
+  const fin=Number(c.accessExpiry)||0, now=Date.now();
+  const d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  const etat=!fin?'accès sans échéance':(fin<now?'expiré le '+d(fin):'jusqu’au '+d(fin));
+  return '<button type="button" class="ccd-tete-b ccd-tete-pro" data-cid="'+escapeHtml(String(c.id||''))+'" onclick="ouvrirProlongation(this.dataset.cid)">'
+    +'<span class="ccd-tete-bt">Prolonger l’accès gratuit<small>'+escapeHtml(etat)+'</small></span></button>';
+}
+function ouvrirProlongation(cid){
+  const c=getOwnedClient(cid);
+  if(!prolongeable(c)) return false;
+  const now=Date.now(), d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" class="pro-feuille">'
+    +'<h2>Prolonger l’accès gratuit</h2>'
+    +'<p class="pro-s">'+escapeHtml((c.fname||'L’athlète')+' : '+(Number(c.accessExpiry)?(Number(c.accessExpiry)<now?'accès expiré le ':'accès jusqu’au ')+d(Number(c.accessExpiry)):'accès sans échéance')+'.')+' La prolongation part de cette date, ou d’aujourd’hui si elle est passée.</p>'
+    +'<div class="pro-choix">'+PROLONGATION_MOIS.map(m=>'<button type="button" class="pro-b" data-cid="'+escapeHtml(String(c.id||''))+'" data-m="'+m+'" onclick="prolongerAccesGratuit(this.dataset.cid,+this.dataset.m)">'
+      +'<b>+ '+m+' mois</b><span>jusqu’au '+escapeHtml(d(dateProlongation(c.accessExpiry,m,now)))+'</span></button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-outline" onclick="closeModal()">Fermer</button></div></div>');
+  return true;
+}
+async function prolongerAccesGratuit(cid,mois){
+  if(!currentUser||currentUser.role!=='coach'||PROLONGATION_MOIS.indexOf(mois)<0) return false;
+  const users=DB.get('users')||{}, c=getOwnedClient(cid,users);
+  if(!prolongeable(c)) return false;
+  const now=Date.now(), fin=dateProlongation(c.accessExpiry,mois,now);
+  const d=new Date(fin).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  if(!await rcConfirm('Prolonger de '+mois+' mois ?','L’accès gratuit de '+(c.fname||'l’athlète')+' courra jusqu’au '+d+'.','Prolonger')) return false;
+  c.accessExpiry=fin;
+  // UN DOSSIER RETOMBÉ EN « FREE » REDEVIENT SUIVI : c'est ce que fait la
+  // saisie d'un code, et c'est ce que le coach vient de décider. Un autre
+  // statut (abonné) ne passe pas ici — prolongeable l'écarte.
+  if(!c.status||c.status==='FREE') c.status='COACHING_SUIVI';
+  const l=Array.isArray(c.prolongationsAcces)?c.prolongationsAcces.slice(-19):[];
+  l.push({date:now,mois,jusqua:fin});
+  c.prolongationsAcces=l;
+  c.updatedAt=now; users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ closeModal(); }catch(e){}
+  try{ _majBoutonBilan(c); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Accès prolongé jusqu’au '+d+' ✓','la prolongation est');
   return true;
 }
 // ⚠ _majBilanNeuf A ETE RETIREE le 08/09/2026, quelques heures apres avoir

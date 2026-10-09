@@ -74771,6 +74771,61 @@ async function testExercices(){
         } finally { window._mlSerieErreurs=svS; _ml=svMl; currentUser=svU; DB.set('users',svDB||{}); }
         return (/"reglesErreursOff"\s*:/.test(String(window._RC_RULES||''))&&/_mlHtmlErreurs\(\)/.test(String(_mlMajLecture))&&/'reglesErreursOff'/.test(_prodSrc()))||_echec('branchements');
       });
+      // ══ LOT PR1 — PROLONGER L'ACCÈS GRATUIT DEPUIS LA CARTE DE L'ATHLÈTE ══
+      {
+        const _N=Date.UTC(2026,9,9,12), _J=864e5, _M=30*_J;
+        ok('PR1 — la nouvelle échéance part du plus tard (échéance en cours ou aujourd’hui), en mois du calendrier : 1, 2, 3 ou 6 seulement',(()=>{
+          if(PROLONGATION_MOIS.join()!=='1,2,3,6'||!Object.isFrozen(PROLONGATION_MOIS)) return _echec('durées');
+          const jour=t=>{ const d=new Date(t); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
+          const oct15=new Date(2026,9,15,12).getTime(), now=new Date(2026,9,9,12).getTime();
+          if(jour(dateProlongation(oct15,1,now))!=='2026-11-15') return _echec('mois calendaire : '+jour(dateProlongation(oct15,1,now)));
+          if(jour(dateProlongation(oct15,3,now))!=='2027-1-15'||jour(dateProlongation(oct15,6,now))!=='2027-4-15') return _echec('3 et 6 mois');
+          if(jour(dateProlongation(new Date(2026,0,31,12).getTime(),1,new Date(2026,0,2,12).getTime()))!=='2026-2-28') return _echec('31 janvier + 1 mois');
+          if(jour(dateProlongation(now-90*_J,2,now))!=='2026-12-9') return _echec('accès expiré : repart d’aujourd’hui');
+          if(jour(dateProlongation(0,6,now))!=='2027-4-9') return _echec('sans échéance');
+          return (dateProlongation(_N,4,_N)===null&&dateProlongation(_N,0,_N)===null)||_echec('durée inventée acceptée');})());
+        ok('PR1 — pas pour un abonné payant, ni pour une invitation non consommée',(()=>{
+          const base={id:'p',email:'p@t.fr',role:'athlete',status:'COACHING_SUIVI'};
+          if(!prolongeable(base)||!prolongeable(Object.assign({},base,{status:'FREE'}))) return _echec('suivi ou free refusé');
+          if(prolongeable(Object.assign({},base,{paymentStatus:'active'}))||prolongeable(Object.assign({},base,{status:'AUTONOMIE_PREMIUM'}))) return _echec('abonné');
+          return (!prolongeable({id:'_code_1',_fromCode:true})&&!prolongeable(Object.assign({},base,{role:'coach'}))&&!prolongeable(null))||_echec('invitation ou coach');})());
+        okA('PR1 — sur la carte : le bouton à côté du bilan, la feuille à quatre durées, l’écriture dans le dossier',async()=>{
+          const sU=currentUser, sv=DB.get('users'), svC=window.rcConfirm, z=document.getElementById('ccd-tete-act');
+          if(!z) return _echec('la rangée a disparu');
+          const avant=z.innerHTML;
+          try{
+            currentUser={id:'co',email:'co@t.fr',role:'coach',sessions:[],bilans:[],studentCodes:[]};
+            const fin=Date.now()+5*_J;
+            const c={id:'pa',email:'pa@t.fr',role:'athlete',fname:'Chris',coachId:'co',status:'COACHING_SUIVI',accessExpiry:fin,sessions:[],
+              bilans:[{date:Date.now()-2*_J}]};
+            const u={}; u[c.email]=c; DB.set('users',u);
+            _majBoutonBilan(c);
+            const bs=[...z.querySelectorAll('.ccd-tete-a button')];
+            if(bs.length!==2||!/Prolonger l’accès gratuit/.test(bs[0].textContent)||!/Nouveau bilan à checker|Voir le dernier bilan/.test(bs[1].textContent)) return _echec(z.innerHTML.slice(0,300));
+            if(!/jusqu’au/.test(bs[0].textContent)) return _echec('échéance non dite');
+            ouvrirProlongation('pa');
+            const ch=[...document.querySelectorAll('.pro-choix .pro-b')];
+            if(ch.length!==4||!/\+ 6 mois/.test(ch[3].textContent)) return _echec('feuille');
+            window.rcConfirm=async()=>true;
+            if(await prolongerAccesGratuit('pa',3)!==true) return _echec('prolongation refusée');
+            const d=DB.get('users')['pa@t.fr'];
+            if(Math.abs(d.accessExpiry-dateProlongation(fin,3,Date.now()))>60000||d.prolongationsAcces.length!==1||d.prolongationsAcces[0].mois!==3) return _echec(JSON.stringify(d));
+            if(document.getElementById('modal-overlay')) return _echec('feuille restée ouverte');
+            // UN DOSSIER RETOMBÉ EN FREE, SANS BILAN : le bouton seul, et il redevient suivi.
+            const f={id:'pf',email:'pf@t.fr',role:'athlete',fname:'Lou',coachId:'co',status:'FREE',accessExpiry:Date.now()-40*_J,sessions:[],bilans:[]};
+            const u2=DB.get('users'); u2[f.email]=f; DB.set('users',u2);
+            _majBoutonBilan(f);
+            if(z.querySelectorAll('.ccd-tete-a button').length!==1||!/expiré le/.test(z.textContent)) return _echec('dossier sans bilan : '+z.innerHTML.slice(0,200));
+            await prolongerAccesGratuit('pf',1);
+            const g=DB.get('users')['pf@t.fr'];
+            if(g.status!=='COACHING_SUIVI'||!(g.accessExpiry>Date.now()+27*_J)) return _echec('free non relancé : '+JSON.stringify(g));
+            const p={id:'pp',email:'pp@t.fr',role:'athlete',coachId:'co',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',sessions:[],bilans:[]};
+            _majBoutonBilan(p);
+            if(z.querySelector('.ccd-tete-pro')) return _echec('bouton chez un abonné');
+          } finally { try{ closeModal(); }catch(e){} window.rcConfirm=svC; currentUser=sU; DB.set('users',sv||{}); z.innerHTML=avant; }
+          return (/"prolongationsAcces"\s*:/.test(String(window._RC_RULES||''))&&/'prolongationsAcces'/.test(_prodSrc()))||_echec('règle ou classement');
+        });
+      }
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');
