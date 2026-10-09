@@ -41,19 +41,20 @@ function demoQuit() {
 // ── Jeu de donnees fictif ─────────────────────────────────────────────────
 // La demo vendeur « Club Horizon » (demoState, core.js) : graine fixe, la meme
 // demo a chaque chargement.
-function seedDemo() { return CFG.capture ? captureState() : demoState(); }
+// La démo vendable (?demo=1) : seedDemo, demo-vendable.js ; capture : captureState (sur demoState).
 
 // Demarrage en demonstration : donnees fictives si besoin, connexion d'office.
 function demoStart() {
-  if (CFG.capture || !S || !S.meta || S.meta.demoSeed !== DEMO_GRAINE || S.meta.capture) { S = normalizeState(seedDemo()); backend.replaceAll(); }
-  if (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)]) safeLS.set(SESSION_KEY, DEMO_USER);
+  if (CFG.capture || !S || !S.meta || S.meta.demoSeed !== (CFG.capture ? DEMO_GRAINE : DEMO_VENDABLE_GRAINE) || S.meta.capture) { S = normalizeState(seedDemo()); backend.replaceAll(); }
+  // Capture : connexion d'office ; démo : l'écran de connexion propose « Lancer la démo ».
+  if (CFG.capture && (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)])) safeLS.set(SESSION_KEY, DEMO_USER);
   if (!CFG.capture) demoRecaler(S);
 }
 // Démonstration : les dossiers de résiliation gardent leur âge (« reçue il y a 2 h ») et la relève date
 // de 12 minutes, quelle que soit l'heure d'ouverture. Décale tous les horodatages du même écart.
 function demoRecaler(st, maintenant = Date.now()) {
   if (!st || !st.meta) return st; const d = maintenant - (st.meta.demoT0 || maintenant); st.meta.demoT0 = maintenant;
-  const ms = deepGet(st, ['clubs', DEMO_CLUB.id, 'mailSync']); if (ms) ms.at = maintenant - 12 * 60000;
+  Object.values(st.clubs || {}).forEach(c => { if (c && c.mailSync) c.mailSync.at = maintenant - 12 * 60000; });
   if (!d) return st; const dec = (o, k) => { if (o && typeof o[k] === 'number') o[k] += d; };
   Object.values(st.resiliations || {}).forEach(r => {
     if (!r || !r.receivedAt) return;
@@ -69,7 +70,7 @@ function demoRecaler(st, maintenant = Date.now()) {
 if (DEMO && !CFG.capture) {
   const bar = document.createElement('div');
   bar.id = 'demo-bar'; bar.setAttribute('role', 'status');
-  bar.innerHTML = '<b>Données fictives de démonstration</b><button type="button" class="btn sm" data-demo="reset">Réinitialiser la démo</button><button type="button" class="btn sm" data-demo="quit">Quitter la démo</button>';
+  bar.innerHTML = '<b>Données de démonstration</b><button type="button" class="btn sm" data-demo="reset">Réinitialiser la démo</button><button type="button" class="btn sm" data-demo="quit">Quitter la démo</button>';
   bar.querySelector('[data-demo=quit]').addEventListener('click', demoQuit);
   bar.querySelector('[data-demo=reset]').addEventListener('click', demoReset);
   document.body.prepend(bar);

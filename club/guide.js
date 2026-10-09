@@ -10,17 +10,15 @@
 // résiliations) sont générés à la volée depuis les données de la démo.
 
 const GUIDE_ON = typeof DEMO !== 'undefined' && DEMO && new URLSearchParams(location.search).get('guide') === '1';
-const GUIDE_DUREE = 7 * 60; // secondes annoncées
+const GUIDE_DUREE = 4 * 60; // secondes annoncées
 const GUIDE = { i: 0, debut: 0, timer: null };
 const GUIDE_ETAPES = [
-  { route: 'home', cible: '#brief-jour', titre: 'Le brief du matin', texte: 'Chaque matin, la veille, l’objectif du jour et trois actions prioritaires. Le texte se copie tel quel pour le groupe de l’équipe.' },
-  { route: 'resiliations', cible: '[data-tuile="sans-reponse"]', titre: 'Les demandes de résiliation', texte: 'Les demandes reçues par e-mail, dans l’appli ou lues dans Resamania arrivent seules. Chaque carte affiche le temps restant pour répondre, puis la date d’effet.' },
-  { route: 'impayes', cible: '.dette-bar', titre: 'Les impayés par ancienneté', texte: 'Quatre tranches montrent où se trouve l’argent à récupérer. Un clic filtre la liste et chaque ligne s’appelle ou se relance par SMS.' },
-  { route: 'loyalty', cible: '.loy-head', titre: 'Les adhérents à garder', texte: 'Appels J+15, J+30 et fins d’engagement arrivent seuls, classés par valeur. La valeur protégée du mois se lit en tête.' },
-  { route: 'imports', avant: () => { UI.impTab = 'rsm'; }, cible: '#rsm-dir-drop', titre: 'Un dépôt, tout est à jour', texte: 'Déposez les exports Resamania de la semaine en une fois. Essayez avec les fichiers d’exemple ci-dessous.', csv: true },
-  { route: 'recap', avant: () => { UI.recapMonth = curMonth(); }, cible: '[data-rev="mrr"]', titre: 'Le récap pour le gérant', texte: 'Revenu récurrent, entrées et sorties, comparés au mois précédent et à l’an dernier. Le récapitulatif part par e-mail en un clic.' },
-  { route: 'journee', cible: '.rap-compteur', titre: 'Ce que Fit Pulse rapporte', texte: 'Résiliations sauvées, impayés récupérés et ventes boutique, chaque euro relié à son dossier. Le temps gagné est compté à part.' },
-  { route: 'home', cible: null, titre: 'Votre club, en vrai', texte: 'Voilà l’essentiel de Fit Pulse. Créez votre club : vos données remplacent la démo.', fin: true },
+  { route: 'impayes', avant: () => { UI.impTab2 = 'suivi'; UI.dunFilter = 'todo'; }, cible: '.dette-bar', titre: 'Les impayés du club', texte: 'Tous les dossiers ouverts, classés par ancienneté de la dette. Un clic sur une tranche filtre la liste.' },
+  { route: 'impayes', avant: () => { UI.impTab2 = 'canaux'; UI.impMonth = curMonth(); }, cible: '#canaux-cartes', titre: 'Récupéré par canal', texte: 'Chaque euro régularisé est rangé par canal : équipe, client en ligne, prélèvement, automatismes, tiers. La part de l’équipe se lit d’un coup d’œil.' },
+  { route: 'impayes', avant: () => { UI.impTab2 = 'canaux'; }, cible: '#ctl-web', titre: 'Les contrôles', texte: 'Le paiement en ligne est comparé aux Transactions Web de Resamania. Concordant : les chiffres sont fiables.' },
+  { route: 'impayes', avant: () => { UI.impTab2 = 'suivi'; UI.dunFilter = 'nobody'; }, cible: '[data-act=dunTake]', titre: 'Je m’en occupe', texte: 'Un dossier sans responsable se prend en un clic. Il entre dans les relances du commercial.' },
+  { route: 'impayes', avant: () => { UI.impTab2 = 'suivi'; UI.dunFilter = 'todo'; }, cible: '[data-act=dunPaid]', titre: 'Marquer récupéré', texte: 'L’adhérent a payé : le dossier passe en Récupéré et le montant est crédité au commercial. Essayez sur un dossier.' },
+  { route: 'recap', avant: () => { UI.recapTab = 'recap'; UI.recapMonth = curMonth(); }, cible: '[data-act=recapPrint]', titre: 'Le récapitulatif du mois', texte: 'Tous les chiffres du mois sur une page pour le gérant. Imprimez-le ou enregistrez-le en PDF.', fin: true },
 ];
 
 // ── Exports d'exemple (format Resamania) ──────────────────────────────────

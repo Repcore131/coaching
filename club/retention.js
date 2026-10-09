@@ -261,3 +261,10 @@ ACTIONS.carteSms = el => {
   else if (t === 'anniversaire') retEnregistrer(id, t, null, 'envoye');
   const a = document.createElement('a'); a.href = href; a.style.display = 'none'; document.body.appendChild(a); try { a.click(); } catch (e) { /* pas d'appli SMS */ } a.remove();
 };
+// Accueil : « Mes appels du jour », impayés et rétention à mon nom, les plus urgents d'abord (3 taps chacun).
+function appelsDuJour(n = 3) {
+  let Q; try { Q = relQueue(CLUB.id, 'mine'); } catch (e) { return ''; }
+  const cartes = Q.now.concat(Q.nophone).map(r => carteAppel(r.top)).filter(Boolean);
+  if (!cartes.length) return '';
+  return `<div class="card appels-jour" style="margin-bottom:14px"><div class="race-h"><div><div class="eyebrow">${plur(cartes.length, 'appel à passer', 'appels à passer')}</div><h3>Mes appels du jour</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/relances">Toute la file</a></div><div class="appels-liste">${cartes.slice(0, n).join('')}</div></div>`;
+}

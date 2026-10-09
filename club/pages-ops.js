@@ -454,7 +454,8 @@ ACTIONS.dunPaidSave = () => {
   const amount = Math.round(toNum(f.amount) * 100) / 100;
   const ops = markPaid(c, amount, { canal, author: ME.id, from: 'impayes' }); closeModal();
   if (!ops.length) { toast(`${c.name} : dossier déjà soldé, rien à ajouter`); return; }
-  db.batch(ops); toast(Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(amount)} noté, reste ${fmtE(Number(S.clients[c.id].balance))} : ${c.name}` : `Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
+  db.batch(ops); if (!(Number(S.clients[c.id].balance) > 0) && canal === 'equipe' && typeof celebrate === 'function') celebrate('Impayé récupéré', `${fmtE(amount)} : ${c.name}`, { kind: 'perso' });
+  toast(Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(amount)} noté, reste ${fmtE(Number(S.clients[c.id].balance))} : ${c.name}` : `Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
 };
 // Un seul chemin pour « payé » (Impayés, Rétention, Relances, saisie détaillée) : markPaid.
 //  - crédit unique : au responsable du dossier (dunning.ownerId), sinon à l'auteur de l'action ;

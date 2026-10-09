@@ -43,6 +43,7 @@ document.addEventListener('submit', e => {
   login(st.users[uid]);
   toast('1 club créé. Ajoutez votre équipe dans Membres.');
 });
+ACTIONS.demoLancer = () => { if (!DEMO || !S || !S.users[DEMO_USER]) return; login(S.users[DEMO_USER]); const q = new URLSearchParams(location.search); if (q.get('guide') === '1' && typeof guideDemarrer === 'function') setTimeout(guideDemarrer, 300); };
 ACTIONS.loadDemo = () => {
   const st = DEMO ? seedDemo() : demoState();
   // Démonstration (hors mode capture) : âges des dossiers et relève recalés sur l'heure réelle.
@@ -66,6 +67,7 @@ PAGES.login = {
       <div class="login-side">
         <div class="login-card">
           ${brandBlock(true)}
+          ${DEMO && !CFG.capture ? `<div class="demo-lancer"><button class="btn primary login-btn" data-act="demoLancer">Lancer la démo</button><p class="muted small">Club Démo Centre : données fictives, rien n’est enregistré dans un club réel.</p></div>` : ''}
           <h1>Connexion</h1>
           <form id="lgc" class="login-form" novalidate>
             <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenom.nom@exemple.fr" value="${esc(email)}"></label>

@@ -211,3 +211,22 @@ test('point 11 : rapport ROI, non calculable sans Incidents, recupFP + recupAuto
   assert.equal(R.roi, null); run(`db.set(['billing', 'price'], 99)`); assert.match(run(`roiRapport('${mk}')`), /fois le prix de l’abonnement/);
   assert.match(run(`PAGES.recap.render()`), /Rapport ROI[\s\S]*Synthèse du mois/); assert.match(run(`roiCard()`), /minImport/);
 });
+test('point 1 : démo vendable, 38 dossiers pour 4 120 €, 5 canaux, part équipe 35 à 45 %, rétention, sans « Niort »', () => {
+  const run = chargerAppli({ clubs: { x: { id: 'x' } }, users: {} }); run(`toast = () => {}; S = normalizeState(seedDemo('demo')); REV++; CLUB = S.clubs.demo; ME = S.users.u1;`);
+  const a = run(`JSON.stringify(seedDemo('demo'))`), b = run(`JSON.stringify(seedDemo('demo'))`); assert.equal(a, b); assert.doesNotMatch(a, /Niort|Fitness Park|GUELLEC/i);
+  const D = J(run, `(() => { const o = dunRows('demo').filter(c => Number(c.balance) > 0); return { n: o.length, total: Math.round(o.reduce((s, c) => s + Number(c.balance), 0) * 100) / 100, sans: o.filter(c => !dunOf(c).ownerId).length, prom: o.filter(c => dunOf(c).status === 'promesse').length, ages: o.map(c => incidentDepuis(c)) }; })()`);
+  assert.equal(D.n, 38); assert.equal(D.total, 4120); assert.equal(D.sans, 9); assert.equal(D.prom, 6); assert.equal(Math.min(...D.ages), 1); assert.equal(Math.max(...D.ages), 75);
+  run(`UI.dunFilter = 'todo'`); assert.match(run(`dunTable()`), /Total dû<\/span><b>4\s120\s€<\/b>/);
+  assert.equal(run(`Object.keys(S.clients).length`), 420); assert.equal(run(`Object.values(S.users).filter(u => u.role === 'membre' && !u.virtual).length`), 5);
+  for (let i = 0; i < 6; i++) {
+    const mk = run(`addMonths(curMonth(), -${i})`); const rg = `{ from: '${mk}-01', to: '${mk}-31' }`;
+    const p = J(run, `recoveredParts('demo', ${rg})`); const tot = run(`recoveredFor('demo', ${rg})`);
+    for (const k of ['equipe', 'client', 'auto', 'automatismes', 'tiers']) assert.ok(p[k] > 0, `${mk} ${k}`);
+    assert.ok(p.equipe / tot >= 0.35 && p.equipe / tot <= 0.45, `${mk} ${p.equipe / tot}`);
+  }
+  run(`UI.impMonth = curMonth()`); assert.match(run(`impayesAnalyse.render()`), /badge ok">concordant/);
+  const T = J(run, `(() => { const L = loyaltyTasks('demo').filter(t => t.state === 'todo'); const n = k => L.filter(t => t.type === k).length; return { j15: n('suivi15'), j30: n('suivi30'), fins: L.filter(t => t.type === 'renouvellement' && t.due <= addDays(today(), 30)).length, anniv: n('anniversaire') }; })()`);
+  assert.deepEqual(T, { j15: 14, j30: 9, fins: 11, anniv: 6 });
+  assert.equal(run(`resToHandle('demo').length`), 5); assert.equal(run(`resList('demo').filter(r => resStatus(r) === 'sauvee' && (S.entries['sv_' + r.id] || {}).date.slice(0, 7) === curMonth()).length`), 2);
+  assert.doesNotMatch(run(`PAGES.impayes.render() + PAGES.loyalty.render() + PAGES.resiliations.render()`), /Niort/i);
+});

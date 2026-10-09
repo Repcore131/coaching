@@ -1395,5 +1395,9 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
   @page { size: A4 portrait; margin: 10mm; }
   body.print-roi .recap > :not(#roi-page), body.print-roi .recap .no-print { display: none !important; }
   body.print-roi .roi-page { border: 0; border-radius: 0; padding: 0; max-width: none; width: 190mm; gap: 10px; }
+  body.print-roi #demo-bar, body.print-roi .legal-foot, body.print-roi .tour, body.print-roi .toast { display: none !important; }
+  body.print-roi, html.is-demo body.print-roi { padding: 0 !important; margin: 0 !important; }
+  body.print-roi .page, body.print-roi .main, body.print-roi .shell { padding: 0 !important; margin: 0 !important; min-height: 0 !important; height: auto !important; }
   body.print-roi .roi-v { color: #111; background: var(--roi-jaune); padding: 0 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.appels-liste { display: grid; gap: 10px; }

@@ -199,6 +199,7 @@ PAGES.home = {
       ${manager ? '' : parcoursCard()}
       ${manager ? '' : myPlanCard()}
       ${manager ? '' : primeCard()}
+      ${typeof appelsDuJour === 'function' ? appelsDuJour(3) : ''}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
           <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres} j</b><span>${compteRebours().ouvres > 1 ? 'ouvrés restants' : 'ouvré restant'}</span></div>${healthChip(myHealth)}</div>
