@@ -58,7 +58,7 @@ function effacementOps(c, { by = ME && ME.id, motif = 'erase' } = {}) {
 async function effacerAdherent(id) {
   const c = S.clients[id]; if (!c || !isManager()) return false;
   if (!await confirmDlg(`Effacer définitivement ${esc(c.name || 'cet adhérent')} ? Sa fiche, ses relances et ses contacts sont supprimés, ses dossiers de résiliation deviennent « ${ANONYME} ». Les chiffres de vente restent, sans lien vers la personne.`, { ok: 'Effacer', danger: true })) return false;
-  db.batch(effacementOps(c)); toast('Adhérent effacé'); return true;
+  db.batch(effacementOps(c)); toast('1 adhérent effacé'); return true;
 }
 ACTIONS.cliErase = async el => { if (await effacerAdherent(el.dataset.id)) location.hash = '#/relances'; };
 ACTIONS.rgpdEffacer = async el => { if (await effacerAdherent(el.dataset.id)) { UI.rgpdQ = ''; render(); } };

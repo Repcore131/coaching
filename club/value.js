@@ -90,5 +90,5 @@ function offersCard() {
 ACTIONS.offerSet = el => {
   const k = el.dataset.k; const v = k === 'prixMensuelTTC' ? (Number.isNaN(parseMontant(el.value)) ? null : Math.round(parseMontant(el.value) * 100) / 100) : el.value;
   db.batch([[['offers', CLUB.id, el.dataset.key, 'libelle'], el.dataset.lib || el.dataset.key], [['offers', CLUB.id, el.dataset.key, k], v]]);
-  toast('Enregistré');
+  toast('1 valeur enregistrée');
 };

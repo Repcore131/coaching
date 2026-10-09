@@ -55,7 +55,7 @@ ACTIONS.apparenceApercu = el => {
 ACTIONS.apparenceSet = el => {
   if (!peutApparence()) return; const k = el.dataset.k; let v = String(el.value || '').trim();
   if (k === 'accent') { if (v && !COULEUR_OK(v)) { toast('Couleur : un code de 6 chiffres hexadécimaux, par exemple #2B4BDB.'); return; } v = v ? v.toUpperCase() : null; }
-  if (k === 'displayName') { v = v.slice(0, 40) || null; if (portee() === 'org') { db.set(['org', 'name'], v); toast('Nom du réseau enregistré'); return; } }
+  if (k === 'displayName') { v = v.slice(0, 40) || null; if (portee() === 'org') { db.set(['org', 'name'], v); toast(`Nom du réseau enregistré : ${v || 'aucun'}`); return; } }
   db.set([...themeChemin(), k], v); toast(k === 'accent' ? `Accent enregistré : ${v || 'thème Fit Pulse'}` : 'Nom affiché enregistré');
 };
 // Lecture d'un fichier de logo : SVG contrôlé puis encodé, PNG de 200 Ko au plus (sinon réduit).
@@ -79,3 +79,23 @@ ACTIONS.apparenceReset = async () => {
   if (!peutApparence() || !(await confirmDlg(portee() === 'org' ? 'Retirer l’accent, le logo et le nom du réseau ?' : 'Retirer l’accent, le logo et le nom affiché de ce club ?', { ok: 'Revenir au thème Fit Pulse' }))) return;
   db.set(themeChemin(), null); toast('Thème Fit Pulse rétabli : 0 personnalisation');
 };
+
+// ── Réglages > Ordre des indicateurs : seul endroit où l'on fait glisser ─────
+// L'ordre (S.kpis[id].order) sert d'ordre par défaut au tableau des indicateurs.
+function ordreKpiCard() {
+  if (!isManager()) return '';
+  const L = kpiList();
+  return `<div class="card" id="ordre-kpi"><h3>Ordre des indicateurs</h3><p class="muted small" style="margin-top:-4px">Faites glisser une ligne, ou utilisez les flèches. Cet ordre est celui du tableau des indicateurs.</p>
+    <ol class="ordre-l">${L.map((k, i) => `<li draggable="true" data-ordre="${k.id}"><span class="poignee" aria-hidden="true">${ico('menu', 'ico ico-xs')}</span><span class="kpi-ico">${kpiIcon(k)}</span><span class="spacer">${esc(k.label)}</span>
+      <button class="btn icon sm" data-act="ordreKpi" data-id="${k.id}" data-d="-1" aria-label="Monter ${esc(k.label)}" ${i ? '' : 'disabled'}>${ico('chevU')}</button><button class="btn icon sm" data-act="ordreKpi" data-id="${k.id}" data-d="1" aria-label="Descendre ${esc(k.label)}" ${i < L.length - 1 ? '' : 'disabled'}>${ico('chevD')}</button></li>`).join('')}</ol></div>`;
+}
+function ordreEnregistrer(ids) { if (!isManager()) return; db.batch(ids.map((id, i) => [['kpis', id, 'order'], i + 1])); toast(`Ordre enregistré : ${plur(ids.length, 'indicateur', 'indicateurs')}`); }
+ACTIONS.ordreKpi = el => { const ids = kpiList().map(k => k.id); const i = ids.indexOf(el.dataset.id), j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; ordreEnregistrer(ids); };
+let ORDRE_DRAG = null;
+document.addEventListener('dragstart', e => { const li = e.target.closest && e.target.closest('[data-ordre]'); if (!li) return; ORDRE_DRAG = li.dataset.ordre; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', ORDRE_DRAG); } catch (_) { /* rien */ } });
+document.addEventListener('dragover', e => { const li = e.target.closest && e.target.closest('[data-ordre]'); if (!li || !ORDRE_DRAG) return; e.preventDefault(); $$('#ordre-kpi [data-ordre]').forEach(x => x.classList.toggle('over', x === li && x.dataset.ordre !== ORDRE_DRAG)); });
+document.addEventListener('dragend', () => { ORDRE_DRAG = null; $$('#ordre-kpi [data-ordre]').forEach(x => x.classList.remove('dragging', 'over')); });
+document.addEventListener('drop', e => {
+  const li = e.target.closest && e.target.closest('[data-ordre]'); if (!li || !ORDRE_DRAG) return; e.preventDefault();
+  const ids = $$('#ordre-kpi [data-ordre]').map(x => x.dataset.ordre).filter(id => id !== ORDRE_DRAG); ids.splice(ids.indexOf(li.dataset.ordre), 0, ORDRE_DRAG); ORDRE_DRAG = null; ordreEnregistrer(ids);
+});

@@ -60,14 +60,14 @@ ACTIONS.yearSave = async el => {
   const ops = [];
   Object.values(plan).forEach(p => p.months.forEach((v, i) => { const mk = `${y}-${pad(i + 1)}`; if (mk < curMonth()) return; members.forEach((u, j) => ops.push([['targets', mk, u.id, p.k.id], p.users[i][j] || 0])); }));
   ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'objectifs_annee', club: CLUB.id, annee: y }]);
-  db.batch(ops); closeModal(); toast('Objectifs de l’année enregistrés');
+  db.batch(ops); closeModal(); toast('Objectifs de l’année enregistrés pour 1 club');
 };
 // Paliers proposés : 90 %, 100 % et 115 % de l'objectif du mois.
 ACTIONS.palPropose = async () => {
   const mk = UI.palMonth || curMonth(); const cur = paliersFor(CLUB.id, mk); const out = {};
   Object.keys(cur).forEach(k => { const t = clubMonthTarget(mk, CLUB.id, k); if (!(t > 0)) { out[k] = cur[k]; return; } out[k] = [0.9, 1, 1.15].map((f, i) => { const old = (cur[k] || [])[i] || {}; return { ...old, target: Math.round(t * f), reward: old.reward || '' }; }); });
   if (!await confirmDlg(`Paliers proposés pour ${monthLabel(mk).toLowerCase()} : ${Object.entries(out).map(([k, L]) => `${esc((S.kpis[k] || {}).label || k)} ${L.map(t => fmtN(t.target)).join(' / ')}`).join(', ')}.`, { ok: 'Appliquer' })) return;
-  db.set(['paliers', CLUB.id, mk], out); toast('Paliers proposés appliqués');
+  db.set(['paliers', CLUB.id, mk], out); toast('Paliers proposés appliqués à 1 club');
 };
 // Bandeau d'accueil trois semaines avant janvier et septembre.
 function saisonBanner() {

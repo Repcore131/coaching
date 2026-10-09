@@ -29,6 +29,10 @@ const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFr
 const fmtN = n => nf0.format(Math.round(n || 0));
 const fmtE = n => (Number.isInteger(Math.round((n || 0) * 100) / 100) ? nf0.format(n || 0) : nf2.format(n || 0)) + ' €';
 const fmtV = (v, unit) => unit === 'eur' ? fmtE(v) : fmtN(v);
+// Valeur et unité d'un KPI : « 30 contrats », « 1 avis », « 1 240 € ». Unité des KPI créés à la main : k.nom = [singulier, pluriel].
+const KPI_NOMS = { avis: ['avis', 'avis'], contrats: ['contrat', 'contrats'], b2b: ['contrat B2B', 'contrats B2B'], invites: ['invité', 'invités'], sauvetage: ['sauvetage', 'sauvetages'], prospects: ['prospect', 'prospects'] };
+function uniteKpi(k, v) { const n = (k && (k.nom || KPI_NOMS[k.id])) || ['unité', 'unités']; return Math.abs(Math.round(v || 0)) >= 2 ? n[1] : n[0]; }
+const fmtU = (v, k) => { const kk = typeof k === 'string' ? S && S.kpis && S.kpis[k] : k; return kk && kk.unit === 'eur' ? fmtE(v) : `${fmtN(v)} ${uniteKpi(kk, v)}`; };
 const fmtP = p => p == null ? 'n.d.' : Math.round(p * 100) + ' %';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -99,6 +103,8 @@ const ICONS = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevL: '<path d="m15 18-6-6 6-6"/>',
   chevR: '<path d="m9 18 6-6-6-6"/>',
+  chevU: '<path d="m18 15-6-6-6 6"/>',
+  chevD: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
@@ -148,8 +154,15 @@ const kpiIconName = k => (k && ICONS[k.icon]) ? k.icon : (k && KPI_ICON[k.id]) |
 const kpiIcon = (k, cls = 'ico') => ico(kpiIconName(k), cls);
 // Reactions : les cles historiques restent (pas de perte), l'affichage passe
 // en icones. Toute autre cle est ignoree (jamais injectee dans la page).
-const REACT_ICON = { '🔥': ['flame', 'Bravo'], '💪': ['medal', 'Costaud'], '👏': ['sparkle', 'Bien joué'], '👍': ['check', 'OK'] };
-const reactIco = em => REACT_ICON[em] ? ico(REACT_ICON[em][0], 'ico') : '';
+// Réactions du fil et du chat : Vu, Bravo, Question. Les anciennes clés (pictogrammes) sont
+// relues sous la nouvelle (feu, biceps, applaudissements : Bravo ; pouce : Vu) : aucun compteur perdu.
+const REACTIONS = { vu: ['check', 'Vu'], bravo: ['sparkle', 'Bravo'], question: ['info', 'Question'] };
+const REACT_MIGR = { '\u{1F525}': 'bravo', '\u{1F4AA}': 'bravo', '\u{1F44F}': 'bravo', '\u{1F44D}': 'vu' };
+// rx : { cle: { uid: true } } (nouvelles et anciennes clés mêlées) -> { vu: [uid…], bravo: [uid…], question: [uid…] }
+function reactionsDe(rx) { const o = { vu: new Set(), bravo: new Set(), question: new Set() }; for (const [k, w] of Object.entries(rx || {})) { const n = REACTIONS[k] ? k : REACT_MIGR[k]; if (n) Object.keys(w || {}).filter(id => w[id]).forEach(id => o[n].add(id)); } return { vu: [...o.vu], bravo: [...o.bravo], question: [...o.question] }; }
+// Bascule de ma réaction : écrit la nouvelle clé et efface les anciennes clés équivalentes.
+function reactOps(base, rx, cle) { const mine = reactionsDe(rx)[cle].includes(ME.id); const ops = [[[...base, cle, ME.id], mine ? null : true]]; for (const [old, n] of Object.entries(REACT_MIGR)) if (n === cle && deepGet(rx || {}, [old, ME.id])) ops.push([[...base, old, ME.id], null]); return ops; }
+const reactBtns = (act, id, rx, cls = '') => { const R = reactionsDe(rx); return Object.entries(REACTIONS).map(([k, [ic, l]]) => `<button class="${cls} ${R[k].includes(ME.id) ? 'on' : ''}" data-act="${act}" data-id="${id}" data-em="${k}" aria-pressed="${R[k].includes(ME.id)}" title="${esc([l, ...R[k].map(u => fullName(S.users[u] || { first: '?' }))].join(', '))}">${ico(ic, 'ico ico-xs')} ${l}${R[k].length ? ` <span class="num">${R[k].length}</span>` : ''}</button>`).join(''); };
 // Image du chat : uniquement une image encodee (data:), jamais un texte qui pourrait sortir de l'attribut.
 const safeImg = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -180,15 +193,19 @@ const DEFAULT_TASKS = [
   ['Clôture', ['Validation de caisse', 'Saisie des KPI du jour dans Fit Pulse', 'Point équipe de fin de journée', 'Fermeture et alarme']],
 ];
 
-// Zones : paliers individuels gagnés par mois validés (voir zoneOf dans calc.js).
+// Niveaux individuels gagnés par mois à 100 % (voir zoneOf dans calc.js).
 const ZONES = TXT.zones.liste;
+const LEVELS = ZONES;
 
-function emptyState() {
+// État initial de la base. emptyState() sans argument y renvoie ; art.js redéfinit emptyState
+// pour les états vides de l'interface (avec un argument).
+function emptyState() { return etatInitial(); }
+function etatInitial() {
   const st = {
     meta: { version: 1, createdAt: Date.now() },
     clubs: {}, users: {}, kpis: JSON.parse(JSON.stringify(DEFAULT_KPIS)),
     targets: {}, entries: {}, imports: {}, monthly: {}, base: {},
-    clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
+    clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {}, celebrated: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
     prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
@@ -219,7 +236,7 @@ const safeLS = {
 // sont lues une fois et recopiées sous « fitpulse. » : club choisi, thème, session et préférences restent.
 (function migrerClesLocales() {
   try {
-    if (localStorage.getItem('fitpulse.migre')) return;
+    if (CFG.demo || localStorage.getItem('fitpulse.migre')) return; // la démonstration ne touche pas aux clés réelles
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('parkpulse.')) { const n = 'fitpulse.' + k.slice(10); if (localStorage.getItem(n) == null) localStorage.setItem(n, localStorage.getItem(k)); } }
     localStorage.setItem('fitpulse.migre', '1');
   } catch (e) { /* stockage indisponible */ }
@@ -665,7 +682,7 @@ function demoState() {
   st.paliers = { [C]: { [cm]: { contrats: [{ target: 100, reward: 'Prime 50 € chacun' }, { target: 125, reward: 'Prime 100 € chacun' }], avis: [{ target: 90, reward: 'Petit-déjeuner d’équipe' }] } } };
   st.challenges.ch1 = { id: 'ch1', clubId: C, title: 'Sprint contrats', desc: 'Le plus de contrats signés en 48 h, rapporté à l’objectif de chacun.', kpiId: 'contrats', start: T0 - 20 * 3600000, end: T0 + 28 * 3600000, by: 'u1' };
   st.challenges.ch2 = { id: 'ch2', clubId: C, title: 'Semaine nutrition', desc: 'Ventes nutrition sur 72 h, rapportées à l’objectif.', kpiId: 'nutrition', start: T0 - 24 * 864e5, end: T0 - 21 * 864e5, by: 'u2' };
-  st.chat.m1 = { id: 'm1', channel: C, userId: 'u1', text: 'Beau mois dernier, merci à tous. Cette semaine : priorité aux résiliations à J-7.', at: T0 - 2 * 864e5 };
+  st.chat.m1 = { id: 'm1', channel: C, userId: 'u1', text: 'Septembre clos à 104 % sur les contrats. Cette semaine : priorité aux résiliations à J-7.', at: T0 - 2 * 864e5 };
   st.chat.m2 = { id: 'm2', channel: C, userId: 'u4', text: 'Je prends les relances J+15 aujourd’hui.', at: T0 - 864e5, parentId: 'm1' };
   st.chat.m3 = { id: 'm3', channel: C, userId: 'u8', text: 'Première semaine : merci pour l’accueil.', at: T0 - 3 * 3600000 };
   for (let i = 0; i < 40; i++) { const d = addDays(t, -(1 + Math.floor(R() * 60))); st.prospects['p' + i] = { id: 'p' + i, clubId: C, nom: pick(N), prenom: pick(P), creeLe: d, commercialId: vendeurs[i % vendeurs.length], statut: pick(['Nouveau', 'Contacté', 'RDV pris', 'Essai', 'Visite effectuée', 'Injoignable']), provenance: pick(['Site web', 'Passage', 'Parrainage', 'Réseaux sociaux']), phone: `06 39 98 ${pad(20 + Math.floor(i / 10))} ${pad(i)}`, at: ts(d) }; }

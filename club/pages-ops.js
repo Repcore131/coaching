@@ -29,11 +29,14 @@ function resUrgent(r) { const n = daysTo(r.effective); return resOpen(r) && n !=
 function resList(clubId) { return Object.values(S.resiliations).filter(r => r.clubId === clubId && !r.hidden); }
 function resToHandle(clubId) { return resList(clubId).filter(r => resOpen(r)); }
 
+// Droits : un manager voit tous les dossiers du club ; un commercial ne voit que les siens.
+const mesDossiersRes = r => isManager() || r.ownerId === ME.id;
+const mesDossiersDun = c => isManager() || dunOf(c).ownerId === ME.id;
 PAGES.resiliations = {
   title: 'Résiliations',
   render() {
     const tab = UI.resTab || 'todo';
-    const all = resList(CLUB.id);
+    const all = resList(CLUB.id).filter(mesDossiersRes);
     // À traiter : échéance la plus proche d'abord (inconnue en dernier), puis valeur décroissante.
     const open = all.filter(resOpen).sort((a, b) => (a.effective || '9999').localeCompare(b.effective || '9999') || (resValeur(b) - resValeur(a)));
     const mk = UI.resMonth || curMonth();
@@ -47,7 +50,7 @@ PAGES.resiliations = {
     const enJeu = resValeur; const vOpen = open.reduce((s, r) => s + resValeur(r), 0);
     const vSaved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const vLost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
-    const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · uniquement les demandes <b>à arbitrer</b> : les résiliations déjà acceptées partent à l’historique.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
+    const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(nomAffiche())} · uniquement les demandes <b>à arbitrer</b> : les résiliations déjà acceptées partent à l’historique.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
     const kpis = `<div class="stat-row">
       <div class="stat ${open.length ? 'hot' : ''}"><span>À arbitrer</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
       <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
@@ -57,12 +60,12 @@ PAGES.resiliations = {
       <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
     if (tab === 'todo') {
-      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune demande à arbitrer', text: 'Seules les demandes « À arbitrer » apparaissent ici. Les résiliations acceptées, rejetées ou annulées sont dans l’historique.' })}</div>`;
+      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'board', title: 'Aucune demande à arbitrer', text: 'Seules les demandes « À arbitrer » apparaissent ici. Les résiliations acceptées, rejetées ou annulées sont dans l’historique.', cta: '<a class="btn sm" href="#/imports">Ouvrir les imports</a>' })}</div>`;
     } else {
       body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}</div>${resOffersTables(month, enJeu)}
         ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
     }
-    return head + (typeof rrqBlock === 'function' ? rrqBlock() : '') + kpis + tabs('resTab', [['todo', `À arbitrer (${open.length})`], ['all', 'Historique du mois']], tab) + body;
+    return head + (isManager() && typeof rrqBlock === 'function' ? rrqBlock() : '') + kpis + tabs('resTab', [['todo', `À arbitrer (${open.length})`], ['all', 'Historique du mois']], tab) + body;
   },
 };
 function resCard(r) {
@@ -110,7 +113,7 @@ ACTIONS.resPickClient = el => { const r = S.resiliations[el.dataset.id]; const L
 ACTIONS.resPickOk = el => { db.batch([[['resiliations', el.dataset.id, 'clientId'], el.dataset.c], resLogOp(S.resiliations[el.dataset.id], 'Fiche client rattachée')]); closeModal(); };
 ACTIONS.resMsgSauvetage = el => { const r = S.resiliations[el.dataset.id]; const v = valeurEnJeu(r);
   copierTexte(remplirMessage(reglage('messageSauvetage', MSG_DEFAUTS.messageSauvetage), { prenom: String(r.client || '').trim().split(/\s+/)[0], montant: fmtE(v.prix).replace(/\s*€$/, ''), club: CLUB.name }), 'Message copié'); };
-ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
+ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('1 dossier ajouté à vos relances'); };
 ACTIONS.resCall = el => {
   const r = S.resiliations[el.dataset.id];
   openModal({ title: `Appel · ${r.client}`, body: `<form id="rcf" class="grid">
@@ -123,13 +126,13 @@ ACTIONS.resCallSave = () => {
   const r = S.resiliations[$('.modal').dataset.id]; const f = formData($('#rcf'));
   const out = $('#rcf input[name=out]:checked').value;
   db.batch([resLogOp(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim(), out, offer: f.offer && f.offer !== 'Aucune' ? f.offer : null }), [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
-  closeModal(); toast('Appel noté');
+  closeModal(); toast('1 appel noté');
 };
 ACTIONS.resSaveIt = el => {
   const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
   db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], valeurEnJeu(r).euros], [['resiliations', r.id, 'valeur'], valeurEnJeu(r).euros], ...(resClient(r) && !r.clientId ? [[['resiliations', r.id, 'clientId'], resClient(r).id]] : []), [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
     [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
-  celebrate('Client sauvé', `${r.client} reste au club`, { kind: 'win' });
+  toast(`Client sauvé : ${r.client} reste au club`);
 };
 ACTIONS.resLose = async el => {
   const r = S.resiliations[el.dataset.id];
@@ -162,7 +165,7 @@ ACTIONS.resDetailSave = el => {
   const svOld = S.entries['sv_' + r.id]; const keep = resStatus(r) === 'sauvee' && svOld;
   if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { ...(keep ? svOld : {}), id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: keep ? svOld.date : today(), value: 1, source: keep ? svOld.source || 'manual' : 'manual', at: keep ? svOld.at || Date.now() : Date.now(), by: ME.id }]);
   if (f.status !== 'sauvee') ops.push([['entries', 'sv_' + r.id], null]);
-  db.batch(ops); closeModal(); toast('Dossier enregistré');
+  db.batch(ops); closeModal(); toast('1 dossier enregistré');
 };
 ACTIONS.resNew = () => openModal({ title: 'Nouvelle demande de résiliation', body: `<form id="rf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="client" required></label><label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${today()}"></label><label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${addDays(today(), 30)}"></label><label class="field full"><span>Motif</span><select class="input" name="reason">${RES_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label><label class="row full small"><input type="checkbox" name="mine" checked> Je m’en occupe</label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="resCreate">Créer le dossier</button>' });
@@ -170,7 +173,7 @@ ACTIONS.resCreate = () => {
   const f = formData($('#rf')); if (!f.client.trim()) { toast('Indiquez le nom du client.'); return; }
   const id = newId();
   db.set(['resiliations', id], { id, clubId: CLUB.id, client: f.client.trim(), date: f.date || today(), effective: f.effective || null, reason: f.reason, status: f.mine ? 'traitement' : 'nouvelle', saved: false, ownerId: f.mine ? ME.id : null, userId: f.mine ? ME.id : null, actions: [{ at: Date.now(), by: ME.id, label: 'Demande enregistrée' }], at: Date.now() });
-  closeModal(); toast('Dossier créé');
+  closeModal(); toast('1 dossier créé');
 };
 ACTIONS.resDel = async el => { if (await confirmDlg('Supprimer définitivement cette demande ?', { ok: 'Supprimer', danger: true })) { db.batch([[['resiliations', el.dataset.id], null], [['entries', 'sv_' + el.dataset.id], null]]); closeModal(); } };
 ACTIONS.resExport = () => {
@@ -222,7 +225,7 @@ PAGES.impayes = {
   title: 'Impayés',
   render() {
     const tab = isManager() ? (UI.impTab2 || 'suivi') : 'suivi';
-    const head = `<div class="page-head"><div><h1>Impayés</h1><p>${esc(CLUB.name)} · le suivi de chaque dossier, alimenté par les imports Resamania.</p></div><span class="spacer"></span><button class="btn" data-act="dunExport">${ico('download')} Exporter</button>${isManager() ? `<button class="btn primary" data-act="dunNew">${ico('plus')} Ajouter un impayé</button>` : ''}</div>`;
+    const head = `<div class="page-head"><div><h1>Impayés</h1><p>${esc(nomAffiche())} · le suivi de chaque dossier, alimenté par les imports Resamania.</p></div><span class="spacer"></span><button class="btn" data-act="dunExport">${ico('download')} Exporter</button>${isManager() ? `<button class="btn primary" data-act="dunNew">${ico('plus')} Ajouter un impayé</button>` : ''}</div>`;
     return head + (isManager() ? tabs('impTab2', [['suivi', 'Suivi des dossiers'], ['canaux', 'Récupéré par canal']], tab) : '') + (tab === 'suivi' ? dunTable() : impayesAnalyse.render());
   },
 };
@@ -238,12 +241,12 @@ function dunSmsTexte(c) {
 }
 ACTIONS.dunSms = el => {
   const c = S.clients[el.dataset.id]; const txt = dunSmsTexte(c);
-  const done = () => { db.batch([dunPatch(c, {}, 'Message de relance copié')]); toast('Message copié'); };
+  const done = () => { db.batch([dunPatch(c, {}, 'Message de relance copié')]); toast('1 message copié'); };
   (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { openModal({ title: 'Message à envoyer', body: `<textarea class="input" rows="5" readonly>${esc(txt)}</textarea>`, foot: '<button class="btn" data-close>Fermer</button>' }); done(); });
 };
 function dunTable() {
   const f = UI.dunFilter || 'todo';
-  const rows = dunRows(CLUB.id);
+  const rows = dunRows(CLUB.id).filter(mesDossiersDun);
   const open = rows.filter(c => Number(c.balance) > 0);
   const mk = curMonth();
   const recMonth = rows.filter(c => dunOf(c).status === 'recupere' && (dunOf(c).recoveredAt || '').slice(0, 7) === mk);
@@ -297,7 +300,7 @@ function dunTable() {
         <td>${rec ? '' : `<input class="input sm" type="date" value="${d.next || ''}" data-change="dunSet" data-id="${c.id}" data-k="next">`}</td>
         <td><input class="input sm note" value="${esc(d.note || '')}" placeholder="Ajouter une note" data-change="dunSet" data-id="${c.id}" data-k="note"></td>
         <td class="nowrap">${rec ? '' : `${c.phone ? `<a class="btn sm" href="tel:${esc(String(c.phone).replace(/[^\d+]/g, ''))}" data-appel="1">${ico('phone')} Appeler</a> ` : ''}<button class="btn sm" data-act="dunSms" data-id="${c.id}">Copier le message</button> <button class="btn sm" data-act="dunLink" data-id="${c.id}" title="Copier un SMS avec le lien de paiement">Lien de paiement</button> <button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>${list.length > Number(Number(UI.dunMax || 100)) ? `<button class="btn sm" style="margin-top:8px" data-act="ui" data-key="dunMax" data-val="${Number(UI.dunMax || 100) + 100}">Afficher 100 de plus (${list.length - Number(UI.dunMax || 100)} restants)</button>` : ''}`
-      : `<div class="card">${emptyBox({ art: 'done', title: f === 'mine' ? 'Aucun dossier à votre nom' : 'Rien dans cette vue', text: f === 'mine' ? 'Prenez un dossier sans responsable avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.', cta: f === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="dunFilter" data-val="nobody">Voir les dossiers sans responsable</button>' : '' })}</div>`}
+      : `<div class="card">${emptyBox({ art: 'eur', title: f === 'mine' ? 'Aucun dossier à votre nom' : 'Rien dans cette vue', text: f === 'mine' ? 'Prenez un dossier sans responsable avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.', cta: f === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="dunFilter" data-val="nobody">Voir les dossiers sans responsable</button>' : '<button class="btn sm" data-act="ui" data-key="dunFilter" data-val="todo">Voir les dossiers en cours</button>' })}</div>`}
     <p class="muted small">Un client absent du prochain export « Clients en incident » passe automatiquement en « Récupéré », avec le canal lu dans la liste Incidents (équipe, client en ligne, prélèvement…). Les notes, responsables et dates restent d’un import à l’autre.</p>`;
 }
 // Message de paiement prêt à envoyer (modifiable dans Réglages), noté dans l'historique.
@@ -305,7 +308,7 @@ const DUN_SMS = 'Bonjour {prenom}, il reste {montant} à régler sur votre abonn
 ACTIONS.dunLink = el => {
   const c = S.clients[el.dataset.id]; const tpl = (S.clubs[CLUB.id] || {}).dunSms || DUN_SMS;
   const txt = tpl.replace(/\{prenom\}/g, (c.name || '').split(' ')[0]).replace(/\{montant\}/g, fmtE(Number(c.balance)));
-  const done = () => { db.batch([dunPatch(c, {}, 'Lien de paiement envoyé')]); toast('Message copié : collez-le dans un SMS'); };
+  const done = () => { db.batch([dunPatch(c, {}, 'Lien de paiement envoyé')]); toast('1 message copié : collez-le dans un SMS'); };
   (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { openModal({ title: 'Message de paiement', body: `<textarea class="input" rows="5" readonly>${esc(txt)}</textarea>`, foot: '<button class="btn" data-close>Fermer</button>' }); done(); });
 };
 ACTIONS.dunQ = el => { UI.dunQ = el.value; render(); };
@@ -318,9 +321,9 @@ ACTIONS.dunSet = el => {
   const c = S.clients[el.dataset.id]; const k = el.dataset.k; const v = el.value;
   const label = k === 'status' ? 'Statut : ' + DUN_STATUS[v].label : k === 'ownerId' ? 'Responsable : ' + (v ? fullName(S.users[v]) : 'aucun') : null;
   db.batch([dunPatch(c, { [k]: v || null }, label)]);
-  if (k !== 'note') toast('Enregistré');
+  if (k !== 'note') toast('1 valeur enregistrée');
 };
-ACTIONS.dunTake = el => { const c = S.clients[el.dataset.id]; db.batch([dunPatch(c, { ownerId: ME.id, status: dunStatus(c) === 'arelancer' ? 'relance' : dunStatus(c) }, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
+ACTIONS.dunTake = el => { const c = S.clients[el.dataset.id]; db.batch([dunPatch(c, { ownerId: ME.id, status: dunStatus(c) === 'arelancer' ? 'relance' : dunStatus(c) }, 'Prise en charge')]); toast('1 dossier ajouté à vos relances'); };
 ACTIONS.dunPaid = el => {
   const c = S.clients[el.dataset.id];
   openModal({ title: `Récupéré · ${c.name}`, body: `<form id="dpf" class="grid"><label class="field"><span>Montant encaissé (€)</span><input class="input" type="number" step="0.01" name="amount" value="${Number(c.balance) || ''}"></label>
@@ -331,7 +334,7 @@ ACTIONS.dunPaid = el => {
 ACTIONS.dunPaidSave = () => {
   const c = S.clients[$('.modal').dataset.id]; const f = formData($('#dpf')); const canal = $('#dpf input[name=canal]:checked').value;
   const amount = Math.round(toNum(f.amount) * 100) / 100;
-  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); celebrate('Impayé récupéré', `${fmtE(amount)}, ${c.name}`, { kind: 'win' });
+  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); toast(`Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
 };
 // Un seul chemin pour « payé » (Impayés, Rétention) : dossier en Récupéré, solde
 // a 0, et UNE saisie d'id fixe dn_<client>_<jour> (deux clics = une saisie).
@@ -349,7 +352,7 @@ ACTIONS.dunCreate = () => {
   const existing = f.num && Object.values(S.clients).find(c => c.clubId === CLUB.id && c.num === f.num.trim());
   const id = existing ? existing.id : newId();
   db.set(['clients', id], { ...(existing || { id, clubId: CLUB.id }), name: f.name.trim(), num: f.num.trim() || (existing || {}).num || '', phone: f.phone || (existing || {}).phone || '', balance: toNum(f.amount), balanceAt: today(), dunning: { status: 'arelancer', history: [{ at: Date.now(), by: ME.id, label: 'Ajouté à la main' }] } });
-  closeModal(); toast('Impayé ajouté');
+  closeModal(); toast('1 impayé ajouté');
 };
 ACTIONS.dunExport = () => {
   const rows = dunRows(CLUB.id);

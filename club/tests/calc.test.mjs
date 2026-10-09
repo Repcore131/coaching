@@ -33,27 +33,28 @@ test('bonus de dépassement : +10 % par tranche de 10 %, plafonné à 150 %', ()
   assert.equal(run("overBonus({ rows: [{ pct: 3, k: { points: 1000 } }] })"), 500);
   assert.equal(run("overBonus({ rows: [{ pct: 0.9, k: { points: 1000 } }] })"), 0);
 });
-test('zones : 0, 2, 5, 9, 14 mois validés', () => {
-  assert.deepEqual(JSON.parse(run('JSON.stringify(ZONES.map(z => [z.label, z.min]))')), [['Zone 1', 0], ['Zone 2', 2], ['Zone 3', 5], ['Zone 4', 9], ['Zone 5', 14]]);
-  assert.deepEqual(JSON.parse(run('JSON.stringify([0, 1, 2, 4, 5, 8, 9, 13, 14, 30].map(n => zoneDe(n).label))')), ['Zone 1', 'Zone 1', 'Zone 2', 'Zone 2', 'Zone 3', 'Zone 3', 'Zone 4', 'Zone 4', 'Zone 5', 'Zone 5']);
+test('niveaux : Recrue, Confirmé, Expert, Référent à 0, 2, 6, 12 mois à 100 %', () => {
+  assert.deepEqual(JSON.parse(run('JSON.stringify(LEVELS.map(z => [z.label, z.min]))')), [['Recrue', 0], ['Confirmé', 2], ['Expert', 6], ['Référent', 12]]);
+  assert.deepEqual(JSON.parse(run('JSON.stringify([0, 1, 2, 5, 6, 11, 12, 30].map(n => zoneDe(n).label))')), ['Recrue', 'Recrue', 'Confirmé', 'Confirmé', 'Expert', 'Expert', 'Référent', 'Référent']);
 });
-test('un commercial à 4 mois validés (80 % de l’objectif) est en Zone 2', () => {
+test('un commercial avec 3 mois à 100 % ou plus est Confirmé', () => {
   const r = boot();
-  // Six mois : quatre au-dessus de 80 %, un juste en dessous, un sans objectif.
+  // Six mois : trois à 100 % ou plus, deux juste en dessous, un sans objectif.
   r(`(() => { const u = Object.values(S.users).find(x => x.role === 'membre' && !x.virtual); globalThis.UID = u.id; u.clubs = [u.clubs[0]];
-    const mois = [5, 4, 3, 2, 1, 0].map(n => addMonths(curMonth(), -n)); pastMonths = () => mois; const scores = [0.8, 1.2, 0.79, 0.95, null, 0.81]; globalThis.SC = Object.fromEntries(mois.map((m, i) => [m, scores[i]]));
+    const mois = [5, 4, 3, 2, 1, 0].map(n => addMonths(curMonth(), -n)); pastMonths = () => mois; const scores = [1, 1.2, 0.99, 0.95, null, 1.01]; globalThis.SC = Object.fromEntries(mois.map((m, i) => [m, scores[i]]));
     statsFor = (c, uid, rg) => ({ score: SC[rg.from.slice(0, 7)] ?? null, rows: [] }); REV++; })()`);
-  assert.equal(r('moisValides(UID).length'), 4);
-  assert.equal(r('zoneOf(UID).label'), 'Zone 2');
-  assert.equal(r('zoneOf(UID).next.label'), 'Zone 3');
+  assert.equal(r('moisValides(UID).length'), 3);
+  assert.equal(r('levelOf(UID).label'), 'Confirmé');
+  assert.equal(r('levelOf(UID).next.label'), 'Expert');
 });
-test('compte à rebours : jours calendaires et jours ouvrés sans dimanche ni férié', () => {
-  // 9 octobre 2026 (vendredi) : 22 jours jusqu'au 31, 23 jours aujourd'hui compris moins 3 dimanches.
-  assert.equal(run("compteRebours('2026-10-09').texte"), 'J-22 · 20 jours ouvrés');
-  // 28 octobre au 1er novembre exclu : 31 octobre est un samedi, pas de dimanche.
-  assert.equal(run("compteRebours('2026-10-28').texte"), 'J-3 · 4 jours ouvrés');
+test('compte à rebours : jours ouvrés restants, lundi au samedi, sans férié (2026 et 2027)', () => {
+  // 9 octobre 2026 (vendredi) : 23 jours aujourd'hui compris moins 3 dimanches.
+  assert.equal(run("compteRebours('2026-10-09').texte"), '20 jours ouvrés restants');
+  assert.equal(run("compteRebours('2026-10-31').texte"), '1 jour ouvré restant');
   // Décembre 2026 : le 25 (vendredi) est férié ; du 24 au 31 : 8 jours, moins le 27 (dimanche) et le 25.
-  assert.equal(run("compteRebours('2026-12-24').texte"), 'J-7 · 6 jours ouvrés');
+  assert.equal(run("compteRebours('2026-12-24').texte"), '6 jours ouvrés restants');
+  // Lundi de Pâques 2027 (29 mars) et Ascension 2027 (6 mai) sont fériés.
+  assert.equal(run("estFerie('2027-03-29') && estFerie('2027-05-06') && estFerie('2027-05-17')"), true);
 });
 test('montants français', () => {
   assert.equal(run("parseMontant('1 234,50 €')"), 1234.5);

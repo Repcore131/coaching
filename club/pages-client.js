@@ -53,7 +53,7 @@ ACTIONS.cliSave = el => {
   const P = k => ['clients', c.id, k]; const id = newId();
   db.batch([[P('phone'), ph], [P('phoneSrc'), 'manual'], [P('phoneBad'), null], [P('phone2'), phoneE164(f.phone2) || null], [P('email'), (f.email || '').trim() || null], [P('optOutSms'), !!f.optOutSms], [P('optOutCall'), !!f.optOutCall],
     [['touches', id], { id, clubId: c.clubId, clientId: c.id, at: Date.now(), by: ME.id, channel: 'note', outcome: 'ok', note: 'Coordonnées modifiées' }]]);
-  closeModal(); toast('Fiche enregistrée');
+  closeModal(); toast('1 fiche enregistrée');
 };
 // Droit d'accès : tout ce que le club détient sur ce client, en CSV.
 ACTIONS.cliExport = el => {

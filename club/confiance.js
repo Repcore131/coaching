@@ -53,7 +53,7 @@ PAGES.confiance = {
     const mk = UI.confMonth || addMonths(curMonth(), -1); const t0 = performance.now(); const D = confianceData(CLUB.id, mk); const ms = performance.now() - t0;
     const fv = (k, v) => fmtV(v, k.unit);
     const pt = p => p ? `<i class="hdot conf-${p}" title="${p === 'vert' ? 'Égal au contrôle' : p === 'orange' ? 'Écart de moins de 2 %' : 'Écart de 2 % ou plus'}" data-pastille="${p}"></i>` : '';
-    return `<div class="page-head"><div><h1>Confiance des chiffres</h1><p>${esc(CLUB.name)} · vos chiffres sont-ils justes ? Chaque KPI, sa source et son contrôle Resamania.</p></div></div>
+    return `<div class="page-head"><div><h1>Confiance des chiffres</h1><p>${esc(nomAffiche())} · vos chiffres sont-ils justes ? Chaque KPI, sa source et son contrôle Resamania.</p></div></div>
       <div class="row wrap" style="margin-bottom:12px">${monthNav('confMonth', mk)}<span class="spacer"></span><span class="muted small" data-ms="${Math.round(ms)}">calculé en ${Math.max(1, Math.round(ms))} ms</span></div>
       <div class="card"><div class="table-wrap"><table class="t conf-t"><thead><tr><th>KPI</th><th class="num">Fit Pulse</th><th>Détail par source</th><th class="num">Contrôle Resamania</th><th class="num">Écart</th><th></th></tr></thead><tbody>
       ${D.lignes.map(l => `<tr data-kpi="${l.k.id}"><td><b>${esc(l.k.label)}</b>${l.doublons ? `<div class="bad small" data-doublons="${l.doublons}">${plur(l.doublons, 'doublon probable', 'doublons probables')}</div>` : ''}</td>

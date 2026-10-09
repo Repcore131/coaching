@@ -12,12 +12,22 @@
 // MODE LOCAL (fichier ouvert en local, tests, ou ?demo=1) : les donnees vivent
 // dans le navigateur, chaque appareil a sa propre copie.
 // Tout passe par window.FITPULSE_CONFIG = { demo, firebase, mailAuto, assets } (lu par core.js : CFG).
-const FITPULSE_CONFIG = window.FITPULSE_CONFIG = { demo: false, firebase: null, mailAuto: false, assets: {} };
+// fontPair : 'geist' (par défaut) ou 'plex' (IBM Plex Sans et Plex Mono).
+const FITPULSE_CONFIG = window.FITPULSE_CONFIG = { demo: false, firebase: null, mailAuto: false, assets: {}, fontPair: 'geist' };
 (function () {
   const h = location.hostname, q = new URLSearchParams(location.search);
   const enLigne = /\.(web\.app|firebaseapp\.com)$/.test(h) || q.get('partage') === '1';
   // MODE DEMONSTRATION (?demo=1) : donnees fictives, aucune base, voir demo.js.
   FITPULSE_CONFIG.demo = q.get('demo') === '1';
+  // MODE CAPTURE (?capture=1, voir capture.js) : données fictives, date figée au mardi 13 octobre 2026, 9 h 12.
+  if (q.get('capture') === '1') {
+    FITPULSE_CONFIG.demo = true;
+    FITPULSE_CONFIG.capture = { scene: q.get('scene') || 'home', theme: q.get('theme') || 'light', accent: q.get('accent') || '', club: q.get('club') || '' };
+    const FIXE = new Date(2026, 9, 13, 9, 12, 0).getTime(); const D = Date;
+    class DateFigee extends D { constructor(...a) { if (a.length) super(...a); else super(FIXE); } static now() { return FIXE; } }
+    window.Date = DateFigee;
+    document.documentElement.classList.add('capture');
+  }
   FITPULSE_CONFIG.firebase = enLigne && !FITPULSE_CONFIG.demo ? {
     apiKey: 'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
     authDomain: 'repcore-sync.firebaseapp.com',
@@ -50,10 +60,8 @@ FITPULSE_CONFIG.mailAuto = false;
 // définition : exporter les images depuis Canva et remplacer les fichiers de
 // club/assets/ sous le même nom. logo : null pour n'afficher que Fit Pulse.
 FITPULSE_CONFIG.assets = {
-  wordmark: 'assets/logo/fitpulse-horizontal-fond-sombre.svg',
   icon: 'favicon.png',
-  banner: 'assets/hero-banner.jpg',
-  login: 'assets/hero-login.jpg',
+  login: 'assets/brand/login-visual.webp',
   logo: null, // logo du club : réglé par club (Club et réglages), aucun par défaut
 };
 

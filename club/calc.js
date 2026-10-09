@@ -72,7 +72,12 @@ function memo(key, fn) { const I = idx(); if (I.memo.has(key)) return I.memo.get
 
 // ── Jours ouvrés : jours d'ouverture du club (lundi à samedi par défaut), hors jours fériés ──
 function paquesDe(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return `${y}-${pad(mo)}-${pad(da)}`; }
-const FERIES = new Map();
+// Jours fériés de métropole : 2026 et 2027 en constante, les autres années calculées (Pâques).
+const FERIES_FR = {
+  2026: ['2026-01-01', '2026-04-06', '2026-05-01', '2026-05-08', '2026-05-14', '2026-05-25', '2026-07-14', '2026-08-15', '2026-11-01', '2026-11-11', '2026-12-25'],
+  2027: ['2027-01-01', '2027-03-29', '2027-05-01', '2027-05-08', '2027-05-06', '2027-05-17', '2027-07-14', '2027-08-15', '2027-11-01', '2027-11-11', '2027-12-25'],
+};
+const FERIES = new Map(Object.entries(FERIES_FR).map(([y, l]) => [Number(y), new Set(l)]));
 const feriesDe = y => { if (!FERIES.has(y)) { const p = paquesDe(y); FERIES.set(y, new Set([`${y}-01-01`, addDays(p, 1), `${y}-05-01`, `${y}-05-08`, addDays(p, 39), addDays(p, 50), `${y}-07-14`, `${y}-08-15`, `${y}-11-01`, `${y}-11-11`, `${y}-12-25`])); } return FERIES.get(y); };
 const estFerie = iso => feriesDe(Number(iso.slice(0, 4))).has(iso);
 const joursClub = () => (typeof CLUB !== 'undefined' && CLUB && S && S.clubs && S.clubs[CLUB.id] && Array.isArray(S.clubs[CLUB.id].openDays) && S.clubs[CLUB.id].openDays.length) ? S.clubs[CLUB.id].openDays : [1, 2, 3, 4, 5, 6];
@@ -238,16 +243,15 @@ function statusOf(pct, exp) {
   return { key: 'verylate', label: TXT.rythme.retard, cls: 'status-bad' };
 }
 
-// Phrase de rythme sous chaque carte KPI.
-function paceMessage(row, exp) {
+// Phrase de rythme d'un KPI : écart entre le réalisé et le rythme attendu au jour dit.
+function paceMessage(row, exp, jour = today()) {
   const { k, real, target, pct } = row;
   if (!target) return TXT.rythme.sansObjectif;
-  if (isReached(pct)) return real - target > 0.004 ? TXT.rythme.auDela(fmtV(real - target, k.unit)) : TXT.rythme.atteint;
-  const due = target * exp - real;
-  if (due > 0.0001) return TXT.rythme.aRattraper(fmtV(k.unit === 'qty' ? Math.ceil(due) : due, k.unit));
-  const next = TIERS.find(t => pct < t);
-  const need = next * target - real;
-  return TXT.rythme.palier(fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit), next * 100);
+  if (isReached(pct)) return real - target > 0.004 ? TXT.rythme.auDela(fmtU(real - target, k)) : TXT.rythme.atteint;
+  const ecart = real - target * exp; const arr = v => k.unit === 'qty' ? Math.ceil(v - 1e-9) : Math.round(v);
+  if (ecart < -0.0001) return TXT.rythme.manque(fmtU(arr(-ecart), k), dmy(jour).slice(0, 5));
+  const av = k.unit === 'qty' ? Math.floor(ecart + 1e-9) : Math.round(ecart); if (av >= 1) return TXT.rythme.avance(fmtU(av, k));
+  return TXT.rythme.dans;
 }
 
 // ── Classements ────────────────────────────────────────────────────────────
@@ -323,14 +327,15 @@ function actionPoints(userId, from, to) {
 function pointsSince(userId, sinceMk) {
   return memo(`ps|${userId}|${sinceMk}`, () => { const u = S.users[userId]; if (!u) return 0; let pts = 0; for (const mk of pastMonths().filter(m => m >= sinceMk)) for (const c of u.clubs || []) { const st = statsFor(c, userId, rangeOf('month', mk)); pts += st.earned + overBonus(st); } pts += trophies(userId).filter(t => t.kind === 'flash' && (t.mk || '') >= sinceMk).length * 200; pts += actionPoints(userId, sinceMk + '-01', today()); return Math.round(pts); });
 }
-// ── Zones : un mois est validé quand le score des KPI obligatoires atteint 80 % ──
+// ── Niveaux : un mois compte quand le score des KPI obligatoires atteint 100 % ──
 // de l'objectif (dans l'un des clubs du membre). Mois clos, et mois en cours dès
-// qu'il passe le seuil. Zone 1 à 5 : 0, 2, 5, 9 et 14 mois validés.
+// qu'il passe le seuil. Recrue, Confirmé, Expert, Référent : 0, 2, 6 et 12 mois.
 function moisValides(userId) {
   return memo(`mv|${userId}`, () => { const u = S.users[userId]; if (!u) return []; return pastMonths().filter(mk => (u.clubs || []).some(c => { const st = statsFor(c, userId, rangeOf('month', mk), { requiredOnly: true }); return st.score != null && st.score >= TXT.zones.seuil - 1e-9; })); });
 }
 function zoneDe(n) { let z = ZONES[0]; for (const x of ZONES) if (n >= x.min) z = x; const i = ZONES.indexOf(z); return { ...z, rang: i + 1, mois: n, next: ZONES[i + 1] || null }; }
 const zoneOf = userId => zoneDe(moisValides(userId).length);
+const levelOf = zoneOf;
 
 // ── Compte à rebours de fin de mois : jours calendaires après aujourd'hui, ──
 // jours ouvrés restants aujourd'hui compris (sans dimanche ni jour férié).
@@ -389,7 +394,7 @@ function allTrophies() {
       for (const mk of months) {
         const sc = {}; team.forEach(u => { if ((u.clubs || []).includes(c.id)) sc[u.id] = statsFor(c.id, u.id, rangeOf('month', mk), { requiredOnly: true }).score; });
         Object.entries(sc).forEach(([uid, s]) => { if (s == null) return; if (best[uid] != null && s > best[uid] + 1e-9) out.push({ userId: uid, kind: 'perso', icon: 'flag', label: `Record personnel ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); best[uid] = Math.max(best[uid] ?? -1, s); });
-        if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus belle progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
+        if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus forte progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
         prevScores = sc;
         const r0 = dateOf(mk + '-01').getTime(), r1 = dateOf(addMonths(mk, 1) + '-01').getTime();
         const pil = team.map(u => ({ u, n: Object.values(S.loyalty || {}).filter(a => a.userId === u.id && a.at >= r0 && a.at < r1 && (OUTCOMES[a.outcome] || {}).done && !(OUTCOMES[a.outcome] || {}).lost).length })).sort((a, b) => b.n - a.n)[0];

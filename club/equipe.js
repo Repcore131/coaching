@@ -44,7 +44,7 @@ function equipeMatrix() {
   const mk = curMonth(); const ks = eqKpis(mk); const team = humanMembers(CLUB.id); const j7 = addDays(today(), -6);
   const sign = n => n == null ? '' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${String(Math.abs(n)).replace('.', ',')}\u00a0j`;
   const fv = (v, k) => k.unit === 'eur' ? fmtN(v) + ' €' : fmtN(v);
-  return `<div class="page-head"><div><h1>Équipe</h1><p>${esc(CLUB.name)} · ${monthLabel(mk)} · écart au rythme en jours ouvrés (lundi au samedi, hors fériés)</p></div></div>
+  return `<div class="page-head"><div><h1>Équipe</h1><p>${esc(nomAffiche())} · ${monthLabel(mk)} · écart au rythme en jours ouvrés (lundi au samedi, hors fériés)</p></div></div>
     <div class="eq-legend small"><span class="eq-l ok">${EQ_MARK.ok} Dans le rythme, en avance ou atteint</span><span class="eq-l warn">${EQ_MARK.warn} À surveiller (jusqu’à 2 jours de retard)</span><span class="eq-l bad">${EQ_MARK.bad} En retard (plus de 2 jours)</span></div>
     ${team.length ? `<div class="card eq-wrap"><table class="eq-m"><thead><tr><th class="eq-name">Commercial</th>${ks.map(k => `<th title="${esc(k.label)}">${esc(k.label)}</th>`).join('')}<th>Activité 7 jours</th><th></th></tr></thead><tbody>
       ${team.map(u => { const A = eqActivite(u.id, j7, today()); const d = eqDecrochage(u.id);
@@ -52,7 +52,7 @@ function equipeMatrix() {
           ${ks.map(k => { const c = eqCell(CLUB.id, u.id, k, mk); return c.niveau === 'none' ? '<td class="eq-c none"><span class="muted small">sans objectif</span></td>' : `<td class="eq-c ${c.niveau}" data-k="${k.id}" data-niveau="${c.niveau}" title="${esc(k.label)} : ${esc(c.libelle)}"><b>${fv(c.realise, k)}</b><span class="eq-obj">/ ${fv(c.objectif, k)}</span><span class="eq-st">${EQ_MARK[c.niveau]}\u00a0${esc(c.libelle)} ${c.libelle === 'Atteint' ? '' : sign(c.ecart)}</span></td>`; }).join('')}
           <td class="eq-act small"><span>${plur(A.relances, 'relance', 'relances')}</span><span>${plur(A.saisies, 'saisie', 'saisies')}</span><span>${plur(A.connexions, 'jour connecté', 'jours connectés')}</span></td>
           <td><button class="btn sm" data-act="eqPoint" data-u="${esc(u.id)}">Préparer le point</button></td></tr>`; }).join('')}
-    </tbody></table></div>` : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucun commercial', text: 'Ajoutez votre équipe dans Pilotage équipe.' })}</div>`}`;
+    </tbody></table></div>` : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucun commercial', text: 'Ajoutez votre équipe dans Pilotage équipe.', cta: isManager() ? '<a class="btn primary sm" href="#/team">Inviter un commercial</a>' : '<a class="btn sm" href="#/home">Retour à l’accueil</a>' })}</div>`}`;
 }
 // Fiche « Préparer le point » : propositions tirées des chiffres, modifiables.
 function eqSuggest(uid) {
@@ -77,7 +77,7 @@ ACTIONS.eqPointOk = el => {
   const uid = el.dataset.u; const f = formData($('#eqf')); if (!f.eng.trim() || !f.engDate) { toast('Indiquez l’engagement et sa date.'); return; }
   const mk = curMonth(); const snap = {}; eqKpis(mk).forEach(k => { const c = eqCell(CLUB.id, uid, k, mk); if (c.niveau !== 'none') snap[k.id] = { realise: c.realise, objectif: c.objectif, ecart: c.ecart }; });
   db.set(['coaching', uid, today()], { date: today(), by: ME.id, at: Date.now(), clubId: CLUB.id, mk, forces: [f.f1.trim(), f.f2.trim()], axes: [f.a1.trim(), f.a2.trim()], engagement: { texte: f.eng.trim(), date: f.engDate }, kpis: snap });
-  closeModal(); toast('Fiche enregistrée');
+  closeModal(); toast('1 fiche enregistrée');
 };
 // #/equipe : la matrice pour un manager, le fil d'équipe pour un commercial.
 const EQUIPE_MEMBRE = PAGES.equipe;

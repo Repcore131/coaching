@@ -129,7 +129,7 @@ PAGES.journee = {
   manager: true,
   render() {
     const blocs = journeeBlocs(CLUB.id);
-    return `<div class="page-head"><div><h1>Ma journée</h1><p>${esc(CLUB.name)} · ${esc(dayLabel(today()))}. Six rendez-vous, un clic chacun.</p></div></div>
+    return `<div class="page-head"><div><h1>Ma journée</h1><p>${esc(nomAffiche())} · ${esc(dayLabel(today()))}. Six rendez-vous, un clic chacun.</p></div></div>
       ${typeof rapporteCompteur === 'function' ? rapporteCompteur(CLUB.id) : ''}
       <div class="journee">${blocs.map(b => `<div class="card jr-bloc${b.courant ? ' courant' : ''}${b.passe ? ' passe' : ''}" data-bloc="${b.cle}">
         <div class="row"><b class="jr-t">${esc(b.titre)}</b><span class="spacer"></span>${b.courant ? '<span class="badge ok">Maintenant</span>' : ''}${b.fait ? `<span class="badge ok" data-fait="1">${ico('check', 'ico ico-xs')} Fait</span>` : b.passe ? '<span class="badge">Pas ouvert</span>' : ''}</div>

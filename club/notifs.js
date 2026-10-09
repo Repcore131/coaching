@@ -66,7 +66,7 @@ ACTIONS.bell = () => {
   const td = myToDo(); const Q = relQueue(CLUB.id, 'mine');
   const todo = [[Q.now.length, 'appel à passer', 'appels à passer', '#/relances'], [td.res.length, 'résiliation à votre nom', 'résiliations à votre nom', '#/resiliations'], [td.dun.filter(dunDue).length, 'impayé à relancer', 'impayés à relancer', '#/impayes']].filter(x => x[0]);
   openModal({ title: 'Notifications', drawer: true, body: `${todo.length ? `<div class="nt-todo">${todo.map(([n, a, b, h]) => `<a href="${h}" data-close>${ico('chevR')}<b>${plur(n, a, b)}</b></a>`).join('')}</div>` : ''}
-    ${L.length ? groups.filter(g => g[1].length).map(([l, g]) => `<div class="nt-g">${l}</div>${g.map(x => `<button class="nt-row ${x.readAt ? '' : 'unread'}" data-act="notifOpen" data-id="${esc(x.id)}"><span class="nt-ico">${ico(NOTIF_ICON[x.kind] || 'bell')}</span><span class="spacer"><b>${esc(x.title)}</b><span>${esc(x.body)}</span><small>${ago(x.at)}</small></span>${x.readAt ? '' : '<i class="nt-dot"></i>'}</button>`).join('')}`).join('') : emptyBox({ art: 'done', title: 'Aucune notification', text: 'Les nouveautés de l’équipe et vos rappels apparaîtront ici.' })}`,
+    ${L.length ? groups.filter(g => g[1].length).map(([l, g]) => `<div class="nt-g">${l}</div>${g.map(x => `<button class="nt-row ${x.readAt ? '' : 'unread'}" data-act="notifOpen" data-id="${esc(x.id)}"><span class="nt-ico">${ico(NOTIF_ICON[x.kind] || 'bell')}</span><span class="spacer"><b>${esc(x.title)}</b><span>${esc(x.body)}</span><small>${ago(x.at)}</small></span>${x.readAt ? '' : '<i class="nt-dot"></i>'}</button>`).join('')}`).join('') : emptyBox({ art: 'chat', title: 'Aucune notification', text: 'Les nouveautés de l’équipe et vos rappels apparaîtront ici.', cta: '<a class="btn sm" href="#/home">Retour à l’accueil</a>' })}`,
     foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
 };
 const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: TXT.notifs.cloture, dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: TXT.mots.sprint, live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
@@ -118,7 +118,7 @@ function notifLive(before, after) {
 // ── Activer sur cet appareil, installer l'appli ──────────────────────────
 let INSTALL_EVT = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALL_EVT = e; });
-addEventListener('appinstalled', () => { INSTALL_EVT = null; toast('Fit Pulse est installée.'); });
+addEventListener('appinstalled', () => { INSTALL_EVT = null; toast('Fit Pulse installée sur 1 appareil'); });
 const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 function notifState() { if (!('Notification' in window)) return ['Non prises en charge par ce navigateur', 'off']; return { granted: ['Activées sur cet appareil', 'on'], denied: ['Bloquées dans le navigateur', 'off'], default: ['Désactivées', 'off'] }[Notification.permission]; }
@@ -182,6 +182,6 @@ function alertsCard() {
   const alive = srv.at && Date.now() - srv.at < 3600e3;
   return `<div class="card"><h3>Alertes de l’équipe</h3><p class="small">${alive ? `Serveur d’envoi actif (dernier passage ${ago(srv.at)}). Messagerie ${srv.mail ? 'réglée : invitations envoyées automatiquement' : 'non réglée : invitations par le bouton Envoyer par e-mail'}.` : 'Serveur d’envoi pas encore passé, ou arrêté depuis plus d’une heure.'}</p>
     ${Object.keys(st).length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Alerte</th><th class="num">Envoyées ce mois</th></tr></thead><tbody>${Object.entries(st).sort((a, b) => b[1] - a[1]).map(([r, n]) => `<tr><td>${esc((NOTIF_RULES[r] || {}).label || r)}</td><td class="num">${fmtN(n)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Aucune alerte envoyée ce mois-ci.</p>'}
-    <label class="row small" style="margin-top:10px"><input type="checkbox" data-change="notifPause" ${paused ? 'checked' : ''}> Mettre les alertes en pause pour ${esc(CLUB.name)} (elles restent dans la cloche)</label></div>`;
+    <label class="row small" style="margin-top:10px"><input type="checkbox" data-change="notifPause" ${paused ? 'checked' : ''}> Mettre les alertes en pause pour ${esc(nomAffiche())} (elles restent dans la cloche)</label></div>`;
 }
 ACTIONS.notifPause = el => { db.set(['clubs', CLUB.id, 'notifPaused'], el.checked || null); toast(el.checked ? 'Alertes en pause' : 'Alertes réactivées'); };

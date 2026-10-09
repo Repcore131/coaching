@@ -61,7 +61,7 @@ async function exportZip(clubIds = myClubs().map(c => c.id)) {
 }
 ACTIONS.toutExporter = async el => {
   if (!isManager()) return; if (el) el.disabled = true;
-  try { const zip = await exportZip(); const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }); downloadFile(`fit-pulse-export-${norm(CLUB.name).replace(/ /g, '-').slice(0, 30)}-${today()}.zip`, blob, 'application/zip'); db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export-tableur', club: CLUB.id }); toast('Export prêt'); }
+  try { const zip = await exportZip(); const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }); downloadFile(`fit-pulse-export-${norm(CLUB.name).replace(/ /g, '-').slice(0, 30)}-${today()}.zip`, blob, 'application/zip'); db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export-tableur', club: CLUB.id }); toast('1 export prêt'); }
   catch (e) { toast('Export impossible : ' + e.message); } finally { if (el) el.disabled = false; }
 };
 ACTIONS.journalVersions = async () => {

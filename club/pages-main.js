@@ -41,7 +41,7 @@ document.addEventListener('submit', e => {
   if (st.users[uid].email) st.team[st.users[uid].email.replace(/\./g, ',')] = true;
   db.replace(st);
   login(st.users[uid]);
-  toast('Club créé. Ajoutez votre équipe dans Membres.');
+  toast('1 club créé. Ajoutez votre équipe dans Membres.');
 });
 ACTIONS.loadDemo = () => { db.replace(DEMO ? seedDemo() : demoState()); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
 
@@ -53,15 +53,13 @@ PAGES.login = {
   auth: false,
   render() {
     const shared = backend.mode === 'firebase';
-    const img = (CFG.assets || {}).login;
-    const club = deepGet(S || {}, ['tenant', 'name']) || (S && Object.values(S.clubs || {})[0] || {}).name || 'Votre club';
+    const img = (CFG.assets || {}).login || 'assets/brand/login-visual.webp';
     const q = new URLSearchParams(location.search);
     const email = q.get('email') || safeLS.get('fitpulse.lastEmail') || '';
     const demo = !shared && S ? Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b))) : [];
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-    return `<div class="auth login2"${img ? ` style="--login:url('${img}')"` : ''}><div class="login-bg" aria-hidden="true"></div>
-      <div class="login-wrap">
-        <div class="login-claim"><span>Chaque contrat compte.</span><span>Chaque client aussi.</span><p>${esc(club)} · l’équipe commerciale</p></div>
+    return `<div class="auth login2"><div class="login-visual" aria-hidden="true">${img ? `<img src="${esc(img)}" alt="" fetchpriority="high">` : ''}</div>
+      <div class="login-side">
         <div class="login-card">
           ${brandBlock(true)}
           <h1>Connexion</h1>
@@ -77,7 +75,7 @@ PAGES.login = {
           ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
           ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
           ${!DEMO ? '<a class="btn login-alt" href="?demo=1&guide=1" data-guide-link>Démo guidée, 7 minutes</a><a class="btn login-alt" href="?demo=1" data-demo-link>Voir la démo</a>' : ''}
-          ${DEMO ? '' : !shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}
+          ${DEMO ? '' : !shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}
           ${typeof legalFooter === 'function' ? legalFooter() : ''}
         </div>
       </div></div>`;
@@ -152,11 +150,10 @@ PAGES.dashboard = {
       ${seg('dashView', [['perso', isManager() ? 'Vue perso' : 'Moi'], ['club', isManager() ? 'Vue club' : 'L’équipe']], view)}
       ${view === 'perso' && isManager() ? `<select class="input sm" style="width:auto" data-change="dashUser">${members.map(u => `<option value="${u.id}" ${u.id === who ? 'selected' : ''}>${esc(fullName(u))}${u.id === ME.id ? ' (moi)' : ''}</option>`).join('')}</select>` : ''}
       <span class="spacer"></span>${monthNav('dashMonth', mk)}</div>`;
-    const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(CLUB.name) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
+    const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(nomAffiche()) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
     return head + (tab === 'plan' ? '' : filters) + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], [isManager() ? 'analyses' : 'historique', isManager() ? 'Analyses' : 'Mon historique'], ['entonnoir', 'Entonnoir'], ['plan', 'Plan T4'], ['opportunites', 'Opportunités']], tab)}</div>` +
       (tab === 'plan' ? planPage() : tab === 'opportunites' ? subPage(PAGES.opportunites.render()) : tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : tab === 'historique' || !isManager() ? myHistory(who || ME.id) : dashAnalyses(r, who));
   },
-  mount() { bindKpiDrag(); },
 };
 // Membre : l'évolution de son score sur 6 mois (pas de comparaison N/N-1 du club).
 function myHistory(uid) {
@@ -164,14 +161,8 @@ function myHistory(uid) {
   const sc = months.map(m => statsFor(CLUB.id, uid, rangeOf('month', m), { requiredOnly: true }).score || 0);
   return `<div class="card"><h3>Mon score sur 6 mois</h3>${monthBars(months, [{ label: 'Score du mois', color: 'var(--fp)', values: sc.map(x => Math.round(x * 100)) }], { fmt: v => v + ' %' })}<p class="muted small">Le score du mois en cours est provisoire.</p></div>`;
 }
-ACTIONS.kpiMove = el => { const ids = $$('#kpi-grid [data-kpi]').map(x => x.dataset.kpi); const i = ids.indexOf(el.dataset.k); const j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; setPref('kpiOrder', ids); };
 ACTIONS.dashUser = el => { UI.dashUser = el.value; render(); };
 
-function moodOf(st) {
-  if (st.score == null) return 'ok';
-  const ratio = st.progress != null ? st.progress / Math.max(st.expected, 0.03) : 1;
-  return ratio >= 1 ? 'happy' : ratio >= 0.7 ? 'ok' : 'tired';
-}
 function dashObjectives(st, r, subject, who) {
   if (!st.rows.some(x => x.target > 0)) {
     return `<div class="card">${emptyBox({ art: 'target', title: isManager() ? 'Objectifs à fixer' : 'Vos objectifs arrivent', text: isManager() ? `Fixez les objectifs de ${monthLabel(r.from.slice(0, 7)).toLowerCase()} dans Équipe, onglet Objectifs.` : 'En attendant, chaque vente saisie compte déjà dans le fil et les paliers d’équipe.', cta: isManager() ? '<a class="btn primary sm" href="#/members" data-act="goTargets">Fixer les objectifs</a>' : '<button class="btn primary sm" data-act="tbSaisir">Saisir une vente</button>' })}</div>`;
@@ -194,21 +185,16 @@ function dashObjectives(st, r, subject, who) {
     if (!c || !p || !p.real) return { v: 'n.d.', sub: `${plur(c ? c.real : 0, 'contrat', 'contrats')} / ${plur(p ? p.real : 0, 'prospect', 'prospects')}` };
     return { v: fmtP(c.real / p.real), sub: `${plur(c.real, 'contrat', 'contrats')} / ${plur(p.real, 'prospect', 'prospects')}` };
   })();
-  const order = pref('kpiOrder', null);
-  let rows = st.rows.filter(x => x.target > 0 || x.real > 0);
-  // Par défaut : KPI obligatoires en retard d'abord, puis les autres, puis ceux à 100 %.
-  const lagOf = x => (x.pct == null ? 9 : x.pct >= 1 ? 8 : (x.k.required ? 0 : 4) + (exp ? x.pct / exp : x.pct));
-  if (order) rows.sort((a, b) => (order.indexOf(a.k.id) + 1 || 99) - (order.indexOf(b.k.id) + 1 || 99)); else rows.sort((a, b) => lagOf(a) - lagOf(b));
-  const touch = matchMedia('(pointer: coarse)').matches;
+  const rows = st.rows.filter(x => x.target > 0 || x.real > 0);
   return `<div class="dash-top">
     <div class="card hero">
-      <div class="hero-ring">${ring(Math.min(st.progress || 0, 1), { label: fmtP(st.progress), sub: { happy: 'en avance', ok: 'dans le rythme', tired: 'à relancer' }[moodOf(st)], color: healthOf(st.progress != null && st.expected ? st.progress / st.expected : null).color, size: 120 })}</div>
+      <div class="hero-ring">${ring(Math.min(st.progress || 0, 1), { label: fmtP(st.progress), sub: status.label, color: healthOf(st.progress != null && st.expected ? st.progress / st.expected : null).color, size: 120 })}</div>
       <div>
         <div class="row"><span class="muted small">${subject ? 'Progression du mois' : 'Progression du club'}</span><span class="spacer"></span>${pulseLine(status, { w: 72, h: 22 })}<span class="badge ${status.cls === 'status-ok' ? 'ok' : status.cls === 'status-warn' ? 'warn' : status.cls === 'status-bad' ? 'bad' : ''}">${status.label}</span></div>
         <div class="big">${fmtP(pctPts)}</div>
-        <div><b>${fmtN(st.earned)}</b> / ${fmtN(st.max)} pts ${lag > 0 ? `· <span style="color:#ff8a7a">${fmtN(lag)} pts de retard</span> sur le rythme` : st.max ? '· <span style="color:#7be0a5">dans le rythme</span>' : ''}</div>
+        <div><b class="num">${fmtN(st.earned)}</b> sur ${fmtN(st.max)} points ${lag > 0 ? `· <span class="bad">${fmtN(lag)} points de retard</span> sur le rythme` : st.max ? '· <span class="ok">dans le rythme</span>' : ''}</div>
         <div class="tiers">${TIERS.map(t => `<span class="${pctPts >= t ? 'got' : ''}">${t * 100} %</span>`).join('')}</div>${typeof rattrapage === 'function' && r.from.slice(0, 7) === curMonth() ? rattrapage(st) : ''}
-        <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">${TXT.cloture.bouton}</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
+        <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">${TXT.journal.bouton}</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
       </div>
     </div>
     <details class="dash-more" ${innerWidth > 860 ? 'open' : ''}><summary>Détails : conversion et score pondéré</summary><div class="grid">
@@ -217,38 +203,43 @@ function dashObjectives(st, r, subject, who) {
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div></details>
   </div>
-  ${touch ? `<div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="btn sm ghost" data-act="ui" data-key="kpiReorder" data-val="${UI.kpiReorder ? '' : '1'}">${UI.kpiReorder ? 'Terminer' : 'Réorganiser'}</button></div>` : ''}
-  <div class="kpi-grid" id="kpi-grid">${rows.map(x => kpiCard({ ...x, uid: who, range: r }, exp)).join('')}</div>`;
+  ${kpiTable(rows, exp, r, who)}`;
 }
-function kpiCard(x, exp) {
-  const { k, real, target, pct, earned, status } = x;
-  const hl = healthOf(pct != null && exp ? pct / exp : null);
-  return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
-    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">Obligatoire</span>` : ''}<span class="spacer"></span>${matchMedia('(pointer: coarse)').matches ? (UI.kpiReorder ? `<button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="-1" aria-label="Monter">${ico('chevL')}</button><button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="1" aria-label="Descendre">${ico('chevR')}</button>` : '') : `<span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span>`}</div>
-    <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val"><span class="trace-n"${x.range ? traceAttr({ t: 'kpi', club: CLUB.id, user: x.uid || null, kpi: k.id, from: x.range.from, to: x.range.to, v: real }) : ''}>${fmtV(real, k.unit)}</span> <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
-    <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
-    <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>
-    <div class="kpi-msg">${esc(paceMessage(x, exp))}</div>${k.id === 'sauvetage' && real > 0 ? `<div class="small muted">soit ${fmtE(sauvValeur(x.uid, x.range))} de valeur gardée</div>` : ''}</div>`;
+// ── Indicateurs du mois : tableau triable (Indicateur, Réalisé, Objectif, Rythme attendu, Écart, Tendance 30 j) ──
+// Le tri choisi est gardé d'une page à l'autre (préférence dashSort). L'ordre par défaut est
+// celui de Réglages > Ordre des indicateurs.
+const KPI_TRI = [['ordre', 'Indicateur'], ['real', 'Réalisé'], ['target', 'Objectif'], ['attendu', 'Rythme attendu'], ['ecart', 'Écart'], ['tendance', 'Tendance 30 j']];
+function tendance30(uid, kpiId) {
+  const fin = today(); const v = []; for (let i = 29; i >= 0; i--) { const d = addDays(fin, -i); v.push(sumRange(CLUB.id, uid || null, kpiId, d, d)); }
+  return v;
 }
+function sparkline(v, { w = 96, h = 24 } = {}) {
+  const mx = Math.max(...v, 0); if (!mx) return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"><line x1="0" x2="${w}" y1="${h - 2}" y2="${h - 2}" stroke="var(--line)" stroke-width="2"/></svg>`;
+  const pts = v.map((x, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(h - 2 - x / mx * (h - 4)).toFixed(1)}`).join(' ');
+  return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+function kpiTable(rows, exp, r, who) {
+  const tri = pref('dashSort', { k: 'ordre', d: 1 }); const ordre = kpiList().map(k => k.id);
+  const jour = r.to < today() ? r.to : today();
+  const L = rows.map(x => { const attendu = x.target ? x.target * exp : null; const t30 = tendance30(who, x.k.id); return { ...x, attendu, ecart: attendu == null ? null : x.real - attendu, t30, tendance: t30.reduce((s, v) => s + v, 0), ordre: ordre.indexOf(x.k.id) }; });
+  const val = (x, k) => k === 'ordre' ? x.ordre : x[k] == null ? -Infinity : x[k];
+  L.sort((a, b) => (val(a, tri.k) > val(b, tri.k) ? 1 : val(a, tri.k) < val(b, tri.k) ? -1 : a.ordre - b.ordre) * (tri.d || 1));
+  const ecartTxt = x => { if (x.ecart == null) return '<span class="muted">sans objectif</span>'; const e = x.k.unit === 'qty' ? (x.ecart < 0 ? -Math.ceil(-x.ecart - 1e-9) : Math.floor(x.ecart + 1e-9)) : Math.round(x.ecart); return `<span class="${e < 0 ? 'bad' : e > 0 ? 'ok' : ''}">${e > 0 ? '+' : e < 0 ? '−' : ''}${esc(fmtU(Math.abs(e), x.k))}</span>`; };
+  return `<div class="card kpi-table-card"><div class="table-wrap"><table class="t kpi-table" id="kpi-table"><thead><tr>${KPI_TRI.map(([k, l], i) => `<th class="${i ? 'num ' : ''}sortable${tri.k === k ? ' tri' : ''}" data-act="dashSort" data-k="${k}" aria-sort="${tri.k === k ? (tri.d > 0 ? 'ascending' : 'descending') : 'none'}">${l}${tri.k === k ? (tri.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('')}</tr></thead><tbody>
+    ${L.map(x => `<tr data-kpi="${x.k.id}"><td><div class="row" style="gap:8px"><span class="kpi-ico">${kpiIcon(x.k)}</span><div><b>${esc(x.k.label)}</b>${x.k.required ? ' <span class="badge req" title="KPI obligatoire du classement">Obligatoire</span>' : ''}<div class="muted small kpi-msg">${esc(paceMessage(x, exp, jour))}</div></div></div></td>
+      <td class="num"><span class="trace-n"${traceAttr({ t: 'kpi', club: CLUB.id, user: who || null, kpi: x.k.id, from: r.from, to: r.to, v: x.real })}>${esc(fmtU(x.real, x.k))}</span>${x.k.id === 'sauvetage' && x.real > 0 ? `<div class="small muted">${fmtE(sauvValeur(who, r))} gardés</div>` : ''}</td>
+      <td class="num">${x.target ? esc(fmtU(x.target, x.k)) : '<span class="muted">aucun</span>'}</td>
+      <td class="num">${x.attendu == null ? '<span class="muted">sans objectif</span>' : esc(fmtU(x.k.unit === 'qty' ? Math.round(x.attendu) : Math.round(x.attendu), x.k))}</td>
+      <td class="num">${ecartTxt(x)}</td>
+      <td class="num" title="${esc(fmtU(x.tendance, x.k))} sur 30 jours">${sparkline(x.t30)}<div class="small muted">${esc(fmtU(x.tendance, x.k))}</div></td></tr>`).join('')}
+  </tbody></table></div></div>`;
+}
+ACTIONS.dashSort = el => { const k = el.dataset.k; const cur = pref('dashSort', { k: 'ordre', d: 1 }); setPref('dashSort', { k, d: cur.k === k ? -cur.d : k === 'ordre' ? 1 : -1 }); };
 // Valeur gardée par les sauvetages d'une période (mensualités x mois restants).
 function sauvValeur(uid, r) {
   if (!r || typeof valeurEnJeu !== 'function') return 0;
   return resList(CLUB.id).filter(d => resStatus(d) === 'sauvee' && (!uid || d.ownerId === uid)).filter(d => { const e = S.entries['sv_' + d.id]; const dt = (e && e.date) || d.date; return dt >= r.from && dt <= r.to; }).reduce((s, d) => s + resValeur(d), 0);
 }
-function bindKpiDrag() {
-  const grid = $('#kpi-grid'); if (!grid) return;
-  let dragId = null;
-  grid.addEventListener('dragstart', e => { const c = e.target.closest('.kpi'); if (!c) return; dragId = c.dataset.kpi; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-  grid.addEventListener('dragend', () => { $$('.kpi', grid).forEach(c => c.classList.remove('dragging', 'over')); });
-  grid.addEventListener('dragover', e => { e.preventDefault(); const c = e.target.closest('.kpi'); $$('.kpi', grid).forEach(x => x.classList.toggle('over', x === c && c.dataset.kpi !== dragId)); });
-  grid.addEventListener('drop', e => {
-    e.preventDefault(); const c = e.target.closest('.kpi'); if (!c || !dragId || c.dataset.kpi === dragId) return;
-    const ids = $$('.kpi', grid).map(x => x.dataset.kpi).filter(id => id !== dragId);
-    ids.splice(ids.indexOf(c.dataset.kpi), 0, dragId);
-    setPref('kpiOrder', ids);
-  });
-}
-
 function dashAnalyses(r, who) {
   const mk = r.from.slice(0, 7); const y = Number(mk.slice(0, 4));
   const kpis = kpiList().filter(k => k.points > 0 || k.id === 'prospects');
@@ -318,7 +309,7 @@ function dashAnalyses(r, who) {
 ACTIONS.anaKpi = el => { UI.anaKpi = el.value; render(); };
 ACTIONS.goManual = () => { UI.impTab = 'manual'; location.hash = '#/imports'; };
 
-// Clôture du jour : la vraie liste des saisies du jour, et un titre qui suit.
+// Journal du jour : la liste des saisies du jour, et un titre factuel (nombre de saisies et d'indicateurs).
 ACTIONS.dayRecap = el => {
   const who = el.dataset.who || null;
   let d = today();
@@ -326,13 +317,13 @@ ACTIONS.dayRecap = el => {
     const list = Object.values(S.entries).filter(e => e.date === d && e.clubId === CLUB.id && (!who || e.userId === who) && entryCounts(e));
     const r = rangeOf('month', d.slice(0, 7)); const st = statsFor(CLUB.id, who, r);
     const byK = {}; list.forEach(e => { byK[e.kpiId] = (byK[e.kpiId] || 0) + Number(e.value); });
-    const title = !list.length ? TXT.cloture.vide : Object.keys(byK).length >= 3 ? TXT.cloture.complete : TXT.cloture.bonne;
+    const title = TXT.journal.titre(list.length, Object.keys(byK).length, d === today() ? 'aujourd’hui' : 'le ' + dmy(d).slice(0, 5));
     return `<div class="row" style="justify-content:center;gap:6px;margin-bottom:12px"><button class="btn icon sm" data-d="-1">${ico('chevL')}</button><b style="min-width:200px;text-align:center">${dayLabel(d)}</b><button class="btn icon sm" data-d="1" ${d >= today() ? 'disabled' : ''}>${ico('chevR')}</button></div>
-      <div style="text-align:center"><div class="title t-28">${title}</div></div>
-      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title t-20">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
-      <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.progress || 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
+      <div style="text-align:center"><div class="title t-20">${title}</div></div>
+      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="num">+${esc(S.kpis[kid] ? fmtU(v, S.kpis[kid]) : fmtN(v))}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
+      <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.progress || 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} sur ${fmtN(st.max)} points</div>`;
   };
-  const m = openModal({ title: TXT.cloture.bouton, body: `<div id="dr">${draw()}</div>` });
+  const m = openModal({ title: TXT.journal.bouton, body: `<div id="dr">${draw()}</div>` });
   m.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b || b.disabled) return; d = addDays(d, Number(b.dataset.d)); $('#dr', m).innerHTML = draw(); });
 };
 
@@ -396,7 +387,7 @@ ACTIONS.openSaisies = () => {
 };
 function tasksToday() {
   const plan = Object.values(S.tasks.plan[CLUB.id] || {}).sort((a, b) => a.hour - b.hour);
-  if (!plan.length) return emptyBox({ art: 'todo', title: 'Aucune tâche prévue', text: isManager() ? 'Construisez le planning dans Équipe, onglet Tâches.' : 'Votre manager n’a pas encore construit le planning du club.' });
+  if (!plan.length) return emptyBox({ art: 'todo', title: 'Aucune tâche prévue', text: isManager() ? 'Construisez le planning dans Équipe, onglet Tâches.' : 'Votre manager n’a pas encore construit le planning du club.', cta: isManager() ? '<a class="btn sm" href="#/team">Construire le planning</a>' : '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' });
   const done = deepGet(S.tasks.done, [today(), ME.id]) || {};
   return `<p class="muted small">Cochez au fil de la journée. ${Object.keys(done).length}/${plan.length} faites.</p>` + plan.map(p => {
     const t = S.tasks.library[p.taskId]; if (!t) return '';
@@ -468,15 +459,16 @@ PAGES.pouls = {
         <div class="row"><span class="muted small">${k ? kpiIcon(k, 'ico ico-xs') + ' ' + esc(k.label) : ''}</span><span class="spacer"></span><span class="muted small">${ago(e.at)}</span></div>
         <div class="amount">+${fmtV(e.value, k ? k.unit : 'qty')}</div>
         <div class="row small" style="margin-top:4px">${avatar(u, 'xs')}<b>${esc(fullName(u))}</b>${c ? `<span class="muted">· ${ico('map')} ${esc(c.name)}</span>` : ''}</div>
-        <div class="reacts">${['🔥', '💪', '👏'].map(em => { const who = rx[em] ? Object.keys(rx[em]) : []; return `<button data-act="react" data-id="${e.id}" data-em="${em}" class="${who.includes(ME.id) ? 'on' : ''}" aria-label="${REACT_ICON[em][1]}" title="${esc([REACT_ICON[em][1], ...who.map(id => fullName(S.users[id]))].join(', '))}">${reactIco(em)} ${who.length || ''}</button>`; }).join('')}</div>
+        <div class="reacts">${reactBtns('react', e.id, rx)}</div>
       </div></div>`;
     }).join('');
     return `<div class="page-head"><div><h1>${TXT.pages.pouls}</h1><p>${TXT.pouls.sous}</p></div></div>
-      ${multi ? `<div style="margin-bottom:12px">${seg('poulsScope', [['club', esc(CLUB.name)], ['all', TXT.pouls.tous]], scope)}</div>` : ''}
-      <div class="pouls">${items || `<div class="card">${emptyBox({ art: 'pouls', title: TXT.pouls.videTitre, text: 'Les ventes de l’équipe apparaissent ici en direct.', cta: '<button class="btn primary sm" data-act="tbSaisir">Saisir</button>' })}</div>`}</div>`;
+      ${multi ? `<div style="margin-bottom:12px">${seg('poulsScope', [['club', esc(nomAffiche())], ['all', TXT.pouls.tous]], scope)}</div>` : ''}
+      <div class="pouls">${items || `<div class="card">${emptyBox({ art: 'pouls', title: TXT.pouls.videTitre, text: 'Les ventes de l’équipe apparaissent ici en direct.', cta: '<button class="btn primary sm" data-act="openSaisies">Nouvelle saisie</button>' })}</div>`}</div>`;
   },
 };
-ACTIONS.react = el => { const p = ['reactions', el.dataset.id, el.dataset.em, ME.id]; db.set(p, deepGet(S, p) ? null : true); };
+ACTIONS.chatFocus = () => { const t = $('#chat-list') && $('.chat-wrap textarea, #chat-form textarea, form textarea'); if (t) t.focus(); };
+ACTIONS.react = el => { if (!REACTIONS[el.dataset.em]) return; db.batch(reactOps(['reactions', el.dataset.id], S.reactions[el.dataset.id], el.dataset.em)); };
 
 // ── Chat : un canal par club + un canal commun a nos clubs ────────────────
 PAGES.chat = {
@@ -493,8 +485,7 @@ PAGES.chat = {
       return `<div class="msg ${m.userId === ME.id ? 'mine' : ''}">${avatar(u)}<div>
         <div class="meta"><b>${esc(fullName(u))}</b>${u && u.role === 'manager' ? ' <span class="badge fp">MANAGER</span>' : ''} · ${timeOf(m.at)}</div>
         ${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ''}${safeImg(m.image) ? `<img class="att" src="${m.image}" alt="Image jointe">` : ''}
-        <div class="tools">${Object.entries(rx).filter(([em, w]) => REACT_ICON[em] && Object.keys(w || {}).length).map(([em, w]) => `<a data-act="chatReact" data-id="${m.id}" data-em="${em}" title="${esc(Object.keys(w).map(id => fullName(S.users[id])).join(', '))}">${reactIco(em)} ${Object.keys(w).length}</a>`).join('')}
-          <a data-act="chatReact" data-id="${m.id}" data-em="👍" aria-label="Réagir : OK">${reactIco('👍')}</a><a data-act="chatReact" data-id="${m.id}" data-em="🔥" aria-label="Réagir : bravo">${reactIco('🔥')}</a>
+        <div class="tools">${reactBtns('chatReact', m.id, rx, 'lien')}
           ${!m.parentId ? `<a data-act="chatReply" data-id="${m.id}">Répondre</a>` : ''}
           ${m.userId === ME.id || isManager() ? `<a data-act="chatDel" data-id="${m.id}">Supprimer</a>` : ''}</div>
         ${!m.parentId && replies(m.id).length ? `<div class="replies">${replies(m.id).map(bubble).join('')}</div>` : ''}
@@ -504,7 +495,7 @@ PAGES.chat = {
     setTimeout(() => { if (unseenChat()) setPref('chatSeen', Date.now()); const l = $('#chat-list'); if (l) l.scrollTop = l.scrollHeight; }, 50);
     const rep = UI.chatReply && S.chat[UI.chatReply];
     return `<div class="card chat-wrap"><div class="chat-head"><h3>Canal</h3>${seg('chatCh', chans.map(([id, n]) => [id, esc(n)]), ch)}<span class="spacer"></span><span class="muted small">${ch === 'all' ? 'Toutes les équipes de nos clubs' : 'L’équipe du club uniquement'}</span></div>
-      <div class="chat-list" id="chat-list">${list || emptyBox({ art: 'chat', title: 'Aucun message', text: 'Lancez la discussion avec votre équipe.' })}</div>
+      <div class="chat-list" id="chat-list">${list || emptyBox({ art: 'chat', title: 'Aucun message', text: 'Lancez la discussion avec votre équipe.', cta: '<button class="btn sm" data-act="chatFocus">Écrire un message</button>' })}</div>
       <form class="chat-input" id="chat-form">
         <div class="spacer">${rep ? `<div class="small muted" style="margin-bottom:4px">Réponse à ${esc(fullName(S.users[rep.userId]))} <a href="javascript:void 0" data-act="chatReply" data-id="">annuler</a></div>` : ''}<textarea class="input" name="text" placeholder="Écrire un message…" rows="1" data-focus="chat"></textarea></div>
         <label class="btn icon" title="Joindre une image (pas de pièce d’identité, de RIB ni de données d’adhérent)">${ico('clip')}<input type="file" accept="image/*" hidden id="chat-file"></label>
@@ -538,7 +529,7 @@ function shrinkImage(file, max) {
     img.src = url;
   });
 }
-ACTIONS.chatReact = el => { const p = ['chat', el.dataset.id, 'reactions', el.dataset.em, ME.id]; db.set(p, deepGet(S, p) ? null : true); };
+ACTIONS.chatReact = el => { if (!REACTIONS[el.dataset.em]) return; db.batch(reactOps(['chat', el.dataset.id, 'reactions'], (S.chat[el.dataset.id] || {}).reactions, el.dataset.em)); };
 ACTIONS.chatReply = el => { UI.chatReply = el.dataset.id || null; render(); setTimeout(() => { const t = $('#chat-form textarea'); if (t) t.focus(); }, 60); };
 ACTIONS.chatDel = async el => { if (await confirmDlg('Supprimer ce message ?', { ok: 'Supprimer', danger: true })) db.batch([[['chat', el.dataset.id], null], ...Object.values(S.chat).filter(m => m.parentId === el.dataset.id).map(m => [['chat', m.id], null])]); };
 

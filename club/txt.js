@@ -39,21 +39,20 @@ const TXT = {
     quality: 'Contrôle qualité', recap: 'Récapitulatif du mois', equipePaliers: 'Équipe et paliers', profil: 'Mon espace', produit: 'Suivi produit',
     rapporte: 'Ce que Fit Pulse a rapporté', relances: 'Relances', opportunites: 'Opportunités',
   },
-  // Paliers individuels : 5 zones gagnées par mois validés
+  // Niveaux individuels : 4 niveaux gagnés par mois à 100 % ou plus (recalculés depuis l'historique)
   zones: {
-    seuil: 0.8, // un mois est validé à 80 % de la valeur cible
+    seuil: 1, // un mois compte quand le score des KPI obligatoires atteint 100 % de l'objectif
     liste: [
-      { id: 'z1', label: 'Zone 1', min: 0 },
-      { id: 'z2', label: 'Zone 2', min: 2 },
-      { id: 'z3', label: 'Zone 3', min: 5 },
-      { id: 'z4', label: 'Zone 4', min: 9 },
-      { id: 'z5', label: 'Zone 5', min: 14 },
+      { id: 'n1', label: 'Recrue', min: 0 },
+      { id: 'n2', label: 'Confirmé', min: 2 },
+      { id: 'n3', label: 'Expert', min: 6 },
+      { id: 'n4', label: 'Référent', min: 12 },
     ],
-    regle: 'Un mois est validé quand le score des KPI obligatoires atteint 80 % de l’objectif.',
+    regle: 'Un mois compte quand le score des KPI obligatoires atteint 100 % de l’objectif.',
     titre: z => `${z.label}`,
-    valides: n => `${n} mois validé${n > 1 ? 's' : ''}`,
-    avant: (n, z) => `Encore ${n} mois validé${n > 1 ? 's' : ''} pour la ${z}`,
-    max: 'Zone 5 atteinte',
+    valides: n => `${n} mois à 100 %`,
+    avant: (n, z) => `Encore ${n} mois à 100 % pour le niveau ${z}`,
+    max: 'Niveau Référent atteint',
     seuilMois: n => `${n} mois`,
   },
   // Phrases de rythme (cartes KPI)
@@ -61,21 +60,26 @@ const TXT = {
     sansObjectif: 'Pas d’objectif ce mois-ci',
     atteint: 'Objectif atteint',
     auDela: v => `Objectif atteint, ${v} au-delà`,
-    aRattraper: v => `${v} à rattraper pour tenir le rythme`,
-    palier: (v, p) => `Dans le rythme. Palier ${p} % : encore ${v}`,
+    manque: (v, jm) => `Il manque ${v} pour tenir le rythme au ${jm}`,
+    avance: v => `En avance de ${v} sur le rythme`,
     dans: 'Dans le rythme',
     surveiller: 'À surveiller',
     retard: 'En retard',
   },
   // Compte à rebours de fin de mois
   compteur: {
-    court: (j, o) => `J-${j} · ${o} jours ouvrés`,
+    court: (j, o) => `${o} jour${o > 1 ? 's' : ''} ouvré${o > 1 ? 's' : ''} restant${o > 1 ? 's' : ''}`,
     titre: (j, o, mois) => `Fin ${mois} : ${j} jour${j > 1 ? 's' : ''} calendaire${j > 1 ? 's' : ''} après aujourd’hui, ${o} jour${o > 1 ? 's' : ''} ouvré${o > 1 ? 's' : ''} aujourd’hui compris (hors dimanches et jours fériés)`,
   },
   pouls: {
     sous: 'Les saisies de l’équipe, en direct. Visible par les seuls membres de vos clubs.',
     tous: 'Tous nos clubs',
     videTitre: 'Le Pouls démarre à la première saisie',
+  },
+  // Journal du jour d'un commercial : la liste de ses saisies, titre factuel.
+  journal: {
+    bouton: 'Journal du jour',
+    titre: (s, k, quand) => s ? `${s} saisie${s > 1 ? 's' : ''} ${quand}, ${k} indicateur${k > 1 ? 's' : ''}` : `Aucune saisie ${quand}`,
   },
   cloture: {
     bouton: 'Clôture du jour',

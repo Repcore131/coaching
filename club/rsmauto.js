@@ -69,5 +69,5 @@ ACTIONS.rsmAutoCfg = () => {
 ACTIONS.rsmAutoCfgOk = () => {
   const f = formData($('#rsac'));
   db.set(['clubs', CLUB.id, 'rsmAuto'], { address: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.address.trim()) ? f.address.trim().toLowerCase() : null, label: f.label.trim().slice(0, 60) || null, driveFolder: f.driveFolder.trim().replace(/[^\w-]/g, '').slice(0, 80) || null });
-  closeModal(); toast('Réglages enregistrés');
+  closeModal(); toast('1 jeu de réglages enregistré');
 };

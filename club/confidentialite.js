@@ -39,13 +39,13 @@ ACTIONS.benchToggle = async el => {
   if (!isManager()) return; const on = el.checked;
   if (on) {
     const hash = deepGet(S, ['clubs', CLUB.id, 'benchmark', 'hash']) || await benchHashNew(CLUB.id);
-    db.set(['clubs', CLUB.id, 'benchmark'], { on: true, hash, at: Date.now(), by: ME.id }); benchSync(true); toast('Comparaison anonyme activée');
+    db.set(['clubs', CLUB.id, 'benchmark'], { on: true, hash, at: Date.now(), by: ME.id }); benchSync(true); toast('Comparaison anonyme activée pour 1 club');
   } else {
     // Retrait : plus aucun envoi, et les agrégats déjà envoyés sont effacés.
     const h = deepGet(S, ['clubs', CLUB.id, 'benchmark', 'hash']);
     const ops = [[['clubs', CLUB.id, 'benchmark', 'on'], false]];
     if (h) Object.keys(S.benchmark || {}).forEach(mk => { if (deepGet(S, ['benchmark', mk, h])) ops.push([['benchmark', mk, h], null]); });
-    db.batch(ops); toast('Comparaison anonyme désactivée');
+    db.batch(ops); toast('Comparaison anonyme désactivée pour 1 club');
   }
 };
 // Position du club : quartile, jamais le nom ni la valeur d'un autre club.

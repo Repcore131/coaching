@@ -65,7 +65,7 @@ function fuitePhrase(f, fc, who) {
 }
 function funnelView(mk, userId) {
   const clubId = CLUB.id;
-  if (!prospectsOf(clubId).length) return `<div class="card">${emptyBox({ art: 'target', title: 'Entonnoir vide', text: 'Déposez l’export Prospects de Resamania (Clients > Prospects > Exporter) dans Imports > Resamania : chaque prospect sera suivi jusqu’au contrat.', cta: isManager() ? '<a class="btn primary sm" href="#/imports">Ouvrir les imports</a>' : '' })}</div>`;
+  if (!prospectsOf(clubId).length) return `<div class="card">${emptyBox({ art: 'board', title: 'Entonnoir vide', text: 'Déposez l’export Prospects de Resamania (Clients > Prospects > Exporter) dans Imports > Resamania : chaque prospect sera suivi jusqu’au contrat.', cta: isManager() ? '<a class="btn primary sm" href="#/imports">Ouvrir les imports</a>' : '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`;
   const f = funnel(clubId, mk, userId), fc = funnel(clubId, mk, null); const who = userId ? (S.users[userId] || {}).first : '';
   const max = Math.max(1, f.crees);
   const bars = STAGES.map(([k, l], i) => `<div class="fn-row"><span>${l}</span><div class="fn-bar"><i style="width:${Math.round(f[k] / max * 100)}%"></i></div><b>${fmtN(f[k])}</b><small>${i ? fmtTaux(f[STAGES[i - 1][0]] ? f[k] / f[STAGES[i - 1][0]] : null) : ''}</small></div>`).join('');
@@ -93,7 +93,7 @@ ACTIONS.prospectNote = el => {
   openModal({ title: `Appel · ${pName(p)}`, body: `<form id="pnf" class="grid"><div class="chips">${[['ok', 'Joint'], ['noanswer', 'Pas de réponse'], ['rdv', 'RDV pris'], ['refus', 'Pas intéressé']].map(([v, l], i) => `<label class="chip-radio"><input type="radio" name="o" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</div><input class="input" name="note" maxlength="200" placeholder="Note (facultatif)"></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="prospectNoteSave" data-id="${p.id}">Enregistrer</button>` });
 };
-ACTIONS.prospectNoteSave = el => { const f = formData($('#pnf')); const id = newId(); db.set(['touches', id], { id, clubId: CLUB.id, prospectId: el.dataset.id, at: Date.now(), by: ME.id, channel: 'call', outcome: ({ ok: 'joint', noanswer: 'pasreponse', rdv: TOUCH_OUTCOMES.rdv ? 'rdv' : 'joint', refus: 'refus' })[f.o] || 'joint', note: (f.note || '').slice(0, 200) + (f.o === 'rdv' && !TOUCH_OUTCOMES.rdv ? ' (RDV pris)' : '') }); closeModal(); toast('Appel noté'); };
+ACTIONS.prospectNoteSave = el => { const f = formData($('#pnf')); const id = newId(); db.set(['touches', id], { id, clubId: CLUB.id, prospectId: el.dataset.id, at: Date.now(), by: ME.id, channel: 'call', outcome: ({ ok: 'joint', noanswer: 'pasreponse', rdv: TOUCH_OUTCOMES.rdv ? 'rdv' : 'joint', refus: 'refus' })[f.o] || 'joint', note: (f.note || '').slice(0, 200) + (f.o === 'rdv' && !TOUCH_OUTCOMES.rdv ? ' (RDV pris)' : '') }); closeModal(); toast('1 appel noté'); };
 
 // ── Invités (et parrainage) ───────────────────────────────────────────────
 const guestsOf = clubId => Object.values(S.guests || {}).filter(g => g && g.clubId === clubId);
@@ -226,11 +226,11 @@ PAGES.opportunites = {
     const done = oppsDoneToday(CLUB.id, mgr && scope === 'all' ? null : ME.id); const doneE = done.reduce((s, x) => s + (Number(x.euros) || 0), 0);
     const counts = {}; all.forEach(o => { counts[o.type] = (counts[o.type] || 0) + 1; });
     const hasData = clubClients(CLUB.id).length || prospectsOf(CLUB.id).length;
-    if (!hasData) return `<div class="page-head"><div><h1>Opportunités</h1></div></div><div class="card">${emptyBox({ art: 'target', title: 'Rien à classer pour l’instant', text: 'Déposez dans Imports > Resamania : Vente d’abonnements, Clients club, Clients en incident, Prospects, Résiliations et Évolution clients. Les actions les plus rentables apparaîtront ici, classées en euros.' })}</div>`;
+    if (!hasData) return `<div class="page-head"><div><h1>Opportunités</h1></div></div><div class="card">${emptyBox({ art: 'import', title: 'Rien à classer pour l’instant', text: 'Déposez dans Imports > Resamania : Vente d’abonnements, Clients club, Clients en incident, Prospects, Résiliations et Évolution clients. Les actions les plus rentables apparaîtront ici, classées en euros.', cta: '<a class="btn primary sm" href="#/imports">Ouvrir les imports</a>' })}</div>`;
     return `<div class="page-head"><div><h1>Opportunités</h1><p>Les actions qui rapportent le plus, classées par euros attendus.</p></div><span class="spacer"></span><button class="btn" data-act="guestNew">${ico('plus')} Invité</button></div>
       <div class="opp-hero"><b>Vos 5 actions les plus rentables aujourd’hui : <span data-brief-total>${fmtE(tot5)}</span> attendus.</b>${palierManque()}</div>
       <div class="row wrap" style="gap:8px;margin:12px 0">${mgr ? seg('oppScope', [['all', 'Tout le club'], ['mine', 'Les miennes']], scope) : ''}<select class="input sm" style="width:auto" data-change="oppType"><option value="all">Tous les types · ${all.length}</option>${Object.entries(OPP_TYPES).filter(([k]) => counts[k]).map(([k, T]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${T.label} · ${counts[k]}</option>`).join('')}</select></div>
-      <div class="card opp-list">${L.length ? L.slice(0, UI.oppAll ? 200 : 25).map(o => oppRow(o, mgr)).join('') : emptyBox({ art: 'done', title: 'Tout est traité', text: 'Aucune opportunité ouverte pour ce filtre.' })}
+      <div class="card opp-list">${L.length ? L.slice(0, UI.oppAll ? 200 : 25).map(o => oppRow(o, mgr)).join('') : emptyBox({ art: 'done', title: 'Tout est traité', text: 'Aucune opportunité ouverte pour ce filtre.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}
       ${L.length > 25 && !UI.oppAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="oppAll" data-val="1">Voir les ${L.length - 25} suivantes</button>` : ''}</div>
       <p class="opp-foot">Réalisé aujourd’hui : <b>${plur(done.length, 'action', 'actions')}</b>, <b>${fmtE(doneE)}</b> sécurisés.</p>
       <p class="muted small">Euros attendus = valeur x probabilité. ${oppProbaTexte(CLUB.id)}${mgr ? ' <a href="#/opportunites" data-act="oppProbaCfg">Régler les probabilités</a>' : ''}</p>`;
@@ -252,7 +252,7 @@ function oppClaim(key, uid) {
 ACTIONS.oppDone = el => {
   const o = oppFind(el.dataset.key); if (!o) return; const ops = [[oppPath(o.key), { ...oppState(o.key), clubId: CLUB.id, doneAt: Date.now(), doneBy: ME.id, euros: o.eurosAttendus, type: o.type }]];
   if (o.clientId) { const id = newId(); ops.push([['touches', id], { id, clubId: CLUB.id, clientId: o.clientId, at: Date.now(), by: ME.id, channel: 'note', outcome: 'ok', note: `Opportunité traitée : ${o.titre}` }]); }
-  db.batch(ops); celebrate('Action faite', `${fmtE(o.eurosAttendus)} sécurisés`, { kind: 'win' });
+  db.batch(ops); toast(`Action faite : ${fmtE(o.eurosAttendus)} sécurisés`);
 };
 ACTIONS.oppLater = el => { const k = el.dataset.key; db.batch([[[...oppPath(k), 'snoozeUntil'], Date.now() + 3 * 864e5], [[...oppPath(k), 'clubId'], CLUB.id]]); toast('Masquée 3 jours'); };
 // Accueil : « Vos 5 actions les plus rentables aujourd'hui » (vue club pour un manager, comme la page).
@@ -273,7 +273,7 @@ ACTIONS.oppProbaCfg = () => {
 ACTIONS.oppProbaOk = () => {
   const f = formData($('#oppf')); const out = {};
   Object.keys(OPP_PROBA).forEach(k => { const v = parseFloat(String(f[k] || '').replace(',', '.')); if (Number.isFinite(v) && v >= 0 && v <= 100) out[k] = Math.round(v * 10) / 1000; });
-  db.set(['clubs', CLUB.id, 'oppProba'], Object.keys(out).length ? out : null); closeModal(); toast('Probabilités enregistrées');
+  db.set(['clubs', CLUB.id, 'oppProba'], Object.keys(out).length ? out : null); closeModal(); toast('Probabilités enregistrées pour 1 club');
 };
 // « Il manque X pour le prochain palier » (repris de la prévision).
 function palierManque() {
@@ -299,8 +299,8 @@ function dunSpeed(mk) {
     <label class="row small" style="gap:8px">Minutes par appel <input class="input sm" style="width:70px" type="number" min="1" max="30" value="${mins}" data-change="minutesAppel" ${isManager() ? '' : 'disabled'}></label></div>`;
 }
 ACTIONS.minutesAppel = el => { const v = Math.max(1, Math.min(30, Number(el.value) || 4)); db.set(['clubs', CLUB.id, 'minutesAppel'], v); };
-ACTIONS.clubCfg = el => { const k = el.dataset.k; let v = el.value.trim(); if (k !== 'parrainReward') { const n = parseMontant(v); v = Number.isNaN(n) ? null : el.dataset.pct ? n / 100 : n; } db.set(['clubs', CLUB.id, k], v || null); toast('Enregistré'); };
-ACTIONS.dunSmsSet = el => { db.set(['clubs', CLUB.id, 'dunSms'], el.value.trim() || null); toast('Message enregistré'); };
+ACTIONS.clubCfg = el => { const k = el.dataset.k; let v = el.value.trim(); if (k !== 'parrainReward') { const n = parseMontant(v); v = Number.isNaN(n) ? null : el.dataset.pct ? n / 100 : n; } db.set(['clubs', CLUB.id, k], v || null); toast('1 valeur enregistrée'); };
+ACTIONS.dunSmsSet = el => { db.set(['clubs', CLUB.id, 'dunSms'], el.value.trim() || null); toast('1 message enregistré'); };
 
 // ── Montée en gamme et anciens membres (onglets d'Adherents a garder) ───────
 const REV_OUT = { propose: 'Montée proposée', accepte: 'Montée acceptée', appele: 'Appelé', offre: 'Offre de retour envoyée', revenu: 'Revenu au club', refus: 'Pas intéressé' };
@@ -315,7 +315,7 @@ function loyUpsell() {
   const L = upsellTargets(CLUB.id);
   return `<p class="muted small">Adhérents en Basic ou Premium depuis 60 à 400 jours, sans impayé, du plus ancien au plus récent. Gain affiché sur 12 mois.</p>
     ${L.length ? `<div class="card">${L.slice(0, 60).map(x => `<div class="row wrap opp-mini"><span class="opp-ico">${ico('sparkle')}</span><div class="spacer"><b>${esc(x.c.name || '')}</b><div class="muted small">${esc(x.c.offer || '')} depuis le ${dmy(x.c.start)} · vers ${x.vers} : +${fmtE(x.gap)} par mois, ${fmtE(x.gap * 12)} sur 12 mois${x.last ? ' · ' + REV_OUT[x.last.outcome].toLowerCase() + ' ' + ago(x.last.at) : ''}</div></div>${clientPhone(x.c) ? `<a class="btn sm icon" href="tel:${esc(clientPhone(x.c))}">${ico('phone')}</a>` : ''}<button class="btn sm" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="propose">Proposé</button><button class="btn sm primary" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="accepte">Accepté</button><button class="btn sm ghost" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="refus">Pas intéressé</button></div>`).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune cible de montée en gamme', text: TXT.clubs.offres })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'target', title: 'Aucune cible de montée en gamme', text: TXT.clubs.offres, cta: '<a class="btn sm" href="#/clubs">Régler les offres</a>' })}</div>`}`;
 }
 const seasonWindow = (d = today()) => { const md = d.slice(5); return (md >= '12-20' || md <= '01-31') || (md >= '08-20' && md <= '09-30'); };
 function loyAnciens() {
@@ -324,14 +324,14 @@ function loyAnciens() {
   return `${seasonWindow() ? `<div class="alert" style="margin-bottom:12px">${ico('flag')}<div><b>Fenêtre forte : campagne de retour conseillée</b>Fin décembre à fin janvier et fin août à fin septembre, les anciens reviennent plus facilement.</div></div>` : ''}
     <div class="row wrap" style="margin-bottom:10px">${segm('ancSeg', [['all', `Tous ${all.length}`], ['3-6', `3 à 6 mois ${n('3-6')}`], ['6-12', `6 à 12 mois ${n('6-12')}`], ['12-24', `12 à 24 mois ${n('12-24')}`]], seg)}<span class="spacer"></span><button class="btn sm" data-act="ancCsv">${ico('download')} CSV du segment</button></div>
     ${L.length ? `<div class="card">${L.slice(0, 80).map(x => { const last = lastRev(x.c.id, 'reactivation'); return `<div class="row wrap opp-mini"><span class="opp-ico">${ico('repeat')}</span><div class="spacer"><b>${esc(x.c.name || '')}</b><div class="muted small">${esc(x.c.offer || 'offre inconnue')} · ${fmtE(mensualite(x.c))} par mois · sorti le ${dmy(x.c.endDate)}${last ? ' · ' + REV_OUT[last.outcome].toLowerCase() + ' ' + ago(last.at) : ''}</div></div>${clientPhone(x.c) ? `<a class="btn sm icon" href="tel:${esc(clientPhone(x.c))}">${ico('phone')}</a>` : ''}${['appele', 'offre', 'revenu', 'refus'].map(o => `<button class="btn sm ${o === 'revenu' ? 'primary' : o === 'refus' ? 'ghost' : ''}" data-act="revAct" data-c="${x.c.id}" data-t="reactivation" data-o="${o}">${{ appele: 'Appelé', offre: 'Offre envoyée', revenu: 'Revenu', refus: 'Pas intéressé' }[o]}</button>`).join('')}</div>`; }).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucun ancien membre à recontacter', text: 'Déposez l’export Évolution clients (detail-perte) : chaque sortant devient une fiche, à recontacter 3 à 24 mois après sa sortie.' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'import', title: 'Aucun ancien membre à recontacter', text: 'Déposez l’export Évolution clients (detail-perte) : chaque sortant devient une fiche, à recontacter 3 à 24 mois après sa sortie.', cta: '<a class="btn sm" href="#/imports">Ouvrir les imports</a>' })}</div>`}`;
 }
 const segm = (k, o, cur) => seg(k, o, cur);
 ACTIONS.revAct = el => {
   const id = newId(); const c = S.clients[el.dataset.c]; const ops = [[['loyalty', id], { id, clientId: c.id, type: el.dataset.t, outcome: el.dataset.o, userId: ME.id, at: Date.now() }]];
   if (el.dataset.o === 'refus' && el.dataset.t === 'reactivation') ops.push([['clients', c.id, 'noReactivation'], true]);
   db.batch(ops); toast(REV_OUT[el.dataset.o]);
-  if (el.dataset.o === 'accepte' || el.dataset.o === 'revenu') celebrate(REV_OUT[el.dataset.o], c.name || '', { kind: 'win' });
+  if (el.dataset.o === 'accepte' || el.dataset.o === 'revenu') toast(`${REV_OUT[el.dataset.o]} : ${c.name || 'fiche sans nom'}`);
 };
 ACTIONS.ancCsv = () => {
   const seg0 = UI.ancSeg || 'all'; const L = reactivables(CLUB.id).filter(x => seg0 === 'all' || x.seg === seg0);
@@ -393,7 +393,7 @@ function recapRevenus(mk) {
         <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Anciens revenus ce mois</span><b>${anc.length}</b><span class="muted small" style="margin-left:8px">${fmtE(Math.round(anc.reduce((s, x) => s + mensualite(x.c) * dureeVieMois(clubId), 0)))} de valeur vie</span></div>
         <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Contrats issus du parrainage</span><b>${par.n}</b><span class="muted small" style="margin-left:8px">${fmtTaux(par.part)} des contrats · ${fmtE(par.valeur)} de valeur vie</span></div>
         <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Revenu mensuel B2B</span><b>${fmtE(mrrB2b)}</b><span class="muted small" style="margin-left:8px">${plur(b2b.length, 'adhérent', 'adhérents')} d’entreprise</span></div>
-        ${par.tops.length ? `<p class="small" style="margin:8px 0 0"><b>Top parrains</b> (2 contrats ou plus sur 12 mois) : ${par.tops.map(x => `${esc(x.c.name || '')} (${x.n})`).join(', ')}${reward ? `. Récompense à remettre : ${esc(reward)}.` : '.'}</p>` : ''}</div></div>
+        ${par.tops.length ? `<p class="small" style="margin:8px 0 0"><b>Parrains les plus actifs</b> (2 contrats ou plus sur 12 mois) : ${par.tops.map(x => `${esc(x.c.name || '')} (${x.n})`).join(', ')}${reward ? `. Récompense à remettre : ${esc(reward)}.` : '.'}</p>` : ''}</div></div>
   </div>`;
 }
 

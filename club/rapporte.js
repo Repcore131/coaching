@@ -49,7 +49,7 @@ PAGES.rapporte = {
   manager: true,
   render() {
     const mk = UI.rapMonth || curMonth(); const R = rapporteMois(CLUB.id, mk); const ouvert = UI.rapOpen || '';
-    return `<div class="page-head"><div><h1>Ce que Fit Pulse a rapporté</h1><p>${esc(CLUB.name)} · ${monthLabel(mk)} · chaque euro renvoie à son dossier.</p></div></div>
+    return `<div class="page-head"><div><h1>Ce que Fit Pulse a rapporté</h1><p>${esc(nomAffiche())} · ${monthLabel(mk)} · chaque euro renvoie à son dossier.</p></div></div>
       <div class="row wrap" style="margin-bottom:12px">${monthNav('rapMonth', mk)}</div>
       <div class="rap-hero card"><div><span class="muted small">Rapporté en ${esc(monthLabel(mk).toLowerCase())}</span><b data-rap-total>${fmtE(R.total)}</b></div>
         ${R.prix ? `<div><span class="muted small">Abonnement Fit Pulse</span><b>${fmtE(R.prix)}</b><small>par mois</small></div><div><span class="muted small">Rapport</span><b>${R.total ? (Math.round(R.total / R.prix * 10) / 10).toString().replace('.', ',') + ' fois' : 'n.d.'}</b><small>le prix de l’abonnement</small></div>` : `<div class="muted small">${isManager() ? '<a href="#/rapporte" data-act="rapPrix">Indiquer le prix de l’abonnement Fit Pulse</a> pour comparer.' : ''}</div>`}</div>

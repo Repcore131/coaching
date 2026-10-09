@@ -153,7 +153,7 @@ function cguGate() {
 ACTIONS.cguAccept = () => {
   const now = Date.now();
   db.batch([[['prefs', ME.id, 'cguVersion'], LEGAL.version], [['prefs', ME.id, 'cguAt'], now], [['audit', newId()], { at: now, by: ME.id, action: 'cgu_acceptees', version: LEGAL.version }]]);
-  const g = $('.cgu-gate'); if (g) g.remove(); toast('Merci. Bonne utilisation de Fit Pulse.');
+  const g = $('.cgu-gate'); if (g) g.remove(); toast('Conditions d’utilisation acceptées : 1 accord enregistré');
 };
 ACTIONS.cguRefuse = () => { const g = $('.cgu-gate'); if (g) g.remove(); logout(); };
 

@@ -114,10 +114,10 @@ PAGES.recap = {
     const maxOf = k => Math.max(1, ...rows.map(r => r.cur[k]));
     const salesMax = Math.max(1, ...rows.map(r => Math.max(r.cur.contrats, r.prev.contrats)));
     return `<div class="recap">
-      <div class="recap-head"><div><div class="eyebrow">${esc(CLUB.name)}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
+      <div class="recap-head"><div><div class="eyebrow">${esc(nomAffiche())}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
         <div class="row wrap no-print">${monthNav('recapMonth', mk)}<button class="btn" data-act="recapCsv">${ico('download')} CSV</button><button class="btn" data-act="recapGerant">${ico('mail')} Envoyer au gérant</button><button class="btn primary" data-act="recapPrint">${ico('download')} Imprimer / PDF</button></div></div>
 
-      <div class="print-only rc-print-head">${clubLogo() ? `<img src="${esc(clubLogo())}" alt="">` : ''}<div><b>${esc(CLUB.name)}</b><div>Récapitulatif · ${esc(monthLabel(mk))}</div></div></div>
+      <div class="print-only rc-print-head">${clubLogo() ? `<img src="${esc(clubLogo())}" alt="">` : ''}<div><b>${esc(nomAffiche())}</b><div>Récapitulatif · ${esc(monthLabel(mk))}</div></div></div>
       ${(() => { const note = deepGet(S, ['recapNotes', CLUB.id, mk]) || ''; return `<div class="card rc-note"><label class="field"><span>Commentaire du directeur</span><textarea class="input no-print" rows="3" maxlength="600" data-change="recapNote" data-mk="${mk}" placeholder="Trois lignes pour le gérant : ce qui a marché, ce qui bloque, la priorité du mois prochain.">${esc(note)}</textarea></label>${note ? `<p class="print-only rc-note-p">${esc(note)}</p>` : ''}</div>`; })()}
       ${rapporteCompteur(CLUB.id)}
       ${(() => { const R = revenusMois(CLUB.id, mk), Rp = revenusMois(CLUB.id, pm), Rn = revenusMois(CLUB.id, addMonths(mk, -12));
@@ -173,7 +173,7 @@ PAGES.recap = {
     </div>`;
   },
 };
-ACTIONS.recapNote = el => { db.set(['recapNotes', CLUB.id, el.dataset.mk], (el.value || '').trim().slice(0, 600) || null); toast('Commentaire enregistré'); };
+ACTIONS.recapNote = el => { db.set(['recapNotes', CLUB.id, el.dataset.mk], (el.value || '').trim().slice(0, 600) || null); toast('1 commentaire enregistré'); };
 // Instantané du mois en cours dans S.monthly (une fois par jour), pour les comparaisons futures.
 function recapInstantane(clubId) {
   const mk = curMonth(); const R = revenusMois(clubId, mk); const cur = deepGet(S, ['monthly', clubId, mk]) || {};

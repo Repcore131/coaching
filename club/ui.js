@@ -60,18 +60,12 @@ function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
       onClose: () => { if (!done) res(false); } });
   });
 }
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; else if (!(el.name in o)) o[el.name] = ''; return; } o[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return o; };
 
-// ── Avatars ───────────────────────────────────────────────────────────────
-// Photo ou couleur choisies dans Mon espace (préférences de la personne).
-const PROFIL_COLORS = ['#FFD600', '#F97316', '#EF4444', '#EC4899', '#A855F7', '#3B82F6', '#06B6D4', '#22C55E', '#F5F5F3', '#6B7280'];
+// ── Avatars : pastille d'initiales, sans photo ni couleur choisie ──────────
 const profilOf = u => (u && S && S.prefs && S.prefs[u.id] && S.prefs[u.id].profil) || {};
-function avatar(u, cls = '') {
-  const p = profilOf(u); const name = esc(fullName(u));
-  if (p.photo && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.photo)) return `<span class="avatar ${cls}" title="${name}"><img src="${p.photo}" alt=""></span>`;
-  const col = PROFIL_COLORS.includes(p.color) ? p.color : null;
-  return `<span class="avatar ${cls}" title="${name}"${col ? ` style="background:${col};color:${['#FFD600', '#F5F5F3', '#06B6D4', '#22C55E', '#F97316'].includes(col) ? '#0B0B0C' : '#fff'}"` : ''}>${esc(initials(u))}</span>`;
-}
+function avatar(u, cls = '') { return `<span class="avatar ${cls}" title="${esc(fullName(u))}">${esc(initials(u))}</span>`; }
 
 // ── Graphiques SVG ────────────────────────────────────────────────────────
 function barChart({ labels, series, height = 220, fmt = fmtN }) {
@@ -200,8 +194,8 @@ const NAV = [
   ['equipe', TXT.nav.equipeManager, 'chart', true],
   ['b2b', TXT.nav.b2b, 'briefcase'],
   ['sep'],
-  ['resiliations', TXT.nav.resiliations, 'door', true],
-  ['impayes', TXT.nav.impayes, 'coinsback', true],
+  ['resiliations', TXT.nav.resiliations, 'door'],
+  ['impayes', TXT.nav.impayes, 'coinsback'],
   ['loyalty', TXT.nav.loyalty, 'magnet', true],
   ['pouls', TXT.nav.pouls, 'pouls', true],
   ['sep'],
@@ -226,10 +220,10 @@ function shell(route, inner) {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr === true && !isManager()) return '';
     if (mgr === 'm' && isManager()) return '';
-    const n = id === 'pouls' ? unseenPouls() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenPouls()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
-    const late = id === 'resiliations' ? rrqCounts(CLUB.id).late : 0;
+    const n = id === 'pouls' ? unseenPouls() : id === 'chat' ? unseenChat() : id === 'equipe' ? (isManager() ? 0 : unseenPouls()) : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? (isManager() ? resToHandle(CLUB.id).length + rrqCounts(CLUB.id).open : resList(CLUB.id).filter(r => r.ownerId === ME.id && resOpen(r)).length) : id === 'impayes' ? dunRows(CLUB.id).filter(mesDossiersDun).filter(dunDue).length : 0;
+    const late = id === 'resiliations' && isManager() ? rrqCounts(CLUB.id).late : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}${late ? `<span class="pill pill-late" title="dont ${late} sans réponse depuis 48 h" aria-label="dont ${late} sans réponse depuis 48 h">${late}</span>` : ''}</a>`;
-  }).join('');
+  }).join('').replace(/(<div class="nav-sep"><\/div>)+/g, '$1').replace(/^<div class="nav-sep"><\/div>|<div class="nav-sep"><\/div>$/g, '');
   const clubs = myClubs();
   return `<div class="shell" id="shell">
     <aside class="side">
@@ -289,7 +283,6 @@ function renderNowInner() {
   appliquerCouleurClub();
   if (typeof purgeAuto === 'function') purgeAuto();
   let { r, args } = currentRoute();
-  if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
   if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;
   if (!PAGES[r] || PAGES[r].auth === false) r = 'home';
   if (PAGES[r].manager && !isManager()) { r = 'home'; history.replaceState(null, '', location.pathname + location.search + '#/home'); }
@@ -342,6 +335,11 @@ document.addEventListener('input', e => {
 // onglets / segments generiques : data-ui="cle" data-val="valeur"
 ACTIONS.ui = el => { UI[el.dataset.key] = el.dataset.val; render(); };
 ACTIONS.burger = () => $('#shell').classList.toggle('nav-open');
+// Paire de polices : Geist (par défaut) ou IBM Plex (FITPULSE_CONFIG.fontPair = 'plex').
+const FONT_PAIR = CFG.fontPair === 'plex' ? 'plex' : 'geist';
+if (FONT_PAIR === 'plex') document.documentElement.dataset.font = 'plex';
+// Avant tout dessin sur canvas : attendre la police (sinon le navigateur dessine avec une police système).
+const policesPretes = () => (document.fonts ? Promise.all([document.fonts.load('500 14px Geist'), document.fonts.load('500 14px "Geist Mono"')]).then(() => document.fonts.ready).catch(() => null) : Promise.resolve());
 // Thème clair par défaut ; sombre si l'appareil le demande ou si l'utilisateur l'a choisi.
 const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S) themeFor(CLUB); }); } catch (e) { /* ancien navigateur */ }

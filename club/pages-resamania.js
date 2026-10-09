@@ -177,7 +177,7 @@ function rsmReview() {
   };
   const opt = (k, cur) => `<option value="">Choisir…</option>${members.map(u => `<option value="${u.id}" ${cur === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}<option value="system" ${cur === 'system' ? 'selected' : ''}>Vente en ligne / système (personne)</option><option value="ignore" ${cur === 'ignore' ? 'selected' : ''}>Ignorer</option>`;
   const usable = B.filter(r => r.def && !r.def.silent).length;
-  return `<div class="row wrap" style="margin-bottom:12px"><h2 class="spacer">${plur(B.length, 'fichier analysé', 'fichiers analysés')}</h2><button class="btn" data-act="rsmCancel">Annuler</button><button class="btn primary" data-act="rsmCommit" ${usable ? '' : 'disabled'}>Importer ${plur(usable, 'fichier', 'fichiers')} dans ${esc(CLUB.name)}</button></div>
+  return `<div class="row wrap" style="margin-bottom:12px"><h2 class="spacer">${plur(B.length, 'fichier analysé', 'fichiers analysés')}</h2><button class="btn" data-act="rsmCancel">Annuler</button><button class="btn primary" data-act="rsmCommit" ${usable ? '' : 'disabled'}>Importer ${plur(usable, 'fichier', 'fichiers')} dans ${esc(nomAffiche())}</button></div>
     ${unk.length ? `<div class="card" style="margin-bottom:14px;border-color:var(--fp)"><h3>Qui est qui ? ${plur(unk.length, 'nom', 'noms')} Resamania à rattacher</h3><p class="muted small">Resamania écrit un vendeur sous plusieurs formes (NOM Prénom, e-mail, code). Votre choix est retenu pour les prochains imports. Sans choix, la ligne n’est attribuée à personne.</p>
       <div class="table-wrap"><table class="t"><tbody>${unk.map(u => `<tr><td><b>${esc(u.label)}</b><div class="muted small">${plur(u.count, 'ligne', 'lignes')}</div></td><td style="width:280px"><select class="input sm" data-change="rsmChoice" data-k="${esc(u.key)}">${opt(u.key, UI.rsmChoices[u.key])}</select></td></tr>`).join('')}</tbody></table></div></div>` : ''}
     <div class="grid">${B.map(card).join('')}</div>`;
@@ -389,7 +389,7 @@ function rsmPending() {
 ACTIONS.pmPick = el => {
   const k = el.dataset.k; const x = deepGet(S, ['rsm', 'pendingMatches', CLUB.id, k]); const c = S.clients[el.value]; if (!x || !c) return;
   db.batch([[['clients', c.id, 'end'], x.end], ...(x.offer ? [[['clients', c.id, 'offer'], c.offer || x.offer]] : []), [['rsm', 'nameLinks', CLUB.id, safeKey(tokensKey(x.name))], c.id], [['rsm', 'pendingMatches', CLUB.id, k], null]]);
-  toast('Rattaché, et retenu pour les prochains imports');
+  toast('1 nom rattaché, retenu pour les prochains imports');
 };
 ACTIONS.pmIgnore = el => db.set(['rsm', 'pendingMatches', CLUB.id, el.dataset.k], null);
 
@@ -416,7 +416,7 @@ const impayesAnalyse = {
     const mt = months.map(m => { const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; return { m, o: recoveredParts(CLUB.id, rg), t: recoveredFor(CLUB.id, rg) }; });
     const max = Math.max(1, ...mt.map(x => x.t));
     const empty = !Object.keys(S.recov || {}).some(id => S.recov[id].clubId === CLUB.id);
-    return `<div class="row wrap" style="margin-bottom:14px"><p class="muted spacer" style="margin:0">Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). ${esc(CLUB.name)}</p>${monthNav('impMonth', mk)}</div>
+    return `<div class="row wrap" style="margin-bottom:14px"><p class="muted spacer" style="margin:0">Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). ${esc(nomAffiche())}</p>${monthNav('impMonth', mk)}</div>
       ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucune régularisation importée</b>Dans Resamania : Données financières > Incidents > FILTRER (Statut = Régularisé, Date de régularisation = le mois, Club) > ⋮ > Exporter. Déposez le fichier dans Imports > Resamania.</div></div>` : ''}
       <div class="grid" style="grid-template-columns:1.2fr 1fr;margin-bottom:14px">
         <div class="card hero" style="grid-template-columns:1fr"><div><div class="muted small">Récupéré en ${monthLabel(mk)}, tous canaux</div><div class="big">${fmtE(total)}</div>
@@ -455,7 +455,7 @@ function memAliases() {
 ACTIONS.aliasAdd = () => {
   const f = formData($('#alf')); const v = f.v.trim(); if (!v) return;
   const key = v.includes('@') ? 'e:' + v.toLowerCase() : /^[A-Za-z]{3,5}$/.test(v) && v === v.toUpperCase() ? 'c:' + v : 'n:' + tokensKey(v);
-  db.set(['rsm', 'aliases', safeKey(key)], f.u); toast('Correspondance ajoutée.');
+  db.set(['rsm', 'aliases', safeKey(key)], f.u); toast('1 correspondance ajoutée');
 };
 ACTIONS.aliasDel = el => db.set(['rsm', 'aliases', el.dataset.k], null);
 

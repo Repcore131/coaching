@@ -99,6 +99,7 @@ export const REGLE = `${DEBUT}
       "resiliations": { ".write": ${j(MEMBRE)} },
       "recov": { ".write": ${j(MEMBRE)} },
       "reactions": { ".write": ${j(MEMBRE)} },
+      "celebrated": { ".write": ${j(MEMBRE)} },
       "relances": { ".write": ${j(MEMBRE)} },
       "resRequests": { ".write": ${j(MEMBRE)} },
       "touches": { ".write": ${j(MEMBRE)} },
@@ -269,7 +270,7 @@ export function emailInvitation(d) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;"><tr><td align="center" style="padding:28px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#111111;border-radius:20px;overflow:hidden;font-family:Montserrat,'Segoe UI',Helvetica,Arial,sans-serif;color:#f5f5f3;">
   <tr><td style="background:#000000;padding:30px 28px 22px;border-bottom:4px solid ${Y};" align="center">
-    <img src="${SITE}/assets/fitpulse-logo.png" width="200" alt="FIT PULSE" style="display:block;width:200px;max-width:70%;height:auto;border:0;color:#ffffff;font-size:28px;font-weight:900;font-style:italic;">
+    <img src="${SITE}/assets/brand/logo-full.png" width="200" alt="Fit Pulse" style="display:block;width:200px;max-width:70%;height:auto;border:0;color:#ffffff;font-size:28px;font-weight:900;font-style:italic;">
     <div style="margin-top:10px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#9b9b9b;">${echap(d.club)}</div>
   </td></tr>
   <tr><td style="padding:30px 28px 6px;">

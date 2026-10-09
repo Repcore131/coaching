@@ -78,7 +78,7 @@ export const REGLE_ORGS = `"orgs": {
           "tasks": { "library": { ".write": ${j(mgr(O))} }, "plan": { ".write": ${j(mgr(O))} }, "done": { ".write": ${j(LIBRE)} } },
           "chat": { "$id": { ".write": ${j(`${acces(O)} && (${mgr(O)} || !data.exists() || data.child('userId').val() === ${UID} || newData.exists())`)} } },
           "clients": { ".write": ${j(LIBRE)} }, "loyalty": { ".write": ${j(LIBRE)} }, "resiliations": { ".write": ${j(LIBRE)} },
-          "recov": { ".write": ${j(LIBRE)} }, "reactions": { ".write": ${j(LIBRE)} }, "relances": { ".write": ${j(LIBRE)} },
+          "recov": { ".write": ${j(LIBRE)} }, "reactions": { ".write": ${j(LIBRE)} }, "celebrated": { ".write": ${j(LIBRE)} }, "relances": { ".write": ${j(LIBRE)} },
           "touches": { ".write": ${j(LIBRE)} }, "guests": { ".write": ${j(LIBRE)} }, "companies": { ".write": ${j(LIBRE)} },
           "prospects": { ".write": ${j(LIBRE)} }, "opps": { ".write": ${j(LIBRE)} }, "resRequests": { ".write": ${j(LIBRE)} },
           "audit": { "$id": { ".write": ${j(`${acces(O)} && !data.exists() && newData.exists()`)} } },

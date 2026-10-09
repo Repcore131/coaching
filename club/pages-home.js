@@ -33,34 +33,31 @@ function palierBlock(clubId, mk, kpiId, big) {
   const left = s.next ? Number(s.next.target) - s.real : 0;
   const daysLeft = Math.max(1, daysIn(mk) - Number(today().slice(8)) + 1);
   return `<div class="palier ${big ? 'big' : ''}">
-    <div class="row"><span class="palier-k">${kpiIcon(k)} ${esc(k.label)}</span><span class="spacer"></span><b class="palier-n">${fmtN(s.real)}</b></div>
+    <div class="row"><span class="palier-k">${kpiIcon(k)} ${esc(k.label)}</span><span class="spacer"></span><b class="palier-n num">${esc(fmtU(s.real, k))}</b></div>
     <div class="palier-track"><i style="width:${clamp(s.real / scale * 100, 0, 100)}%"></i>${s.tiers.map((t, i) => `<span class="palier-mark ${s.real >= t.target ? 'got' : ''}" style="left:${t.target / scale * 100}%"><em>P${i + 1}</em></span>`).join('')}<span class="palier-pace" style="left:${clamp(s.expected * s.max / scale * 100, 0, 100)}%" title="Rythme attendu pour le dernier palier"></span></div>
-    <div class="palier-tiers">${s.tiers.map((t, i) => `<span class="${s.real >= t.target ? 'got' : ''}">${palierBadge(i + 1, 28, s.real >= t.target)} ${fmtN(t.target)}</span>`).join('')}</div>
-    <div class="palier-msg">${s.next ? `Encore <b>${fmtN(Math.ceil(left))}</b> pour le <b>Palier ${s.reached + 1}</b>${s.next.reward ? ` · ${esc(s.next.reward)}` : ''} <span class="muted">· ${(left / daysLeft).toFixed(1).replace('.', ',')} par jour</span>` : `${palierBadge(3, 28)} <b>Tous les paliers sont atteints</b>`}</div>${big || typeof manqueActions !== 'function' ? '' : manqueActions(clubId, mk, kpiId)}</div>`;
+    <div class="palier-tiers">${s.tiers.map((t, i) => `<span class="${s.real >= t.target ? 'got' : ''}">${palierBadge(i + 1, 24, s.real >= t.target)} P${i + 1} : ${esc(fmtU(t.target, k))}</span>`).join('')}</div>
+    <div class="palier-msg">${s.next ? `Encore <b>${esc(fmtU(Math.ceil(left), k))}</b> pour le palier ${s.reached + 1}${s.next.reward ? ` · ${esc(s.next.reward)}` : ''} <span class="muted">· ${k.unit === 'eur' ? fmtE(Math.ceil(left / daysLeft)) : (left / daysLeft).toFixed(1).replace('.', ',') + ' ' + uniteKpi(k, 2)} par jour</span>` : `${palierBadge(s.tiers.length, 24)} <b>${plur(s.tiers.length, 'palier atteint', 'paliers atteints')}</b>`}</div>${big || typeof manqueActions !== 'function' ? '' : manqueActions(clubId, mk, kpiId)}</div>`;
 }
 
-// Célébration plein écran (palier franchi, client sauvé, impayé récupéré)
-// Trois niveaux : 'win' (client sauve, impaye recupere) = bandeau 3 s sans
-// plein ecran ; 'team' (palier franchi) et 'level' (nouveau niveau) = plein
-// ecran noir, insigne, bandes jaunes. Sans animation si l'utilisateur le demande.
-function celebrate(title, sub, { kind = 'team', art = '' } = {}) {
-  if (kind === 'win') {
-    const t = document.createElement('div'); t.className = 'win-toast'; t.setAttribute('role', 'status');
-    t.innerHTML = `<span class="win-ico">${ico('check')}</span><div><b>${esc(title)}</b><span>${esc(sub || '')}</span></div>`;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 3000); return;
-  }
-  const el = document.createElement('div'); el.className = 'celebrate zone-black' + (reducedMotion() ? ' still' : '');
-  el.innerHTML = `<div class="cel-band b1"></div><div class="cel-band b2"></div><div class="celebrate-in">${art ? `<div class="cel-art">${art}</div>` : ''}<div class="celebrate-t">${esc(title)}</div><div class="celebrate-s">${esc(sub || '')}</div>${kind === 'team' ? '<button class="btn sm cel-share" data-act="celShare">Partager au fil</button>' : ''}</div>`;
+// Célébration : réservée au palier d'équipe atteint, une fois par palier et par mois
+// (S.celebrated[club][mois][kpi] garde le dernier palier fêté). Tout autre résultat
+// (client sauvé, impayé récupéré, action faite) devient un toast chiffré.
+function celebrate(title, sub, { kind = 'team', art = '', cle = null } = {}) {
+  if (kind !== 'team' || !cle) { toast(sub ? `${title} : ${sub}` : title); return; }
+  const [club, mk, kpi, n] = cle; const deja = Number(deepGet(S, ['celebrated', club, mk, kpi])) || 0;
+  if (deja >= n) return;
+  db.set(['celebrated', club, mk, kpi], n);
+  const el = document.createElement('div'); el.className = 'celebrate'; el.setAttribute('role', 'status');
+  el.innerHTML = `<div class="celebrate-in card">${art ? `<div class="cel-art">${art}</div>` : ''}<div class="celebrate-t">${esc(title)}</div><div class="celebrate-s">${esc(sub || '')}</div><div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn sm cel-share" data-act="celShare">Partager au fil</button><button class="btn sm primary">Fermer</button></div></div>`;
   el.dataset.title = title; el.dataset.sub = sub || '';
-  document.body.appendChild(el); el.addEventListener('click', e => { if (!e.target.closest('.cel-share')) el.remove(); }); setTimeout(() => el.remove(), reducedMotion() ? 2500 : 3500);
-
+  document.body.appendChild(el); el.addEventListener('click', e => { if (!e.target.closest('.cel-share')) el.remove(); }); setTimeout(() => el.remove(), 6000);
 }
 // palier franchi par cette saisie ? (comparaison avant / après)
-ACTIONS.celShare = el => { const c = el.closest('.celebrate'); sendChat({ text: `${c.dataset.title} : ${c.dataset.sub}` }); c.remove(); toast('Partagé dans le chat de l’équipe'); };
+ACTIONS.celShare = el => { const c = el.closest('.celebrate'); sendChat({ text: `${c.dataset.title} : ${c.dataset.sub}` }); c.remove(); toast('1 message partagé dans le chat de l’équipe'); };
 function palierSnapshot() { const mk = curMonth(); return Object.keys(paliersFor(CLUB.id, mk)).map(k => { const s = palierState(CLUB.id, mk, k); return s ? s.reached : 0; }); }
 function checkPalierCrossed(before) {
   const mk = curMonth(); const keys = Object.keys(paliersFor(CLUB.id, mk));
-  keys.forEach((k, i) => { const s = palierState(CLUB.id, mk, k); if (s && s.reached > (before[i] || 0)) setTimeout(() => celebrate(`PALIER ${s.reached} ATTEINT`, `${S.kpis[k].label} : ${fmtN(s.real)} pour l’équipe${s.tiers.at(s.reached - 1).reward ? '. ' + s.tiers.at(s.reached - 1).reward : ''}`, { kind: 'team', art: palierBadge(Math.min(3, s.reached), 200) }), 300); });
+  keys.forEach((k, i) => { const s = palierState(CLUB.id, mk, k); if (s && s.reached > (before[i] || 0)) setTimeout(() => celebrate(`Palier ${s.reached} atteint`, `${S.kpis[k].label} : ${fmtU(s.real, S.kpis[k])} pour l’équipe${s.tiers.at(s.reached - 1).reward ? '. ' + s.tiers.at(s.reached - 1).reward : ''}`, { kind: 'team', art: palierBadge(s.reached, 96), cle: [CLUB.id, mk, k, s.reached] }), 300); });
 }
 
 // ── Saisie rapide : un geste = une saisie, annulable 5 s ──────────────────
@@ -76,18 +73,17 @@ function quickAdd(kpiId, value, userId = ME.id) {
   const k = S.kpis[kpiId];
   const row = (statsFor(CLUB.id, userId, r, { kpiIds: [kpiId] }).rows[0]) || null;
   const rk = ranking(CLUB.id, r).find(x => x.u.id === userId);
-  const parts = [`+${fmtV(value, k.unit)} ${k.label.toLowerCase()}`];
+  const parts = [`${k.label} : +${fmtU(value, k)}`];
   let tierHit = null;
   if (row && row.target > 0) {
-    parts.push(`${fmtV(row.real, k.unit)} sur ${fmtV(row.target, k.unit)}`);
+    parts.push(`${fmtU(row.real, k)} sur ${fmtU(row.target, k)}`);
     const next = TIERS.find(t => row.pct < t - 1e-9);
-    if (next) { const need = next * row.target - row.real; parts.push(`plus que ${fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit)} pour l’étape ${next * 100} %`); }
+    if (next) { const need = next * row.target - row.real; parts.push(`encore ${fmtU(k.unit === 'qty' ? Math.ceil(need) : Math.round(need), k)} pour ${next * 100} % de l’objectif`); }
     tierHit = TIERS.filter(t => row0 && row0.pct < t - 1e-9 && row.pct >= t - 1e-9).pop() || null;
   }
   if (rk0 && rk && rk.rank < rk0.rank) parts.push(`vous passez ${rk.rank}${rk.rank === 1 ? 'er' : 'e'}`);
   let pending = null;
-  if (tierHit === 1) pending = setTimeout(() => celebrate('OBJECTIF ATTEINT', `${k.label} : ${fmtV(row.real, k.unit)}`, { kind: 'team', art: trophyArt({ icon: 'trophy', kind: 'month', label: k.label }, 200) }), 400);
-  else if (tierHit) pending = setTimeout(() => stepBanner(`Étape ${tierHit * 100} % · ${k.label}`), 300);
+  if (tierHit) pending = setTimeout(() => stepBanner(`${k.label} : ${tierHit * 100} % de l’objectif, ${fmtU(row.real, k)}`), 300);
   if (navigator.vibrate && pref('vibrate', true)) navigator.vibrate(tierHit ? [30, 40, 30, 40, 30] : 15);
   toastUndo(parts.join('. '), () => { clearTimeout(pending); db.set(['entries', id], null); });
   checkPalierCrossed(before);
@@ -96,7 +92,7 @@ function stepBanner(t) { const el = document.createElement('div'); el.className 
 function toastUndo(msg, undo) {
   const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span><button>Annuler</button>`;
   el.style.pointerEvents = 'auto';
-  $('button', el).addEventListener('click', () => { undo(); el.remove(); toast('Saisie annulée'); });
+  $('button', el).addEventListener('click', () => { undo(); el.remove(); toast('1 saisie annulée'); });
   $('#toasts').appendChild(el); setTimeout(() => el.remove(), 5000);
 }
 // Prospects en dernier (0 point) ; les impayes recuperes passent par les relances.
@@ -156,8 +152,9 @@ ACTIONS.relNobody = () => { UI.relScope = 'nobody'; UI.relSeg = 'file'; location
 // ── Accueil ───────────────────────────────────────────────────────────────
 const ASSET = k => (CFG.assets || {})[k] || null;
 function clubWeather(mk) {
-  // météo du club = la pire projection des paliers collectifs
+  // Projection des paliers : la pire projection des paliers collectifs, à partir du 5 du mois.
   const keys = Object.keys(paliersFor(CLUB.id, mk)); if (!keys.length) return HEALTH.none;
+  if (mk === curMonth() && Number(today().slice(8)) < PROJ_JOUR_MIN) return null;
   let worst = HEALTH.good;
   keys.forEach(k => { const s = palierState(CLUB.id, mk, k); if (!s) return; const dayNow = Number(today().slice(8)); const proj = s.real / Math.max(1, dayNow) * daysIn(mk); const t = s.tiers.filter(x => proj >= x.target).length; const h = t === s.tiers.length ? HEALTH.good : t ? HEALTH.watch : HEALTH.alert; if (h === HEALTH.alert || (h === HEALTH.watch && worst === HEALTH.good)) worst = h; });
   return worst;
@@ -184,17 +181,16 @@ PAGES.home = {
     const stR = statsFor(CLUB.id, ME.id, r, { requiredOnly: true });
     const myPct = stR.score;
     const myHealth = healthOf(stR.progress != null && stR.expected ? stR.progress / stR.expected : null);
-    const banner = ASSET('banner');
-    const bigKpis = palierKeys.slice(0, 2).map(k => { const s = palierState(CLUB.id, mk, k); if (!s) return ''; return `<div class="bk"><span>${esc(S.kpis[k].label)} · équipe</span><b>${fmtN(s.real)}</b><small>${s.next ? `P${s.reached + 1} à ${fmtN(s.next.target)} · encore ${fmtN(Math.ceil(s.next.target - s.real))}` : 'tous les paliers atteints'}</small></div>`; }).join('');
+    const bigKpis = palierKeys.slice(0, 2).map(k => { const s = palierState(CLUB.id, mk, k); if (!s) return ''; const kk = S.kpis[k]; return `<div class="bk"><span>${esc(kk.label)} · équipe</span><b>${esc(fmtU(s.real, kk))}</b><small>${s.next ? `P${s.reached + 1} : ${esc(fmtU(s.next.target, kk))}, encore ${esc(fmtU(Math.ceil(s.next.target - s.real), kk))}` : plur(s.tiers.length, 'palier atteint', 'paliers atteints')}</small></div>`; }).join('');
     const top5 = rk.filter(x => x.score != null).slice(0, 5);
     const manager = isManager();
     const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; const parts = recoveredParts(CLUB.id, rg); if (parts.equipe_na) { parts.equipe += parts.equipe_na; delete parts.equipe_na; } out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: recoveredFor(CLUB.id, rg) }); } return out; })() : [];
     return `<div class="home2">${manager ? miseEnRouteCard() : ''}
-      <section class="banner" ${banner ? `style="--banner:url('${banner}')"` : ''}><div class="banner-stripe"></div>
-        <div class="banner-in"><div class="eyebrow light">${esc(CLUB.name)} · ${monthLabel(mk)}</div>
+      <section class="banner">
+        <div class="banner-in"><div class="eyebrow light">${esc(nomAffiche())} · ${monthLabel(mk)}</div>
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
-          <div class="row wrap banner-meta"><span class="jtag" title="${esc(compteRebours().titre)}">${esc(compteRebours().texte)}</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
-          <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${plur(acc.streak, 'jour', 'jours')} de suite</small></a>` : ''}</div></div></section>
+          <div class="row wrap banner-meta"><span class="jtag" title="${esc(compteRebours().titre)}">${esc(compteRebours().texte)}</span>${weather ? `${healthChip(weather)}<span class="muted-l">Projection des paliers</span>` : `<span class="muted-l">Projection disponible le ${PROJ_JOUR_MIN}</span>`}</div>
+          <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>${me.rank}<sup>${me.rank === 1 ? 'er' : 'e'}</sup> sur ${rk.length}</b><small>Série : ${plur(acc.streak, 'jour', 'jours')}</small></a>` : ''}</div></div></section>
       ${typeof planHomeCard === 'function' ? planHomeCard() : ''}
       ${weekDigestCard()}
       ${manager ? saisonBanner() : ''}
@@ -204,8 +200,8 @@ PAGES.home = {
       ${manager ? '' : primeCard()}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
-          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${rk.length}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">J-${compteRebours().jours}</b><span>${plur(compteRebours().ouvres, 'jour ouvré', 'jours ouvrés')}</span></div>${healthChip(myHealth)}</div>
-          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
+          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres}</b><span>${compteRebours().ouvres > 1 ? 'jours ouvrés restants' : 'jour ouvré restant'}</span></div>${healthChip(myHealth)}</div>
+          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
           ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">Classé en euros attendus</div><h3>Vos 5 actions les plus rentables aujourd’hui</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/opportunites">Tout voir</a></div>${oppHomeList(5)}</div>
       </div>
@@ -215,13 +211,13 @@ PAGES.home = {
       ${manager ? briefDuJourCard() : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
-        <div class="card col8"><details class="race-det" ${innerWidth > 860 ? 'open' : ''}><summary>Voir la course au palier</summary>${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</details></div>
+        <div class="card col8"><details class="race-det" ${innerWidth > 860 ? 'open' : ''}><summary>Voir la projection des paliers</summary>${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</details></div>
         <div class="card col4 paliers"><div class="race-h"><div><div class="eyebrow light">Prime d’équipe</div><h3>Paliers du mois</h3></div><span class="spacer"></span>${manager ? '<a class="btn ghost sm light" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>${palierKeys.map(k => palierBlock(CLUB.id, mk, k, false)).join('') || '<p class="muted">Aucun palier collectif.</p>'}</div>
-        <div class="card col5"><div class="race-h"><div><div class="eyebrow">Un toucher = enregistré</div><h3>Saisir</h3></div></div>${quickPad()}</div>
+        <div class="card col5"><div class="race-h"><div><div class="eyebrow">Saisie rapide</div><h3>Saisir</h3></div></div>${quickPad()}</div>
         <div class="card col3"><div class="race-h"><div><div class="eyebrow">Mes objectifs</div><h3>Ma progression</h3></div></div>
           <div class="center">${ring(myPct == null ? null : Math.min(myPct, 1), { label: fmtP(myPct), sub: 'score du mois', color: myHealth.color })}${healthChip(myHealth)}</div>
-          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus</p>'}</div>
-        <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Top 5</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
+          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus</p>'}</div>
+        <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Les 5 premiers</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
           ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span>${manager || x.u.id === ME.id ? `<i class="hdot ${h.cls}" title="${h.label}"></i>` : ''}<b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>
         ${manager ? `<div class="card col3"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, mk)}</div>
         <div class="card col3"><div class="race-h"><div><div class="eyebrow">Tous canaux</div><h3>Impayés récupérés</h3></div></div>${stackRows(recovRows, Object.entries(RECOV_CHANNELS).map(([key, c]) => ({ key, label: c.label, color: c.color })))}</div>` : ''}
@@ -311,7 +307,7 @@ function palRead(mk) {
   Object.keys(p).forEach(k => { p[k] = p[k].filter(t => Number(t.target) > 0).sort((a, b) => a.target - b.target); });
   return p;
 }
-ACTIONS.palSave = el => { db.set(['paliers', CLUB.id, el.dataset.mk], palRead(el.dataset.mk)); toast('Paliers enregistrés'); };
+ACTIONS.palSave = el => { db.set(['paliers', CLUB.id, el.dataset.mk], palRead(el.dataset.mk)); toast('1 grille de paliers enregistrée'); };
 ACTIONS.palAdd = () => { const k = $('#pal-add').value; if (!k) return; const mk = UI.palMonth || curMonth(); const p = palRead(mk); p[k] = [{ target: 10, reward: '' }]; db.set(['paliers', CLUB.id, mk], p); };
 ACTIONS.palDel = el => { const mk = UI.palMonth || curMonth(); const p = palRead(mk); delete p[el.dataset.k]; db.set(['paliers', CLUB.id, mk], p); };
 

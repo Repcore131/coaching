@@ -47,7 +47,7 @@ function purgePlan() {
 ACTIONS.purgeOld = async () => {
   const { ops, n } = purgePlan(); if (!ops.length) { toast('Rien à purger : toutes les données sont dans leurs durées de conservation.'); return; }
   if (!await confirmDlg(`Supprimer définitivement : ${Object.entries(n).map(([k, v]) => `${k} : ${v}`).join(', ')} ?`, { ok: 'Purger', danger: true })) return;
-  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'purge', detail: n }]); db.batch(ops); toast('Purge effectuée');
+  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'purge', detail: n }]); db.batch(ops); toast(`Purge effectuée : ${plur(n, 'élément retiré', 'éléments retirés')}`);
 };
 function purgeCard() {
   if (!isCreator()) return ''; const { n } = purgePlan(); const tot = Object.values(n).reduce((s, x) => s + x, 0);

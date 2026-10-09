@@ -149,7 +149,7 @@ function impNew() {
       ${plan.dups ? `<div class="alert" style="margin-bottom:12px">${plur(plan.dups, 'ligne', 'lignes')} existent déjà dans un import actif (même commercial, KPI, jour et montant) : elles ne seront pas comptées deux fois.</div>` : ''}
       <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th><th>KPI</th><th class="num">Total importé</th><th class="num">Lignes</th></tr></thead><tbody>${plan.summary.map(s => `<tr><td>${esc(fullName(S.users[s.userId]))}</td><td>${esc(S.kpis[s.kpiId].label)}</td><td class="num">${fmtV(s.value, S.kpis[s.kpiId].unit)}</td><td class="num">${s.n}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucune ligne exploitable.</td></tr>'}</tbody></table></div>`
       : `<div class="row wrap" style="gap:22px;margin-bottom:12px"><div><div class="muted small">${plan.type === 'resil' ? 'Résiliations' : 'Clients'} à créer</div><b class="title t-24">${plan.created}</b></div><div><div class="muted small">À mettre à jour</div><b class="title t-24">${plan.updated}</b></div><div><div class="muted small">Lignes ignorées</div><b>${plan.skipped}</b></div></div>`}
-    <div class="row" style="margin-top:16px"><button class="btn" data-act="wizBack">${ico('chevL')} Retour</button><button class="btn ghost" data-act="wizCancel">Annuler</button><span class="spacer"></span><button class="btn primary" data-act="wizCommit" ${plan.empty ? 'disabled' : ''}>Importer dans ${esc(CLUB.name)}</button></div></div>`;
+    <div class="row" style="margin-top:16px"><button class="btn" data-act="wizBack">${ico('chevL')} Retour</button><button class="btn ghost" data-act="wizCancel">Annuler</button><span class="spacer"></span><button class="btn primary" data-act="wizCommit" ${plan.empty ? 'disabled' : ''}>Importer dans ${esc(nomAffiche())}</button></div></div>`;
 }
 ACTIONS.wizCol = el => { UI.wiz.col[el.dataset.k] = el.value; if (el.dataset.k === 'user') UI.wiz.userMap = {}; render(); };
 ACTIONS.wizSet = el => { UI.wiz[el.dataset.k] = el.value; render(); };
@@ -234,7 +234,7 @@ ACTIONS.wizCommit = () => {
     meta.count = plan.items.length;
   }
   ops.push([['imports', impId], meta]);
-  db.batch(ops); UI.wiz = null; UI.impTab = 'history'; render(); toast('Import terminé');
+  db.batch(ops); UI.wiz = null; UI.impTab = 'history'; render(); toast('1 import terminé');
 };
 
 function impHistory() {
@@ -258,7 +258,7 @@ ACTIONS.impCancel = async el => {
   const ops = [[['imports', i.id, 'active'], false]];
   const carries = r => (r.importIds ? !!r.importIds[i.id] : r.importId === i.id);
   if (i.type === 'resil') Object.values(S.resiliations).filter(r => carries(r) && !Object.keys(r.importIds || {}).some(k => k !== i.id && impActive(k))).forEach(r => ops.push([['resiliations', r.id, 'hidden'], true]));
-  db.batch(ops); toast('Import annulé.');
+  db.batch(ops); toast('1 import annulé');
 };
 ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops = [[['imports', i.id, 'active'], true]];
   // Les lignes deja comptees par un autre import actif (meme cle metier) ne sont
@@ -270,7 +270,7 @@ ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops
   if (dup.length) {
     if (!await confirmDlg(`${plur(dup.length, 'ligne', 'lignes')} de cet import sont déjà comptées par un autre import actif. Rétablir uniquement les ${plur(mine.length - dup.length, 'ligne', 'lignes')} nouvelles ?`, { ok: 'Rétablir sans doublon' })) return;
     dup.forEach(e => ops.push([['entries', e.id, 'suppressed'], true]));
-  } Object.values(S.resiliations).filter(r => (r.importIds ? !!r.importIds[i.id] : r.importId === i.id)).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
+  } Object.values(S.resiliations).filter(r => (r.importIds ? !!r.importIds[i.id] : r.importId === i.id)).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('1 import rétabli'); };
 ACTIONS.impDetail = el => {
   const i = S.imports[el.dataset.id];
   const rows = Object.values(S.entries).filter(e => e.importId === i.id).sort((a, b) => a.date.localeCompare(b.date));
@@ -289,17 +289,17 @@ function impManual() {
   const data = S.monthly[CLUB.id] || {};
   const warn = [];
   for (let m = 1; m <= 12; m++) { const v = data[`${y}-${pad(m)}`]; if (v && Number(v.impayes) > 3 * (Number(v.caPack) || 0) && Number(v.caPack) > 0) warn.push(MOIS[m - 1]); }
-  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="badge ok">${TXT.imports.auto}</span><span class="spacer"></span><span class="muted small">${esc(CLUB.name)}</span></div>
+  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="manYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="badge ok">${TXT.imports.auto}</span><span class="spacer"></span><span class="muted small">${esc(nomAffiche())}</span></div>
     ${warn.length ? `<div class="alert" style="margin-bottom:12px"><div><b>À vérifier : ${warn.join(', ')}</b>Les impayés y dépassent largement le CA Pack : deux colonnes ont peut-être été inversées.</div></div>` : ''}
     <div class="table-wrap"><table class="t"><thead><tr><th>Mois ${y}</th>${MANUAL_FIELDS.map(f => `<th class="num">${f[1]}</th>`).join('')}</tr></thead><tbody>
     ${MOIS.map((ml, i) => { const mk = `${y}-${pad(i + 1)}`; const dis = mk >= cm; return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${MANUAL_FIELDS.map(([k, , u]) => `<td class="num"><input class="cell" type="number" step="${u === 'eur' ? '0.01' : '1'}" min="0" value="${deepGet(data, [mk, k]) ?? ''}" data-change="manCell" data-mk="${mk}" data-k="${k}" ${dis ? 'disabled title="Seuls les mois terminés sont modifiables"' : ''}></td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
     <p class="muted small">Seuls les mois terminés sont modifiables. Une valeur remplace les saisies du mois dans la comparaison annuelle du tableau de bord ; vider une cellule revient aux saisies. Ces chiffres n’entrent ni dans les scores ni dans le classement.</p>`;
 }
-ACTIONS.manCell = el => { const v = el.value === '' ? null : toNum(el.value); db.set(['monthly', CLUB.id, el.dataset.mk, el.dataset.k], v); toast('Enregistré'); };
+ACTIONS.manCell = el => { const v = el.value === '' ? null : toNum(el.value); db.set(['monthly', CLUB.id, el.dataset.mk, el.dataset.k], v); toast('1 valeur enregistrée'); };
 // Copie le prompt « tout récupérer » pour Claude dans Chrome (à côté de Resamania).
 ACTIONS.rsmCopyPrompt = async () => {
   const t = rsmImportPrompt();
-  try { await navigator.clipboard.writeText(t); toast('Prompt copié : collez-le dans Claude, à côté de votre page Resamania.'); }
+  try { await navigator.clipboard.writeText(t); toast('1 prompt copié : collez-le dans Claude, à côté de votre page Resamania.'); }
   catch (e) { openModal({ title: 'Prompt à copier', body: `<p class="muted small">Sélectionnez tout et copiez, puis collez dans Claude à côté de Resamania.</p><textarea class="input" rows="16" style="width:100%" onclick="this.select()">${esc(t)}</textarea>`, foot: '<button class="btn primary" data-close>Fermer</button>' }); }
 };
 
@@ -319,7 +319,7 @@ PAGES.loyalty = {
     }
     const body = tab === 'fins' ? loyFins() : tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
     const prot = loyProtected(CLUB.id, curMonth());
-    return `<div class="page-head"><div><h1>${TXT.pages.loyalty}</h1><p>${esc(CLUB.name)} · ${TXT.garder.sous} · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+    return `<div class="page-head"><div><h1>${TXT.pages.loyalty}</h1><p>${esc(nomAffiche())} · ${TXT.garder.sous} · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn primary" data-act="loySession">${ico('phone')} Démarrer mes appels</button><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
       <div class="stat-row loy-head"><div class="stat"><span>Valeur protégée ce mois</span><b class="ok">${fmtE(prot.total)}</b><small>${plur(prot.n, 'tâche réussie', 'tâches réussies')} (Joint OK ou RDV)</small></div><div class="stat"><span>Euros en jeu à traiter</span><b>${fmtE(todo.filter(x => !x.nextDate).reduce((s2, x) => s2 + x.valeurEnJeu, 0))}</b><small>${plur(todo.filter(x => !x.nextDate).length, 'tâche', 'tâches')} à faire maintenant</small></div></div>
       ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
       ${tabs('loyTab', [['fins', 'Fins d’engagement'], ['tasks', `Autres tâches (${todo.length})`], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
@@ -339,7 +339,7 @@ function loyTasks(todo) {
     ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}${t.step ? ' J+' + t.step : ''}</span> <span class="badge ok" title="Valeur en jeu">${fmtE(t.valeurEnJeu)} en jeu</span>${t.nextDate ? ` <span class="badge info">prochaine action le ${dm(t.nextDate)}</span>` : ''}${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
       <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${plur(t.client.incidents, 'incident', 'incidents')}` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-s="${t.step || ''}" data-v="${t.valeurEnJeu}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`}`;
 }
 ACTIONS.loyQ = el => { UI.loyQ = el.value; render(); };
 ACTIONS.loySort = el => { UI.loySort = el.value; render(); };
@@ -378,7 +378,7 @@ function loyFins() {
     ${rows.length ? `<div class="grid">${rows.map(({ c, s }) => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico('clock')}</span><div class="spacer"><b>${esc(c.name)}</b> <span class="badge ${s.cls}">${s.label}</span>
       <div class="muted small">${ico('phone')} ${esc(c.phone || 'pas de téléphone')} · fin d’engagement le <b>${dmy(c.end)}</b>${c.offer ? ' · ' + esc(c.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => k !== 'paid').map(([k, o]) => `<button class="btn sm ${s.k === 'todo' ? '' : 'ghost'}" data-act="loyAct" data-c="${c.id}" data-t="renouvellement" data-v="${valueAtStake({ type: 'renouvellement', client: c })}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune fin d’engagement ce mois-ci', text: 'Déposez l’export Abonnements (fins d’engagement) dans Imports, ou changez de mois.' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'cal', title: 'Aucune fin d’engagement ce mois-ci', text: 'Déposez l’export Abonnements (fins d’engagement) dans Imports, ou changez de mois.', cta: '<a class="btn sm" href="#/imports">Ouvrir les imports</a>' })}</div>`}`;
 }
 function loyPerf() {
   const mk = UI.loyMonth || curMonth();
@@ -389,13 +389,13 @@ function loyPerf() {
   const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n);
   return `<div class="row" style="margin-bottom:12px">${monthNav('loyMonth', mk)}</div>
     ${rows.length ? `<div class="card">${rows.map(([uid, x], i) => `<div class="rank-row"><div class="rank-n">${i + 1}</div><div class="row">${avatar(S.users[uid])}<b>${esc(fullName(S.users[uid]))}</b></div><div>${progressBar(x.n ? x.ok / x.n : 0, { ticks: false })}<span class="muted small">${fmtP(x.n ? x.ok / x.n : 0)} de succès</span></div><b class="num">${plur(x.n, 'action', 'actions')}</b></div>`).join('')}</div>`
-      : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucune action ce mois-ci', text: 'Le classement démarre au premier appel.' })}</div>`}`;
+      : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucune action ce mois-ci', text: 'Le classement démarre au premier appel.', cta: '<a class="btn sm" href="#/relances">Ouvrir les relances</a>' })}</div>`}`;
 }
 function loyLost(list) {
   return list.length ? `<div class="grid">${list.map(t => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(LOYALTY_TYPES[t.type].icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge bad">${LOYALTY_TYPES[t.type].label}</span><div class="muted small">${plur(t.acts.length, 'tentative', 'tentatives')} · dernière : ${t.acts[0] ? esc(OUTCOMES[t.acts[0].outcome].label) + ' par ' + esc(fullName(S.users[t.acts[0].userId])) + ', ' + ago(t.acts[0].at) : 'n.d.'}${t.acts[0] && t.acts[0].note ? ' · « ' + esc(t.acts[0].note) + ' »' : ''}</div></div><button class="btn sm" data-act="loyRetry" data-c="${t.client.id}" data-t="${t.type}">Relancer</button></div>`).join('')}</div>`
-    : `<div class="card">${emptyBox({ art: 'done', title: 'Aucun client perdu', text: 'Les relances épuisées ou abandonnées apparaîtront ici.' })}</div>`;
+    : `<div class="card">${emptyBox({ art: 'done', title: 'Aucun client perdu', text: 'Les relances épuisées ou abandonnées apparaîtront ici.', cta: '<a class="btn sm" href="#/loyalty">Voir les adhérents à garder</a>' })}</div>`;
 }
-ACTIONS.loyRetry = el => { const id = newId(); db.set(['loyalty', id], { id, clientId: el.dataset.c, type: el.dataset.t, outcome: 'reopen', userId: ME.id, at: Date.now() }); toast('Remis dans les tâches'); };
+ACTIONS.loyRetry = el => { const id = newId(); db.set(['loyalty', id], { id, clientId: el.dataset.c, type: el.dataset.t, outcome: 'reopen', userId: ME.id, at: Date.now() }); toast('1 tâche remise dans la liste'); };
 ACTIONS.loyHistory = () => {
   const clientIds = new Set(Object.values(S.clients).filter(c => c.clubId === CLUB.id).map(c => c.id));
   const acts = Object.values(S.loyalty).filter(a => clientIds.has(a.clientId)).sort((a, b) => b.at - a.at).slice(0, 100);
@@ -403,7 +403,7 @@ ACTIONS.loyHistory = () => {
 };
 ACTIONS.addClient = () => openModal({ title: 'Ajouter un client', body: `<form id="cf" class="form-grid"><label class="field full"><span>Nom complet</span><input class="input" name="name" required></label><label class="field"><span>Téléphone</span><input class="input" name="phone"></label><label class="field"><span>E-mail</span><input class="input" name="email"></label><label class="field"><span>Date de naissance</span><input class="input" type="date" name="birth"></label><label class="field"><span>Début de contrat</span><input class="input" type="date" name="start"></label><label class="field"><span>Fin de contrat</span><input class="input" type="date" name="end"></label><label class="field"><span>Solde dû (€)</span><input class="input" type="number" step="0.01" name="balance"></label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveClient">Ajouter</button>' });
-ACTIONS.saveClient = () => { const f = formData($('#cf')); if (!f.name.trim()) return; const id = newId(); db.set(['clients', id], { id, clubId: CLUB.id, name: f.name.trim(), phone: f.phone, email: f.email, birth: f.birth ? String(f.birth).slice(-5) : null, start: f.start || null, end: f.end || null, balance: toNum(f.balance), balanceAt: today() }); closeModal(); toast('Client ajouté.'); };
+ACTIONS.saveClient = () => { const f = formData($('#cf')); if (!f.name.trim()) return; const id = newId(); db.set(['clients', id], { id, clubId: CLUB.id, name: f.name.trim(), phone: f.phone, email: f.email, birth: f.birth ? String(f.birth).slice(-5) : null, start: f.start || null, end: f.end || null, balance: toNum(f.balance), balanceAt: today() }); closeModal(); toast('1 client ajouté'); };
 
 // ── Club et réglages ──────────────────────────────────────────────────────
 PAGES.clubs = {
@@ -436,18 +436,18 @@ ACTIONS.clubSave = el => {
   if (!id) { id = norm(f.name).replace(/ /g, '-').slice(0, 30) || newId(); if (S.clubs[id]) id += '-' + newId().slice(-4); }
   const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), gerantEmail: (f.gerantEmail || '').trim() || null }]];
   if (!el.dataset.id) ops.push([['users', ME.id, 'clubs'], [...(ME.clubs || []), id]]);
-  db.batch(ops); closeModal(); toast('Club enregistré.');
+  db.batch(ops); closeModal(); toast('1 club enregistré');
 };
 function clubBase() {
   const y = Number(UI.baseYear || curMonth().slice(0, 4));
   const cm = curMonth(); const data = S.base[CLUB.id] || {};
-  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="muted small">${esc(CLUB.name)}</span></div>
+  return `<div class="row wrap" style="margin-bottom:12px"><div class="row" style="gap:4px"><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y - 1}">${ico('chevL')}</button><b style="min-width:60px;text-align:center">${y}</b><button class="btn icon sm" data-act="ui" data-key="baseYear" data-val="${y + 1}">${ico('chevR')}</button></div><span class="muted small">${esc(nomAffiche())}</span></div>
     <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>${TXT.base.explication} « Contrats à signer » = objectif de fin de mois moins la base de fin de mois : comparez-le à la somme des objectifs « Contrats signés » de l’équipe.</div></div>
     <div class="table-wrap"><table class="t"><thead><tr><th>Mois</th><th class="num">${TXT.base.actifs}</th><th class="num">Sortants</th><th class="num">${TXT.base.fin}</th><th class="num">Objectif fin de mois</th><th class="num">Contrats à signer</th><th class="num">Objectifs équipe</th></tr></thead><tbody>
     ${MOIS.map((ml, i) => { const mk = `${y}-${pad(i + 1)}`; const v = data[mk] || {}; const net = (Number(v.actifs) || 0) - (Number(v.sortants) || 0); const toSign = v.objectif ? Number(v.objectif) - net : null; const team = clubMonthTarget(mk, CLUB.id, 'contrats');
       return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${['actifs', 'sortants'].map(k => `<td class="num"><input class="cell" type="number" min="0" value="${v[k] ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="${k}"></td>`).join('')}<td class="num">${v.actifs ? fmtN(net) : 'n.d.'}</td><td class="num"><input class="cell" type="number" min="0" value="${v.objectif ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="objectif"></td><td class="num">${toSign != null ? `<b>${fmtN(toSign)}</b>` : 'n.d.'}</td><td class="num ${toSign != null && team && team < toSign ? 'bad' : ''}">${team ? fmtN(team) : 'n.d.'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
-ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k], el.value === '' ? null : toNum(el.value)); toast('Enregistré'); };
+ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k], el.value === '' ? null : toNum(el.value)); toast('1 valeur enregistrée'); };
 // Réglages communs (S.settings) : valeurs par défaut lisibles, modifiables par un manager.
 const DUN_SMS_DEFAUT = 'Bonjour {prénom}, votre club vous informe d’un solde de {montant} €. Vous pouvez le régler à l’accueil ou depuis votre espace adhérent. Merci.';
 const reglage = (k, def) => { const v = deepGet(S || {}, ['settings', k]); return v == null || v === '' ? def : v; };
@@ -467,13 +467,13 @@ function reperesCard() {
 ACTIONS.jourOuvre = el => {
   const d = Number(el.dataset.d); const cur = openDaysOf(CLUB.id); const next = el.checked ? [...new Set([...cur, d])] : cur.filter(x => x !== d);
   if (!next.length) { el.checked = true; toast('Gardez au moins un jour ouvré.'); return; }
-  db.set(['clubs', CLUB.id, 'openDays'], next.sort((a, b) => a - b)); toast('Jours ouvrés enregistrés');
+  db.set(['clubs', CLUB.id, 'openDays'], next.sort((a, b) => a - b)); toast(`Jours ouvrés enregistrés : ${next.length} par semaine`);
 };
 // Messages types : variables {prénom}, {montant}, {club}.
 const MSG_DEFAUTS = {
   dunSms: DUN_SMS_DEFAUT,
   messageSauvetage: 'Bonjour {prénom}, merci pour notre échange. Votre abonnement continue chez {club} : nous sommes ravis de vous garder. À très vite.',
-  messageEquipe: 'Bravo {prénom}, la plus belle contribution du jour chez {club}.',
+  messageEquipe: 'Meilleure contribution du jour chez {club} : {prénom}.',
 };
 const remplirMessage = (tpl, v) => String(tpl).replace(/\{pr[ée]nom\}/gi, v.prenom || '').replace(/\{montant\}/g, v.montant || '').replace(/\{club\}/g, v.club || (CLUB ? CLUB.name : ''));
 function messagesCard() {
@@ -483,7 +483,7 @@ function messagesCard() {
 }
 ACTIONS.settingSet = el => { if (!isManager()) return; const k = el.dataset.k; let v = String(el.value || '').trim();
   if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (!v) v = null; else v = v.slice(0, 600);
-  db.set(['settings', k], v); toast('Enregistré'); };
+  db.set(['settings', k], v); toast('1 valeur enregistrée'); };
 // Identité du client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen, mentions légales.
 const TENANT_LEGAL = [['auteur', 'Responsable de la publication'], ['societe', 'Société (raison sociale)'], ['sigle', 'Sigle'], ['forme', 'Forme juridique'], ['capital', 'Capital'], ['rcs', 'RCS'], ['siret', 'SIRET du club'], ['tva', 'TVA intracommunautaire'], ['adresse', 'Siège social'], ['president', 'Représentant légal'], ['etablissement', 'Adresse du club'], ['tel', 'Téléphone'], ['email', 'E-mail de contact'], ['site', 'Site'], ['tribunal', 'Ville du tribunal compétent'], ['marque', 'Marque de l’enseigne']];
 function monClubCard() {
@@ -499,7 +499,7 @@ ACTIONS.tenantSet = el => {
   if (!isManager()) return; const path = ['tenant', ...el.dataset.k.split('.')]; let v = String(el.value || '').trim();
   if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (/colors\./.test(el.dataset.k)) { if (!COULEUR_OK(v)) return; v = v.toUpperCase(); }
   else if (el.dataset.k === 'logo') { if (v && !/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(v)) { toast('Logo : un fichier du dossier assets/ (svg, png, jpg, webp).'); return; } v = v || null; } else v = v ? v.slice(0, 300) : null;
-  db.set(path, v); toast('Enregistré');
+  db.set(path, v); toast('1 valeur enregistrée');
 };
 // Logo : image redimensionnée à 256 px de côté au plus, data URL de 100 Ko au plus.
 const LOGO_MAX = 100 * 1024;
@@ -518,7 +518,7 @@ ACTIONS.logoEnvoi = async el => {
 };
 ACTIONS.logoRetirer = () => db.set(['tenant', 'logo'], null);
 ACTIONS.tenantPublier = async () => {
-  try { const L = deepGet(S, ['tenant', 'legal']) || {}; await backend.fb.database().ref(MULTI ? `orgs_public/${ORG}/legal` : 'pulse_public/legal').set(Object.fromEntries(Object.entries(L).filter(([, v]) => typeof v === 'string' && v))); toast('Mentions légales publiées'); }
+  try { const L = deepGet(S, ['tenant', 'legal']) || {}; await backend.fb.database().ref(MULTI ? `orgs_public/${ORG}/legal` : 'pulse_public/legal').set(Object.fromEntries(Object.entries(L).filter(([, v]) => typeof v === 'string' && v))); toast(`Mentions légales publiées : ${plur(Object.keys(L).length, 'champ', 'champs')}`); }
   catch (e) { toast('Publication impossible : ' + e.message); }
 };
 function clubSettings() {
@@ -526,6 +526,7 @@ function clubSettings() {
     ${monClubCard()}
     ${apparenceCard()}
     ${reperesCard()}
+    ${ordreKpiCard()}
     ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
       <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>Le score est la moyenne de vos % d’objectif, pondérée par les points de chaque KPI, plafonnée à 150 %. Les points récompensent l’atteinte : 25, 50, 75 puis 100 % des points du KPI. En calcul continu, chaque unité rapporte sa part, sans marche. Le calcul continu est conseillé pour les petits objectifs (moins de 5).</div></div>
       ${kpiWarn()}
@@ -565,7 +566,7 @@ ACTIONS.kpiReco = async () => {
   const ops = Object.entries(KPI_RECO).filter(([id]) => S.kpis[id]).map(([id, v]) => [['kpis', id, 'points'], v]);
   if (S.kpis.sauvetage) ops.push([['kpis', 'sauvetage', 'required'], true]);
   ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'bareme_recommande' }]);
-  db.batch(ops); toast('Barème recommandé appliqué');
+  db.batch(ops); toast(`Barème recommandé appliqué : ${plur(ops.length, 'KPI', 'KPI')}`);
 };
 ACTIONS.kpiSet = el => { const k = el.dataset.k; const v = el.type === 'checkbox' ? el.checked : (k === 'points' || k === 'order') ? toNum(el.value) : el.value.trim(); db.set(['kpis', el.dataset.id, k], v); };
 const KPI_PICK = ['target', 'star', 'cup', 'pen', 'cap', 'coins', 'briefcase', 'ticket', 'lifebuoy', 'magnet', 'phone', 'trophy', 'flame', 'heart', 'users', 'bolt', 'flag', 'calcheck'];
@@ -583,14 +584,14 @@ ACTIONS.importAll = el => {
     const intrus = Object.values(data.users).filter(u => u && u.role === 'createur' && !(S.users[u.id] && S.users[u.id].role === 'createur'));
     if (intrus.length) { toast('Sauvegarde refusée : elle ajoute un compte Créateur inconnu.'); return; }
     if (!await confirmDlg('Remplacer toutes les données actuelles par cette sauvegarde ? Une copie de l’état actuel est d’abord téléchargée.', { ok: 'Restaurer', danger: true })) return;
-    const mot = prompt('Pour confirmer, tapez RESTAURER'); if ((mot || '').trim().toUpperCase() !== 'RESTAURER') { toast('Restauration annulée.'); return; }
+    const mot = prompt('Pour confirmer, tapez RESTAURER'); if ((mot || '').trim().toUpperCase() !== 'RESTAURER') { toast('1 restauration annulée'); return; }
     downloadFile(`fit-pulse-avant-restauration-${today()}.json`, JSON.stringify(S), 'application/json');
     db.replace(data);
     // En ligne : les cles de connexion des membres actifs sont reposees, pour
     // que leurs codes marchent tout de suite (changement de base, de projet).
     const keys = {}; Object.values(S.users).forEach(u => { if (u.bootKey && u.status !== 'archived') keys[u.bootKey] = u.id; });
     if (backend.mode === 'firebase') await backend.setBoot(keys);
-    toast('Sauvegarde restaurée.');
+    toast('1 sauvegarde restaurée');
   };
   fr.readAsText(file);
 };

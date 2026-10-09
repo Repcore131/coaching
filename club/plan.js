@@ -240,12 +240,12 @@ function planReglages() {
 
 // ── Actions ───────────────────────────────────────────────────────────────
 const planPath = (...k) => ['plans', CLUB.id, PLAN_DEFAULT.id, ...k];
-ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { toast('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('Nombre d’avis noté'); };
+ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { toast('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('1 relevé d’avis noté'); };
 ACTIONS.planSave = () => {
   const f = formData($('#plf')); const num = k => { const v = parseMontant(f[k]); return Number.isNaN(v) ? null : v; }; const mk = curMonth();
   const t = {}; ['ca', 'ventes', 'engagementPct', 'optionsPct', 'boutique', 'avis', 'transfoEquipe', 'transfoMin'].forEach(k => { const v = num(k); if (v != null) t[k] = v; });
   const ops = [[planPath('targets'), t], [planPath('primes', 'palier'), num('palier') || 150], [planPath('primes', 'equipeMoisVentes'), num('equipeMoisVentes') || 60], [planPath('directeur'), (f.directeur || '').trim()], [planPath('copie'), (f.copie || '').trim() || null], [planPath('mois', mk, 'ventes'), num('moisVentes')], [planPath('mois', mk, 'ca'), num('moisCa')], [planPath('caManuel', mk), num('caManuel')]];
-  db.batch(ops); toast('Plan enregistré');
+  db.batch(ops); toast('1 plan enregistré');
 };
 ACTIONS.planMystere = el => db.set(planPath('mystere', curMonth(), el.dataset.u), el.value || null);
 ACTIONS.planVideo = el => db.set(planPath('missions', 'videos'), el.dataset.v);
@@ -283,5 +283,5 @@ function planHomeCard() {
   const st = planStats(); const P = st.P; if (today() < P.from || today() > P.to) return '';
   const pct = (v, t) => (v == null ? 'n.d.' : fmtP(v / t));
   return `<a class="card plan-home" href="#/dashboard" data-act="ui" data-key="dashTab" data-val="plan"><div class="row"><b class="spacer">Plan ${esc(P.label)}</b><span class="muted small">${fmtP(st.elapsed)} écoulé</span></div>
-    <div class="plan-kpis"><div><span>CA HT</span><b>${pct(st.ca, P.targets.ca)}</b></div><div><span>Abonnements</span><b>${st.ventes} / ${P.targets.ventes}</b></div><div><span>Boutique</span><b>${pct(st.boutique, P.targets.boutique)}</b></div><div><span>Avis</span><b>${st.avis.n}</b></div></div></a>`;
+    <div class="plan-kpis"><div><span>CA HT</span><b>${pct(st.ca, P.targets.ca)}</b></div><div><span>Abonnements</span><b>${st.ventes} sur ${plur(P.targets.ventes, 'contrat', 'contrats')}</b></div><div><span>Boutique</span><b>${pct(st.boutique, P.targets.boutique)}</b></div><div><span>Avis</span><b>${plur(st.avis.n, 'avis', 'avis')}</b></div></div></a>`;
 }

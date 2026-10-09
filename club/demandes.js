@@ -79,7 +79,7 @@ function rrqStatusOps(r, to, extra = {}) {
 }
 const rrqGet = id => deepGet(S, ['resRequests', CLUB.id, id]);
 const rrqName = r => { const c = r.clientId && S.clients[r.clientId]; return c ? c.name : (String(r.from || '').replace(/\s*<[^>]*>\s*/, '').trim() || r.fromEmail || 'Client'); };
-ACTIONS.rrqTake = el => { const r = rrqGet(el.dataset.id); if (!r) return; db.batch([[['resRequests', CLUB.id, r.id, 'ownerId'], ME.id], [['resRequests', CLUB.id, r.id, 'log', newId()], { at: Date.now(), by: ME.id, label: 'Prise en charge' }]]); toast('Demande à votre nom'); };
+ACTIONS.rrqTake = el => { const r = rrqGet(el.dataset.id); if (!r) return; db.batch([[['resRequests', CLUB.id, r.id, 'ownerId'], ME.id], [['resRequests', CLUB.id, r.id, 'log', newId()], { at: Date.now(), by: ME.id, label: 'Prise en charge' }]]); toast('1 demande à votre nom'); };
 ACTIONS.rrqSet = el => {
   const r = rrqGet(el.dataset.id); const to = el.dataset.to; if (!r || !RRQ_STATUS[to]) return;
   const ops = rrqStatusOps(r, to);
@@ -90,7 +90,7 @@ ACTIONS.rrqSet = el => {
       [['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }], [['resRequests', CLUB.id, r.id, 'resiliationId'], id]);
   }
   db.batch(ops);
-  if (to === 'sauve') celebrate('Client sauvé', `${rrqName(r)} reste au club`, { kind: 'win' }); else toast(`Demande : ${RRQ_STATUS[to].label.toLowerCase()}`);
+  if (to === 'sauve') toast(`Client sauvé : ${rrqName(r)} reste au club`); else toast(`Demande : ${RRQ_STATUS[to].label.toLowerCase()}`);
 };
 ACTIONS.rrqResilier = el => {
   const r = rrqGet(el.dataset.id); if (!r) return;
@@ -104,7 +104,7 @@ ACTIONS.rrqResilierOk = el => {
   const id = 'mail_' + safeKey(r.id); const owner = r.ownerId || ME.id;
   db.batch([...rrqStatusOps(r, 'resilie', { resiliationId: id }),
     [['resiliations', id], { id, clubId: CLUB.id, client: rrqName(r), clientId: r.clientId || null, date: isoOf(new Date(r.receivedAt || Date.now())), effective: f.effective, reason: f.reason, status: 'resiliee', saved: false, ownerId: owner, userId: owner, source: 'mail', requestId: r.id, at: Date.now(), log: { [newId()]: { at: Date.now(), by: ME.id, label: 'Résiliation enregistrée (demande reçue par e-mail)' } } }]]);
-  closeModal(); toast('Dossier de résiliation créé');
+  closeModal(); toast('1 dossier de résiliation créé');
 };
 
 // Réglages du club : adresse de la boîte relevée et expéditeurs de l'appli adhérents (/pulse/clubs/{id}/mailSources).
@@ -119,5 +119,5 @@ ACTIONS.rrqCfg = () => {
 ACTIONS.rrqCfgOk = () => {
   const f = formData($('#rrqc')); const clean = s => String(s || '').split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   db.set(['clubs', CLUB.id, 'mailSources'], { inbox: clean(f.inbox)[0] || null, appli: clean(f.appli).join(', ') || null });
-  closeModal(); toast('Réglages enregistrés');
+  closeModal(); toast('1 jeu de réglages enregistré');
 };
