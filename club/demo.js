@@ -44,7 +44,7 @@ function seedDemo() {
   const R = rng(20261009);
   const pick = a => a[Math.floor(R() * a.length)];
   const t = today(), cm = curMonth(), now = Date.now(), DAY = 864e5;
-  const club = { ...(window.PARKPULSE_CLUB || {}), id: 'demo-centre', name: 'Club Démo Centre' };
+  const club = { id: 'demo-centre', name: 'Club Démo Centre', address: '1 place Centrale', city: 'Démoville' };
   const C = club.id;
   st.meta.demo = true; st.meta.demoSeed = 1;
   st.clubs[C] = { ...club, createdAt: now - 400 * DAY };
@@ -220,35 +220,7 @@ if (DEMO) {
   document.body.prepend(bar);
 }
 
-// ── Sans marque ───────────────────────────────────────────────────────────
-// Les textes de l'appli (scripts d'appel, SMS, mentions) citent l'enseigne :
-// en demonstration, tout ce qui s'affiche en est nettoye au vol.
-const DEMO_BRAND = [
-  [/«\s*Fitness Park\s*» est une marque[^.]*\.\s*/gi, ''],
-  [/,? il n’est ni édité ni approuvé par le réseau Fitness Park/gi, ''],
-  [/\s*\(Fitness Park[^)]*\)/gi, ''],
-  [/(clubs?) Fitness Park(?: Niort)?/gi, '$1'],
-  [/abonnement Fitness Park/gi, 'abonnement'],
-  [/Fitness Park Niort/gi, 'Club Démo Centre'],
-  [/Fitness Park\s+/gi, ''],
-  [/Fitness Park/gi, 'votre club'],
-  [/Fitness%20Park%20/gi, ''],
-  [/Fitness%20Park/gi, 'votre%20club'],
-];
-const demoUnbrand = s => DEMO_BRAND.reduce((a, [re, to]) => a.replace(re, to), s);
-const DEMO_ATTRS = ['value', 'placeholder', 'title', 'alt', 'aria-label', 'href', 'content'];
-function demoScrub(root) {
-  if (root.nodeType === 3) { if (/Fitness.Park/i.test(root.nodeValue)) root.nodeValue = demoUnbrand(root.nodeValue); return; }
-  if (root.nodeType !== 1) return;
-  const els = [root, ...root.querySelectorAll('*')];
-  for (const el of els) for (const a of DEMO_ATTRS) { const v = el.getAttribute(a); if (v && /Fitness.Park/i.test(v)) el.setAttribute(a, demoUnbrand(v)); }
-  for (const el of els) if (el.tagName === 'TEXTAREA' && /Fitness.Park/i.test(el.value)) el.value = demoUnbrand(el.value);
-  const w = document.createTreeWalker(root, 4) /* texte seulement */; let n;
-  while ((n = w.nextNode())) if (/Fitness.Park/i.test(n.nodeValue)) n.nodeValue = demoUnbrand(n.nodeValue);
-}
 if (DEMO) {
   document.title = 'Fit Pulse · démonstration';
   const meta = document.querySelector('meta[name=description]'); if (meta) meta.setAttribute('content', 'Fit Pulse : le pouls commercial de votre club.');
-  new window.MutationObserver(list => { for (const m of list) { if (m.type === 'characterData') demoScrub(m.target); else m.addedNodes.forEach(demoScrub); } })
-    .observe(document.body, { childList: true, subtree: true, characterData: true });
 }

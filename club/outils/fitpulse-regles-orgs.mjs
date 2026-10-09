@@ -104,6 +104,13 @@ export const REGLE_ORGS = `"orgs": {
     "orgs_inbox": { "$org": { "$uid": { ".read": ${j(SOIMEME)}, "$id": { "readAt": { ".write": ${j(`${SOIMEME} && data.parent().exists()`)} } } } } },
     "orgs_mail": { "$org": { ".read": false, "$id": { ".write": ${j(`${mgr(O)} && !data.exists()`)} } } },
     "orgs_product": { "$org": { ".read": ${j(crea(O))}, ".write": ${j(crea(O))} } },
+    "orgs_public": {
+      "$org": {
+        ".read": true,
+        "legal": { ".write": ${j(mgr(O))}, "$c": { ".validate": "newData.isString() && newData.val().length <= 300" } },
+        "$autre": { ".validate": false }
+      }
+    },
     "orgs_boot": {
       "$k": {
         ".read": true,

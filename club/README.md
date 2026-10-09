@@ -137,6 +137,26 @@ Détail et bascule : `docs/multi-salles.md`.
 - `bash club/scripts/paquet-esoleau.sh [sortie]` : archive datée pour e-Soleau (HTML unique, docs et captures, code des outils, historique git, `SHA256SUMS.txt`), refusée au-delà de 10 Mo.
 - `bash club/scripts/creer-depot-fit-pulse.sh ../fit-pulse [url-privée]` : crée le dépôt « fit-pulse » (fitpulse.html, assets/, scripts/, docs/), premier commit daté, étiquette `v0.1-2026-10` ; avec une URL de dépôt privé existant, le pousse.
 
+## Pilotage du directeur (lot B)
+
+- `#/journee` (managers) : Brief 8 h, Impayés 11 h, Résiliations 14 h, Bilan 18 h, Routine du lundi, Clôture du mois (du 1er au 5). Le bloc de l'heure est mis en avant ; « Fait » quand l'action a été ouverte (S.prefs[uid].journee).
+- Accueil manager : Brief du jour (veille ouvrée, objectif du jour, fraîcheur des imports, trois actions, texte WhatsApp), badge « Chiffres vérifiés » quand tous les KPI contrôlés sont égaux à Resamania.
+- Clôture du jour : point par commercial, absents (S.absences), projection de fin de mois en jours ouvrés, message d'équipe.
+- Impayés : ancienneté de la dette (0-15, 16-30, 31-60, plus de 60 jours), colonne Âge, Appeler, Copier le message (S.settings.dunSms).
+- Résiliations : fiche client rattachée, valeur en jeu = prix (ou panier moyen, 32 € par défaut) x mois restants, 12 mois sans engagement.
+- Imports : contrôle de la semaine (Reçu, Manquant, Suspect), dépôt d'un dossier entier ou d'un ZIP.
+- Récap : revenu récurrent, perdu, gagné (M-1 et N-1), commentaire du directeur (S.recapNotes), envoi au gérant ; compteur « Ce que Fit Pulse a rapporté ce mois » (le temps gagné n'est jamais additionné aux euros).
+- `#/confiance` : chaque KPI par source, contrôle Resamania, écart, doublons probables.
+- Club et réglages > Données et RGPD : registre (CSV), effacement d'un adhérent, purge à 24 mois après la fin du contrat (réglable).
+- Équipe > Adoption : S.usage (une écriture par minute au plus), 4 semaines, parcours de démarrage, taux d'adoption.
+
+## Application neutre et données de départ
+
+- Le fichier livré (`node club/outils/build-single.mjs`) ne contient ni enseigne, ni ville, ni personne : `grep -c "Fitness Park\|Niort\|FPN GESTION\|KGUE\|GUELLEC"` ne trouve que les en-têtes de licence.
+- Le client est décrit par `S.tenant` (nom, enseigne, logo, couleurs, société, panier moyen, mentions légales), saisi à la création du club et modifiable dans Club et réglages > Réglages > Identité du client. La couleur primaire recolore l'appli sans rechargement ; le texte posé dessus respecte le contraste AA.
+- Les comptes, le club et l'identité du déploiement historique sont dans `club/tools/bootstrap.js`, jamais chargé par le navigateur. Le passage serveur (`fitpulse-serveur.mjs`) pose les clés de connexion, `/pulse/tenant`, `/pulse_public/legal` et le destinataire du rapport du lundi s'ils manquent ; `node club/tools/bootstrap.js --ecrire` fait de même à la main.
+- Mentions légales : celles du client (S.tenant.legal) ; un visiteur non connecté lit celles publiées dans `/pulse_public/legal` (bouton « Publier les mentions légales »).
+
 ## Mettre en ligne (vraie adresse)
 
 Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :

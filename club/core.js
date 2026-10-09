@@ -9,6 +9,12 @@
 // enseignes, ni fil partage avec l'exterieur.
 
 const APP = { name: TXT.app.nom, tagline: TXT.app.accroche };
+// ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
+// Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
+// Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.
+const tenant = () => (S && S.tenant) || {};
+const entiteTexte = () => tenant().entity ? `Entité = ${tenant().entity}` : 'Entité = votre société d’exploitation';
+
 
 // ── Outils ─────────────────────────────────────────────────────────────────
 const $ = (s, r = document) => r.querySelector(s);
@@ -512,22 +518,22 @@ function demoState() {
   const R = rng(20261005);
   const pick = a => a[Math.floor(R() * a.length)];
   st.clubs = {
-    niort: { id: 'niort', name: 'Fitness Park Niort', address: '600 Av. de Paris', city: '79000 Niort', createdAt: Date.now() },
-    rochelle: { id: 'rochelle', name: 'Fitness Park La Rochelle', address: '12 rue du Port', city: '17000 La Rochelle', createdAt: Date.now() },
+    centre: { id: 'centre', name: 'Club Centre', address: '1 place du Marché', city: 'Démoville', createdAt: Date.now() },
+    littoral: { id: 'littoral', name: 'Club Littoral', address: '12 quai des Pêcheurs', city: 'Démoville-Plage', createdAt: Date.now() },
   };
   const people = [
-    ['u1', 'Camille', 'Roux', 'manager', ['niort', 'rochelle'], 'f1'],
-    ['u2', 'Hugo', 'Lefèvre', 'manager', ['niort'], 'h1'],
-    ['u3', 'Inès', 'Moreau', 'membre', ['niort'], 'f2'],
-    ['u4', 'Lucas', 'Petit', 'membre', ['niort'], 'h2'],
-    ['u5', 'Sarah', 'Garnier', 'membre', ['niort'], 'f1'],
-    ['u6', 'Nathan', 'Faure', 'membre', ['rochelle'], 'h1'],
-    ['u7', 'Léa', 'Bonnet', 'membre', ['rochelle'], 'f2'],
+    ['u1', 'Camille', 'Roux', 'manager', ['centre', 'littoral'], 'f1'],
+    ['u2', 'Hugo', 'Lefèvre', 'manager', ['centre'], 'h1'],
+    ['u3', 'Inès', 'Moreau', 'membre', ['centre'], 'f2'],
+    ['u4', 'Lucas', 'Petit', 'membre', ['centre'], 'h2'],
+    ['u5', 'Sarah', 'Garnier', 'membre', ['centre'], 'f1'],
+    ['u6', 'Nathan', 'Faure', 'membre', ['littoral'], 'h1'],
+    ['u7', 'Léa', 'Bonnet', 'membre', ['littoral'], 'f2'],
   ];
   people.forEach(([id, first, last, role, clubs, avatar], i) => {
     st.users[id] = { id, first, last, role, clubs, avatar, status: 'active', email: `${norm(first)}.${norm(last)}@exemple.fr`.replace(/ /g, ''), createdAt: Date.now() - (200 - i) * 86400000 };
   });
-  st.users.u8 = { id: 'u8', first: 'Tom', last: 'Girard', role: 'membre', clubs: ['niort'], avatar: 'h2', status: 'archived', archivedAt: addDays(today(), -60), email: 'tom.girard@exemple.fr', createdAt: Date.now() - 300 * 86400000 };
+  st.users.u8 = { id: 'u8', first: 'Tom', last: 'Girard', role: 'membre', clubs: ['centre'], avatar: 'h2', status: 'archived', archivedAt: addDays(today(), -60), email: 'tom.girard@exemple.fr', createdAt: Date.now() - 300 * 86400000 };
 
   const cm = curMonth();
   const months = [addMonths(cm, -3), addMonths(cm, -2), addMonths(cm, -1), cm];
@@ -556,12 +562,12 @@ function demoState() {
     });
   });
   // Un import Resamania deja passe (actif), pour montrer l'historique.
-  st.imports.imp1 = { id: 'imp1', name: 'export-ventes-abonnements.csv', type: 'kpi', clubId: 'niort', at: Date.now() - 6 * 86400000, rows: 3, from: `${addMonths(cm, -1)}-01`, to: `${addMonths(cm, -1)}-${daysIn(addMonths(cm, -1))}`, active: true, by: 'u1' };
-  [['u2', 2], ['u3', 1], ['u4', 1]].forEach(([u, v], i) => addE({ userId: u, clubId: 'niort', kpiId: 'b2b', date: `${addMonths(cm, -1)}-${pad(10 + i)}`, value: v, source: 'import', importId: 'imp1' }));
+  st.imports.imp1 = { id: 'imp1', name: 'export-ventes-abonnements.csv', type: 'kpi', clubId: 'centre', at: Date.now() - 6 * 86400000, rows: 3, from: `${addMonths(cm, -1)}-01`, to: `${addMonths(cm, -1)}-${daysIn(addMonths(cm, -1))}`, active: true, by: 'u1' };
+  [['u2', 2], ['u3', 1], ['u4', 1]].forEach(([u, v], i) => addE({ userId: u, clubId: 'centre', kpiId: 'b2b', date: `${addMonths(cm, -1)}-${pad(10 + i)}`, value: v, source: 'import', importId: 'imp1' }));
 
   // Historique mensuel du club (annee N-1 et N) pour la comparaison annuelle.
   const y = Number(cm.slice(0, 4));
-  ['niort', 'rochelle'].forEach((c, ci) => {
+  ['centre', 'littoral'].forEach((c, ci) => {
     st.monthly[c] = {};
     for (let yy = y - 1; yy <= y; yy++) for (let m = 1; m <= 12; m++) {
       const mk = `${yy}-${pad(m)}`; if (mk >= cm) continue;
@@ -576,7 +582,7 @@ function demoState() {
   const P = ['Emma', 'Louis', 'Chloé', 'Jules', 'Manon', 'Arthur', 'Zoé', 'Gabriel', 'Lina', 'Raphaël', 'Jade', 'Adam', 'Alice', 'Léo', 'Rose', 'Noah', 'Anna', 'Paul', 'Mila', 'Ethan', 'Nina', 'Sacha', 'Lou', 'Tim'];
   const N = ['Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Durand', 'Leroy', 'Simon', 'Laurent', 'Michel', 'Garcia', 'David', 'Bertrand', 'Morel', 'Fournier', 'Mercier', 'Blanc', 'Guerin', 'Muller'];
   for (let i = 1; i <= 46; i++) {
-    const club = i % 4 === 0 ? 'rochelle' : 'niort';
+    const club = i % 4 === 0 ? 'littoral' : 'centre';
     const birth = `${1975 + Math.floor(R() * 30)}-${cm.slice(5, 7)}-${pad(1 + Math.floor(R() * 28))}`;
     const start = addDays(today(), -Math.floor(R() * 400));
     const end = addDays(today(), Math.floor(R() * 120) - 20);
@@ -594,59 +600,59 @@ function demoState() {
    ['r5', 'Karim Benali', -12, 18, 'Prix', 'sauvee', 'u4'],
    ['r6', 'Claire Fontaine', -15, -2, 'Concurrence', 'resiliee', 'u5']].forEach(([id, client, ago, eff, reason, status, owner]) => {
     const at = Date.now() + ago * 86400000;
-    st.resiliations[id] = { id, clubId: 'niort', client, date: addDays(today(), ago), effective: addDays(today(), eff), reason, status, saved: status === 'sauvee', ownerId: owner, userId: owner, at,
+    st.resiliations[id] = { id, clubId: 'centre', client, date: addDays(today(), ago), effective: addDays(today(), eff), reason, status, saved: status === 'sauvee', ownerId: owner, userId: owner, at,
       actions: [{ at, by: 'u2', label: 'Demande enregistrée' }, ...(owner ? [{ at: at + 86400000, by: owner, label: status === 'sauvee' ? 'Offre proposée · Suspension' : 'Message laissé', note: status === 'traitement' ? 'Rappeler en fin de semaine' : '' }] : []), ...(status === 'sauvee' ? [{ at: at + 2 * 86400000, by: owner, label: 'Client sauvé' }] : [])] };
-    if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: 'niort', kpiId: 'sauvetage', date: addDays(today(), ago + 2), value: 1, source: 'manual', at: at + 2 * 86400000 };
+    if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: 'centre', kpiId: 'sauvetage', date: addDays(today(), ago + 2), value: 1, source: 'manual', at: at + 2 * 86400000 };
   });
 
-  st.chat.m1 = { id: 'm1', channel: 'niort', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier. On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
-  st.chat.m2 = { id: 'm2', channel: 'niort', userId: 'u3', text: 'Je m’occupe des relances anniversaires cette semaine.', at: Date.now() - 86400000, parentId: 'm1' };
+  st.chat.m1 = { id: 'm1', channel: 'centre', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier. On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
+  st.chat.m2 = { id: 'm2', channel: 'centre', userId: 'u3', text: 'Je m’occupe des relances anniversaires cette semaine.', at: Date.now() - 86400000, parentId: 'm1' };
   st.chat.m3 = { id: 'm3', channel: 'all', userId: 'u1', text: 'Point mensuel des deux clubs vendredi 10h. Venez avec vos chiffres.', at: Date.now() - 5 * 3600000 };
 
   const libIds = Object.keys(st.tasks.library);
-  st.tasks.plan.niort = {};
-  [[7, 0], [8, 1], [10, 6], [11, 9], [14, 10], [15, 14], [17, 21], [20, 31]].forEach(([h, t], i) => { const id = 'p' + i; st.tasks.plan.niort[id] = { id, taskId: libIds[t], hour: h }; });
+  st.tasks.plan.centre = {};
+  [[7, 0], [8, 1], [10, 6], [11, 9], [14, 10], [15, 14], [17, 21], [20, 31]].forEach(([h, t], i) => { const id = 'p' + i; st.tasks.plan.centre[id] = { id, taskId: libIds[t], hour: h }; });
 
-  st.challenges.ch1 = { id: 'ch1', clubId: 'niort', title: 'Sprint nutrition', desc: 'Le plus de ventes nutrition en 48 h (rapporté à l’objectif).', kpiId: 'nutrition', start: Date.now() - 20 * 86400000, end: Date.now() - 18 * 86400000, by: 'u2' };
+  st.challenges.ch1 = { id: 'ch1', clubId: 'centre', title: 'Sprint nutrition', desc: 'Le plus de ventes nutrition en 48 h (rapporté à l’objectif).', kpiId: 'nutrition', start: Date.now() - 20 * 86400000, end: Date.now() - 18 * 86400000, by: 'u2' };
   // Regularisations d'impayes par canal (comme la liste Incidents de Resamania)
   let rv = 0;
-  Object.values(st.entries).filter(e => e.kpiId === 'impayes' && e.clubId === 'niort').forEach(e => { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: e.date, amount: e.value, canal: 'equipe', userId: e.userId, type: 'Prélèvements rejetés', at: e.at }; });
+  Object.values(st.entries).filter(e => e.kpiId === 'impayes' && e.clubId === 'centre').forEach(e => { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'centre', date: e.date, amount: e.value, canal: 'equipe', userId: e.userId, type: 'Prélèvements rejetés', at: e.at }; });
   months.forEach(mk => {
     const days = mk === cm ? Math.max(1, Number(today().slice(8)) - 1) : daysIn(mk);
     [['auto', 34, 42], ['client', 10, 38], ['automatismes', 7, 30], ['tiers', 1, 60]].forEach(([canal, n, avg]) => {
-      for (let i = 0; i < Math.round(n * days / daysIn(mk)); i++) { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: `${mk}-${pad(1 + Math.floor(R() * days))}`, amount: Math.round(avg * (0.5 + R()) * 100) / 100, canal, userId: null, type: 'Prélèvements rejetés', at: Date.now() }; }
+      for (let i = 0; i < Math.round(n * days / daysIn(mk)); i++) { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'centre', date: `${mk}-${pad(1 + Math.floor(R() * days))}`, amount: Math.round(avg * (0.5 + R()) * 100) / 100, canal, userId: null, type: 'Prélèvements rejetés', at: Date.now() }; }
     });
   });
   // Impayés : quelques dossiers déjà pris en charge
   Object.values(st.clients).filter(c => c.balance > 0).forEach((c, i) => { c.num = String(10000 + i); c.balanceAt = addDays(today(), -3 - i * 4); c.incidents = 1 + (i % 2); if (i % 3 === 1) c.dunning = { status: 'relance', ownerId: ['u3', 'u4', 'u5'].at(i % 3), next: addDays(today(), i % 2 ? 0 : 3), note: i % 2 ? 'CB expirée, rappel prévu' : '' }; if (i % 3 === 2) c.dunning = { status: 'promesse', ownerId: 'u2', next: addDays(today(), 5), note: 'Paiera le 15' }; });
-  st.clients.c41 = { ...(st.clients.c41 || { id: 'c41', clubId: 'niort', name: 'Hugo Martin' }), clubId: 'niort', balance: 0, dunning: { status: 'recupere', recoveredAt: addDays(today(), -2), amount: 59.9, canal: 'equipe', by: 'u3' } };
+  st.clients.c41 = { ...(st.clients.c41 || { id: 'c41', clubId: 'centre', name: 'Hugo Martin' }), clubId: 'centre', balance: 0, dunning: { status: 'recupere', recoveredAt: addDays(today(), -2), amount: 59.9, canal: 'equipe', by: 'u3' } };
   // Paliers collectifs du mois (prime d'équipe)
-  st.paliers = { niort: { [cm]: { contrats: [{ target: 90, reward: 'Prime 50 € chacun' }, { target: 100, reward: 'Prime 100 € chacun' }, { target: 115, reward: 'Prime 150 € + resto d’équipe' }], avis: [{ target: 80, reward: 'Petit-déj d’équipe' }, { target: 100, reward: 'Prime 30 € chacun' }] } } };
-  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); st.rsm.controls.niort = st.rsm.controls.niort || {}; (st.rsm.controls.niort.du = st.rsm.controls.niort.du || {})[`${m}-28`] = Math.round((1900 - i * 140 + R() * 300) * 100) / 100; (st.rsm.controls.niort.evo = st.rsm.controls.niort.evo || {})[m] = { gained: Math.round(95 + R() * 40), lost: Math.round(60 + R() * 30) }; }
-  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); for (let j = 0; j < 3 + Math.floor(R() * 6); j++) { const id = `rh${i}_${j}`; const status = R() < .35 ? 'sauvee' : 'resiliee'; const date = `${m}-${pad(1 + Math.floor(R() * 26))}`; st.resiliations[id] = { id, clubId: 'niort', client: `${pick(P)} ${pick(N)}`, date, effective: addDays(date, 30), reason: pick(['Prix', 'Déménagement', 'Santé', 'Manque de temps']), status, saved: status === 'sauvee', ownerId: pick(['u2', 'u3', 'u4']), at: dateOf(date).getTime() }; } }
+  st.paliers = { centre: { [cm]: { contrats: [{ target: 90, reward: 'Prime 50 € chacun' }, { target: 100, reward: 'Prime 100 € chacun' }, { target: 115, reward: 'Prime 150 € + resto d’équipe' }], avis: [{ target: 80, reward: 'Petit-déj d’équipe' }, { target: 100, reward: 'Prime 30 € chacun' }] } } };
+  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); st.rsm.controls.centre = st.rsm.controls.centre || {}; (st.rsm.controls.centre.du = st.rsm.controls.centre.du || {})[`${m}-28`] = Math.round((1900 - i * 140 + R() * 300) * 100) / 100; (st.rsm.controls.centre.evo = st.rsm.controls.centre.evo || {})[m] = { gained: Math.round(95 + R() * 40), lost: Math.round(60 + R() * 30) }; }
+  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); for (let j = 0; j < 3 + Math.floor(R() * 6); j++) { const id = `rh${i}_${j}`; const status = R() < .35 ? 'sauvee' : 'resiliee'; const date = `${m}-${pad(1 + Math.floor(R() * 26))}`; st.resiliations[id] = { id, clubId: 'centre', client: `${pick(P)} ${pick(N)}`, date, effective: addDays(date, 30), reason: pick(['Prix', 'Déménagement', 'Santé', 'Manque de temps']), status, saved: status === 'sauvee', ownerId: pick(['u2', 'u3', 'u4']), at: dateOf(date).getTime() }; } }
   st.rsm.aliases = { 'c:HLEF': 'u2', 'c:IMOR': 'u3', 'c:LPET': 'u4', 'c:SGAR': 'u5', 'c:CROU': 'u1' };
   st.meta.demo = true;
   // Revenus : prix, numéros, prospects, invités, anciens membres, entreprises.
   const PRIX = { Basic: 24.99, Premium: 29.99, Ultimate: 39.99 };
-  [['rc1', 'Marc Henry', 'Basic', 40], ['rc2', 'Julie Perrin', 'Ultimate', 240], ['rc3', 'Paul Noël', 'Premium', 90]].forEach(([id, name, offer, d], i) => { st.clients[id] = { id, clubId: 'niort', num: String(700100 + i), name, offer, price: PRIX[offer], status: 'Client', start: addDays(today(), -300), end: addDays(today(), d), phone: '+3361' + String(4000000 + i * 919).slice(0, 7) }; });
+  [['rc1', 'Marc Henry', 'Basic', 40], ['rc2', 'Julie Perrin', 'Ultimate', 240], ['rc3', 'Paul Noël', 'Premium', 90]].forEach(([id, name, offer, d], i) => { st.clients[id] = { id, clubId: 'centre', num: String(700100 + i), name, offer, price: PRIX[offer], status: 'Client', start: addDays(today(), -300), end: addDays(today(), d), phone: '+3361' + String(4000000 + i * 919).slice(0, 7) }; });
   Object.values(st.recov).forEach((x, i) => { x.incidentDate = addDays(x.date, -[3, 6, 9, 14, 21, 35, 50][i % 7]); });
   const sellers = ['u2', 'u3', 'u4', 'u5', 'u6'];
   Object.values(st.clients).forEach((c, i) => { c.num = String(100200 + i); c.price = PRIX[c.offer] || 29.99; c.status = 'Client'; c.sellerId = sellers[i % sellers.length]; if (c.balance > 0) { c.balanceAt = addDays(today(), -[3, 12, 40, 75][i % 4]); c.oldestIncident = c.balanceAt; } });
-  const cl = Object.values(st.clients).filter(c => c.clubId === 'niort');
+  const cl = Object.values(st.clients).filter(c => c.clubId === 'centre');
   for (let i = 0; i < 60; i++) {
     const d = i >= 40 ? addDays(today(), -(2 + (i * 7) % 20)) : addDays(today(), -Math.floor(R() * 95)); const conv = i < 14 ? cl[i] : null; const u = i % 7 === 0 ? 'u1' : sellers[i % sellers.length];
     const [prenom, nom] = conv ? conv.name.split(' ') : [pick(P), pick(N)];
     if (conv) { const s0 = addDays(d, 2 + Math.floor(R() * 25)); conv.start = s0 > today() ? today() : s0; }
     const statut = conv ? 'Visite effectuée' : pick(['Nouveau', 'Contacté', 'Contacté', 'RDV pris', 'Essai', 'Injoignable']);
-    st.prospects['p' + i] = { id: 'p' + i, clubId: 'niort', nom, prenom, creeLe: d, commercialId: u, statut, provenance: pick(['Site web', 'Passage', 'Parrainage', 'Réseaux sociaux']), valeur: Math.round(R() * 5), phone: '+3366' + String(1000000 + i * 7919).slice(0, 7), at: Date.now() };
+    st.prospects['p' + i] = { id: 'p' + i, clubId: 'centre', nom, prenom, creeLe: d, commercialId: u, statut, provenance: pick(['Site web', 'Passage', 'Parrainage', 'Réseaux sociaux']), valeur: Math.round(R() * 5), phone: '+3366' + String(1000000 + i * 7919).slice(0, 7), at: Date.now() };
   }
-  for (let i = 0; i < 6; i++) { const id = 'g' + i; st.guests[id] = { id, clubId: 'niort', nom: `${pick(P)} ${pick(N)}`, phone: '+3367' + String(2000000 + i * 3571).slice(0, 7), date: addDays(today(), -i * 2), parrainId: i % 2 ? cl[20 + i].id : null, by: sellers[i % 5], at: Date.now() - i * 2 * 864e5 }; }
-  for (let i = 0; i < 12; i++) { const id = 'a' + i; st.clients[id] = { id, clubId: 'niort', num: String(900100 + i), name: `${pick(P)} ${pick(N)}`, phone: '+3368' + String(3000000 + i * 4111).slice(0, 7), status: 'Ancien client', endDate: addDays(today(), -(95 + i * 50)), offer: pick(['Basic', 'Premium', 'Ultimate']), price: 0, start: addDays(today(), -(500 + i * 50)) }; st.clients[id].price = PRIX[st.clients[id].offer]; }
-  [['co1', 'Mutuelle Atlantique', 'signe', 120, 6], ['co2', 'Hôpital de Niort', 'proposition', 450, 0], ['co3', 'Transports Bréan', 'rdv', 60, 0], ['co4', 'Groupe Sèvre Bâtiment', 'a_contacter', 0, 0]].forEach(([id, nom, statut, effectif, n]) => {
-    st.companies[id] = { id, clubId: 'niort', nom, statut, effectif: effectif || null, ownerId: 'u3', adherents: n, nums: cl.slice(30, 30 + n).map(c => c.num), signeLe: statut === 'signe' ? addDays(today(), -40) : null, at: Date.now() };
+  for (let i = 0; i < 6; i++) { const id = 'g' + i; st.guests[id] = { id, clubId: 'centre', nom: `${pick(P)} ${pick(N)}`, phone: '+3367' + String(2000000 + i * 3571).slice(0, 7), date: addDays(today(), -i * 2), parrainId: i % 2 ? cl[20 + i].id : null, by: sellers[i % 5], at: Date.now() - i * 2 * 864e5 }; }
+  for (let i = 0; i < 12; i++) { const id = 'a' + i; st.clients[id] = { id, clubId: 'centre', num: String(900100 + i), name: `${pick(P)} ${pick(N)}`, phone: '+3368' + String(3000000 + i * 4111).slice(0, 7), status: 'Ancien client', endDate: addDays(today(), -(95 + i * 50)), offer: pick(['Basic', 'Premium', 'Ultimate']), price: 0, start: addDays(today(), -(500 + i * 50)) }; st.clients[id].price = PRIX[st.clients[id].offer]; }
+  [['co1', 'Mutuelle Atlantique', 'signe', 120, 6], ['co2', 'Hôpital du secteur', 'proposition', 450, 0], ['co3', 'Transports Bréan', 'rdv', 60, 0], ['co4', 'Groupe Vallée Bâtiment', 'a_contacter', 0, 0]].forEach(([id, nom, statut, effectif, n]) => {
+    st.companies[id] = { id, clubId: 'centre', nom, statut, effectif: effectif || null, ownerId: 'u3', adherents: n, nums: cl.slice(30, 30 + n).map(c => c.num), signeLe: statut === 'signe' ? addDays(today(), -40) : null, at: Date.now() };
     cl.slice(30, 30 + n).forEach(c => { c.company = nom; });
   });
-  cl.slice(0, 10).forEach((c, i) => { if (i % 2 === 0 && c.start <= today()) { const id = 'shop' + i; st.entries[id] = { id, userId: c.sellerId, clubId: 'niort', kpiId: 'nutrition', date: addDays(c.start, i % 4 ? 0 : 9), value: 35, source: 'manual', at: Date.now(), clientNum: c.num }; } });
+  cl.slice(0, 10).forEach((c, i) => { if (i % 2 === 0 && c.start <= today()) { const id = 'shop' + i; st.entries[id] = { id, userId: c.sellerId, clubId: 'centre', kpiId: 'nutrition', date: addDays(c.start, i % 4 ? 0 : 9), value: 35, source: 'manual', at: Date.now(), clientNum: c.num }; } });
   return st;
 }
 

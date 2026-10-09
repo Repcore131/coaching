@@ -30,11 +30,11 @@ const PR_COMPORTEMENTS = [
 ];
 const PR_CHECKS = [['appel1', 'Appel 1'], ['appel2', 'Appel 2'], ['vocal', 'Message vocal'], ['sms', 'SMS']];
 const PR_SMS = [
-  ['premier', 'Premier contact', 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ?'],
-  ['manque', 'Après un appel manqué', 'Bonjour {prenom}, {commercial} du Fitness Park {club}. J’ai essayé de vous joindre au sujet de votre demande. Quand puis-je vous rappeler ? Vous pouvez aussi répondre à ce message.'],
-  ['seance', 'Relance séance découverte', 'Bonjour {prenom}, votre séance découverte au Fitness Park {club} vous attend toujours. Dites-moi le jour qui vous arrange et je vous la réserve. {commercial}'],
-  ['offre', 'Offre du moment', 'Bonjour {prenom}, {commercial} du Fitness Park {club}. Nous avons une offre d’inscription en ce moment : je vous en dis plus en deux minutes au téléphone ou au club ?'],
-  ['dernier', 'Dernière relance', 'Bonjour {prenom}, je ne veux pas vous déranger : je clôture votre demande au Fitness Park {club}. Si vous souhaitez toujours essayer le club, répondez simplement à ce message. {commercial}'],
+  ['premier', 'Premier contact', 'Bonjour {prenom}, c’est {commercial} de {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ?'],
+  ['manque', 'Après un appel manqué', 'Bonjour {prenom}, {commercial} de {club}. J’ai essayé de vous joindre au sujet de votre demande. Quand puis-je vous rappeler ? Vous pouvez aussi répondre à ce message.'],
+  ['seance', 'Relance séance découverte', 'Bonjour {prenom}, votre séance découverte chez {club} vous attend toujours. Dites-moi le jour qui vous arrange et je vous la réserve. {commercial}'],
+  ['offre', 'Offre du moment', 'Bonjour {prenom}, {commercial} de {club}. Nous avons une offre d’inscription en ce moment : je vous en dis plus en deux minutes au téléphone ou au club ?'],
+  ['dernier', 'Dernière relance', 'Bonjour {prenom}, je ne veux pas vous déranger : je clôture votre demande chez {club}. Si vous souhaitez toujours essayer le club, répondez simplement à ce message. {commercial}'],
 ];
 const PR_STOP = ' Répondez STOP pour ne plus recevoir ces messages.';
 
@@ -130,7 +130,7 @@ function prospSmsList() {
 }
 function prospSmsText(p, tplKey) {
   const t = prospSmsList(p).find(x => x[0] === tplKey) || PR_SMS[0];
-  const f = fillTemplate(t[2] + (/STOP/.test(t[2]) ? '' : PR_STOP), { prenom: p.prenom || (pName(p).split(' ')[0]) || '', nom: pName(p), club: (CLUB.name || '').replace(/^Fitness Park\s*/i, ''), commercial: ME.first || '' });
+  const f = fillTemplate(t[2] + (/STOP/.test(t[2]) ? '' : PR_STOP), { prenom: p.prenom || (pName(p).split(' ')[0]) || '', nom: pName(p), club: CLUB.name || '', commercial: ME.first || '' });
   return { text: f.text.replace(/\[[a-z_]+ manquant\]\s?/g, ''), label: t[1] };
 }
 // SMS depuis la fiche : journalisé, puis l'appli SMS du téléphone s'ouvre avec le texte.

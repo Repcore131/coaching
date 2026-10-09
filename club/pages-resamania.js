@@ -14,7 +14,7 @@ const ROUTINE_WEEK = [
 ];
 const ROUTINE_MONTH = [
   ['ventes', '1er → dernier jour du mois', 'RSM_ventes-abonnements_AAAA-MM.csv'],
-  ['factures', 'Mois, Entité = FPN GESTION, Club (déposez le ZIP tel quel)', 'RSM_factures-avoirs_AAAA-MM.zip'],
+  ['factures', 'Mois, Entité = votre société d’exploitation, Club (déposez le ZIP tel quel)', 'RSM_factures-avoirs_AAAA-MM.zip'],
   ['evolution', 'Mois, Club (déposez le ZIP tel quel)', 'RSM_evolution-clients_AAAA-MM.zip'],
   ['tti', 'Mois', 'RSM_tti-commerciaux_AAAA-MM.csv'],
   ['web', 'Mois, Club', 'RSM_web-transactions_AAAA-MM.csv'],
@@ -57,7 +57,7 @@ function impRsm() {
   const item = ([id, filt, file], since) => {
     const d = defById(id); const ts = routine[id]; const ok = ts && ts >= since;
     return `<details class="rsm-item"><summary class="row"><span class="badge ${ok ? 'ok' : ''}" style="min-width:26px;justify-content:center">${ok ? ico('check', 'ico ico-xs') : '·'}</span><b class="spacer">${esc(d.label)}</b><span class="muted small">${ts ? 'importé le ' + dm(isoOf(new Date(ts))) : 'jamais importé'}</span></summary>
-      <div class="small" style="padding:8px 0 4px 36px;display:grid;gap:4px"><div><span class="muted">Où :</span> ${esc(d.path)}</div><div><span class="muted">Filtres :</span> ${esc(filt)}</div><div><span class="muted">Nom à donner :</span> <code>${esc(file)}</code></div><div><span class="muted">Alimente :</span> ${esc(d.feeds)}</div></div></details>`;
+      <div class="small" style="padding:8px 0 4px 36px;display:grid;gap:4px"><div><span class="muted">Où :</span> ${esc(d.path)}</div><div><span class="muted">Filtres :</span> ${esc(filt.replace('Entité = votre société d’exploitation', entiteTexte()))}</div><div><span class="muted">Nom à donner :</span> <code>${esc(file)}</code></div><div><span class="muted">Alimente :</span> ${esc(d.feeds)}</div></div></details>`;
   };
   const cnt = (list, since) => list.filter(([id]) => (routine[id] || 0) >= since).length;
   return `${done}
@@ -76,7 +76,7 @@ function impRsm() {
         <p class="muted small" style="margin-top:-6px">Pour le mois clos. Les exports marqués (S) dans Resamania demandent un code reçu par e-mail.</p>${ROUTINE_MONTH.map(x => item(x, mo)).join('')}</div></div>
     <div class="card"><h3>Où trouver quoi dans Resamania</h3><p class="muted small">Une seule source de vérité par KPI : on n’additionne jamais deux exports pour le même chiffre.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>KPI Fit Pulse</th><th>Source Resamania</th><th>Rattachement au commercial</th></tr></thead><tbody>
-      ${[['Contrats signés', 'Exports de gestion > Membres & Ventes > Vente d’abonnements', 'Commercial initial (code KGUE, AREA…)'],
+      ${[['Contrats signés', 'Exports de gestion > Membres & Ventes > Vente d’abonnements', 'Commercial initial (code ABCD…)'],
          ['Nutrition', 'Exports de gestion > Finance > Factures & avoirs (DetailLignes) ou liste Lignes de factures', 'Auteur / Vendeur'],
          ['Accessoires', 'Idem, codes produit FPARK / NO_FPARK', 'Auteur / Vendeur'],
          ['Impayés récupérés', 'Données financières > Incidents (Statut = Régularisé)', 'Auteur de la régularisation → canal'],
@@ -444,11 +444,11 @@ function memAliases() {
   const members = clubMembers(CLUB.id, { all: true });
   const byUser = {}; Object.entries(al).forEach(([k, v]) => { (byUser[v] = byUser[v] || []).push(k); });
   const pretty = k => { const [t, ...r] = k.split(':'); const v = r.join(':').replace(/,/g, '.'); return `<span class="badge">${{ e: 'e-mail', i: 'id', c: 'code', n: 'nom' }[t] || t}</span> ${esc(v)}`; };
-  return `<div class="card" style="margin-bottom:14px"><h3>Correspondances Resamania</h3><p class="muted small">Resamania écrit un même commercial de plusieurs façons : « NOM Prénom », « Prénom NOM &lt;e-mail&gt; {id} » ou un code (KGUE). Le nom et l’e-mail du membre sont reconnus d’office, dans n’importe quel ordre et casse. Ajoutez ici les codes trigrammes et les autres formes.</p>
-    <form id="alf" class="row wrap" style="margin-top:10px"><input class="input sm" style="width:260px" name="v" placeholder="Code (KGUE), e-mail ou NOM Prénom"><select class="input sm" style="width:auto" name="u">${members.map(u => `<option value="${u.id}">${esc(fullName(u))}</option>`).join('')}<option value="system">Vente en ligne / système</option><option value="ignore">Ignorer</option></select><button class="btn sm primary" type="button" data-act="aliasAdd">${ico('plus')} Ajouter</button></form></div>
+  return `<div class="card" style="margin-bottom:14px"><h3>Correspondances Resamania</h3><p class="muted small">Resamania écrit un même commercial de plusieurs façons : « NOM Prénom », « Prénom NOM &lt;e-mail&gt; {id} » ou un code (ABCD). Le nom et l’e-mail du membre sont reconnus d’office, dans n’importe quel ordre et casse. Ajoutez ici les codes trigrammes et les autres formes.</p>
+    <form id="alf" class="row wrap" style="margin-top:10px"><input class="input sm" style="width:260px" name="v" placeholder="Code (ABCD), e-mail ou NOM Prénom"><select class="input sm" style="width:auto" name="u">${members.map(u => `<option value="${u.id}">${esc(fullName(u))}</option>`).join('')}<option value="system">Vente en ligne / système</option><option value="ignore">Ignorer</option></select><button class="btn sm primary" type="button" data-act="aliasAdd">${ico('plus')} Ajouter</button></form></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(300px, 100%), 1fr))">
     ${members.map(u => `<div class="card"><div class="row">${avatar(u, 'xs')}<b class="spacer">${esc(fullName(u))}</b></div><div class="muted small" style="margin:6px 0">Reconnu d’office : ${esc(fullName(u))}${u.email ? ' · ' + esc(u.email) : ''}</div>${(byUser[u.id] || []).map(k => `<div class="row small" style="padding:3px 0">${pretty(k)}<span class="spacer"></span><button class="btn ghost icon sm" data-act="aliasDel" data-k="${esc(k)}" title="Retirer">${ico('x')}</button></div>`).join('') || '<div class="muted small">Aucune autre forme enregistrée.</div>'}</div>`).join('')}
-    ${['system', 'ignore'].map(t => `<div class="card"><b>${t === 'system' ? 'Vente en ligne / système' : 'Ignorés'}</b><div class="muted small" style="margin:6px 0">${t === 'system' ? 'Jamais attribué à un commercial. Toujours reconnus : Traitement automatique, Automatismes, Site web Fitness Park Public, PSO Site (SPSO), En ligne, BackOffice Mobile, Espace membre.' : 'Lignes non importées.'}</div>${(byUser[t] || []).map(k => `<div class="row small" style="padding:3px 0">${pretty(k)}<span class="spacer"></span><button class="btn ghost icon sm" data-act="aliasDel" data-k="${esc(k)}">${ico('x')}</button></div>`).join('')}</div>`).join('')}</div>`;
+    ${['system', 'ignore'].map(t => `<div class="card"><b>${t === 'system' ? 'Vente en ligne / système' : 'Ignorés'}</b><div class="muted small" style="margin:6px 0">${t === 'system' ? 'Jamais attribué à un commercial. Toujours reconnus : Traitement automatique, Automatismes, Site web de l’enseigne, PSO Site (SPSO), En ligne, BackOffice Mobile, Espace membre.' : 'Lignes non importées.'}</div>${(byUser[t] || []).map(k => `<div class="row small" style="padding:3px 0">${pretty(k)}<span class="spacer"></span><button class="btn ghost icon sm" data-act="aliasDel" data-k="${esc(k)}">${ico('x')}</button></div>`).join('')}</div>`).join('')}</div>`;
 }
 ACTIONS.aliasAdd = () => {
   const f = formData($('#alf')); const v = f.v.trim(); if (!v) return;

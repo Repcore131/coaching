@@ -4,7 +4,7 @@
 // Lance par .github/workflows/fitpulse-mail.yml (toutes les 5 minutes).
 //  1. S'assure que les regles Fit Pulse sont dans la base (elles peuvent
 //     disparaitre quand RepCore redeploie ses regles depuis main : on les remet)
-//     et que les cles de connexion des comptes de config.js existent.
+//     et que les cles de connexion des comptes de tools/bootstrap.js existent.
 //  2. Lit /fitpulse_mail (ecrit par l'app quand un code est cree), envoie un
 //     e-mail d'invitation par demande, puis efface la demande (et donc le code).
 // Aucune dependance : JWT, HTTPS et SMTP sur TLS ecrits a la main, comme
@@ -14,6 +14,7 @@
 // Variables : FIREBASE_SERVICE_ACCOUNT, MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE,
 //             FITPULSE_URL (https://fitpulse-niort.web.app), DRY_RUN=1 pour tester.
 
+import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import tls from 'node:tls';
 import { pathToFileURL } from 'node:url';
@@ -128,6 +129,11 @@ export const REGLE = `${DEBUT}
       ".read": ${j(CREATEUR)},
       ".write": ${j(CREATEUR)}
     },
+    "pulse_public": {
+      ".read": true,
+      "legal": { ".write": ${j(MGR)}, "$c": { ".validate": "newData.isString() && newData.val().length <= 300" } },
+      "$autre": { ".validate": false }
+    },
     "pulse_boot": {
       ".read": ${j(MANAGER)},
       "$k": {
@@ -204,12 +210,20 @@ async function assurerRegle(tk) {
   await api(tk, '.settings/rules.json', { method: 'PUT', body: neuf });
   return 'mise à jour';
 }
-// Comptes declares dans club/config.js (createur, manager) : leur cle de
-// connexion est posee si elle manque.
+// Comptes de départ du déploiement (club/tools/bootstrap.js, jamais livré au
+// navigateur) : leur clé de connexion est posée si elle manque, ainsi que
+// l'identité du client (/pulse/tenant) et ses mentions légales publiques
+// (/pulse_public/legal) quand elles n'existent pas encore.
 async function assurerComptes(tk) {
-  const src = readFileSync(new URL('../config.js', import.meta.url), 'utf8');
-  const comptes = [...src.matchAll(/id: '([^']+)'[^\n]*?bootKey: '([0-9a-f]{40})'(?:, codeKey: '([0-9a-f]{40})')?/g)].map(m => ({ id: m[1], cle: m[2], ck: m[3] }));
+  let B = { accounts: [] }; try { B = createRequire(import.meta.url)('../tools/bootstrap.js').BOOTSTRAP; } catch (e) { return 'pas de tools/bootstrap.js : aucun compte de départ'; }
+  const comptes = (B.accounts || []).filter(a => a.bootKey).map(a => ({ id: a.id, cle: a.bootKey, ck: a.codeKey }));
   const faits = [];
+  if (B.tenant) {
+    const { legal, ...tenant } = B.tenant;
+    if (!(await (await api(tk, 'pulse/tenant.json')).json())) { if (!DRY) await api(tk, 'pulse/tenant.json', { method: 'PUT', body: JSON.stringify(tenant) }); faits.push('identité du client'); }
+    if (B.plan && B.plan.directeur) { const p = `pulse/plans/${B.plan.club}/${B.plan.id}/directeur.json`; if (!(await (await api(tk, p)).json())) { if (!DRY) await api(tk, p, { method: 'PUT', body: JSON.stringify(B.plan.directeur) }); faits.push('destinataire du rapport'); } }
+    if (legal && !(await (await api(tk, 'pulse_public/legal.json')).json())) { if (!DRY) await api(tk, 'pulse_public/legal.json', { method: 'PUT', body: JSON.stringify(legal) }); faits.push('mentions légales publiques'); }
+  }
   for (const c of comptes) {
     const v = await (await api(tk, `pulse_boot/${c.cle}.json`)).json();
     if (v !== c.id) { if (!DRY) await api(tk, `pulse_boot/${c.cle}.json`, { method: 'PUT', body: JSON.stringify(c.id) }); faits.push(c.id); }

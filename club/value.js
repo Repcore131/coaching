@@ -56,7 +56,7 @@ function encaisseMois(clubId, mk) {
 // Valeur en jeu d'une demande de resiliation : mensualite x mois restants.
 // Panier moyen du club (Club et réglages > Réglages), 32 € à défaut.
 const PANIER_DEFAUT = 32;
-const panierMoyen = () => { const v = Number(deepGet(S || {}, ['settings', 'panierMoyen'])); return v > 0 ? v : PANIER_DEFAUT; };
+const panierMoyen = () => { const v = Number(deepGet(S || {}, ['settings', 'panierMoyen'])) || Number(deepGet(S || {}, ['tenant', 'panierMoyen'])); return v > 0 ? v : PANIER_DEFAUT; };
 // Fiches possibles d'une demande : numéro client s'il est connu, sinon nom normalisé.
 function resCandidats(r) {
   const L = clubClients(r.clubId); const num = String(r.num || r.clientNum || '').trim();

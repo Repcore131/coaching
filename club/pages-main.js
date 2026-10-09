@@ -12,12 +12,15 @@ PAGES.onboarding = {
       <p class="muted">${esc(TXT.app.accueil)}</p>
       <form id="ob" class="grid" style="margin-top:16px">
         <label class="field"><span>Nom du club</span><input class="input" name="club" required placeholder="Nom de votre club"></label>
+        <div class="form-grid"><label class="field"><span>Enseigne</span><input class="input" name="brand" maxlength="60" placeholder="Facultatif"></label><label class="field"><span>Société d’exploitation</span><input class="input" name="entity" maxlength="80" placeholder="Raison sociale"></label></div>
+        <div class="form-grid"><label class="field"><span>Couleur principale</span><input class="input" type="color" name="primary" value="#12B3A8"></label><label class="field"><span>Panier moyen (€ par mois)</span><input class="input" inputmode="decimal" name="panierMoyen" placeholder="32"></label></div>
         <div class="form-grid"><label class="field"><span>Votre prénom</span><input class="input" name="first" required></label><label class="field"><span>Votre nom</span><input class="input" name="last" required></label></div>
         <label class="field"><span>E-mail</span><input class="input" type="email" name="email" placeholder="facultatif en mode local"></label>
         <button class="btn primary" type="submit">Créer mon club</button>
       </form>
       <div class="row" style="margin:16px 0 0"><span class="spacer" style="height:1px;background:#2a2a2e"></span><span class="muted small">ou</span><span class="spacer" style="height:1px;background:#2a2a2e"></span></div>
       <button class="btn" style="width:100%;margin-top:14px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>
+      <p class="small" style="margin:10px 0 0;text-align:center"><a href="?demo=1">Voir la démo</a> <span class="muted">sans rien enregistrer dans ce navigateur</span></p>
       <p class="muted small" style="margin-top:14px">${backend.mode === 'local' ? 'Mode local : les données restent dans ce navigateur. Le mode partagé (toute l’équipe sur la même base) s’active dans config.js.' : 'Mode partagé : base Firebase de l’équipe.'}</p>
     </div></div>`;
   },
@@ -29,6 +32,8 @@ document.addEventListener('submit', e => {
   const st = emptyState();
   const cid = norm(f.club).replace(/ /g, '-').slice(0, 30) || 'club';
   st.clubs[cid] = { id: cid, name: f.club.trim(), address: '', city: '', createdAt: Date.now() };
+  const primary = COULEUR_OK(f.primary) ? f.primary.toUpperCase() : null;
+  st.tenant = { name: f.club.trim(), brand: (f.brand || '').trim() || null, logo: null, colors: primary ? { primary, onPrimary: encreSur(primary) } : null, entity: (f.entity || '').trim() || null, panierMoyen: parseMontant(f.panierMoyen || '') > 0 ? parseMontant(f.panierMoyen) : null };
   const uid = newId();
   if (backend.mode === 'firebase') f.email = backend.user.email;
   st.users[uid] = { id: uid, first: f.first.trim(), last: f.last.trim(), email: (f.email || '').trim().toLowerCase(), role: 'manager', clubs: [cid], avatar: 'h1', status: 'active', createdAt: Date.now() };
@@ -48,7 +53,7 @@ PAGES.login = {
   render() {
     const shared = backend.mode === 'firebase';
     const img = (window.PARKPULSE_ASSETS || {}).login;
-    const club = (window.PARKPULSE_CLUB || {}).name || 'Fitness Park';
+    const club = deepGet(S || {}, ['tenant', 'name']) || (S && Object.values(S.clubs || {})[0] || {}).name || 'Votre club';
     const q = new URLSearchParams(location.search);
     const email = q.get('email') || safeLS.get('parkpulse.lastEmail') || '';
     const demo = !shared && S ? Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b))) : [];

@@ -1,7 +1,7 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 // ══ CONFIGURATION FIT PULSE ══════════════════════════════════════════════
 //
-// MODE PARTAGE (site en ligne fitpulse-niort.web.app) : toute l'equipe lit et
+// MODE PARTAGE (site en ligne du club) : toute l'equipe lit et
 // ecrit la meme base Firebase (projet repcore-sync, noeud /pulse). On se
 // connecte avec son e-mail + son code personnel, depuis n'importe quel
 // appareil. Les regles d'acces sont posees par club/outils/fitpulse-serveur.mjs.
@@ -37,19 +37,14 @@
 window.PARKPULSE_MAIL_AUTO = false;
 
 // ══ COMPTES DE DEPART ═════════════════════════════════════════════════════
-// Crees automatiquement au premier lancement (et ajoutes a une base existante
-// s'ils manquent). Seule l'EMPREINTE du code est ici (SHA-256 sale) : le code
-// lui-meme n'est ecrit nulle part dans le depot. bootKey = SHA-256(e-mail|code),
-// la cle de connexion en mode partage (ouvre /pulse_boot, voir core.js). Pour changer un code : Mon
-// profil > Securite, ou un createur depuis Membres.
-window.PARKPULSE_CLUB = { id: 'niort', name: 'Fitness Park Niort', address: '600 Av. de Paris', city: '79000 Niort' };
-window.PARKPULSE_ACCOUNTS = [
-  { id: 'kg-createur', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'createur', salt: 'c1e2c0f885e88133', codeHash: '18c5a02277b8bab8d72fa5eb511ae202b15025f066067d09208c3c4210c7b358', bootKey: 'bcb94d3b291bacdcdff6c95889640de19eca876a', codeKey: '1c293626e1688b3928e389927280ac6f85fad62e' },
-  { id: 'kg-manager', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'manager', salt: 'd8a29558ba1fbce4', codeHash: '223ecb32cf76b5fe1560af2119eaf86285531e09858aee8b5f59c862142e7440', bootKey: 'b6b8b10beaaa9ffe3dd08b5d97efe10de1c6fd04', codeKey: '5368636c980e2b8a61e205a08b155b36efca0a4e' },
-];
+// Aucun compte ni club dans le fichier livre : une base neuve est vide jusqu'au
+// formulaire de creation (nom du club, enseigne, societe, couleur, premier
+// manager). Les comptes de depart d'un deploiement donne sont dans
+// tools/bootstrap.js, lu par le serveur (outils/fitpulse-serveur.mjs), jamais
+// charge par le navigateur.
 
 // ══ VISUELS ═══════════════════════════════════════════════════════════════
-// Images d'ambiance (Canva) et logo officiel du club. Pour passer en haute
+// Images d'ambiance (Canva). Le logo du club se regle dans Club et reglages. Pour passer en haute
 // définition : exporter les images depuis Canva et remplacer les fichiers de
 // club/assets/ sous le même nom. logo : null pour n'afficher que Fit Pulse.
 window.PARKPULSE_ASSETS = {
@@ -60,10 +55,8 @@ window.PARKPULSE_ASSETS = {
   logo: null, // logo du club : réglé par club (Club et réglages), aucun par défaut
 };
 
-// Demonstration : ni comptes reels, ni club reel, ni logo de l'enseigne.
+// Demonstration : ni comptes reels, ni club reel, ni logo.
 if (window.PARKPULSE_DEMO) {
-  window.PARKPULSE_ACCOUNTS = [];
-  window.PARKPULSE_CLUB = { id: 'demo-centre', name: 'Club Démo Centre', address: '1 place Centrale', city: 'Démoville' };
   window.PARKPULSE_ASSETS.logo = null;
   window.PARKPULSE_MAIL_AUTO = false;
 }

@@ -166,26 +166,26 @@ function relQueue(clubId, scope = 'mine') {
 
 // ── Modèles de messages et scripts d'appel ────────────────────────────────
 const TPL_DEFAULT = {
-  inactif: { sms: 'Bonjour {prenom}, on ne vous a pas vu au Fitness Park {club} depuis quelques semaines. Pour reprendre en douceur, je vous offre une séance de reprise avec un coach : quel jour vous arrange ? {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. On ne vous a pas vu depuis quelques semaines, je voulais prendre de vos nouvelles.', 'Qu’est-ce qui vous a éloigné du club : le temps, la motivation, une blessure ?', 'Je vous propose une séance de reprise offerte avec un coach, pour repartir sur un programme adapté. Quel jour vous arrange ?'] },
-  prospect: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
-  invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir le Fitness Park {club} ! Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous êtes venu découvrir le club récemment : comment s’est passée la séance ?', 'Qu’avez-vous préféré : les machines, les cours, l’ambiance ?', 'Je vous propose de passer pour voir l’offre qui vous correspond, ou je vous l’envoie par SMS. Qu’est-ce qui vous arrange ?'] },
-  suivi15: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. J’ai essayé de vous joindre pour savoir comment se passent vos débuts. Une question, un besoin ? Répondez ici, je vous rappelle.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Je vous appelle pour savoir comment se passent vos deux premières semaines. Vous avez deux minutes ?', 'Vous venez combien de fois par semaine ? Vous avez trouvé vos repères sur les machines ? Vous avez déjà fait votre séance avec un coach ?', 'Je vous propose un créneau avec un coach pour caler un programme. Plutôt en semaine ou le week-end ?'] },
-  suivi30: { sms: 'Bonjour {prenom}, déjà un mois au Fitness Park {club}. Envie d’un point avec un coach pour garder le rythme ? Répondez OUI et je vous propose un créneau. {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Ça fait un mois que vous êtes avec nous, je voulais faire le point.', 'Vous atteignez ce que vous visiez en vous inscrivant ? Qu’est-ce qui vous aiderait à venir plus souvent ? Vous connaissez quelqu’un qui aimerait essayer ?', 'Je peux lui offrir une séance découverte. Vous me donnez son prénom et son numéro ?'] },
-  anniversaire: { sms: 'Joyeux anniversaire {prenom} ! Toute l’équipe du Fitness Park {club} vous souhaite une belle journée. Une petite attention vous attend à l’accueil cette semaine.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. On voulait simplement vous souhaiter un bon anniversaire de la part de toute l’équipe.', '', 'Passez nous voir à l’accueil cette semaine, on a une petite attention pour vous.'] },
-  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Avant cette date, je peux vous proposer une offre de maintien de 8 semaines pour continuer dans les meilleures conditions. On en parle ? {commercial}, Fitness Park {club}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Votre engagement {offre} arrive à échéance le {date_fin}, je voulais anticiper avec vous.', 'Comment s’est passée cette année ? Vous comptez continuer ? Votre formule correspond toujours à votre pratique ?', 'Si vous renouvelez avant le {date_fin}, je vous garde les conditions actuelles. On le fait ensemble à l’accueil ou par téléphone ?'] },
-  impaye: { sms: 'Bonjour {prenom}, un prélèvement de {montant} n’a pas pu être effectué sur votre abonnement Fitness Park {club}. Vous pouvez régulariser à l’accueil. Merci, {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Je vous appelle au sujet d’un prélèvement qui n’est pas passé, pour un montant de {montant}. Ça arrive souvent, je voulais simplement régler ça avec vous.', 'Vous étiez au courant ? Votre carte ou votre compte a changé récemment ?', 'Vous pouvez régler à l’accueil lors de votre prochaine séance. À quelle date je peux noter le règlement ?'] },
-  mandat: { sms: 'Bonjour {prenom}, il manque le mandat de prélèvement sur votre abonnement Fitness Park {club}. Passez à l’accueil avec votre RIB, cela prend deux minutes.',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Il manque le mandat de prélèvement sur votre abonnement, ce qui peut bloquer votre accès.', '', 'Ça prend deux minutes à l’accueil avec votre RIB. Vous passez quand cette semaine ?'] },
-  resiliation: { sms: 'Bonjour {prenom}, j’ai bien reçu votre demande. Avant de la traiter, j’aimerais en parler deux minutes avec vous. Quand puis-je vous appeler ? {commercial}, Fitness Park {club}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. J’ai bien reçu votre demande de résiliation. Avant de la traiter, je voulais comprendre ce qui vous amène à arrêter.', 'Qu’est-ce qui a changé pour vous ? Si on trouvait une solution à ce point, vous resteriez ?', 'Prix : une formule plus adaptée. Manque de temps ou santé : une suspension plutôt qu’un arrêt. Insatisfaction : une séance avec un coach. Toujours finir par : je note votre décision et je vous confirme par SMS.'] },
+  inactif: { sms: 'Bonjour {prenom}, on ne vous a pas vu chez {club} depuis quelques semaines. Pour reprendre en douceur, je vous offre une séance de reprise avec un coach : quel jour vous arrange ? {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. On ne vous a pas vu depuis quelques semaines, je voulais prendre de vos nouvelles.', 'Qu’est-ce qui vous a éloigné du club : le temps, la motivation, une blessure ?', 'Je vous propose une séance de reprise offerte avec un coach, pour repartir sur un programme adapté. Quel jour vous arrange ?'] },
+  prospect: { sms: 'Bonjour {prenom}, c’est {commercial} de {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
+  invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir {club} ! Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Vous êtes venu découvrir le club récemment : comment s’est passée la séance ?', 'Qu’avez-vous préféré : les machines, les cours, l’ambiance ?', 'Je vous propose de passer pour voir l’offre qui vous correspond, ou je vous l’envoie par SMS. Qu’est-ce qui vous arrange ?'] },
+  suivi15: { sms: 'Bonjour {prenom}, c’est {commercial} de {club}. J’ai essayé de vous joindre pour savoir comment se passent vos débuts. Une question, un besoin ? Répondez ici, je vous rappelle.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Je vous appelle pour savoir comment se passent vos deux premières semaines. Vous avez deux minutes ?', 'Vous venez combien de fois par semaine ? Vous avez trouvé vos repères sur les machines ? Vous avez déjà fait votre séance avec un coach ?', 'Je vous propose un créneau avec un coach pour caler un programme. Plutôt en semaine ou le week-end ?'] },
+  suivi30: { sms: 'Bonjour {prenom}, déjà un mois chez {club}. Envie d’un point avec un coach pour garder le rythme ? Répondez OUI et je vous propose un créneau. {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Ça fait un mois que vous êtes avec nous, je voulais faire le point.', 'Vous atteignez ce que vous visiez en vous inscrivant ? Qu’est-ce qui vous aiderait à venir plus souvent ? Vous connaissez quelqu’un qui aimerait essayer ?', 'Je peux lui offrir une séance découverte. Vous me donnez son prénom et son numéro ?'] },
+  anniversaire: { sms: 'Joyeux anniversaire {prenom} ! Toute l’équipe de {club} vous souhaite une belle journée. Une petite attention vous attend à l’accueil cette semaine.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. On voulait simplement vous souhaiter un bon anniversaire de la part de toute l’équipe.', '', 'Passez nous voir à l’accueil cette semaine, on a une petite attention pour vous.'] },
+  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Avant cette date, je peux vous proposer une offre de maintien de 8 semaines pour continuer dans les meilleures conditions. On en parle ? {commercial}, {club}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Votre engagement {offre} arrive à échéance le {date_fin}, je voulais anticiper avec vous.', 'Comment s’est passée cette année ? Vous comptez continuer ? Votre formule correspond toujours à votre pratique ?', 'Si vous renouvelez avant le {date_fin}, je vous garde les conditions actuelles. On le fait ensemble à l’accueil ou par téléphone ?'] },
+  impaye: { sms: 'Bonjour {prenom}, un prélèvement de {montant} n’a pas pu être effectué sur votre abonnement chez {club}. Vous pouvez régulariser à l’accueil. Merci, {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Je vous appelle au sujet d’un prélèvement qui n’est pas passé, pour un montant de {montant}. Ça arrive souvent, je voulais simplement régler ça avec vous.', 'Vous étiez au courant ? Votre carte ou votre compte a changé récemment ?', 'Vous pouvez régler à l’accueil lors de votre prochaine séance. À quelle date je peux noter le règlement ?'] },
+  mandat: { sms: 'Bonjour {prenom}, il manque le mandat de prélèvement sur votre abonnement chez {club}. Passez à l’accueil avec votre RIB, cela prend deux minutes.',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Il manque le mandat de prélèvement sur votre abonnement, ce qui peut bloquer votre accès.', '', 'Ça prend deux minutes à l’accueil avec votre RIB. Vous passez quand cette semaine ?'] },
+  resiliation: { sms: 'Bonjour {prenom}, j’ai bien reçu votre demande. Avant de la traiter, j’aimerais en parler deux minutes avec vous. Quand puis-je vous appeler ? {commercial}, {club}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. J’ai bien reçu votre demande de résiliation. Avant de la traiter, je voulais comprendre ce qui vous amène à arrêter.', 'Qu’est-ce qui a changé pour vous ? Si on trouvait une solution à ce point, vous resteriez ?', 'Prix : une formule plus adaptée. Manque de temps ou santé : une suspension plutôt qu’un arrêt. Insatisfaction : une séance avec un coach. Toujours finir par : je note votre décision et je vous confirme par SMS.'] },
 };
 const MARKETING = ['anniversaire', 'suivi30'];
 function tplFor(kind, ch) {
@@ -199,10 +199,12 @@ function tplFor(kind, ch) {
 }
 function tplCtx(rl) {
   const c = rl.client || {};
-  return { prenom: (c.name || rl.name || '').split(' ')[0] || '', nom: c.name || rl.name || '', club: (CLUB.name || '').replace(/^Fitness Park\s*/i, ''), commercial: ME.first || '', montant: rl.amount ? fmtE(rl.amount) : '', date_fin: c.end ? dmy(c.end) : '', offre: c.offer || '' };
+  return { prenom: (c.name || rl.name || '').split(' ')[0] || '', nom: c.name || rl.name || '', club: CLUB.name || '', commercial: ME.first || '', montant: rl.amount ? fmtE(rl.amount) : '', date_fin: c.end ? dmy(c.end) : '', offre: c.offer || '' };
 }
 function fillTemplate(body, ctx) {
   const missing = [];
+  // Ancien modèle personnalisé « <enseigne> {club} » : {club} porte déjà le nom complet.
+  const marque = deepGet(S || {}, ['tenant', 'brand']); if (marque) body = String(body).replace(new RegExp(marque.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+\\{club\\}', 'gi'), '{club}');
   const out = String(body).replace(/\{([a-z_]+)\}/g, (m, k) => { const v = ctx[k]; if (v == null || v === '') { missing.push(k); return `[${k} manquant]`; } return v; });
   return { text: out, missing };
 }
@@ -212,7 +214,7 @@ function contactLinks(rl, text = '') {
     tel: p ? `tel:${p}` : null,
     sms: p ? `sms:${p}?&body=${encodeURIComponent(text)}` : null,
     wa: p ? `https://wa.me/${p.replace('+', '')}?text=${encodeURIComponent(text)}` : null,
-    mail: e && /^[^\s@<>"']+@[^\s@<>"']+$/.test(e) ? `mailto:${encodeURIComponent(e).replace('%40', '@')}?subject=${encodeURIComponent('Fitness Park ' + (CLUB.name || ''))}&body=${encodeURIComponent(text)}` : null,
+    mail: e && /^[^\s@<>"']+@[^\s@<>"']+$/.test(e) ? `mailto:${encodeURIComponent(e).replace('%40', '@')}?subject=${encodeURIComponent(CLUB.name || 'Votre club')}&body=${encodeURIComponent(text)}` : null,
   };
 }
 

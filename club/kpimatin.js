@@ -179,7 +179,7 @@ PAGES.kpimatin = {
           : `<button class="btn primary lg" data-act="kmMake">${ico('send')} Créer mon SMS</button>`}</div>
       ${mgr ? `<details class="card"><summary><b>Modèle du message</b> <span class="muted small">(manager)</span></summary>
         <p class="muted small">Le texte envoyé chaque matin. Les mots entre accolades sont remplacés : ${['mois', 'date', ...KM_FIELDS.map(f => f[0])].map(k => `<code>{${k}}</code>`).join(' ')}</p>
-        <form id="kmf" class="grid"><label class="field"><span>Nom du groupe WhatsApp (rappel affiché au moment d’envoyer)</span><input class="input" name="group" maxlength="80" value="${esc(cfg.group || '')}" placeholder="FITNESS PARK Niort KPI"></label>
+        <form id="kmf" class="grid"><label class="field"><span>Nom du groupe WhatsApp (rappel affiché au moment d’envoyer)</span><input class="input" name="group" maxlength="80" value="${esc(cfg.group || '')}" placeholder="KPI de l’équipe"></label>
           <label class="field"><span>E-mail du récap automatique de 8 h 45 (avec bouton « Envoyer sur WhatsApp »)</span><input class="input" name="email" type="email" maxlength="120" value="${esc(cfg.email || '')}" placeholder="accueil du club (sinon : e-mail de copie du Plan)"></label>
         <label class="field"><span>Modèle</span><textarea class="input km-text" name="template" rows="16">${esc(kmTemplate())}</textarea></label></form>
         <div class="row" style="gap:8px"><button class="btn primary" data-act="kmCfgSave">Enregistrer le modèle</button><button class="btn ghost" data-act="kmCfgReset">Rétablir le modèle d’origine</button></div></details>` : ''}`;

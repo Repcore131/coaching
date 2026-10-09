@@ -62,7 +62,7 @@ PAGES.donnees = {
   title: 'Données personnelles',
   render() {
     return `<div class="page-head"><div><h1>Données personnelles</h1><p>Ce que Fit Pulse garde, pourquoi, combien de temps.</p></div></div>
-      <div class="card prose"><h3>Responsable de traitement</h3><p>La société qui exploite le club Fitness Park (contact : le responsable du club).</p>
+      <div class="card prose"><h3>Responsable de traitement</h3><p>La société qui exploite le club (contact : le responsable du club).</p>
       <h3>Finalités</h3><p>Suivi commercial de l’équipe, relances de fidélisation des adhérents, recouvrement amiable des impayés.</p>
       <h3>Base légale</h3><p>Intérêt légitime du club pour le suivi commercial et la fidélisation ; exécution du contrat d’abonnement pour les impayés.</p>
       <h3>Données</h3><p>Équipe : nom, e-mail, saisies. Adhérents : nom, numéro, téléphone, e-mail, offre, dates de contrat, jour et mois d’anniversaire (sans l’année), solde dû, demande de résiliation, contacts notés. Jamais de pièce d’identité ni de RIB : n’en mettez pas dans le chat.</p>

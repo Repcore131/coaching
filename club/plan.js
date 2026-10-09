@@ -15,7 +15,7 @@ const PLAN_DEFAULT = {
   partenariats: 2, cibles: ['MAIF', 'MACIF', 'MAAF', 'IMA'], blackFriday: '2026-11-15',
   avisDepart: 920, avisDepartDate: '2026-10-06',
   primes: { palier: 150, avis: [[50, 50], [75, 80]], equipeMoisVentes: 60 },
-  directeur: 'kevinguellec.pro@gmail.com', copie: null, rapport: 'lundi 15 h',
+  directeur: '', copie: null, rapport: 'lundi 15 h',
 };
 const planStore = (club = CLUB.id) => deepGet(S, ['plans', club, PLAN_DEFAULT.id]) || {};
 function planOf(club = CLUB.id) {

@@ -10,7 +10,7 @@ test('la migration conserve exactement les totaux de septembre', () => {
   const pulse = demo(); const k = 'a'.repeat(40), p = 'b'.repeat(40);
   const { up, rapport } = migrer({ pulse, pulse_boot: { [k]: 'u2', [p]: k }, pulse_product: { p01: { status: 'devant' } } }, 'fitnessparkniort', { nom: 'FPN Gestion' });
   const avant = totaux(pulse, '2026-09'), apres = totaux(vueOrg(up, 'fitnessparkniort'), '2026-09');
-  assert.ok(Object.values(avant.niort.kpi).some(v => v > 0), 'la démo a des chiffres en septembre');
+  assert.ok(Object.values(avant.centre.kpi).some(v => v > 0), 'la démo a des chiffres en septembre');
   assert.deepEqual(ecarts(avant, apres), []);
   assert.deepEqual(up[`orgs_boot/${k}`], { org: 'fitnessparkniort', uid: 'u2', privilegie: true });
   assert.equal(up[`orgs_boot/${p}`], k);

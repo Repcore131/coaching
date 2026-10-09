@@ -104,18 +104,22 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
   return `<div class="bar"><i style="width:${w}%;background:${col}"></i>${ticks ? [25, 50, 75].map(t => `<span class="tick" style="left:${t}%"></span>`).join('') : ''}${pace != null ? `<span class="pace" style="left:${clamp(pace * 100, 0, 100)}%" title="Rythme attendu"></span>` : ''}</div>`;
 }
 
-// ── Couleurs : --brand (Fit Pulse, fixe) et --club (réglable par club ou par espace) ──
-// Le club choisit sa couleur dans Club et réglages ; sans réglage, --club = --brand.
+// ── Couleurs : --brand (Fit Pulse, fixe) et --club (couleur du client) ────
+// --club : couleur du club (Club et réglages), sinon couleur primaire du client
+// (S.tenant.colors.primary), sinon --brand. Le texte posé dessus respecte le
+// contraste AA (4,5:1) : la couleur onPrimary choisie, sinon noir ou blanc.
 const COULEUR_OK = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
-function couleurClub() { const c = (CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur) || deepGet(S || {}, ['info', 'couleur']); return COULEUR_OK(c) ? c : null; }
-// Encre lisible sur une couleur (noir ou blanc selon la luminance).
-function encreSur(hex) { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); const L = 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; return L > 0.22 ? '#0B0B0C' : '#FFFFFF'; }
+function couleurClub() { const c = (CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur) || deepGet(tenant(), ['colors', 'primary']) || deepGet(S || {}, ['info', 'couleur']); return COULEUR_OK(c) ? c : null; }
+const luminance = hex => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+const contraste = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+// Encre lisible sur une couleur : celle demandée si elle passe AA, sinon la meilleure du noir ou du blanc.
+function encreSur(hex, voulue) { if (COULEUR_OK(voulue) && contraste(hex, voulue) >= 4.5) return voulue; return contraste(hex, '#0B0B0C') >= contraste(hex, '#FFFFFF') ? '#0B0B0C' : '#FFFFFF'; }
 function appliquerCouleurClub() {
-  const r = document.documentElement.style; const c = couleurClub();
-  if (c) { r.setProperty('--club', c); r.setProperty('--club-ink', encreSur(c)); } else { r.removeProperty('--club'); r.removeProperty('--club-ink'); }
+  const r = document.documentElement.style; const c = couleurClub(); const clubC = CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur;
+  if (c) { r.setProperty('--club', c); r.setProperty('--club-ink', encreSur(c, clubC ? null : deepGet(tenant(), ['colors', 'onPrimary']))); } else { r.removeProperty('--club'); r.removeProperty('--club-ink'); }
 }
-// Logo du club : réglage du club, sinon celui de config.js (aucun par défaut). Fichier du site uniquement.
-function clubLogo() { const l = (CLUB && CLUB.logo) || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) ? l : null; }
+// Logo : celui du club, sinon celui du client, sinon config.js (aucun par défaut). Fichier du site uniquement.
+function clubLogo() { const l = (CLUB && CLUB.logo) || tenant().logo || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) ? l : null; }
 
 // ── Tracé de pouls : amplitude et couleur selon le rythme (statusOf) ──────
 const POULS = { ahead: [1, 'var(--ok)'], ontime: [0.8, 'var(--ok)'], done: [1, 'var(--ok)'], late: [0.5, 'var(--warn)'], verylate: [0.25, 'var(--bad)'], wait: [0.12, 'var(--muted)'], none: [0, 'var(--muted)'] };

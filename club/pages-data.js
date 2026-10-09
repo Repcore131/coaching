@@ -463,8 +463,32 @@ function reglagesCommunsCard() {
 ACTIONS.settingSet = el => { if (!isManager()) return; const k = el.dataset.k; let v = String(el.value || '').trim();
   if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (!v) v = null; else v = v.slice(0, 600);
   db.set(['settings', k], v); toast('Enregistré'); };
+// Identité du client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen, mentions légales.
+const TENANT_LEGAL = [['auteur', 'Responsable de la publication'], ['societe', 'Société (raison sociale)'], ['sigle', 'Sigle'], ['forme', 'Forme juridique'], ['capital', 'Capital'], ['rcs', 'RCS'], ['siret', 'SIRET du club'], ['tva', 'TVA intracommunautaire'], ['adresse', 'Siège social'], ['president', 'Représentant légal'], ['etablissement', 'Adresse du club'], ['tel', 'Téléphone'], ['email', 'E-mail de contact'], ['site', 'Site'], ['tribunal', 'Ville du tribunal compétent'], ['marque', 'Marque de l’enseigne']];
+function tenantCard() {
+  const T = tenant(); const c = deepGet(T, ['colors', 'primary']) || '#12B3A8'; const on = encreSur(c, deepGet(T, ['colors', 'onPrimary'])); const ratio = contraste(c, on);
+  const champ = (k, l, v, extra = '') => `<label class="field"><span>${l}</span><input class="input" data-change="tenantSet" data-k="${k}" value="${esc(v == null ? '' : String(v))}" ${extra}></label>`;
+  return `<div class="card" id="tenant-card"><h3>Identité du client</h3><p class="muted small" style="margin-top:-4px">Nom, enseigne et couleurs affichés dans Fit Pulse, et société d’exploitation reprise dans les exports et les mentions légales.</p>
+    <div class="form-grid">${champ('name', 'Nom', T.name)}${champ('brand', 'Enseigne', T.brand, 'placeholder="Facultatif"')}${champ('entity', 'Société d’exploitation', T.entity, 'placeholder="Entité = votre société d’exploitation"')}${champ('logo', 'Logo (fichier assets/…)', T.logo, 'placeholder="assets/logo-club.svg"')}
+      <label class="field"><span>Couleur principale</span><input class="input" type="color" data-change="tenantSet" data-k="colors.primary" value="${esc(c)}"></label>
+      <label class="field"><span>Texte sur la couleur</span><input class="input" type="color" data-change="tenantSet" data-k="colors.onPrimary" value="${esc(on)}"><small class="muted" data-contraste="${ratio.toFixed(2)}">Contraste ${ratio.toFixed(1).replace('.', ',')}:1 ${ratio >= 4.5 ? '(AA respecté)' : '(insuffisant : noir ou blanc appliqué)'}</small></label>
+      ${champ('panierMoyen', 'Panier moyen (€ par mois)', T.panierMoyen, 'inputmode="decimal" data-num="1"')}</div>
+    <details style="margin-top:10px"><summary><b>Mentions légales</b></summary><div class="form-grid" style="margin-top:8px">${TENANT_LEGAL.map(([k, l]) => champ('legal.' + k, l, deepGet(T, ['legal', k]))).join('')}</div>
+      ${backend.mode === 'firebase' ? '<button class="btn sm" style="margin-top:8px" data-act="tenantPublier">Publier les mentions légales (lisibles sans connexion)</button>' : ''}</details></div>`;
+}
+ACTIONS.tenantSet = el => {
+  if (!isManager()) return; const path = ['tenant', ...el.dataset.k.split('.')]; let v = String(el.value || '').trim();
+  if (el.dataset.num) { v = v === '' ? null : parseMontant(v); if (v != null && !(v > 0)) { toast('Valeur invalide.'); return; } } else if (/colors\./.test(el.dataset.k)) { if (!COULEUR_OK(v)) return; v = v.toUpperCase(); }
+  else if (el.dataset.k === 'logo') { if (v && !/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(v)) { toast('Logo : un fichier du dossier assets/ (svg, png, jpg, webp).'); return; } v = v || null; } else v = v ? v.slice(0, 300) : null;
+  db.set(path, v); toast('Enregistré');
+};
+ACTIONS.tenantPublier = async () => {
+  try { const L = deepGet(S, ['tenant', 'legal']) || {}; await backend.fb.database().ref(MULTI ? `orgs_public/${ORG}/legal` : 'pulse_public/legal').set(Object.fromEntries(Object.entries(L).filter(([, v]) => typeof v === 'string' && v))); toast('Mentions légales publiées'); }
+  catch (e) { toast('Publication impossible : ' + e.message); }
+};
 function clubSettings() {
   return `<div class="grid">
+    ${tenantCard()}
     ${reglagesCommunsCard()}
     ${offersCard()}
     <div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>

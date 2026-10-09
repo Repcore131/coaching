@@ -74,5 +74,12 @@ await check('aucun nom dans /benchmark (valeur texte refusée)', await req('PUT'
 await check('empreinte du club obligatoire (pas un nom en clé)', await req('PUT', 'benchmark/2026-09/Niort', BENCH, who('mgr')), false);
 await check('membre lit les agrégats', await req('GET', 'benchmark/2026-09', undefined, who('mem')), true);
 await check('anonyme ne lit pas les agrégats', await req('GET', 'benchmark', undefined), false);
+// Mentions légales publiques (lisibles sans connexion, écrites par un manager)
+await check('manager publie les mentions légales', await req('PUT', 'pulse_public/legal', { societe: 'SAS Exemple', email: 'contact@exemple.fr' }, who('mgr')), true);
+await check('anonyme lit les mentions légales', await req('GET', 'pulse_public/legal', undefined), true);
+await check('membre ne modifie pas les mentions légales', await req('PUT', 'pulse_public/legal/societe', 'X', who('mem')), false);
+await check('rien d’autre sous pulse_public', await req('PUT', 'pulse_public/autre', 'X', who('mgr')), false);
+await check('membre écrit son usage', await req('PUT', 'pulse/usage/mem/2026-10-09', { opens: 1 }, who('mem')), true);
+await check('membre n’écrit pas l’usage d’un autre', await req('PUT', 'pulse/usage/mgr/2026-10-09', { opens: 1 }, who('mem')), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

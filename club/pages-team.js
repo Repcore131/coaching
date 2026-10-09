@@ -97,7 +97,7 @@ async function issueCode(u, email) {
 // (club/outils/fitpulse-serveur.mjs) envoie le bel e-mail puis l'efface.
 function inviteText(u, code) {
   const url = `${location.origin}${location.pathname}?email=${encodeURIComponent(u.email || '')}`;
-  const club = CLUB ? CLUB.name : 'Fitness Park';
+  const club = CLUB ? CLUB.name : 'Votre club';
   return {
     subject: `Votre accès Fit Pulse · ${club}`,
     body: `Bonjour ${u.first || ''},

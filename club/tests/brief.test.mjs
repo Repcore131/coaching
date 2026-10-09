@@ -16,7 +16,7 @@ test('7 h 30 heure de Paris, été comme hiver, du lundi au samedi', () => {
 });
 
 test('digest=false : rien n’est envoyé', async () => {
-  const S = demo(); const club = 'niort';
+  const S = demo(); const club = 'centre';
   for (const u of Object.values(S.users)) if (u.role === 'manager') { S.prefs = S.prefs || {}; S.prefs[u.id] = { ...(S.prefs[u.id] || {}), digest: false }; }
   assert.equal(destinataires(S, club).length, 0);
   const envois = []; const api = async () => ({ ok: true, json: async () => ({}) });
@@ -26,11 +26,11 @@ test('digest=false : rien n’est envoyé', async () => {
 
 test('chaque manager avec digest reçoit l’e-mail ; le total est celui de la page', async () => {
   const S = demo(); const envois = []; const api = async () => ({ ok: true, json: async () => ({}) });
-  const dest = destinataires(S, 'niort'); assert.ok(dest.length >= 1);
+  const dest = destinataires(S, 'centre'); assert.ok(dest.length >= 1);
   await passageBrief(api, 'tk', S, async (d, m) => envois.push([d, m]), { force: true, log: null, push: false });
   assert.ok(envois.length >= 1);
-  const run = chargerAppli(S); const D = briefPour(S, 'niort', run);
-  run(`ME = Object.values(S.users).find(u => u.role === 'manager' && (u.clubs || []).includes('niort')); CLUB = S.clubs.niort; UI.oppScope = 'all';`);
+  const run = chargerAppli(S); const D = briefPour(S, 'centre', run);
+  run(`ME = Object.values(S.users).find(u => u.role === 'manager' && (u.clubs || []).includes('centre')); CLUB = S.clubs.centre; UI.oppScope = 'all';`);
   const page = run(`PAGES.opportunites.render()`);
   const totalPage = page.match(/data-brief-total>([^<]+)</)[1];
   assert.equal(totalPage, run(`fmtE(${D.total})`));
@@ -39,7 +39,7 @@ test('chaque manager avec digest reçoit l’e-mail ; le total est celui de la p
 });
 
 test('e-mail et notification : ni tiret cadratin ni emoji ; aucun nom dans la notification', () => {
-  const S = demo(); const D = briefPour(S, 'niort'); const m = emailBrief(D); const p = pushBrief(D);
+  const S = demo(); const D = briefPour(S, 'centre'); const m = emailBrief(D); const p = pushBrief(D);
   for (const t of [m.objet, m.texte, m.html, p.title, p.body]) { assert.doesNotMatch(t, /—/); assert.doesNotMatch(t, /\p{Extended_Pictographic}/u); }
   for (const o of D.top) if (o.client) assert.ok(!p.body.includes(o.client));
   assert.equal(D.top.length, 5);

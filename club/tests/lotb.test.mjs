@@ -231,3 +231,21 @@ test('adoption : le parcours de démarrage disparaît à la 4e étape', () => {
   assert.equal(run(`parcoursCard()`), '');
   run(`ME = S.users.u`); assert.match(run(`managerCockpit()`), /data-tuile="adoption"/);
 });
+
+test('application neutre : aucune enseigne, ville ou personne dans fitpulse.html, hors commentaires de licence', async () => {
+  const { execFileSync } = await import('node:child_process'); const { readFileSync, mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const path = await import('node:path');
+  const out = path.join(mkdtempSync(path.join(tmpdir(), 'neutre-')), 'fitpulse.html');
+  execFileSync(process.execPath, [new URL('../outils/build-single.mjs', import.meta.url).pathname, out], { stdio: 'ignore' });
+  const L = readFileSync(out, 'utf8').split('\n').filter(l => /Fitness Park|Niort|FPN GESTION|KGUE|GUELLEC/.test(l)).filter(l => !/^\/\*! Fit Pulse ©|^<!-- Fit Pulse ©/.test(l.trim()));
+  assert.deepEqual(L, []);
+  assert.doesNotMatch(readFileSync(out, 'utf8'), /PARKPULSE_ACCOUNTS = \[|guellec\.coachingpro/);
+});
+test('couleur primaire du client : texte posé dessus au contraste AA', () => {
+  const run = appli();
+  for (const c of ['#1E6FD9', '#12B3A8', '#FFD600', '#222222', '#E11D48']) { const ink = J(run, `encreSur('${c}')`); assert.ok(J(run, `contraste('${c}', '${ink}')`) >= 4.5, c); }
+  assert.equal(J(run, `encreSur('#1E6FD9', '#0B0B0C')`), '#FFFFFF'); // noir demandé mais insuffisant : blanc
+  assert.equal(J(run, `encreSur('#12B3A8', '#0B0B0C')`), '#0B0B0C');
+  run(`S.tenant = { colors: { primary: '#1E6FD9' }, entity: 'SAS Exemple', panierMoyen: 41 }; REV++;`);
+  assert.equal(J(run, `couleurClub()`), '#1E6FD9'); assert.equal(J(run, `entiteTexte()`), 'Entité = SAS Exemple'); assert.equal(J(run, `panierMoyen()`), 41);
+  run(`S.tenant = {}; REV++;`); assert.equal(J(run, `entiteTexte()`), 'Entité = votre société d’exploitation');
+});

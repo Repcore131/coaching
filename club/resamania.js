@@ -142,9 +142,11 @@ const safeKey = k => String(k).replace(/[.#$/\[\]]/g, ',');
 // ── Annuaire des commerciaux ──────────────────────────────────────────────
 // Resamania ecrit le meme vendeur de quatre facons : « NOM Prénom »,
 // « Prénom NOM <email> », « Prénom NOM <email> {id} », ou un code trigramme
-// (KGUE). Les correspondances validees sont gardees dans S.rsm.aliases :
+// (ABCD). Les correspondances validees sont gardees dans S.rsm.aliases :
 // cle -> id de membre, 'system' (vente en ligne / automatique) ou 'ignore'.
-const SYSTEM_SELLERS = ['traitement automatique', 'automatismes', 'automatique', 'site web fitness park public', 'pso site', 'spso', 'en ligne', 'fitness park backoffice mobile', 'espace membre fitnesspark public', 'qualite de la donnee', 'site', 'web', 'borne'];
+const SYSTEM_SELLERS = ['traitement automatique', 'automatismes', 'automatique', 'pso site', 'spso', 'en ligne', 'qualite de la donnee', 'site', 'web', 'borne'];
+// Comptes système propres à chaque enseigne : « Site web <enseigne> Public », « <enseigne> BackOffice Mobile », « Espace membre <enseigne> Public ».
+const SYSTEM_MOTIFS = [/^site web .+ public$/, /backoffice mobile$/, /^espace membre .+ public$/];
 function sellerKeys(raw, code) {
   raw = String(raw || '').trim();
   const email = (raw.match(/<([^>]+)>/) || [])[1];
@@ -161,7 +163,7 @@ function resolveSeller(raw, code) {
   const k = sellerKeys(raw, code);
   if (!k.keys.length) return { status: 'system', label: '(vide)' };
   const nm = norm(k.name);
-  if (SYSTEM_SELLERS.includes(nm) || (code && String(code).toUpperCase() === 'SPSO')) return { status: 'system', label: k.label };
+  if (SYSTEM_SELLERS.includes(nm) || SYSTEM_MOTIFS.some(re => re.test(nm)) || (code && String(code).toUpperCase() === 'SPSO')) return { status: 'system', label: k.label };
   const al = (S.rsm && S.rsm.aliases) || {};
   for (const key of k.keys) {
     const v = al[safeKey(key)];
@@ -239,7 +241,7 @@ const RSM_DEFS = [
   },
   {
     id: 'factures', label: 'Factures & avoirs (DetailLignesFacture&AvoirsV2)', family: 'gestion', feeds: 'Nutrition · Accessoires · Contrat B2B (société du client)',
-    path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', filters: 'Dates du mois, Entité = FPN GESTION, Club', file: 'RSM_factures-avoirs_AAAA-MM.zip',
+    path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', get filters() { return `Dates du mois, ${entiteTexte()}, Club`; }, file: 'RSM_factures-avoirs_AAAA-MM.zip',
     sig: has => has('nature') && has('code du produit') && has('famille de produit niveau 1'),
     parse(c) {
       const iDate = c.col('date de creation de la facture'), iNum = c.col('numero de la facture'), iNat = c.col('nature'), iEtat = c.col('etat'), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iFam = c.col('famille de produit niveau 1'), iAut = c.col('auteur'), iSoc = c.col('societe du client'), iCli = c.find(h => /num(ero)? (du )?client/.test(h));
@@ -476,7 +478,7 @@ function rsmImportPrompt() {
   const debut = fr(`${mk}-01`), fin = fr(`${mk}-${String(dImax).padStart(2, '0')}`), ajd = fr(auj);
   const defs = RSM_DEFS.filter(d => d.path && !d.silent);
   const lignes = defs.map((d, i) => `${i + 1}. ${d.label}\n   Chemin : ${d.path}\n   Filtres : ${(d.filters || '').replace(/AAAA-MM-JJ|AAAA-MM/g, '')} → période du ${debut} au ${fin}${/incident|abonnement|sans.?mandat|clients club/i.test(d.label) ? ` (ou situation au ${ajd})` : ''}\n   Puis : ⋮ / Exporter → télécharger le fichier.`);
-  return `Tu es dans l'espace de gestion Resamania de Fitness Park Niort, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
+  return `Tu es dans l'espace de gestion Resamania de ${CLUB ? CLUB.name : 'votre club'}, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
 }
 function linesParse(c, avoir) {
   const iNum = c.find(h => h.startsWith('num facture') || h.startsWith('num avoir')), iDate = c.find(h => h.startsWith('date de')), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iV = c.col('vendeur'), iSt = c.find(h => h.startsWith('statut'));
