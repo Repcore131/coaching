@@ -36155,7 +36155,8 @@ async function testExercices(){
           const src=String(_enregistrerAchat);
           if(src.indexOf('verifierAchatProgramme')<0)
             return _echec('l’achat ne demande rien au serveur');
-          return src.indexOf('ouvertJusqu')>=0
+          // La fiche d'achat (ficheAchatProgramme, 09/10/2026) porte la fenêtre.
+          return (src.indexOf('ficheAchatProgramme')>=0&&String(ficheAchatProgramme).indexOf('ouvertJusqu')>=0)
             ?true:_echec('l’achat ne pose aucune fenêtre côté dossier');
         } finally {
           if(sauve==null) localStorage.removeItem(DROITS_CLE);
@@ -36945,7 +36946,8 @@ async function testExercices(){
       ok('LOT 1 — LES OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
         const attendu={
           programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
-          boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
+          // boutique_prog : 1 mois (30 jours d'app) et le programme à vie, depuis le 09/10/2026.
+          boutique_prog:[14.9,'ultime',1], coaching_essentiel:[150,'suivi',1],
           coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
           // ⚠ C'est LE test qui empeche un tarif de bouger en silence : les
           //   chiffres y sont ecrits a la main, et c'est voulu. 9,50 et 24,90
