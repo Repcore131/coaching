@@ -185,7 +185,7 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
       const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), ...(batchImp[id] || {}), [impId]: true }; batchImp[id] = importIds;
       // B2B : l'entreprise reste comptée à sa première facture, chez le commercial d'origine.
       const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
-      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}), ...(e.priceHT != null ? { priceHT: e.priceHT } : {}), ...(e.engaged != null ? { engaged: e.engaged } : {}), ...(e.option ? { option: true } : {}) }]);
+      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.line ? { line: e.line } : {}), ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}), ...(e.priceHT != null ? { priceHT: e.priceHT } : {}), ...(e.engaged != null ? { engaged: e.engaged } : {}), ...(e.option ? { option: true } : {}) }]);
     }
     // Export de gestion qui couvre une periode complete : Resamania fait foi sur
     // cette periode. Une vente deja importee absente du nouveau fichier (annulee
@@ -211,7 +211,7 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
       let id = 'v' + hkey(club + '|' + x.key);
       if (x.legacyKey && (S.recov || {})['v' + hkey(club + '|' + x.legacyKey)]) id = 'v' + hkey(club + '|' + x.legacyKey);
       const rvOld = (S.recov || {})[id]; const rvImp = { ...((rvOld && rvOld.importIds) || (rvOld && rvOld.importId ? { [rvOld.importId]: true } : {})), [impId]: true };
-      ops.push([['recov', id], { importIds: rvImp, id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now }]);
+      ops.push([['recov', id], { importIds: rvImp, id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now, ...(x.line ? { line: x.line } : {}) }]);
       summary.recov++;
     }
     const wasErased = typeof erasedNums === 'function' ? erasedNums(club) : () => false; const back = Object.keys(r.clients).filter(wasErased);

@@ -1177,3 +1177,13 @@ html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(va
 .eq-prev { margin-top: 12px; } .eq-prev summary { cursor: pointer; font-weight: 600; }
 .eq-prev-i { padding: 8px 0; border-bottom: 1px solid var(--line); }
 @media (max-width: 900px) { .eq-wrap { overflow-x: auto; } .eq-m { min-width: 760px; } }
+
+/* ── Fiabilité : chiffres cliquables, contrôle, tests intégrés ── */
+.trace-n { cursor: pointer; text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.trace-n:hover, .trace-n:focus-visible { text-decoration-style: solid; outline: none; }
+.trace-tot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+.trace-tot b { font-family: var(--font-title); font-size: var(--t-28); }
+#fp-tests { position: fixed; right: 12px; bottom: 12px; z-index: 9000; width: min(560px, calc(100vw - 24px)); max-height: 70vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); font-size: 13px; }
+.fp-tests-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fp-tests-h b { flex: 1; }
+#fp-tests li.ok { color: var(--ok); } #fp-tests li.bad { color: var(--bad); font-weight: 700; }

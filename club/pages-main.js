@@ -207,7 +207,7 @@ function dashObjectives(st, r, subject, who) {
     </div>
     <details class="dash-more" ${innerWidth > 860 ? 'open' : ''}><summary>Détails : conversion et score pondéré</summary><div class="grid">
       <div class="card"><div class="muted small">Taux de conversion</div><div class="title t-32">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
-      ${!who && recoveredFor(CLUB.id, r) ? (() => { const t = recoveredFor(CLUB.id, r); const e = recoveredFor(CLUB.id, r, 'equipe'); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
+      ${!who && recoveredFor(CLUB.id, r) ? (() => { const t = recoveredFor(CLUB.id, r); const e = recoveredFor(CLUB.id, r, 'equipe'); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32"><span class="trace-n"${traceAttr({ t: 'recov', canal: 'all', club: CLUB.id, from: r.from, to: r.to, v: t })}>${fmtE(t)}</span></div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div></details>
   </div>
@@ -221,7 +221,7 @@ function kpiCard(x, exp) {
   const hl = healthOf(pct != null && exp ? pct / exp : null);
   return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
     <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span>${matchMedia('(pointer: coarse)').matches ? (UI.kpiReorder ? `<button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="-1" aria-label="Monter">${ico('chevL')}</button><button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="1" aria-label="Descendre">${ico('chevR')}</button>` : '') : `<span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span>`}</div>
-    <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
+    <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val"><span class="trace-n"${x.range ? traceAttr({ t: 'kpi', club: CLUB.id, user: x.uid || null, kpi: k.id, from: x.range.from, to: x.range.to, v: real }) : ''}>${fmtV(real, k.unit)}</span> <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>
     <div class="kpi-msg">${esc(paceMessage(x, exp))}</div>${k.id === 'sauvetage' && real > 0 ? `<div class="small muted">soit ${fmtE(sauvValeur(x.uid, x.range))} de valeur gardée</div>` : ''}</div>`;
@@ -263,8 +263,17 @@ function dashAnalyses(r, who) {
   const lab = MOIS_C.map(x => x.replace('.', ''));
   const vN1 = [], vN = [];
   for (let m = 1; m <= 12; m++) { vN1.push(valOf(`${y - 1}-${pad(m)}`)); vN.push(`${y}-${pad(m)}` <= cm ? valOf(`${y}-${pad(m)}`) : 0); }
+  // À jours égaux : du 1er janvier au jour J, contre la même période un an plus tôt ;
+  // le mois en cours compte du 1er au jour J des deux côtés (le 9 octobre : 9 jours contre 9).
+  const isCur = Number(cm.slice(0, 4)) === y; const J = isCur ? today() : `${y}-12-31`; const C = compareN1(CLUB.id, who, kSel, J);
   const closed = []; for (let m = 1; m <= 12; m++) if (`${y}-${pad(m)}` < cm) closed.push(m - 1);
-  const totN1 = closed.reduce((s, i) => s + vN1[i], 0), totN = closed.reduce((s, i) => s + vN[i], 0);
+  const im = Number(cm.slice(5)) - 1; let estime = false;
+  if (isCur) {
+    vN[im] = C.moisN; vN1[im] = C.moisN1;
+    // N-1 connu seulement par l'historique mensuel (sans le détail par jour) : ramené au prorata des jours, signalé « estimé ».
+    const mN1 = `${y - 1}-${cm.slice(5)}`; if (!C.moisN1 && !sumRange(CLUB.id, who, kSel, mN1 + '-01', `${mN1}-${daysIn(mN1)}`) && valOf(mN1)) { vN1[im] = valOf(mN1) * C.joursN1 / daysIn(mN1); estime = true; }
+  }
+  const totN1 = closed.reduce((s, i) => s + vN1[i], 0) + (isCur ? vN1[im] : 0), totN = closed.reduce((s, i) => s + vN[i], 0) + (isCur ? vN[im] : 0);
   const evo = totN1 ? (totN - totN1) / totN1 : null;
   const st = statsFor(CLUB.id, who, r);
   const exp = st.expected;
@@ -279,10 +288,10 @@ function dashAnalyses(r, who) {
         <select class="input sm" style="width:auto" data-change="anaKpi">${kpis.map(x => `<option value="${x.id}" ${x.id === kSel ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
         ${isManager() ? `<a class="btn sm" href="#/imports" data-act="goManual" title="Corriger l’historique mensuel">${ico('edit')}</a>` : ''}</div>
       <div class="row wrap" style="gap:22px;margin-bottom:8px">
-        <div><div class="muted small">${y - 1} (${closed.length} mois)</div><b class="title t-20">${fmtV(totN1, k.unit)}</b></div>
-        <div><div class="muted small">${y} (${closed.length} mois)</div><b class="title t-20">${fmtV(totN, k.unit)}</b></div>
-        <div><div class="muted small">Évolution à période égale</div><b class="title ${evo == null ? '' : evo >= 0 ? 'ok' : 'bad'} t-20">${evo == null ? 'n.d.' : (evo >= 0 ? '+' : '') + (evo * 100).toFixed(1).replace('.', ',') + ' %'}</b></div>
-        <div class="muted small" style="max-width:280px">Le mois en cours (${monthLabel(cm)}) est affiché mais exclu du total tant qu’il n’est pas terminé.</div>
+        <div><div class="muted small">${y - 1}, au ${dm(C.jourN1)}</div><b class="title t-20">${fmtV(totN1, k.unit)}</b></div>
+        <div><div class="muted small">${y}, au ${dm(C.jour)}</div><b class="title t-20">${fmtV(totN, k.unit)}</b></div>
+        <div><div class="muted small">Évolution à jours égaux</div><b class="title ${evo == null ? '' : evo >= 0 ? 'ok' : 'bad'} t-20">${evo == null ? 'n.d.' : (evo >= 0 ? '+' : '') + (evo * 100).toFixed(1).replace('.', ',') + ' %'}</b></div>
+        <div class="muted small cmp-n1" style="max-width:300px">${isCur ? `Du 1er janvier au ${dm(C.jour)} contre la même période de ${y - 1}. ${monthLabel(cm)} : ${plur(C.jours, 'jour', 'jours')} contre ${plur(C.joursN1, 'jour', 'jours')}${estime ? ' (N-1 estimé au prorata de l’historique mensuel)' : ''}.` : 'Années complètes.'}</div>
       </div>
       <div class="legend"><span><i style="background:var(--d-3)"></i>${y - 1}</span><span><i style="background:var(--d-1)"></i>${y}</span></div>
       ${barChart({ labels: lab, series: [{ name: String(y - 1), color: 'var(--d-3)', values: vN1 }, { name: String(y), color: 'var(--d-1)', values: vN }], fmt: v => k.unit === 'eur' ? fmtN(v) + ' €' : fmtN(v) })}

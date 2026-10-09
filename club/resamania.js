@@ -516,8 +516,10 @@ function analyzeTable(t, { clubId, month }) {
   if (!def) return res;
   const H = t.headers.map(norm);
   const find = f => H.findIndex(f);
+  // Numéro de ligne du fichier (l'en-tête est la ligne 1), noté sur chaque saisie : « D'où vient ce chiffre ».
+  const rowsLn = new Proxy(t.rows, { get(tgt, p) { if (p === Symbol.iterator) return function* () { for (let i = 0; i < tgt.length; i++) { c._line = i + 2; yield tgt[i]; } c._line = null; }; const v = Reflect.get(tgt, p); return typeof v === 'function' ? v.bind(tgt) : v; } });
   const c = {
-    H, rows: t.rows, fileName: t.name, clubId, month,
+    H, rows: rowsLn, fileName: t.name, clubId, month,
     find,
     col: p => { const n = norm(p); const e = H.indexOf(n); return e >= 0 ? e : H.findIndex(h => h.includes(n)); },
     colExact: p => H.indexOf(norm(p)),
@@ -526,8 +528,8 @@ function analyzeTable(t, { clubId, month }) {
     colAt: (pos, p) => (norm(H[pos] || '') === norm(p) ? pos : H.indexOf(norm(p))),
     skip: why => { res.skipped[why] = (res.skipped[why] || 0) + 1; },
     warn: w => res.warnings.push(w),
-    entry: e => { res.entries.push(e); if (!res.from || e.date < res.from) res.from = e.date; if (!res.to || e.date > res.to) res.to = e.date; },
-    recov: x => { res.recov.push(x); if (x.date && (!res.from || x.date < res.from)) res.from = x.date; if (x.date && (!res.to || x.date > res.to)) res.to = x.date; },
+    entry: e => { if (c._line && e.line == null) e.line = c._line; res.entries.push(e); if (!res.from || e.date < res.from) res.from = e.date; if (!res.to || e.date > res.to) res.to = e.date; },
+    recov: x => { if (c._line && x.line == null) x.line = c._line; res.recov.push(x); if (x.date && (!res.from || x.date < res.from)) res.from = x.date; if (x.date && (!res.to || x.date > res.to)) res.to = x.date; },
     client: (num, o) => { res.clients[num] = { ...(res.clients[num] || {}), ...Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== '')) }; },
     clientByName: (name, o) => res.clientsByName.push({ name, ...o }),
     resil: x => res.resil.push(x),

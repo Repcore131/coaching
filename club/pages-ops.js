@@ -245,13 +245,13 @@ function dunTable() {
   const K = dunStats(CLUB.id, mk);
   return `<div class="stat-row dun-head">
       <div class="stat"><span>Délai médian du mois</span><b>${K.medianJours == null ? 'n.d.' : plur(K.medianJours, 'jour', 'jours')}</b><small>${plur(K.nClos, 'dossier régularisé', 'dossiers régularisés')} en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</small></div>
-      <div class="stat"><span>Part récupérée par l’équipe</span><b>${fmtP(K.partEquipe)}</b><small>${fmtE(K.team)} sur ${fmtE(K.all)}</small></div>
+      <div class="stat"><span>Part récupérée par l’équipe</span><b>${fmtP(K.partEquipe)}</b><small><span class="trace-n"${traceAttr({ t: 'recov', canal: 'equipe', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: K.team })}>${fmtE(K.team)}</span> sur ${fmtE(K.all)}</small></div>
       <div class="stat ${K.du30 ? 'alarm' : ''}"><span>Encore dû, plus de 30 jours</span><b>${fmtE(K.du30)}</b><small>${plur(K.n30, 'dossier', 'dossiers')}</small></div>
       <div class="stat ${K.promessesEchues ? 'alarm' : ''}"><span>Promesses échues</span><b>${K.promessesEchues}</b><small>repassées « À relancer »</small></div></div>
     <div class="stat-row">
       <div class="stat hot"><span>Total dû</span><b>${fmtE(total)}</b><small>${plur(open.length, 'dossier ouvert', 'dossiers ouverts')}</small></div>
       <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${cnt('due')}</b><small>${cnt('nobody')} sans responsable</small></div>
-      <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${fmtE(recTot)}</b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
+      <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok"><span class="trace-n"${traceAttr({ t: 'recov', canal: 'all', club: CLUB.id, from: rgM.from, to: rgM.to, v: recTot })}>${fmtE(recTot)}</span></b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
       <div class="stat"><span>Dossiers soldés ce mois</span><b>${recMonth.length}</b><small>passés en « Récupéré »</small></div></div>
     ${open.length ? `<div class="age-tiles">${tranches.map(x => `<div class="age-tile ${x.t[3]}"><span>${x.t[2]}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')} · attendu ${fmtP(x.t[1])}</small></div>`).join('')}</div>` : ''}
     ${late30.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>${plur(late30.length, 'dossier a passé', 'dossiers ont passé')} 30 jours sans responsable</b>${late30.slice(0, 4).map(c => esc(c.name || '')).join(', ')}. Chaque semaine perdue fait baisser la chance de récupérer.</div></div>` : ''}

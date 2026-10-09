@@ -102,9 +102,9 @@ PAGES.recap = {
         ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${plur(F.demandes, 'demande', 'demandes')} · ${plur(F.sauvees, 'sauvée', 'sauvées')}`)}
         ${tile('Taux de résiliation', F.tauxResil == null ? 'n.d.' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %', delta(F.tauxResil, P.tauxResil, { up: false, pct: true }), F.actifs ? `sur ${fmtN(F.actifs)} adhérents actifs` : 'base adhérents à renseigner')}
         ${tile('Impayés en cours', F.du == null ? 'n.d.' : fmtE(F.du), delta(F.du, P.du, { up: false, unit: 'eur' }), 'total dû en fin de mois')}
-        ${tile('Impayés récupérés par l’équipe', fmtE(F.impayesEquipe), delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
+        ${tile('Impayés récupérés par l’équipe', `<span class="trace-n"${traceAttr({ t: 'recov', canal: 'equipe', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: F.impayesEquipe })}>${fmtE(F.impayesEquipe)}</span>`, delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
         ${tile('Avis Google', fmtN(F.avis), delta(F.avis, P.avis))}
-        ${tile('Ventes boutique', fmtE(F.boutique), delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
+        ${tile('Ventes boutique', `<span class="trace-n"${traceAttr({ t: 'ca', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: F.boutique })}>${fmtE(F.boutique)}</span>`, delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
       </div>
       <div class="rc-grid rc-value">
         ${(() => { const enc = encaisseMois(CLUB.id, mk), encP = encaisseMois(CLUB.id, pm), ch = churnEuros(CLUB.id, mk), chP = churnEuros(CLUB.id, pm); return `

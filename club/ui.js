@@ -133,6 +133,7 @@ const NAV = [
   ['feed', 'Fil d’équipe', 'feed', true],
   ['sep'],
   ['imports', 'Imports Resamania', 'upload', true],
+  ['controle', 'Contrôle des chiffres', 'check', true],
 ];
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
