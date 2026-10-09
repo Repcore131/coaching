@@ -340,9 +340,9 @@ function dunStats(clubId, mk, t = today()) {
 PAGES.impayes = {
   title: 'Impayés',
   render() {
-    const tab = isManager() ? (UI.impTab2 || 'suivi') : 'suivi';
+    const tab = UI.impTab2 === 'resultats' ? 'resultats' : isManager() ? (UI.impTab2 || 'suivi') : 'suivi';
     const head = `<div class="page-head"><div><h1>Impayés</h1><p>${esc(nomAffiche())} · le suivi de chaque dossier, alimenté par les imports Resamania.</p></div><span class="spacer"></span><button class="btn" data-act="dunExport">${ico('download')} Exporter</button>${isManager() ? `<button class="btn primary" data-act="dunNew">${ico('plus')} Ajouter un impayé</button>` : ''}</div>`;
-    return head + (isManager() ? tabs('impTab2', [['suivi', 'Suivi des dossiers'], ['canaux', 'Récupéré par canal']], tab) : '') + (tab === 'suivi' ? dunTable() : impayesAnalyse.render());
+    return head + tabs('impTab2', [['suivi', 'Suivi des dossiers'], ...(isManager() ? [['canaux', 'Récupéré par canal']] : []), ['resultats', 'Résultats']], tab) + (tab === 'suivi' ? dunTable() : tab === 'resultats' ? resultatsOnglet('impayes') : impayesAnalyse.render());
   },
 };
 // Ancienneté de la dette : today() moins la date du solde (c.balanceAt). Date inconnue : plus de 60 jours.
@@ -465,7 +465,7 @@ ACTIONS.dunPaidSave = () => {
 const arr2 = x => Math.round((Number(x) || 0) * 100) / 100;
 // Identifiant de saisie : dn_<client>_<jour>_<rang> (deux acomptes le même jour ne s'écrasent pas).
 function dnId(clientId, date) { const p = 'dn_' + clientId + '_' + date; const n = Object.keys(S.entries).filter(k => k === p || k.startsWith(p + '_')).length; return p + '_' + n; }
-function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = '', force = false, date = today() } = {}) {
+function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = '', force = false, date = today(), tplId = null } = {}) {
   if (!c) return [];
   const solde = arr2(c.balance); const montant = arr2(amount);
   if (!(montant > 0)) return [];
@@ -479,8 +479,8 @@ function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = ''
   // Paiement partiel : la dette restante reste ouverte (« Acompte reçu »), le cumul encaissé est gardé.
   const reste = arr2(Math.max(0, solde - montant)); const d = dunOf(c); const cumul = arr2((Number(d.paid) || 0) + Math.min(montant, solde));
   const ops = reste > 0
-    ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtEc(montant)}, reste ${fmtEc(reste)}`)]
-    : [[['clients', c.id, 'balance'], 0], [['clients', c.id, 'firstIncidentAt'], null], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
+    ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtEc(montant)}, reste ${fmtEc(reste)}`, { outcome: 'acompte', amount: montant, ...(tplId ? { tplId } : {}) })]
+    : [[['clients', c.id, 'balance'], 0], [['clients', c.id, 'firstIncidentAt'], null], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`, { outcome: 'paye', amount: montant, ...(tplId ? { tplId } : {}) })];
   if (canal === 'equipe') ops.push(entree());
   return ops;
 }

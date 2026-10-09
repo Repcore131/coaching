@@ -175,3 +175,23 @@ test('point 9 : fin de contrat dans 12 jours en 3 taps ; À rappeler demain 18 h
   assert.deepEqual(J(run, `retIssues('anniversaire').map(x => x[1])`), ['Message envoyé']);
   run(`retEnregistrer('f1', 'renouvellement', '', 'part', { motif: 'Prix' })`); assert.equal(run(`Object.values(S.transferts)[0].motif`), 'Prix');
 });
+test('point 10 : 600 € en 30 appels = 300 € par heure ; taux de sauvetage = monthFigures ; Euros gardés après un Payé', () => {
+  const run = appli({ clients: { c1: client({ balance: 120, dunning: { ownerId: 'v' } }) } });
+  const d = run('today()'); const mk = d.slice(0, 7);
+  run(`S.entries.e1 = { id: 'e1', userId: 'v', clubId: 'k', kpiId: 'impayes', date: '${d}', value: 600, source: 'manual', at: Date.now() };
+    for (let i = 0; i < 30; i++) S.loyalty['a' + i] = { id: 'a' + i, clientId: 'c1', type: 'suivi15', outcome: 'noanswer', userId: 'v', at: Date.now() - i * 1000 }; REV++`);
+  const L = J(run, `resultatsLigne('k', '${mk}', 'v')`); assert.equal(L.rec, 600); assert.equal(L.appels, 30); assert.equal(L.parHeure, 300);
+  run(`UI.resuMonth = '${mk}'`); const h = run(`resultatsOnglet('retention')`);
+  assert.match(h, new RegExp(`data-res="taux"[\\s\\S]*?<b>${run(`fmtP(monthFigures('k', '${mk}').tauxSauvetage)`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</b>`));
+  for (const k of ['recup', 'delai', 'parheure', 'sauves', 'taux']) assert.match(h, new RegExp(`data-res="${k}"><span class="has-tip" title="[^"]{10,}"`));
+  const avant = J(run, `eurosGardesClassement('k', '${mk}').find(x => x.u.id === 'v').garde`);
+  run(`db.batch(markPaid(S.clients.c1, 120, { author: 'u' }))`);
+  assert.equal(J(run, `eurosGardesClassement('k', '${mk}').find(x => x.u.id === 'v').garde`), avant + 120);
+  assert.match(run(`eurosGardesCard('${mk}')`), /data-eg="v"/);
+  assert.match(run(`PAGES.leaderboard.render()`), /id="euros-gardes"/);
+});
+test('point 10 : script partagé au réseau sans nom d’adhérent', () => {
+  const run = appli({}); run(`S.templates.t1 = { id: 't1', clubId: 'k', kind: 'impaye', channel: 'script', step: 1, text: 'Bonjour {prenom}, je vous appelle pour votre abonnement.', body: ['Bonjour {prenom}', '', ''], author: 'u', sharedNetwork: false }; REV++`);
+  run(`ACTIONS.scriptPartage({ dataset: { id: 't1' } })`); const x = J(run, `Object.values(S.scriptsReseau)[0]`);
+  assert.deepEqual(Object.keys(x).sort(), ['at', 'channel', 'kind', 'step', 'taux', 'text']); assert.equal(run(`S.templates.t1.sharedNetwork`), true);
+});

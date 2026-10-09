@@ -195,7 +195,7 @@ function retEnregistrer(cid, type, step, o, { nextAt = null, motif = null, note 
   let next = nextAt ? isoOf(new Date(nextAt)) : null;
   if (o === 'noanswer') { const at = nextStepAt({ kind: LOY_REL[type] || type, clubId: CLUB.id }, ((task && task.failed) || 0) + 1); nextAt = at; next = at ? isoOf(new Date(at)) : null; }
   const id = newId(); const rec = loyActRecord({ id, clientId: cid, type, step, outcome: code, note: [motif ? 'Motif : ' + motif : '', note].filter(Boolean).join(' · '), value: task ? retEuros(task).v : null, next });
-  ops.push([['loyalty', id], { ...rec, ...(nextAt ? { nextAt } : {}), ...(o === 'rdv' && nextAt ? { rdvAt: nextAt } : {}) }]);
+  ops.push([['loyalty', id], { ...rec, tplId: tplIdFor(LOY_REL[type] || type), ...(nextAt ? { nextAt } : {}), ...(o === 'rdv' && nextAt ? { rdvAt: nextAt } : {}) }]);
   if (o === 'renouvelle') {
     const m = tarifMensuel(c); const k = 'rn_' + cid + '_' + curMonth();
     ops.push([['clients', cid, 'renewedAt'], today()], [['entries', k], { id: k, userId: ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, saved_eur: Math.round(m * 12 * 100) / 100, source: 'manual', at: Date.now(), by: ME.id, from: 'renouvellement', clientId: cid }]);

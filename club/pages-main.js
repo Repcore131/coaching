@@ -455,7 +455,7 @@ PAGES.leaderboard = {
       <p class="muted small">Points cumulés : étapes atteintes chaque mois, bonus de dépassement, points d’action des relances et 200 pts par sprint gagné.</p></div>`;
     return `<div class="page-head"><div><h1>Classement</h1><p>${esc(scope === 'clubs' ? 'Nos clubs' : CLUB.name)} · ${r.label}</p></div></div>
       <div class="row wrap" style="margin-bottom:14px">${seg('lbPeriod', [['week', 'Hebdomadaire'], ['month', 'Mensuel'], ['quarter', 'Trimestriel']], period)}${scope === 'members' ? seg('lbView', [['rang', 'Rang'], ['progression', 'Progression']], UI.lbView || 'rang') : ''}<button class="btn ghost sm" data-act="lbHelp">${ico('info')} Comment gagner des points</button>${multi ? seg('lbScope', [['members', 'Membres'], ['clubs', 'Nos clubs']], scope) : ''}<span class="spacer"></span>${nav}</div>
-      <div class="lb-layout">${main}${side}</div>`;
+      <div class="lb-layout">${main}<div class="lb-side">${scope === 'members' && typeof eurosGardesCard === 'function' ? eurosGardesCard(period === 'month' ? r.from.slice(0, 7) : curMonth()) : ''}${side}</div></div>`;
   },
 };
 ACTIONS.lbShift = el => { const r = rangeOf(UI.lbPeriod || 'month', UI.lbAnchor || today()); const n = shiftRange(r, Number(el.dataset.n)); UI.lbAnchor = n.from; render(); };

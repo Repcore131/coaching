@@ -1364,3 +1364,10 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .carte-tel { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
 .carte-tel .small { grid-column: 1 / -1; }
 .carte-tel .input, .carte-tel .btn { min-height: 44px; }
+
+/* Classement Euros gardés, infobulles de formule */
+.lb-side { display: grid; gap: 14px; align-content: start; }
+.eg-podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: end; margin: 8px 0; }
+.eg-podium .step { text-align: center; padding: 10px 6px; border-radius: 10px; background: var(--surface-2); display: grid; gap: 4px; }
+.eg-podium .p1 { min-height: 96px; } .eg-podium .p2 { min-height: 80px; } .eg-podium .p3 { min-height: 68px; }
+.has-tip { cursor: help; border-bottom: 1px dotted var(--line); }

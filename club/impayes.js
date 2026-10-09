@@ -86,7 +86,7 @@ function dunIssueOps(c, o, extra = {}) {
     label = `Promesse : ${fmtE(patch.promiseAmount)} le ${dm(extra.date)}`; nextAt = dateOf(addDays(extra.date, 1)).getTime() + 10 * 3600000;
   } else if (o === 'refus') { patch = { ...patch, status: 'relance', next: addDays(today(), 7) }; nextAt = dateOf(addDays(today(), 7)).getTime() + 10 * 3600000; }
   const rk = dunRelKey(c);
-  return [dunPatch(c, patch, label + (note ? ' : ' + note : ''), { outcome: o, ...(note ? { note } : {}) }),
+  return [dunPatch(c, patch, label + (note ? ' : ' + note : ''), { outcome: o, ...(note ? { note } : {}), tplId: tplIdFor('impaye') }),
     [['relances', rk, 'nextAt'], nextAt], [['relances', rk, 'kind'], 'impaye'], [['relances', rk, 'clubId'], c.clubId], [['relances', rk, 'status'], 'attente'], [['relances', rk, 'ownerId'], owner]];
 }
 // Après une issue : la feuille se ferme, la carte suivante de la file apparaît.
@@ -107,8 +107,8 @@ ACTIONS.dunOut = el => {
   $$('.dsheet-out').forEach(b => { b.disabled = true; });
 };
 ACTIONS.dunPad = el => { const x = el.dataset.p; let v = UI.dunPad || ''; if (x === 'effacer') v = v.slice(0, -1); else if (x === ',') { if (!v.includes(',')) v = (v || '0') + ','; } else if (!/,\d\d$/.test(v)) v += x; UI.dunPad = v; $('#pad-v').textContent = (v || '0') + ' €'; };
-ACTIONS.dunPayOk = el => { const c = S.clients[el.dataset.id]; const a = parseMontant($('#dpay').value); if (!(a > 0)) { toast('Saisissez le montant encaissé.'); return; } const ops = markPaid(c, a, { author: ME.id, from: 'impayes' }); if (!ops.length) { dunApres(c, `${c.name} : dossier déjà soldé`); return; } db.batch(ops); dunApres(c, Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(a)} noté, reste ${fmtE(Number(S.clients[c.id].balance))}` : `Impayé récupéré : ${fmtE(a)}, ${c.name}`); if (!(Number(S.clients[c.id].balance) > 0) && typeof celebrate === 'function') celebrate('Impayé récupéré', `${fmtE(a)} : ${c.name}`, { kind: 'perso' }); };
-ACTIONS.dunAcompteOk = el => { const c = S.clients[el.dataset.id]; const a = toNum(UI.dunPad || ''); if (!(a > 0)) { toast('Saisissez le montant de l’acompte.'); return; } db.batch(markPaid(c, a, { author: ME.id, from: 'impayes' })); dunApres(c, Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(a)} noté, reste ${fmtE(Number(S.clients[c.id].balance))}` : `Impayé récupéré : ${fmtE(a)}, ${c.name}`); };
+ACTIONS.dunPayOk = el => { const c = S.clients[el.dataset.id]; const a = parseMontant($('#dpay').value); if (!(a > 0)) { toast('Saisissez le montant encaissé.'); return; } const ops = markPaid(c, a, { author: ME.id, from: 'impayes', tplId: tplIdFor('impaye') }); if (!ops.length) { dunApres(c, `${c.name} : dossier déjà soldé`); return; } db.batch(ops); dunApres(c, Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(a)} noté, reste ${fmtE(Number(S.clients[c.id].balance))}` : `Impayé récupéré : ${fmtE(a)}, ${c.name}`); if (!(Number(S.clients[c.id].balance) > 0) && typeof celebrate === 'function') celebrate('Impayé récupéré', `${fmtE(a)} : ${c.name}`, { kind: 'perso' }); };
+ACTIONS.dunAcompteOk = el => { const c = S.clients[el.dataset.id]; const a = toNum(UI.dunPad || ''); if (!(a > 0)) { toast('Saisissez le montant de l’acompte.'); return; } db.batch(markPaid(c, a, { author: ME.id, from: 'impayes', tplId: tplIdFor('impaye') })); dunApres(c, Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(a)} noté, reste ${fmtE(Number(S.clients[c.id].balance))}` : `Impayé récupéré : ${fmtE(a)}, ${c.name}`); };
 ACTIONS.dunPromOk = el => { const c = S.clients[el.dataset.id]; db.batch(dunIssueOps(c, 'promesse', { date: el.dataset.d })); dunApres(c, `Promesse notée pour le ${dmy(el.dataset.d)} : ${c.name}`); };
 ACTIONS.dunPromDate = el => { if (el.value) ACTIONS.dunPromOk({ dataset: { id: el.dataset.id, d: el.value } }); };
 ACTIONS.dunSuivant = () => { closeModal(); render(); };
