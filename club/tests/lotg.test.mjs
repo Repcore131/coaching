@@ -41,3 +41,18 @@ test('point 3 : Membres > Contrôles liste les saisies sans client et propose la
   assert.equal(run(`recoveredFor('k', ${rg}, 'equipe')`), 45);
   assert.equal(run(`monthFigures('k', '${mk}').recEquipe`), run(`recoveredFor('k', ${rg}, 'equipe')`));
 });
+test('point 4 : 120 €, acompte de 50 € : reste 70 €, badge « Acompte reçu » ; 120 € soldent le dossier', () => {
+  const run = appli({ clients: { c1: client({ balance: 120 }), c2: client({ id: 'c2', num: '5002', balance: 120 }) } });
+  run(`db.batch(markPaid(S.clients.c1, 50, { author: 'u' }))`);
+  const c = J(run, `S.clients.c1`); assert.equal(c.balance, 70); assert.equal(c.dunning.status, 'partiel'); assert.equal(c.dunning.paid, 50);
+  assert.equal(c.dunning.history.slice(-1)[0].label, run(`'Acompte ' + fmtE(50) + ', reste ' + fmtE(70)`)); assert.match(c.dunning.history.slice(-1)[0].label, /^Acompte 50,00.€, reste 70,00.€$/);
+  assert.equal(run(`DUN_STATUS.partiel.label`), 'Acompte reçu'); assert.equal(run(`dunStatus(S.clients.c1)`), 'partiel');
+  run(`UI.dunFilter = 'todo'`); assert.match(run(`dunTable()`), /data-badge="acompte">Acompte reçu</);
+  run(`db.batch(markPaid(S.clients.c2, 120, { author: 'u' }))`); assert.equal(run(`S.clients.c2.dunning.status`), 'recupere'); assert.equal(run(`S.clients.c2.balance`), 0);
+});
+test('point 4 : deux acomptes de 30 € le même jour : deux saisies distinctes', () => {
+  const run = appli({ clients: { c1: client({ balance: 120 }) } });
+  run(`db.batch(markPaid(S.clients.c1, 30, { author: 'u' })); db.batch(markPaid(S.clients.c1, 30, { author: 'u' }))`);
+  const E = J(run, `Object.values(S.entries).filter(e => e.kpiId === 'impayes').map(e => e.id).sort()`);
+  assert.equal(E.length, 2); assert.notEqual(E[0], E[1]); assert.match(E[0], /^dn_c1_\d{4}-\d{2}-\d{2}_0$/); assert.equal(run(`S.clients.c1.balance`), 60);
+});

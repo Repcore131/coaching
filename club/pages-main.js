@@ -383,8 +383,7 @@ ACTIONS.openSaisies = () => {
       const v = parseMontant(f['k_' + k.id]);
       if (Number.isNaN(v) || !v || v < 0) continue;
       if (k.id === 'impayes') {
-        const imp = date === today() ? markPaid(cImp, v, { canal: 'equipe', author: f.userId, from: 'saisie', force: true })
-          : S.entries['dn_' + cImp.id + '_' + date] ? [] : [[['entries', 'dn_' + cImp.id + '_' + date], { id: 'dn_' + cImp.id + '_' + date, userId: dunOf(cImp).ownerId || f.userId, clubId: CLUB.id, kpiId: 'impayes', date, value: Math.round(v * 100) / 100, source: 'manual', at: dateOf(date).getTime() + 12 * 3600000, by: ME.id, from: 'saisie', clientId: cImp.id, clientNum: cImp.num || '', ...(reason ? { reason } : {}) }]];
+        const imp = markPaid(cImp, v, { canal: 'equipe', author: f.userId, from: 'saisie', force: true, date }).map(o => o[0][0] === 'entries' && reason ? [o[0], { ...o[1], reason }] : o);
         ops.push(...imp); continue;
       }
       const id = newId();

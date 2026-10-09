@@ -294,6 +294,7 @@ const DUN_STATUS = {
   promesse: { label: 'Promesse de paiement', cls: 'info' },
   recupere: { label: 'Récupéré', cls: 'ok' },
   a_verifier: { label: 'Soldé, à vérifier', cls: 'warn' },
+  partiel: { label: 'Acompte reçu', cls: 'info' },
   perdu: { label: 'Huissier / perdu', cls: 'bad' },
 };
 const dunOf = c => c.dunning || {};
@@ -394,7 +395,7 @@ function dunTable() {
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
     ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th class="num sortable" data-act="ui" data-key="dunSort" data-val="${UI.dunSort === 'age' ? 'age-' : 'age'}" aria-sort="${UI.dunSort === 'age' ? 'descending' : UI.dunSort === 'age-' ? 'ascending' : 'none'}">Âge${UI.dunSort === 'age' ? ' ▼' : UI.dunSort === 'age-' ? ' ▲' : ''}</th><th>Ouvert depuis</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.slice(0, Number(UI.dunMax || 100)).map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
-      return `<tr class="${dunDue(c) ? 'due' : ''}"><td><a href="#/client/${esc(c.id)}"><b>${esc(c.name || 'Sans nom')}</b></a><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
+      return `<tr class="${dunDue(c) ? 'due' : ''}"><td><a href="#/client/${esc(c.id)}"><b>${esc(c.name || 'Sans nom')}</b></a>${st === 'partiel' ? ` <span class="badge info" data-badge="acompte">Acompte reçu</span>` : ''}<div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
         <td class="num nowrap" data-age="${detteAge(c) ?? ''}">${rec ? '' : detteAge(c) == null ? '<span class="muted small">date inconnue</span>' : plur(detteAge(c), 'jour', 'jours')}</td>
         <td class="small nowrap">${rec ? `soldé le ${dm(d.recoveredAt)}${joursOuvert(c) != null ? ' · ' + plur(joursOuvert(c), 'jour', 'jours') : ''}` : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${joursOuvert(c) == null ? 'n.d.' : plur(joursOuvert(c), 'jour', 'jours')}</span>`}${dunPromiseLate(c) ? `<div class="bad">promesse du ${dm(dunPromiseDate(c))} non tenue</div>` : ''}</td>
@@ -432,7 +433,7 @@ ACTIONS.dunPaid = el => {
   const c = S.clients[el.dataset.id];
   openModal({ title: `Récupéré · ${c.name}`, body: `<form id="dpf" class="grid"><label class="field"><span>Montant encaissé (€)</span><input class="input" type="number" step="0.01" name="amount" value="${Number(c.balance) || ''}"></label>
     <div class="field"><span>Comment ?</span><div class="chips">${[['equipe', 'Encaissé par l’équipe'], ['client', 'Payé en ligne par le client'], ['auto', 'Prélèvement']].map(([k, l], i) => `<label class="chip-radio"><input type="radio" name="canal" value="${k}" ${i === 0 ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
-    <p class="muted small" style="margin:0">Encaissé par l’équipe : le montant s’ajoute aux impayés récupérés de ${esc(fullName(S.users[dunOf(c).ownerId || ME.id]))} (KPI et prime).</p></form>`,
+    <p class="muted small" style="margin:0">Montant inférieur au solde : acompte, le dossier reste ouvert pour le reste. Encaissé par l’équipe : le montant s’ajoute aux impayés récupérés de ${esc(fullName(S.users[dunOf(c).ownerId || ME.id]))} (KPI et prime).</p></form>`,
     foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="dunPaidSave">Valider</button>', onMount: m => { m.dataset.id = c.id; } });
 };
 ACTIONS.dunPaidSave = () => {
@@ -440,7 +441,7 @@ ACTIONS.dunPaidSave = () => {
   const amount = Math.round(toNum(f.amount) * 100) / 100;
   const ops = markPaid(c, amount, { canal, author: ME.id, from: 'impayes' }); closeModal();
   if (!ops.length) { toast(`${c.name} : dossier déjà soldé, rien à ajouter`); return; }
-  db.batch(ops); toast(`Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
+  db.batch(ops); toast(Number(S.clients[c.id].balance) > 0 ? `Acompte de ${fmtE(amount)} noté, reste ${fmtE(Number(S.clients[c.id].balance))} : ${c.name}` : `Impayé récupéré : ${fmtE(amount)}, ${c.name}`);
 };
 // Un seul chemin pour « payé » (Impayés, Rétention, Relances, saisie détaillée) : markPaid.
 //  - crédit unique : au responsable du dossier (dunning.ownerId), sinon à l'auteur de l'action ;
@@ -449,19 +450,25 @@ ACTIONS.dunPaidSave = () => {
 //    montant à 7 jours près, reconnaît la saisie (rsmCommitPlan) ;
 //  - la saisie porte clientId et clientNum.
 const arr2 = x => Math.round((Number(x) || 0) * 100) / 100;
-function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = '', force = false } = {}) {
+// Identifiant de saisie : dn_<client>_<jour>_<rang> (deux acomptes le même jour ne s'écrasent pas).
+function dnId(clientId, date) { const p = 'dn_' + clientId + '_' + date; const n = Object.keys(S.entries).filter(k => k === p || k.startsWith(p + '_')).length; return p + '_' + n; }
+function markPaid(c, amount, { canal = 'equipe', author = ME && ME.id, from = '', force = false, date = today() } = {}) {
   if (!c) return [];
   const solde = arr2(c.balance); const montant = arr2(amount);
   if (!(montant > 0)) return [];
   const by = dunOf(c).ownerId || author;
-  const id = 'dn_' + c.id + '_' + today();
+  const entree = () => { const id = dnId(c.id, date); return [['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date, value: montant, source: 'manual', at: date === today() ? Date.now() : dateOf(date).getTime() + 12 * 3600000, by: ME.id, from, clientId: c.id, clientNum: c.num || '', ...(from === 'retention' ? { needsCheck: true } : {}) }]; };
   if (!(solde > 0)) {
-    // Dossier déjà soldé : rien, sauf une saisie détaillée (force) qui n'a pas encore d'entrée ce jour-là.
-    if (!force || S.entries[id] || canal !== 'equipe') return [];
-    return [[['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: montant, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '' }]];
+    // Dossier déjà soldé : rien, sauf une saisie détaillée (force) qui n'a pas encore d'entrée ce jour-là pour ce montant.
+    const deja = Object.values(S.entries).some(e => e.kpiId === 'impayes' && e.clientId === c.id && e.date === date && Math.abs(Number(e.value) - montant) <= 0.01 && entryCounts(e));
+    return force && !deja && canal === 'equipe' ? [entree()] : [];
   }
-  const ops = [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: today(), amount: montant, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
-  if (canal === 'equipe') ops.push([['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: montant, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '', ...(from === 'retention' ? { needsCheck: true } : {}) }]);
+  // Paiement partiel : la dette restante reste ouverte (« Acompte reçu »), le cumul encaissé est gardé.
+  const reste = arr2(Math.max(0, solde - montant)); const d = dunOf(c); const cumul = arr2((Number(d.paid) || 0) + Math.min(montant, solde));
+  const ops = reste > 0
+    ? [[['clients', c.id, 'balance'], reste], dunPatch(c, { status: 'partiel', paid: cumul, lastPaidAt: date, ownerId: d.ownerId || null }, `Acompte ${fmtE(montant)}, reste ${fmtE(reste)}`)]
+    : [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: date, amount: cumul, paid: cumul, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(montant)})`)];
+  if (canal === 'equipe') ops.push(entree());
   return ops;
 }
 // Ancienne signature (le crédit suit désormais la règle unique de markPaid).
