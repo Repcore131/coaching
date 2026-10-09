@@ -2,8 +2,8 @@
 'use strict';
 // ══ FIT PULSE — demarrage ════════════════════════════════════════════════
 (async function boot() {
-  if (window.PARKPULSE_BLOCKED) return; // copie hors adresse officielle : rien ne démarre
-  const theme = safeLS.get('parkpulse.theme');
+  if (window.FITPULSE_BLOCKED) return; // copie hors adresse officielle : rien ne démarre
+  const theme = safeLS.get('fitpulse.theme');
   if (theme) document.documentElement.dataset.theme = theme;
   try { await backend.start(); }
   catch (e) {
@@ -16,7 +16,7 @@
   if (backend.mode === 'firebase' && backend.user && !S) { db.replace(emptyState()); }
   // Premier lancement avec des comptes declares : le club et les comptes sont
   // crees d'office, on arrive directement sur la connexion.
-  if (!S && (window.PARKPULSE_ACCOUNTS || []).length && backend.mode === 'local') { S = emptyState(); backend.replaceAll(); }
+  if (!S && (CFG.accounts || []).length && backend.mode === 'local') { S = emptyState(); backend.replaceAll(); }
   if (S) { const ops = bootstrapOps(); if (ops.length) db.batch(ops); }
   if (S) {
     if (backend.mode === 'local') {
@@ -27,7 +27,7 @@
       ME = u && u.status !== 'archived' ? u : null;
       if (!ME) await backend.signOut();
     }
-    const cid = safeLS.get('parkpulse.club');
+    const cid = safeLS.get('fitpulse.club');
     if (ME && cid && S.clubs[cid] && (inClub(ME, cid) || ME.role === 'createur')) CLUB = S.clubs[cid];
   }
   db.onChange(render);

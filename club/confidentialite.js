@@ -112,14 +112,14 @@ const ROLES_VOIENT = [
 ];
 function confidentialiteBody(connecte) {
   const R = typeof RETENTION !== 'undefined' ? RETENTION : {};
-  const enLigne = !!window.PARKPULSE_FIREBASE; const region = enLigne ? (/firebasedatabase\.app/.test(window.PARKPULSE_FIREBASE.databaseURL) ? window.PARKPULSE_FIREBASE.databaseURL.split('.')[1] : 'us-central1 (États-Unis), région par défaut de la base actuelle') : null;
+  const enLigne = !!CFG.firebase; const region = enLigne ? (/firebasedatabase\.app/.test(CFG.firebase.databaseURL) ? CFG.firebase.databaseURL.split('.')[1] : 'us-central1 (États-Unis), région par défaut de la base actuelle') : null;
   const mgr = connecte && isManager(); const pos = mgr && benchOn() ? benchPosition(CLUB.id, addMonths(curMonth(), -1)) : null;
   return `<div class="card prose conf">
     <h2>Ce que voit chaque rôle</h2>
     <div class="table-wrap"><table class="t"><thead><tr><th>Rôle</th><th>Accès</th></tr></thead><tbody>${ROLES_VOIENT.map(([r, d]) => `<tr><td><b>${r}</b></td><td>${d}</td></tr>`).join('')}</tbody></table></div>
     <p class="small">Chaque personne se connecte avec son e-mail et un code personnel. Changer ou retirer un code coupe l’accès aussitôt. Les mots de passe et les jetons d’accès aux boîtes e-mail ne sont jamais stockés dans l’application.</p>
     <h2>Où sont stockées les données</h2>
-    <p>${enLigne ? `Base de données Google Firebase (Realtime Database), projet ${esc(window.PARKPULSE_FIREBASE.projectId)}, région ${esc(region)}. Le site est servi par Firebase Hosting. Une copie de travail reste dans le navigateur pour fonctionner sans réseau.` : 'Mode local : les données restent dans ce navigateur, sur cet appareil. Rien n’est envoyé sur un serveur.'}</p>
+    <p>${enLigne ? `Base de données Google Firebase (Realtime Database), projet ${esc(CFG.firebase.projectId)}, région ${esc(region)}. Le site est servi par Firebase Hosting. Une copie de travail reste dans le navigateur pour fonctionner sans réseau.` : 'Mode local : les données restent dans ce navigateur, sur cet appareil. Rien n’est envoyé sur un serveur.'}</p>
     <p class="small">Les traitements automatiques (relève des demandes de résiliation, imports Resamania, brief du matin) tournent sur les serveurs de Google ou de GitHub et ne gardent rien hors de la base.</p>
     <h2>Durées de conservation</h2>
     <ul><li>Anciens adhérents : ${Math.round((R.clientInactifMois || 36) / 12)} ans après la sortie.</li><li>Impayés soldés : ${Math.round((R.impayeSoldeMois || 24) / 12)} ans.</li><li>Résiliations : ${Math.round((R.resiliationMois || 24) / 12)} ans.</li><li>Extrait des e-mails de résiliation : 90 jours après le traitement.</li><li>Contacts notés : ${Math.round((R.contactsMois || 36) / 12)} ans.</li><li>Chat : ${R.chatMois || 12} mois.</li><li>Journal d’erreurs : ${R.logsJours || 30} jours.</li></ul>

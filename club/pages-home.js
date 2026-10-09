@@ -154,7 +154,7 @@ function todoList(limit = 6) {
 ACTIONS.relNobody = () => { UI.relScope = 'nobody'; UI.relSeg = 'file'; location.hash = '#/relances'; };
 
 // ── Accueil ───────────────────────────────────────────────────────────────
-const ASSET = k => (window.PARKPULSE_ASSETS || {})[k] || null;
+const ASSET = k => (CFG.assets || {})[k] || null;
 function clubWeather(mk) {
   // météo du club = la pire projection des paliers collectifs
   const keys = Object.keys(paliersFor(CLUB.id, mk)); if (!keys.length) return HEALTH.none;
@@ -231,7 +231,7 @@ PAGES.home = {
 // Donnees saisies sur cet appareil AVANT le mode partage (ancien mode local) :
 // on propose de les verser dans la base de l'equipe, sans rien ecraser.
 function localData() {
-  if (backend.mode !== 'firebase' || safeLS.get('parkpulse.transferred')) return null;
+  if (backend.mode !== 'firebase' || safeLS.get('fitpulse.transferred')) return null;
   try { const st = JSON.parse(safeLS.get(LOCAL_KEY) || 'null'); if (!st || (st.meta && st.meta.demo)) return null; return st; } catch (e) { return null; }
 }
 function localTransferPlan(st) {
@@ -257,11 +257,11 @@ ACTIONS.localTransfer = () => {
   const st = localData(); if (!st) return;
   const p = localTransferPlan(st);
   for (let i = 0; i < p.ops.length; i += 400) db.batch(p.ops.slice(i, i + 400));
-  safeLS.set('parkpulse.transferred', '1');
+  safeLS.set('fitpulse.transferred', '1');
   toast(`Transféré : ${plur(p.users, 'membre', 'membres')}, ${plur(p.items, 'élément', 'éléments')}. Générez maintenant leurs codes dans Équipe.`);
   render();
 };
-ACTIONS.localTransferSkip = () => { safeLS.set('parkpulse.transferred', '1'); render(); };
+ACTIONS.localTransferSkip = () => { safeLS.set('fitpulse.transferred', '1'); render(); };
 ACTIONS.goPaliers = () => { UI.memTab = 'paliers'; location.hash = '#/members'; };
 function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;
@@ -318,9 +318,9 @@ ACTIONS.palDel = el => { const mk = UI.palMonth || curMonth(); const p = palRead
 // ── Barre d'onglets du téléphone ──────────────────────────────────────────
 function tabBar(route) {
   // Accueil, Relances, [Saisir], Classement, Equipe (managers : Plus pour le menu complet).
-  const t = [['home', 'Accueil', 'dashboard'], ['relances', 'Relances', 'phone'], ['saisir', 'Saisir', 'plus'], ['leaderboard', 'Classement', 'trophy'], isManager() ? ['more', 'Plus', 'menu'] : ['equipe', 'Équipe', 'users']];
+  const t = [['home', 'Accueil', 'home'], ['relances', 'Relances', 'callback'], ['saisir', 'Nouvelle saisie', 'plus'], ['leaderboard', 'Classement', 'ranking'], isManager() ? ['more', 'Plus', 'menu'] : ['equipe', 'Équipe', 'team']];
   const n = relBadge();
-  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Saisir">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : id === 'equipe' && (unseenPouls() + unseenChat()) ? `<em>${Math.min(99, unseenPouls() + unseenChat())}</em>` : ''}</a>`).join('')}</nav>`;
+  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Nouvelle saisie">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : id === 'equipe' && (unseenPouls() + unseenChat()) ? `<em>${Math.min(99, unseenPouls() + unseenChat())}</em>` : ''}</a>`).join('')}</nav>`;
 }
 ACTIONS.tbSaisir = () => {
   openModal({ title: 'Saisir', body: `${quickPad()}<p class="muted small" style="margin-bottom:0">Pour une autre date ou un autre membre : <a href="javascript:void 0" data-act="openSaisiesFromPad">saisie détaillée</a>.</p>` });

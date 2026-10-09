@@ -53,10 +53,10 @@ PAGES.login = {
   auth: false,
   render() {
     const shared = backend.mode === 'firebase';
-    const img = (window.PARKPULSE_ASSETS || {}).login;
+    const img = (CFG.assets || {}).login;
     const club = deepGet(S || {}, ['tenant', 'name']) || (S && Object.values(S.clubs || {})[0] || {}).name || 'Votre club';
     const q = new URLSearchParams(location.search);
-    const email = q.get('email') || safeLS.get('parkpulse.lastEmail') || '';
+    const email = q.get('email') || safeLS.get('fitpulse.lastEmail') || '';
     const demo = !shared && S ? Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b))) : [];
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     return `<div class="auth login2"${img ? ` style="--login:url('${img}')"` : ''}><div class="login-bg" aria-hidden="true"></div>
@@ -105,7 +105,7 @@ document.addEventListener('submit', async e => {
   const code = (f.code || '').trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { loginMsg('Saisissez votre adresse e-mail complète.'); $('#lg-email').focus(); return; }
   if (normCode(code).replace(/[^A-Z0-9]/g, '').length !== 14) { loginMsg('Le code fait 12 caractères : FP-XXXX-XXXX-XXXX.'); $('#lg-code').focus(); return; }
-  safeLS.set('parkpulse.lastEmail', email);
+  safeLS.set('fitpulse.lastEmail', email);
   const btn = $('#lg-btn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Connexion…'; loginMsg('');
   const done = () => { if (btn.isConnected) { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = 'Se connecter'; } };
   if (backend.mode === 'firebase') {
@@ -133,7 +133,7 @@ document.addEventListener('submit', async e => {
   done(); loginMsg('E-mail ou code incorrect.');
 });
 ACTIONS.loginAs = el => login(S.users[el.dataset.id]);
-ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les données de ce navigateur ?', { ok: 'Tout effacer', danger: true })) { backend.wipe(); S = null; ME = null; if ((window.PARKPULSE_ACCOUNTS || []).length && backend.mode === 'local') { db.replace(emptyState()); db.batch(bootstrapOps()); } render(); } };
+ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les données de ce navigateur ?', { ok: 'Tout effacer', danger: true })) { backend.wipe(); S = null; ME = null; if ((CFG.accounts || []).length && backend.mode === 'local') { db.replace(emptyState()); db.batch(bootstrapOps()); } render(); } };
 
 // ── Tableau de bord ───────────────────────────────────────────────────────
 PAGES.dashboard = {
@@ -356,7 +356,7 @@ ACTIONS.openSaisies = () => {
       : tasksToday();
     $('.modal-body', m).innerHTML = `<div class="tabs"><button data-t="saisie" class="${tab === 'saisie' ? 'on' : ''}">Mes saisies</button><button data-t="tasks" class="${tab === 'tasks' ? 'on' : ''}">Liste de tâches</button></div>${body}`;
   };
-  const m = openModal({ title: 'Saisies', drawer: true, body: '' });
+  const m = openModal({ title: 'Nouvelle saisie', drawer: true, body: '' });
   draw(m);
   m.addEventListener('click', async e => {
     const t = e.target.closest('[data-t]'); if (t) { tab = t.dataset.t; draw(m); return; }

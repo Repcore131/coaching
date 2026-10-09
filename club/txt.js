@@ -9,7 +9,7 @@
 const TXT = {
   app: {
     nom: 'Fit Pulse',
-    accroche: 'Objectifs, relances et rétention du club',
+    accroche: 'Le suivi commercial des clubs',
     accueil: 'Objectifs, classement, relances et imports Resamania de votre club. Les données restent dans votre espace.',
   },
   // Vocabulaire propre à Fit Pulse

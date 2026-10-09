@@ -93,7 +93,7 @@ async function issueCode(u, email) {
 }
 // Invitation : un e-mail pret a partir (ouvert dans la messagerie du manager,
 // marche partout, tout de suite). Si l'envoi automatique est active
-// (PARKPULSE_MAIL_AUTO), la demande part aussi dans /fitpulse_mail : le serveur
+// (FITPULSE_CONFIG.mailAuto), la demande part aussi dans /fitpulse_mail : le serveur
 // (club/outils/fitpulse-serveur.mjs) envoie le bel e-mail puis l'efface.
 function inviteText(u, code) {
   const url = `${location.origin}${location.pathname}?email=${encodeURIComponent(u.email || '')}`;
@@ -120,7 +120,7 @@ ${ME ? fullName(ME) : ''}`,
 }
 async function sendInvite(u, code) {
   const st = $('#mail-state');
-  const srv = (S && S.serveur) || {}; const auto = window.PARKPULSE_MAIL_AUTO || srv.mail === true; const late = Date.now() - (Number(srv.at) || 0) > 3600e3;
+  const srv = (S && S.serveur) || {}; const auto = CFG.mailAuto || srv.mail === true; const late = Date.now() - (Number(srv.at) || 0) > 3600e3;
   if (!auto || backend.mode !== 'firebase' || !u.email) return;
   if (st) st.innerHTML = '<span class="muted">Envoi automatique de l’invitation…</span>';
   try {
@@ -382,7 +382,7 @@ ACTIONS.profPhoto = async el => {
   profPatch({ photo: data }); toast('Photo enregistrée');
 };
 ACTIONS.profSave = () => { const f = formData($('#ppf2')); profPatch({ poste: (f.poste || '').trim().slice(0, 60) || null, tel: (f.tel || '').trim().slice(0, 20) || null, bio: (f.bio || '').trim().slice(0, 140) || null }); toast('Profil enregistré'); };
-ACTIONS.themeSet = el => { document.documentElement.dataset.theme = el.dataset.t; safeLS.set('parkpulse.theme', el.dataset.t); render(); };
+ACTIONS.themeSet = el => { document.documentElement.dataset.theme = el.dataset.t; safeLS.set('fitpulse.theme', el.dataset.t); render(); };
 function profAccount() {
   return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">${profPersonal()}
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>

@@ -238,7 +238,7 @@ test('application neutre : aucune enseigne, ville ou personne dans fitpulse.html
   execFileSync(process.execPath, [new URL('../outils/build-single.mjs', import.meta.url).pathname, out], { stdio: 'ignore' });
   const L = readFileSync(out, 'utf8').split('\n').filter(l => /Fitness Park|Niort|FPN GESTION|KGUE|GUELLEC/.test(l)).filter(l => !/^\/\*! Fit Pulse ©|^<!-- Fit Pulse ©/.test(l.trim()));
   assert.deepEqual(L, []);
-  assert.doesNotMatch(readFileSync(out, 'utf8'), /PARKPULSE_ACCOUNTS = \[|guellec\.coachingpro/);
+  assert.doesNotMatch(readFileSync(out, 'utf8'), /ACCOUNTS = \[|guellec\.coachingpro/);
 });
 test('couleur primaire du client : texte posé dessus au contraste AA', () => {
   const run = appli();

@@ -164,15 +164,15 @@ try {
   console.log(`%c© 2026 Fit Pulse. Tous droits réservés.\nLogiciel protégé par le Code de la propriété intellectuelle. Toute copie, reproduction, adaptation ou réutilisation, même partielle, est interdite et sera poursuivie (art. L335-2 et L335-3 CPI : 3 ans d’emprisonnement et 300 000 € d’amende).`, 'font:13px sans-serif;color:#d33');
 } catch (e) { /* console indisponible */ }
 // Fonctionnement limité aux adresses officielles : une copie hébergée ailleurs affiche un avertissement.
-// Adresses du déploiement : window.PARKPULSE_DOMAINES (config du déploiement), sinon tout hébergement Firebase.
+// Adresses du déploiement : CFG.domaines (config du déploiement), sinon tout hébergement Firebase.
 function legalDomainOk() {
   if (location.protocol === 'file:') return true;
-  const h = location.hostname; const D = window.PARKPULSE_DOMAINES || [];
+  const h = location.hostname; const D = CFG.domaines || [];
   return ['localhost', '127.0.0.1'].includes(h) || /^192\.168\.|^10\./.test(h) || (D.length ? D.includes(h) : /\.(web\.app|firebaseapp\.com)$/.test(h));
 }
 if (!legalDomainOk()) {
   document.addEventListener('DOMContentLoaded', () => {
     document.body.innerHTML = `<div style="font-family:sans-serif;max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#eee;background:#111;border-radius:16px"><h1 style="color:#12B3A8">Copie non autorisée</h1><p>Cette application est un logiciel protégé, utilisé ici hors de l’adresse de son déploiement. Toute copie, reproduction ou hébergement non autorisé est interdit et poursuivi (articles L335-2 et L335-3 du Code de la propriété intellectuelle).</p><p>Sa reproduction ou son hébergement en dehors de l’adresse officielle est une contrefaçon (art. L335-2 et L335-3 du Code de la propriété intellectuelle) et fera l’objet de poursuites.</p><p>Signalement : ${esc(LEGAL.email)}</p></div>`;
   });
-  window.PARKPULSE_BLOCKED = true;
+  window.FITPULSE_BLOCKED = true;
 }

@@ -6,7 +6,7 @@
 // (club/cloud : totpEtat, totpInscrire, totpValider) ; les règles de la base
 // refusent tout accès tant que ce n'est pas fait. Rien n'est vérifié ici.
 
-const fnUrl = nom => `https://${(window.PARKPULSE_FIREBASE || {}).functionsRegion || 'europe-west1'}-${(window.PARKPULSE_FIREBASE || {}).projectId}.cloudfunctions.net/${nom}`;
+const fnUrl = nom => `https://${(CFG.firebase || {}).functionsRegion || 'europe-west1'}-${(CFG.firebase || {}).projectId}.cloudfunctions.net/${nom}`;
 async function appelFonction(be, nom, data = {}) {
   const tk = await be.fb.auth().currentUser.getIdToken();
   let r; try { r = await fetch(fnUrl(nom), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ data }) }); } catch (e) { throw new Error('Serveur injoignable : vérifiez la connexion internet.'); }

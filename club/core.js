@@ -8,6 +8,9 @@
 // Rien ne sort de nos clubs : il n'existe ni reseau, ni classement inter-
 // enseignes, ni fil partage avec l'exterieur.
 
+// Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
+const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
+CFG.assets = CFG.assets || {};
 const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.4' };
 // ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
 // Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
@@ -64,10 +67,22 @@ function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 10139
 
 // ── Icones (trait, 24x24) ─────────────────────────────────────────────────
 const ICONS = {
+  // Navigation (planche de référence assets/brand/icons-sheet.png) : trait 2, extrémités arrondies.
+  home: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
+  target: '<circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="M11 13l8.5-8.5M16 4.5V8h3.5"/>',
+  ranking: '<rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8" width="5" height="13" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/>',
+  callback: '<path d="M5.5 3.5h2.8l1.4 3.8-2 1.4a10.5 10.5 0 0 0 4.6 4.6l1.4-2 3.8 1.4v2.8a2 2 0 0 1-2 2A14.5 14.5 0 0 1 3.5 5.5a2 2 0 0 1 2-2z"/><path d="M14.5 3a6.5 6.5 0 0 1 6.2 5"/><path d="M18.4 7.4l2.3.9.8-2.3"/>',
+  door: '<path d="M4 3.5l8.5 1.5v15.5L4 19z"/><path d="M12.5 5h5v14.5h-5"/><path d="M7.5 12h2"/>',
+  coinsback: '<path d="M19.5 10A8.5 8.5 0 1 0 11 20.5"/><path d="M14 8.6a3.5 3.5 0 1 0 0 5.8"/><path d="M7.5 10.6h5M7.5 12.6h5"/><path d="M21 21a3 3 0 0 0-3-3h-3.5"/><path d="M16.5 16l-2 2 2 2"/>',
+  magnet: '<path d="M5 4h4.5v7.5a2.5 2.5 0 0 0 5 0V4H19v7.5a7 7 0 0 1-14 0z"/><path d="M5 8h4.5M14.5 8H19"/>',
+  import: '<path d="M12 3v10M8 9.5l4 4 4-4"/><path d="M3.5 14.5l1.8-3.5M20.5 14.5l-1.8-3.5"/><path d="M3.5 14.5h17V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19z"/>',
+  team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20.5a6.5 6.5 0 0 1 13 0z"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.5 20.5h6a4.5 4.5 0 0 0-5.6-4.4"/>',
+  chat: '<path d="M5.5 4h13A2.5 2.5 0 0 1 21 6.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-5 4v-4h-.5A2.5 2.5 0 0 1 3 14.5v-8A2.5 2.5 0 0 1 5.5 4z"/>',
+  flag: '<path d="M5 21V3.5"/><path d="M5 4.5c3-2 6 2 9 0s4.5-1 5.5-.5v9c-1-.5-2.5-1.5-5.5.5s-6-2-9 0"/>',
+  report: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M8.5 16.5l3-3 2 1.5 3-3.5"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
-  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   pouls: '<path d="M2 12h4l2-5 4 10 3-7 2 2h5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
   mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/>',
@@ -75,7 +90,6 @@ const ICONS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
-  door: '<path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M10 17l-5-5 5-5M5 12h12"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -102,7 +116,6 @@ const ICONS = {
   clip: '<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/>',
-  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   map: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
@@ -117,7 +130,6 @@ const ICONS = {
   briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
   ticket: '<path d="M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a2 2 0 0 0 0 4v0a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4V12a2 2 0 0 0 0-4z"/><path d="M14 5v14" stroke-dasharray="2 2"/>',
   lifebuoy: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/>',
-  magnet: '<path d="M5 3v8a7 7 0 0 0 14 0V3h-4v8a3 3 0 0 1-6 0V3z"/><path d="M5 7h4M15 7h4"/>',
   crown: '<path d="m3 8 4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
   medal: '<path d="M8 3h8l-2 6h-4z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 1 2h2l-1.6 1.3.6 2.2-2-1.3-2 1.3.6-2.2L9 14h2z"/>',
   cake: '<path d="M4 21V12h16v9M2 21h20M4 16c2 1.5 4 1.5 6 0s4-1.5 6 0 3 1 4 0M12 12V8M12 5.5v.5"/>',
@@ -127,7 +139,6 @@ const ICONS = {
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
-  flag: '<path d="M5 21V4M5 4h12l-2 4 2 4H5"/>',
   calcheck: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/>',
 };
 // Icone d'un KPI : par son id (KPI par defaut), sinon le nom d'icone choisi,
@@ -196,14 +207,23 @@ function defaultLibrary() {
 // de suite, l'ecran se redessine, la persistance suit.
 let S = null;
 let REV = 0;
-const LOCAL_KEY = 'parkpulse.v1';
-const SESSION_KEY = 'parkpulse.session';
+const LOCAL_KEY = 'fitpulse.v1';
+const SESSION_KEY = 'fitpulse.session';
 const listeners = new Set();
 const safeLS = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { /* rien */ } },
 };
+// Repli : les clés locales d'une installation existante (préfixe historique « parkpulse. »)
+// sont lues une fois et recopiées sous « fitpulse. » : club choisi, thème, session et préférences restent.
+(function migrerClesLocales() {
+  try {
+    if (localStorage.getItem('fitpulse.migre')) return;
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('parkpulse.')) { const n = 'fitpulse.' + k.slice(10); if (localStorage.getItem(n) == null) localStorage.setItem(n, localStorage.getItem(k)); } }
+    localStorage.setItem('fitpulse.migre', '1');
+  } catch (e) { /* stockage indisponible */ }
+})();
 
 function setPath(obj, path, value) {
   let o = obj;
@@ -246,18 +266,18 @@ async function codeKeyOf(code) {
 // Adresse saisie : sans espaces, en minuscules, et les fautes de clavier courantes corrigées.
 const cleanEmail = e => String(e || '').replace(/\s+/g, '').toLowerCase().replace(/[,;]/g, '.').replace(/\.+$/, '').replace(/@gmail\.(fr|con|cm|om)$/, '@gmail.com');
 class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
-// ── Mode multi-salles (PARKPULSE_FIREBASE.multi) ─────────────────────────
+// ── Mode multi-salles (FITPULSE_CONFIG.firebase.multi) ─────────────────────────
 // Chaque société cliente a son espace : /orgs/{org}/info (abonnement, statut,
 // sécurité), /orgs/{org}/clubs/{club}, et toutes les collections sous
 // /orgs/{org}/data/… ; les clés de connexion sont dans /orgs_boot/{clé} =
 // { org, uid }. Sans ce réglage, l'appli reste sur /pulse (base historique).
-const MULTI = !!(window.PARKPULSE_FIREBASE && window.PARKPULSE_FIREBASE.multi);
+const MULTI = !!(CFG.firebase && CFG.firebase.multi);
 let ORG = null;
 const ROOT = () => MULTI ? `orgs/${ORG}/data` : 'pulse';
 const BOOT = MULTI ? 'orgs_boot' : 'pulse_boot';
 // Lecture REST d'un chemin public (clé de connexion, invitation), simulateur compris.
 function restUrl(chemin) {
-  const F = window.PARKPULSE_FIREBASE || {}; const e = F.emulateurs;
+  const F = CFG.firebase || {}; const e = F.emulateurs;
   return e ? `http://${e.db[0]}:${e.db[1]}/${chemin}.json?ns=${F.databaseURL.replace(/^https:\/\//, '').split('.')[0]}` : `${F.databaseURL}/${chemin}.json`;
 }
 // Chemins annexes (push, boîte de réception, journal) : sous l'espace de la société en multi-salles.
@@ -269,8 +289,8 @@ const firebaseBackend = {
     for (const f of ['firebase-app-compat', 'firebase-auth-compat', 'firebase-database-compat']) {
       await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `vendor/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }
-    this.fb = window.firebase; this.fb.initializeApp(window.PARKPULSE_FIREBASE);
-    const emu = window.PARKPULSE_FIREBASE.emulateurs; if (emu) { this.fb.database().useEmulator(...emu.db); this.fb.auth().useEmulator(emu.auth, { disableWarnings: true }); }
+    this.fb = window.firebase; this.fb.initializeApp(CFG.firebase);
+    const emu = CFG.firebase.emulateurs; if (emu) { this.fb.database().useEmulator(...emu.db); this.fb.auth().useEmulator(emu.auth, { disableWarnings: true }); }
   },
   keyOfUser(u) { const m = /^fp-([0-9a-f]{40})@/.exec((u && u.email) || ''); return m ? m[1] : null; },
   async start() {
@@ -380,7 +400,7 @@ const firebaseBackend = {
   // REST : la session du manager n'est pas touchee.
   async precreate(key, code) {
     try {
-      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${window.PARKPULSE_FIREBASE.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'fp-' + key + AUTH_DOMAIN_FP, password: normCode(code), returnSecureToken: false }) });
+      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${CFG.firebase.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'fp-' + key + AUTH_DOMAIN_FP, password: normCode(code), returnSecureToken: false }) });
     } catch (e) { /* hors ligne : le compte sera cree a la premiere connexion */ }
   },
   // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
@@ -395,7 +415,7 @@ const firebaseBackend = {
 localBackend.setBoot = () => {};
 localBackend.precreate = async () => {};
 
-const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
+const backend = CFG.firebase ? firebaseBackend : localBackend;
 // En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
 // leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
 const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, info: `orgs/${ORG}/info`, product: `orgs_product/${ORG}`, benchmark: 'benchmark' } : { product: 'pulse_product', benchmark: 'benchmark' };
@@ -499,6 +519,8 @@ function normalizeState(st) {
   if (st.kpis.invites && / > /.test(st.kpis.invites.label || '')) st.kpis.invites.label = TXT.kpi.invites;
   const lib = st.tasks.library || {}; if (lib.t1 && /^Check /.test(lib.t1.label || '')) lib.t1.label = TXT.taches.passage;
   Object.values(lib).forEach(t => { if (t && /avis Wiz/i.test(t.label || '')) t.label = TXT.taches.avis; });
+  // Marque blanche : le club historique (niort) sans thème garde son nom, son jaune et son logo d'avant.
+  const ni = st.clubs && st.clubs.niort; if (ni && !ni.theme) ni.theme = { displayName: ni.name || null, accent: '#FFD600', logo: ni.logo || (CFG.assets || {}).logo || null };
   // PSO : « membre » virtuel qui porte les ventes et prospects venus du web ou
   // de l'application, non attribués à un commercial. Jamais enregistré en base,
   // jamais invité ni doté d'un code. Recalculé à chaque chargement.
@@ -680,9 +702,9 @@ async function newCodeRecord() {
 }
 // Comptes declares dans config.js : crees s'ils manquent, rattaches a tous les clubs.
 function bootstrapOps() {
-  const ops = []; const accounts = window.PARKPULSE_ACCOUNTS || [];
+  const ops = []; const accounts = CFG.accounts || [];
   if (!accounts.length) return ops;
-  const club = window.PARKPULSE_CLUB;
+  const club = CFG.club;
   if (club && !S.clubs[club.id]) ops.push([['clubs', club.id], { ...club, createdAt: Date.now() }]);
   const allClubs = [...new Set([...Object.keys(S.clubs), ...(club ? [club.id] : [])])];
   for (const a of accounts) {

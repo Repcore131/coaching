@@ -3,16 +3,16 @@
 // ══ FIT PULSE — mode démonstration (?demo=1) ═════════════════════════════
 //
 // Pour montrer l'appli a un prospect sans donnees reelles ni marque :
-//  - aucune base Firebase (config.js laisse PARKPULSE_FIREBASE a null) ;
+//  - aucune base Firebase (config.js laisse FITPULSE_CONFIG.firebase a null) ;
 //  - tout ce que l'appli range dans le navigateur passe par UNE seule cle,
-//    fp_demo : les vraies cles (parkpulse.v1, session, theme…) ne sont ni lues
+//    fp_demo : les vraies cles (fitpulse.v1, session, theme…) ne sont ni lues
 //    ni modifiees ;
 //  - jeu de donnees fictif genere par seedDemo() (demoState), connexion d'office ;
 //  - bandeau fixe « Donnees fictives de demonstration » et bouton pour sortir ;
 //  - ni logo ni nom de l'enseigne a l'ecran.
 // L'adresse garde ?demo=1 : recharger la page reste en demonstration.
 
-const DEMO = !!window.PARKPULSE_DEMO;
+const DEMO = !!CFG.demo;
 const DEMO_KEY = 'fp_demo';
 const DEMO_USER = 'u1'; // Directeur Démo
 
@@ -24,7 +24,7 @@ if (DEMO) {
   safeLS.get = k => { const v = load()[k]; return v == null ? null : v; };
   safeLS.set = (k, v) => { load()[k] = String(v); return save(); };
   safeLS.del = k => { if (k in load()) { delete mem[k]; save(); } };
-  APP.tagline = 'Le pouls commercial de votre club';
+  APP.tagline = TXT.app.accroche;
   document.documentElement.classList.add('is-demo');
 }
 
@@ -60,5 +60,5 @@ if (DEMO) {
 
 if (DEMO) {
   document.title = 'Fit Pulse · démonstration';
-  const meta = document.querySelector('meta[name=description]'); if (meta) meta.setAttribute('content', 'Fit Pulse : le pouls commercial de votre club.');
+  const meta = document.querySelector('meta[name=description]'); if (meta) meta.setAttribute('content', 'Fit Pulse : le suivi commercial des clubs.');
 }

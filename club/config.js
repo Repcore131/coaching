@@ -11,12 +11,14 @@
 //
 // MODE LOCAL (fichier ouvert en local, tests, ou ?demo=1) : les donnees vivent
 // dans le navigateur, chaque appareil a sa propre copie.
+// Tout passe par window.FITPULSE_CONFIG = { demo, firebase, mailAuto, assets } (lu par core.js : CFG).
+const FITPULSE_CONFIG = window.FITPULSE_CONFIG = { demo: false, firebase: null, mailAuto: false, assets: {} };
 (function () {
   const h = location.hostname, q = new URLSearchParams(location.search);
   const enLigne = /\.(web\.app|firebaseapp\.com)$/.test(h) || q.get('partage') === '1';
   // MODE DEMONSTRATION (?demo=1) : donnees fictives, aucune base, voir demo.js.
-  window.PARKPULSE_DEMO = q.get('demo') === '1';
-  window.PARKPULSE_FIREBASE = enLigne && !window.PARKPULSE_DEMO ? {
+  FITPULSE_CONFIG.demo = q.get('demo') === '1';
+  FITPULSE_CONFIG.firebase = enLigne && !FITPULSE_CONFIG.demo ? {
     apiKey: 'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
     authDomain: 'repcore-sync.firebaseapp.com',
     databaseURL: 'https://repcore-sync-default-rtdb.firebaseio.com',
@@ -25,7 +27,7 @@
   // Essais du mode multi-salles sur le simulateur Firebase, en local seulement :
   // http://localhost:8765/?emu=fitpulse-e2e (base et authentification simulées).
   if (/^(localhost|127\.0\.0\.1)$/.test(h) && /^[a-z0-9-]{3,40}$/.test(q.get('emu') || '')) {
-    window.PARKPULSE_FIREBASE = { apiKey: 'demo-cle', projectId: 'demo-fitpulse', authDomain: 'localhost', databaseURL: `https://${q.get('emu')}.firebaseio.com`, multi: true, emulateurs: { db: ['127.0.0.1', 9000], auth: 'http://127.0.0.1:9099' } };
+    FITPULSE_CONFIG.firebase = { apiKey: 'demo-cle', projectId: 'demo-fitpulse', authDomain: 'localhost', databaseURL: `https://${q.get('emu')}.firebaseio.com`, multi: true, emulateurs: { db: ['127.0.0.1', 9000], auth: 'http://127.0.0.1:9099' } };
   }
 })();
 
@@ -34,7 +36,7 @@
 // les taches programmees que depuis la branche main : a passer a true une fois
 // ce workflow present sur main. En attendant, le bouton « Envoyer par e-mail »
 // de la fenetre du code ouvre l'invitation prete a partir.
-window.PARKPULSE_MAIL_AUTO = false;
+FITPULSE_CONFIG.mailAuto = false;
 
 // ══ COMPTES DE DEPART ═════════════════════════════════════════════════════
 // Aucun compte ni club dans le fichier livre : une base neuve est vide jusqu'au
@@ -47,7 +49,7 @@ window.PARKPULSE_MAIL_AUTO = false;
 // Images d'ambiance (Canva). Le logo du club se regle dans Club et reglages. Pour passer en haute
 // définition : exporter les images depuis Canva et remplacer les fichiers de
 // club/assets/ sous le même nom. logo : null pour n'afficher que Fit Pulse.
-window.PARKPULSE_ASSETS = {
+FITPULSE_CONFIG.assets = {
   wordmark: 'assets/logo/fitpulse-horizontal-fond-sombre.svg',
   icon: 'favicon.png',
   banner: 'assets/hero-banner.jpg',
@@ -56,7 +58,7 @@ window.PARKPULSE_ASSETS = {
 };
 
 // Demonstration : ni comptes reels, ni club reel, ni logo.
-if (window.PARKPULSE_DEMO) {
-  window.PARKPULSE_ASSETS.logo = null;
-  window.PARKPULSE_MAIL_AUTO = false;
+if (FITPULSE_CONFIG.demo) {
+  FITPULSE_CONFIG.assets.logo = null;
+  FITPULSE_CONFIG.mailAuto = false;
 }

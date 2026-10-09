@@ -427,15 +427,14 @@ function clubList() {
 ACTIONS.clubForm = el => {
   const c = el.dataset.id ? S.clubs[el.dataset.id] : null;
   openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : '')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label><div class="field"><span>Jours d’ouverture (rythme des objectifs)</span><div class="chips">${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, n) => `<label class="chip-radio"><input type="checkbox" name="od_${n}" ${(c && Array.isArray(c.openDays) ? c.openDays : [1, 2, 3, 4, 5, 6]).includes(n) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div></div>
-<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label><label class="field"><span>E-mail du gérant</span><input class="input" type="email" name="gerantEmail" value="${esc(c && c.gerantEmail || '')}"></label></div>
-    <div class="form-grid"><label class="field"><span>${TXT.clubs.couleur}</span><input class="input" type="color" name="couleur" value="${esc(c && COULEUR_OK(c.couleur) ? c.couleur : '#12B3A8')}"><small class="muted">${TXT.clubs.couleurAide}</small><label class="chk"><input type="checkbox" name="couleurDefaut" ${c && COULEUR_OK(c.couleur) ? '' : 'checked'}> ${TXT.clubs.couleurDefaut}</label></label><label class="field"><span>${TXT.clubs.logo}</span><input class="input" name="logo" maxlength="80" value="${esc(c && c.logo || '')}" placeholder="assets/logo-club.svg"><small class="muted">${TXT.clubs.logoAide}</small></label></div></form>`,
+<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label><label class="field"><span>E-mail du gérant</span><input class="input" type="email" name="gerantEmail" value="${esc(c && c.gerantEmail || '')}"></label></div></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="clubSave" data-id="${c ? c.id : ''}">Enregistrer</button>` });
 };
 ACTIONS.clubSave = el => {
   const f = formData($('#clf')); if (!f.name.trim()) return;
   let id = el.dataset.id;
   if (!id) { id = norm(f.name).replace(/ /g, '-').slice(0, 30) || newId(); if (S.clubs[id]) id += '-' + newId().slice(-4); }
-  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), gerantEmail: (f.gerantEmail || '').trim() || null, couleur: !f.couleurDefaut && COULEUR_OK(f.couleur) ? f.couleur.toUpperCase() : null, logo: /^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test((f.logo || '').trim()) ? f.logo.trim() : null }]];
+  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim(), gerantEmail: (f.gerantEmail || '').trim() || null }]];
   if (!el.dataset.id) ops.push([['users', ME.id, 'clubs'], [...(ME.clubs || []), id]]);
   db.batch(ops); closeModal(); toast('Club enregistré.');
 };
@@ -488,14 +487,10 @@ ACTIONS.settingSet = el => { if (!isManager()) return; const k = el.dataset.k; l
 // Identité du client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen, mentions légales.
 const TENANT_LEGAL = [['auteur', 'Responsable de la publication'], ['societe', 'Société (raison sociale)'], ['sigle', 'Sigle'], ['forme', 'Forme juridique'], ['capital', 'Capital'], ['rcs', 'RCS'], ['siret', 'SIRET du club'], ['tva', 'TVA intracommunautaire'], ['adresse', 'Siège social'], ['president', 'Représentant légal'], ['etablissement', 'Adresse du club'], ['tel', 'Téléphone'], ['email', 'E-mail de contact'], ['site', 'Site'], ['tribunal', 'Ville du tribunal compétent'], ['marque', 'Marque de l’enseigne']];
 function monClubCard() {
-  const T = tenant(); const c = deepGet(T, ['colors', 'primary']) || '#12B3A8'; const on = encreSur(c, deepGet(T, ['colors', 'onPrimary'])); const ratio = contraste(c, on);
+  const T = tenant();
   const champ = (k, l, v, extra = '') => `<label class="field"><span>${l}</span><input class="input" data-change="tenantSet" data-k="${k}" value="${esc(v == null ? '' : String(v))}" ${extra}></label>`;
-  const logo = clubLogo();
-  return `<div class="card" id="tenant-card"><h3>Mon club</h3><p class="muted small" style="margin-top:-4px">Nom, logo et couleur affichés dans Fit Pulse ; société d’exploitation reprise dans les exports et les mentions légales.</p>
+  return `<div class="card" id="tenant-card"><h3>Mon club</h3><p class="muted small" style="margin-top:-4px">Nom du client ; société d’exploitation reprise dans les exports et les mentions légales.</p>
     <div class="form-grid">${champ('name', 'Nom', T.name)}${champ('entity', 'Société d’exploitation', T.entity, 'placeholder="Entité = votre société d’exploitation"')}${champ('brand', 'Enseigne', T.brand, 'placeholder="Facultatif"')}
-      <div class="field"><span>Logo</span><div class="row" style="gap:10px">${logo ? `<img class="logo-apercu" src="${esc(logo)}" alt="Logo du club">` : '<span class="muted small">aucun</span>'}<label class="btn sm">${ico('upload')} Choisir une image<input type="file" accept="image/*" hidden data-change="logoEnvoi"></label>${T.logo ? '<button class="btn ghost sm" data-act="logoRetirer">Retirer</button>' : ''}</div><small class="muted">Réduit à 256 px, 100 Ko au plus.</small></div>
-      <label class="field"><span>Couleur principale</span><input class="input" type="color" data-change="tenantSet" data-k="colors.primary" value="${esc(c)}"></label>
-      <label class="field"><span>Texte sur la couleur</span><input class="input" type="color" data-change="tenantSet" data-k="colors.onPrimary" value="${esc(on)}"><small class="muted" data-contraste="${ratio.toFixed(2)}">Contraste ${ratio.toFixed(1).replace('.', ',')}:1 ${ratio >= 4.5 ? '(AA respecté)' : '(insuffisant : noir ou blanc appliqué)'}</small></label>
       </div>
     <details style="margin-top:10px"><summary><b>Mentions légales</b></summary><div class="form-grid" style="margin-top:8px">${TENANT_LEGAL.map(([k, l]) => champ('legal.' + k, l, deepGet(T, ['legal', k]))).join('')}</div>
       ${backend.mode === 'firebase' ? '<button class="btn sm" style="margin-top:8px" data-act="tenantPublier">Publier les mentions légales (lisibles sans connexion)</button>' : ''}</details></div>`;
@@ -529,6 +524,7 @@ ACTIONS.tenantPublier = async () => {
 function clubSettings() {
   return `<div class="grid reglages">
     ${monClubCard()}
+    ${apparenceCard()}
     ${reperesCard()}
     ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>
       <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>Le score est la moyenne de vos % d’objectif, pondérée par les points de chaque KPI, plafonnée à 150 %. Les points récompensent l’atteinte : 25, 50, 75 puis 100 % des points du KPI. En calcul continu, chaque unité rapporte sa part, sans marche. Le calcul continu est conseillé pour les petits objectifs (moins de 5).</div></div>

@@ -45,6 +45,12 @@ document.addEventListener('keydown', e => {
   if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); } else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+// Touche N : nouvelle saisie (hors champ de saisie et hors fenêtre ouverte).
+document.addEventListener('keydown', e => {
+  if ((e.key !== 'n' && e.key !== 'N') || e.ctrlKey || e.metaKey || e.altKey || !ME || !S) return;
+  const t = e.target; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  if ($('#modal-root .modal') || typeof ACTIONS.openSaisies !== 'function') return; e.preventDefault(); ACTIONS.openSaisies();
+});
 function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
   return new Promise(res => {
     let done = false;
@@ -104,22 +110,57 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
   return `<div class="bar"><i style="width:${w}%;background:${col}"></i>${ticks ? [25, 50, 75].map(t => `<span class="tick" style="left:${t}%"></span>`).join('') : ''}${pace != null ? `<span class="pace" style="left:${clamp(pace * 100, 0, 100)}%" title="Rythme attendu"></span>` : ''}</div>`;
 }
 
-// ── Couleurs : --brand (Fit Pulse, fixe) et --club (couleur du client) ────
-// --club : couleur du club (Club et réglages), sinon couleur primaire du client
-// (S.tenant.colors.primary), sinon --brand. Le texte posé dessus respecte le
-// contraste AA (4,5:1) : la couleur onPrimary choisie, sinon noir ou blanc.
+// ── Thème : produit, réseau, club ───────────────────────────────────────────
+// Résolution : accent et logo du club (S.clubs[id].theme), sinon du réseau (S.org.theme),
+// sinon le produit (--fp-signal, bleu Fit Pulse). themeFor(club) pose sur :root
+// --accent (couleur choisie), --accent-ink (encre du bouton : #15171C ou #FFFFFF, la mieux
+// contrastée), --accent-text (texte coloré : assombri en clair, éclairci en sombre, par pas
+// de 4 % jusqu'à 4,5:1) et --accent-soft (12 %). Les statuts (ok, warn, bad) n'en dépendent jamais.
 const COULEUR_OK = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
-function couleurClub() { const c = (CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur) || deepGet(tenant(), ['colors', 'primary']) || deepGet(S || {}, ['info', 'couleur']); return COULEUR_OK(c) ? c : null; }
 const luminance = hex => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
 const contraste = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-// Encre lisible sur une couleur : celle demandée si elle passe AA, sinon la meilleure du noir ou du blanc.
-function encreSur(hex, voulue) { if (COULEUR_OK(voulue) && contraste(hex, voulue) >= 4.5) return voulue; return contraste(hex, '#0B0B0C') >= contraste(hex, '#FFFFFF') ? '#0B0B0C' : '#FFFFFF'; }
-function appliquerCouleurClub() {
-  const r = document.documentElement.style; const c = couleurClub(); const clubC = CLUB && S && S.clubs[CLUB.id] && S.clubs[CLUB.id].couleur;
-  if (c) { r.setProperty('--club', c); r.setProperty('--club-ink', encreSur(c, clubC ? null : deepGet(tenant(), ['colors', 'onPrimary']))); } else { r.removeProperty('--club'); r.removeProperty('--club-ink'); }
+const INK = '#15171C', BLANC = '#FFFFFF', SURF_SOMBRE = '#171A20';
+function versHsl(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b); const l = (mx + mn) / 2; let h = 0, s = 0;
+  if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; }
+  return [h, s, l];
 }
-// Logo : celui du club, sinon celui du client, sinon config.js (aucun par défaut). Fichier du site uniquement.
-function clubLogo() { const l = (CLUB && CLUB.logo) || tenant().logo || (window.PARKPULSE_ASSETS || {}).logo; return typeof l === 'string' && (/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) || (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(l) && l.length <= 100 * 1024)) ? l : null; }
+function depuisHsl(h, s, l) {
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return '#' + [f(0), f(8), f(4)].map(x => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+// Ajuste la clarté par pas de 4 % (sens -1 : assombrir, +1 : éclaircir) jusqu'à 4,5:1 sur le fond.
+function ajusteContraste(hex, fond, sens) { const [h, s, l0] = versHsl(hex); let l = l0, c = hex.toUpperCase(); for (let i = 0; i < 25 && contraste(c, fond) < 4.5; i++) { l = Math.max(0, Math.min(1, l + sens * 0.04)); c = depuisHsl(h, s, l); } return c; }
+// Encre lisible sur une couleur : celle demandée si elle passe AA, sinon la meilleure de l'encre ou du blanc.
+function encreSur(hex, voulue) { if (COULEUR_OK(voulue) && contraste(hex, voulue) >= 4.5) return voulue; return contraste(hex, INK) >= contraste(hex, BLANC) ? INK : BLANC; }
+// Jeu complet de variables pour un accent et un thème (clair ou sombre) : testable sans navigateur.
+function accentVars(accent, sombre = false) {
+  if (!COULEUR_OK(accent)) return null; let fond = accent.toUpperCase(); let ink = encreSur(fond);
+  if (contraste(fond, ink) < 4.5) { fond = ajusteContraste(fond, BLANC, -1); ink = BLANC; } // couleur moyenne : fond du bouton légèrement assombri
+  return { '--accent': fond, '--accent-ink': ink, '--accent-text': sombre ? ajusteContraste(accent, SURF_SOMBRE, 1) : ajusteContraste(accent, BLANC, -1), '--accent-soft': `color-mix(in srgb, ${fond} 12%, transparent)` };
+}
+// Proximité avec un statut : teinte à moins de 20° de ok, warn ou bad et saturation au-delà de 50 %.
+const STATUTS_HEX = { ok: '#157F3B', warn: '#A15C00', bad: '#B42318' };
+function procheStatut(accent) {
+  if (!COULEUR_OK(accent)) return null; const [h, s] = versHsl(accent); if (s <= 0.5) return null;
+  return Object.keys(STATUTS_HEX).find(k => { const d = Math.abs(h - versHsl(STATUTS_HEX[k])[0]) % 360; return Math.min(d, 360 - d) < 20; }) || null;
+}
+const orgTheme = () => deepGet(S || {}, ['org', 'theme']) || {};
+function clubTheme(club = CLUB) { const c = club && S && S.clubs ? S.clubs[club.id] || club : club; return (c && c.theme) || {}; }
+// Accent résolu : club, puis réseau, puis l'ancienne couleur (club ou client) ; null = produit.
+function accentDe(club = CLUB) { const c = club && S && S.clubs ? S.clubs[club.id] || club : club; const a = clubTheme(c).accent || orgTheme().accent || (c && c.couleur) || deepGet(tenant(), ['colors', 'primary']); return COULEUR_OK(a) ? a.toUpperCase() : null; }
+const couleurClub = () => accentDe();
+// Nom affiché : celui du thème du club, sinon le nom du club, sinon le nom du réseau.
+function nomAffiche(club = CLUB) { const c = club && S && S.clubs ? S.clubs[club.id] || club : club; return clubTheme(c).displayName || (c && c.name) || deepGet(S || {}, ['org', 'name']) || tenant().name || ''; }
+function themeFor(club = CLUB) {
+  const r = document.documentElement.style; const v = accentVars(accentDe(club), curTheme() === 'dark');
+  for (const k of ['--accent', '--accent-ink', '--accent-text', '--accent-soft']) if (v) r.setProperty(k, v[k]); else r.removeProperty(k);
+  return v;
+}
+const appliquerCouleurClub = () => themeFor(CLUB);
+// Logo : thème du club, ancien logo du club, réseau, client, config (aucun par défaut). Fichier du site ou image intégrée.
+const LOGO_OK = l => typeof l === 'string' && (/^assets\/[\w.-]+\.(svg|png|jpe?g|webp)$/i.test(l) || (/^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(l) && l.length <= 280 * 1024));
+function clubLogo(club = CLUB) { const c = club && S && S.clubs ? S.clubs[club.id] || club : club; const l = clubTheme(c).logo || (c && c.logo) || orgTheme().logo || tenant().logo || (CFG.assets || {}).logo; return LOGO_OK(l) ? l : null; }
 
 // ── Tracé de pouls : amplitude et couleur selon le rythme (statusOf) ──────
 const POULS = { ahead: [1, 'var(--ok)'], ontime: [0.8, 'var(--ok)'], done: [1, 'var(--ok)'], late: [0.5, 'var(--warn)'], verylate: [0.25, 'var(--bad)'], wait: [0.12, 'var(--muted)'], none: [0, 'var(--muted)'] };
@@ -131,36 +172,40 @@ function pulseLine(rythme, { w = 120, h = 32, label = '' } = {}) {
   return `<svg class="pulse-line pl-${key}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(t)}"${t ? '' : ' aria-hidden="true"'}><path d="${d}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-// Logo Fit Pulse (image) ; à défaut, la marque en texte
+// Logo Fit Pulse : carré arrondi plein (currentColor) et « P » en négatif dont la panse est
+// un tracé de pouls à trois pics prolongé vers la droite. Texte « Fit Pulse » en casse normale.
+let LOGO_N = 0;
+function logoMark(size = 28) {
+  const id = 'fpm' + (++LOGO_N);
+  return `<svg class="fp-mark" width="${size}" height="${size}" viewBox="0 0 28 28" role="img" aria-label="Fit Pulse"><mask id="${id}"><rect width="28" height="28" fill="#fff"/><path d="M9 22V6.5" stroke="#000" stroke-width="2.4" stroke-linecap="round"/><path d="M9 6.5h5a4.5 4.5 0 0 1 4.5 4.5M9 15.5h3l1.2-2.4 1.6 4.4 1.6-6.2 1.3 4.2H21" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></mask><rect width="28" height="28" rx="6" fill="currentColor" mask="url(#${id})"/></svg>`;
+}
 function brandBlock(big = false) {
-  const w = (window.PARKPULSE_ASSETS || {}).wordmark;
-  if (w) return `<div class="brand with-logo ${big ? 'big' : ''}"><img class="brand-logo" src="${w}" alt="Fit Pulse"><div class="brand-sub">${esc(APP.tagline)}</div></div>`;
-  return `<div class="brand"><div class="brand-mark">${ico('pouls')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
+  return `<div class="brand${big ? ' big' : ''}"><div class="brand-mark">${logoMark(28)}</div><div><div class="brand-name">Fit Pulse</div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
 }
 
 // ── Coque ──────────────────────────────────────────────────────────────────
 // 4e champ : true = managers seulement, 'm' = commerciaux seulement (leur menu
 // tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
-  ['home', TXT.nav.home, 'dashboard'],
+  ['home', TXT.nav.home, 'home'],
   ['journee', TXT.nav.journee, 'cal', true],
   ['kpimatin', TXT.nav.kpimatin, 'send'],
   ['dashboard', TXT.nav.dashboard, 'target'],
-  ['relances', TXT.nav.relances, 'phone'],
-  ['leaderboard', TXT.nav.leaderboard, 'trophy'],
-  ['equipe', TXT.nav.equipeMembre, 'users', 'm'],
-  ['recap', TXT.nav.recap, 'chart', true],
+  ['relances', TXT.nav.relances, 'callback'],
+  ['leaderboard', TXT.nav.leaderboard, 'ranking'],
+  ['equipe', TXT.nav.equipeMembre, 'team', 'm'],
+  ['recap', TXT.nav.recap, 'report', true],
   ['rapporte', TXT.nav.rapporte, 'euro', true],
-  ['team', TXT.nav.team, 'users', true],
+  ['team', TXT.nav.team, 'team', true],
   ['equipe', TXT.nav.equipeManager, 'chart', true],
   ['b2b', TXT.nav.b2b, 'briefcase'],
   ['sep'],
   ['resiliations', TXT.nav.resiliations, 'door', true],
-  ['impayes', TXT.nav.impayes, 'euro', true],
-  ['loyalty', TXT.nav.loyalty, 'heart', true],
+  ['impayes', TXT.nav.impayes, 'coinsback', true],
+  ['loyalty', TXT.nav.loyalty, 'magnet', true],
   ['pouls', TXT.nav.pouls, 'pouls', true],
   ['sep'],
-  ['imports', TXT.nav.imports, 'upload', true],
+  ['imports', TXT.nav.imports, 'import', true],
   ['controle', TXT.nav.controle, 'check', true],
   ['confiance', TXT.nav.confiance, 'shield', true],
 ];
@@ -189,8 +234,8 @@ function shell(route, inner) {
   return `<div class="shell" id="shell">
     <aside class="side">
       ${brandBlock()}
-      ${clubLogo() ? `<div class="club-logo"><img src="${esc(clubLogo())}" alt="${esc(CLUB.name)}"></div>` : ''}
-      <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : `<div class="club-name">${esc(CLUB.name)}</div>`}</div>
+      ${clubLogo() ? `<div class="club-logo"><img src="${esc(clubLogo())}" alt="${esc(nomAffiche())}"></div>` : ''}
+      <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(nomAffiche(c))}</option>`).join('')}</select>` : `<div class="club-name">${esc(nomAffiche())}</div>`}</div>
       <nav class="nav">${nav}</nav>
       <div class="side-foot nav">
         <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>${TXT.nav.profil}</span></a>
@@ -200,9 +245,9 @@ function shell(route, inner) {
       </div>
     </aside>
     <main class="main">
-      <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(window.PARKPULSE_ASSETS || {}).icon ? `<img class="top-icon" src="${window.PARKPULSE_ASSETS.icon}" alt="">` : ''}
+      <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(CFG.assets || {}).icon ? `<img class="top-icon" src="${CFG.assets.icon}" alt="">` : ''}
         <b class="title t-16">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
-        <div class="countdown" id="countdown"></div><button class="btn ghost icon" data-act="search" aria-label="Rechercher un client">${ico('search')}</button>${bellBtn()}<button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
+        <div class="countdown" id="countdown"></div><button class="btn ghost icon" data-act="search" aria-label="Rechercher un client">${ico('search')}</button>${bellBtn()}<button class="btn primary top-cta" data-act="openSaisies" aria-keyshortcuts="N" title="Nouvelle saisie (touche N)">${ico('plus')} Nouvelle saisie</button></div>
       <div class="page page-${route}">${inner}${typeof legalFooter === 'function' ? legalFooter() : ''}</div>
     </main>
     ${tabBar(route)}
@@ -297,10 +342,12 @@ document.addEventListener('input', e => {
 // onglets / segments generiques : data-ui="cle" data-val="valeur"
 ACTIONS.ui = el => { UI[el.dataset.key] = el.dataset.val; render(); };
 ACTIONS.burger = () => $('#shell').classList.toggle('nav-open');
-const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-ACTIONS.theme = () => { const t = curTheme() === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; safeLS.set('parkpulse.theme', t); render(); };
+// Thème clair par défaut ; sombre si l'appareil le demande ou si l'utilisateur l'a choisi.
+const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S) themeFor(CLUB); }); } catch (e) { /* ancien navigateur */ }
+ACTIONS.theme = () => { const t = curTheme() === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; safeLS.set('fitpulse.theme', t); render(); };
 ACTIONS.logout = () => logout();
-ACTIONS.pickClub = el => { CLUB = S.clubs[el.value]; safeLS.set('parkpulse.club', CLUB.id); UI.dashUser = null; render(); };
+ACTIONS.pickClub = el => { CLUB = S.clubs[el.value]; safeLS.set('fitpulse.club', CLUB.id); UI.dashUser = null; render(); };
 ACTIONS.go = el => { location.hash = el.dataset.href; };
 document.addEventListener('click', e => { const sh = $('#shell'); if (sh && sh.classList.contains('nav-open') && e.target.closest('.nav a')) sh.classList.remove('nav-open'); });
 document.addEventListener('click', e => { const sh = $('#shell'); if (sh && sh.classList.contains('nav-open') && !e.target.closest('.side') && !e.target.closest('[data-act=burger]')) sh.classList.remove('nav-open'); }, true);
