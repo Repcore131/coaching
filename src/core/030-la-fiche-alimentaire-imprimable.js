@@ -2587,10 +2587,11 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
     const dc=(decote==null)?1:Number(decote);
     const w=cw?parseFloat(prev.weight)/dc:parseFloat(prev.weight)*dc;
     const kg=appliquerFrein(res.kg,w,frein,cw,ex,u);
-    return Object.assign({prev},res,{kg,raison:frein.raison,frein});
+    return _ramadanAnnoter(u,ex,Object.assign({prev},res,{kg,raison:frein.raison,frein}));
   }
-  if(eff&&eff.rirPlus) return Object.assign({prev},res,{raison:res.raison+' · '+eff.raison,dispo:eff});
-  return Object.assign({prev},res);
+  if(eff&&eff.rirPlus) return _ramadanAnnoter(u,ex,Object.assign({prev},res,{raison:res.raison+' · '+eff.raison,dispo:eff}));
+  // LE MODE RAMADAN (build 1957) : le plafond suggéré s'ajoute à la raison, le kg ne bouge pas.
+  return _ramadanAnnoter(u,ex,Object.assign({prev},res));
 }
 
 // ══ LA SÉRIE PRÉCÉDENTE, PAR INDEX (30/09/2026) ═════════════════════════

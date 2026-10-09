@@ -91,6 +91,30 @@
           },
           "$autre": { ".validate": false }
         },
+        // LE MODE RAMADAN (build 1957) — la periode, les horaires du jour
+        // (sahur, iftar), l heure de seance et le compteur d eau. Liste
+        // blanche fermee ; l app controle avant d ecrire (enregistrerRamadan).
+        "ramadan": {
+          ".validate": "newData.hasChildren(['actif'])",
+          "actif":       { ".validate": "newData.isBoolean()" },
+          "debut":       { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+          "fin":         { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+          "ville":       { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "heureSeance": { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+          "par":         { ".validate": "newData.isString() && newData.val().matches(/^(athlete|coach)$/)" },
+          "majLe":       { ".validate": "newData.isNumber()" },
+          "termineLe":   { ".validate": "newData.isNumber()" },
+          "horaires": {
+            "$jour": {
+              ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.hasChildren(['iftar', 'sahur'])",
+              "iftar":  { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+              "sahur":  { ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "eau": { "$jour": { ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 40" } },
+          "$autre": { ".validate": false }
+        },
         // LES DEFIS STREET (build 1956) — records solo et equipe par format,
         // et les derniers essais. Liste blanche fermee : l app borne avant
         // d ecrire (defiStreetEntree). Un score est un temps (s) ou des reps.

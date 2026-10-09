@@ -76293,6 +76293,119 @@ async function testExercices(){
         return true;
       }finally{ _chsArreter(); _chsEtat=null; currentUser=sU; window.go=svG; }
     });
+    // ══ BUILD 1957 — LE MODE RAMADAN ═════════════════════════════════════════════
+    const _rmdH={iftar:'18:41',sahur:'05:12'};
+    const _rmdU=(extra)=>Object.assign({email:'rmd@t',role:'athlete',fname:'Sami',sessions:[],nutrition:{dietType:'flexible'},
+      ramadan:{actif:true,debut:'2027-02-08',fin:'2027-03-09',horaires:{'2027-02-10':_rmdH},heureSeance:'20:30',par:'athlete',majLe:1}},extra||{});
+    ok('1957 — RAMADAN_REPARTITION : gelée, chaque macro fait 100 % sur les 4 repas, protéines 25 % partout',()=>{
+      if(!Object.isFrozen(RAMADAN_REPARTITION)||RAMADAN_REPAS_ORDRE.some(k=>!Object.isFrozen(RAMADAN_REPARTITION[k]))) return _echec('gel');
+      for(const m of ['p','g','l']){ const s=RAMADAN_REPAS_ORDRE.reduce((a,k)=>a+RAMADAN_REPARTITION[k][m],0); if(s!==100) return _echec(m+' = '+s+' %'); }
+      const R=RAMADAN_REPARTITION;
+      if(R.iftar.l!==0||R.post_seance.l!==15||R.collation.l!==40||R.sahur.l!==45) return _echec('lipides');
+      if(R.iftar.g!==30||R.post_seance.g!==30||R.collation.g!==10||R.sahur.g!==30) return _echec('glucides');
+      if(R.iftar.glucides!=='rapides'||R.collation.glucides!=='lents') return _echec('rapides/lents');
+      return true;
+    });
+    ok('1957 — repasRamadan : 4 repas horodatés de l’iftar au sahur, cibles exactes, alerte sous 40 g de protéines',()=>{
+      let r=repasRamadan({p:200,g:300,l:80},_rmdH,'21:00');
+      if(r.erreur||r.repas.length!==4) return _echec(JSON.stringify(r));
+      const [i,ps,c,s]=r.repas;
+      if(i.heure!=='18:41'||s.heure!=='04:27') return _echec('heures iftar/sahur : '+i.heure+' '+s.heure);
+      if(ps.heure!=='22:15') return _echec('après séance : '+ps.heure);
+      if(!(c.min>ps.min&&c.min<s.min)) return _echec('collation entre les deux');
+      if(i.p!==50||i.g!==90||i.l!==0||s.l!==36||c.g!==30) return _echec('cibles : '+JSON.stringify(r.repas));
+      const tot=r.repas.reduce((a,x)=>({p:a.p+x.p,g:a.g+x.g,l:a.l+x.l}),{p:0,g:0,l:0});
+      if(tot.p!==200||tot.g!==300||tot.l!==80) return _echec('somme : '+JSON.stringify(tot));
+      if(r.repas.some(x=>x.alerte)) return _echec('alerte à 50 g');
+      r=repasRamadan({p:120,g:200,l:60},_rmdH);
+      if(!r.repas.every(x=>/40 g de protéines/.test(x.alerte||''))) return _echec('30 g par repas sans alerte');
+      if(r.repas[1].heure!=='20:11') return _echec('sans séance : iftar + 1 h 30 → '+r.repas[1].heure);
+      return true;
+    });
+    ok('1957 — horaires manquants : rien n’est calculé, et on le dit',()=>{
+      const r=repasRamadan({p:200,g:300,l:80},null,'21:00');
+      if(r.repas.length||!/manquants/.test(r.erreur)) return _echec(JSON.stringify(r));
+      if(repasRamadan({p:1},{iftar:'05:00',sahur:'18:00'}).repas.length) return _echec('sahur après l’iftar accepté');
+      if(conseilSeanceRamadan(null,'21:00')!=='inconnue'||rappelsHydratation({}).heures.length||rappelSieste(null,0)!==null) return _echec('le reste sans horaires');
+      const u=_rmdU();
+      const e=ramadanEtat(u,'2027-02-11');
+      if(!e.actif||!e.manque) return _echec('jour sans horaires : '+JSON.stringify(e));
+      const h=htmlCarteRamadan(u,'2027-02-11',{p:200,g:300,l:80},[],0);
+      if(!/manquants/.test(h)||/Iftar 18/.test(h)) return _echec('carte');
+      return true;
+    });
+    ok('1957 — séance : idéale 1 h 30 à 3 h après l’iftar, acceptable après le sahur, déconseillée avant l’iftar (75 min, fin à la rupture)',()=>{
+      const cas=[['20:11','ideale'],['21:41','ideale'],['19:00','acceptable'],['02:00','acceptable'],['07:00','acceptable'],['15:00','deconseillee'],['18:00','deconseillee']];
+      for(const [h,v] of cas) if(conseilSeanceRamadan(_rmdH,h)!==v) return _echec(h+' → '+conseilSeanceRamadan(_rmdH,h));
+      const d=detailSeanceRamadan(_rmdH,'17:00');
+      if(d.debutConseille!=='17:26'||d.dureeMax!==75||d.intensiteMax!==0.6||d.reps.join()!=='8,12') return _echec(JSON.stringify(d));
+      if(!/après le sahur/i.test(detailSeanceRamadan(_rmdH,'06:00').phrase)) return _echec('phrase du sahur');
+      return true;
+    });
+    ok('1957 — plafond 60 % de l’e1RM signalé dans la raison, sans toucher la charge proposée',()=>{
+      const p=plafondRamadan(100,70);
+      if(!p||p.plafond!==60||!p.depasse||!/60 kg \(60 % de ton e1RM\), 8-12 rép/.test(p.phrase)) return _echec(JSON.stringify(p));
+      if(plafondRamadan(100,55).depasse||plafondRamadan(0,50)!==null) return _echec('sous le plafond ou sans e1RM');
+      const svM=window.maxE1rmObserve, svU=currentUser;
+      try{
+        window.maxE1rmObserve=()=>100;
+        const j=localISODate(new Date());
+        const u=_rmdU({ramadan:{actif:true,debut:j,fin:j,horaires:{},par:'athlete',majLe:1}});
+        const r=_ramadanAnnoter(u,{name:'Squat'},{kg:80,raison:'RIR 2'});
+        if(r.kg!==80||!/RIR 2 · Ramadan : plafond suggéré 60 kg/.test(r.raison)) return _echec(JSON.stringify(r));
+        u.ramadan.actif=false;
+        if(_ramadanAnnoter(u,{name:'Squat'},{kg:80,raison:'x'}).raison!=='x') return _echec('hors période');
+        return true;
+      }finally{ window.maxE1rmObserve=svM; currentUser=svU; }
+    });
+    ok('1957 — fin automatique le lendemain de la fin ; période et import des horaires contrôlés',()=>{
+      const u=_rmdU();
+      if(ramadanFinAuto(u,'2027-03-09',5)||!u.ramadan.actif) return _echec('coupé le dernier jour');
+      if(!ramadanFinAuto(u,'2027-03-10',5)||u.ramadan.actif||u.ramadan.termineLe!==5) return _echec('pas coupé le lendemain');
+      if(ramadanFinAuto(u,'2027-03-11',6)) return _echec('recoupé');
+      if(ramadanEtat(u,'2027-02-10').actif) return _echec('encore actif après la fin');
+      if(ramadanEtat(_rmdU(),'2027-02-07').actif) return _echec('actif avant le début');
+      if(!ramadanPeriodeValide('2027-03-01','2027-02-01').erreur||!ramadanPeriodeValide('2027-01-01','2027-03-01').erreur||ramadanPeriodeValide('2027-02-08','2027-03-09').jours!==30) return _echec('période');
+      const im=ramadanImporterHoraires('2027-02-08 05:12 18:41\n09/02/2027;5h10;18:42\n\nn’importe quoi\n2027-02-10 19:00 05:00');
+      if(Object.keys(im.horaires).join()!=='2027-02-08,2027-02-09'||im.horaires['2027-02-09'].sahur!=='05:10'||im.erreurs.join()!=='4,5') return _echec(JSON.stringify(im));
+      return true;
+    });
+    ok('1957 — eau toutes les 30 min de l’iftar au sahur (200 mL), sieste 30-40 min loin du coucher',()=>{
+      const e=rappelsHydratation(_rmdH);
+      if(e.heures[0]!=='18:41'||e.heures[1]!=='19:11'||e.heures[e.heures.length-1]!=='05:11'||e.objectifMl!==e.heures.length*200) return _echec(JSON.stringify(e));
+      const s=rappelSieste(_rmdH,23*60);
+      if(!s||s.debut!=='14:00'||s.fin!=='14:40'||!/avant 60 min/.test(s.phrase)) return _echec(JSON.stringify(s));
+      const t=rappelSieste(_rmdH,20*60);
+      if(!t||t.debut!=='13:20') return _echec('coucher à 20 h : '+JSON.stringify(t));
+      if(rappelSieste(_rmdH,12*60+30)!==null) return _echec('coucher trop tôt : pas de sieste');
+      if(ramadanRappelDu(_rmdH,'19:11',23*60).titre!=='Un verre d’eau'||ramadanRappelDu(_rmdH,'14:00',23*60).titre!=='La sieste'||ramadanRappelDu(_rmdH,'12:00',23*60)) return _echec('rappels');
+      return true;
+    });
+    ok('1957 — stricte : le plan recalé sur les 4 repas (aucun inventé) ; flexible : ce qui est mangé, par repas',()=>{
+      const rc=recalerPlanRamadan(['petit_dej','midi','apres','collation2','soir','inconnu']);
+      if(rc.iftar.join()!=='soir'||rc.post_seance.join()!=='apres'||rc.collation.join()!=='collation2'||rc.sahur.join()!=='petit_dej,midi') return _echec(JSON.stringify(rc));
+      if(Object.values(rc).flat().length!==5) return _echec('un repas inventé ou perdu');
+      const r=repasRamadan({p:200,g:300,l:80},_rmdH,'21:00').repas;
+      const at=(h,m)=>new Date(2027,1,10,h,m).getTime();
+      const c=ramadanConsommeParRepas([{id:at(18,50),p:30,c:40,l:2,kcal:300},{id:at(23,0),p:20,c:10,l:5,kcal:165},{id:at(4,40),p:25,c:30,l:20,kcal:400},{id:at(12,0),p:1,c:1,l:1,kcal:1}],r);
+      if(c.iftar.p!==30||c.post_seance.p!==20||c.sahur.p!==26) return _echec(JSON.stringify(c));
+      return true;
+    });
+    ok('1957 — la carte de l’accueil (flexible) et la ligne de la fiche coach',()=>{
+      const u=_rmdU();
+      const d=document.createElement('div');
+      d.innerHTML=htmlCarteRamadan(u,'2027-02-10',{p:200,g:300,l:80},[],3);
+      const t=d.textContent;
+      if(!/Sahur 05:12 · Iftar 18:41/.test(t)||!/Séance à 20:30/.test(t)||d.querySelectorAll('.rmd-r').length!==4||!/600 \//.test(t)) return _echec(t.slice(0,300));
+      if(!d.querySelector('.rmd-sea.rmd-ideale')) return _echec('verdict');
+      if(htmlCarteRamadan(_rmdU({ramadan:{actif:false}}),'2027-02-10',{},[],0)!=='') return _echec('inactif affiché');
+      const z=document.getElementById('ccd-ramadan'), av=z.innerHTML;
+      try{
+        renderCoachRamadan(u);
+        if(!/Mode Ramadan/.test(z.textContent)||!/Régler/.test(z.textContent)) return _echec('fiche coach');
+      }finally{ z.innerHTML=av; }
+      return true;
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

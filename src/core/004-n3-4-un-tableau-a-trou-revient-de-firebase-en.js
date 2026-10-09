@@ -804,7 +804,11 @@ const CHAMPS_SANTE=Object.freeze([
   // ecran, et il ne sert qu'a des calculs de sante — masse grasse, repere
   // energetique, fourchette de perte. Le laisser passer seul n'apporterait
   // rien et ouvrirait une porte a surveiller.
-  'gender'
+  'gender',
+  // LE MODE RAMADAN (build 1957) : il révèle une pratique religieuse, donnée
+  // de l'article 9 au même titre que la santé. Il ne s'écrit qu'après le
+  // consentement, comme le reste de cette liste.
+  'ramadan'
 ]);
 // L'AUTRE MOITIE. Identite, authentification, lien au coach, programme,
 // preferences d'affichage, et tout l'espace coach — qui ne porte aucune donnee
