@@ -2171,7 +2171,26 @@
       // chiffres d affaires en creux — le createur seul. Le reste (badges,
       // saisons) reste public, comme avant.
       "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LES CONNEXIONS ESTIMEES (serveur leger, chaque minute) : le createur seul.
+      "connexions": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       "$autre": { ".read": true }
+    },
+    // LA PRESENCE (09/10/2026) : « cet appareil est ouvert », pour estimer les
+    // connexions simultanees (serveur leger, alerte a 70). Une heure serveur
+    // et un drapeau : le flux temps reel du coach est-il ouvert. Aucun contenu.
+    // Ecrite par son titulaire toutes les 5 minutes au plus, app visible ; lue
+    // par le Worker seul ; purgee chaque jour au-dela de 24 h, effacee avec le
+    // compte.
+    "presence": {
+      ".indexOn": ["t"],
+      "$k": {
+        ".read": false,
+        ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
+        ".validate": "newData.hasChildren(['t']) || !newData.exists()",
+        "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "f": { ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1)" },
+        "$autre": { ".validate": false }
+      }
     },
     // LE RESUME D ACTIVITE d un compte, pour la retention agregee : des jours
     // actifs et des oui/non, aucun contenu. Ecrit par son titulaire, lu par
