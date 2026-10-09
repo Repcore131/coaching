@@ -256,6 +256,8 @@ await test('coach qui résilie : noté, son palier se referme à la date', async
   await w.PP.finsCoachs();
   assert.equal(w.F.lire('users/co@t,fr/coachSubActive'), false);
   assert.equal(w.F.lire('users/co@t,fr/coachPlan'), 'libre');
+  // La formule que les règles croient retombe aussi (rc_codes/months : 1 mois).
+  assert.equal(w.F.lire('coach_paliers/co@t,fr/palier'), 'libre');
 });
 
 await test('coach qui repaie : son palier payé revient (coachPlan et coachSubActive)', async () => {
@@ -266,6 +268,9 @@ await test('coach qui repaie : son palier payé revient (coachPlan et coachSubAc
   assert.equal(w.F.lire('users/co@t,fr/coachPlan'), 'pro');
   assert.equal(w.F.lire('users/co@t,fr/coachSubActive'), true);
   assert.equal(w.F.lire('users/co@t,fr/abonnement/finAccesPaypal'), null);
+  // LA FORMULE QUE LES RÈGLES LISENT (database.rules.json, rc_codes/months).
+  const cp = w.F.lire('coach_paliers/co@t,fr');
+  assert.ok(cp && cp.palier === 'pro' && cp.source === 'paypal' && cp.maj > 0, JSON.stringify(cp));
   assert.notEqual(w.F.lire('users/co@t,fr/status'), 'AUTONOMIE_PREMIUM', 'un coach ne devient pas abonné athlète');
 });
 

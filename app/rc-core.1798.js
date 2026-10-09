@@ -1254,7 +1254,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -1675,6 +1675,47 @@ function _paliersDispo(){return _tablePaliers().filter(p=>!!p.planId());}
 // une série normale. Retro-écrire un défaut coûterait un PUT du document
 // entier par coach pour n'apprendre à personne ce que l'absence dit déjà.
 const COACH_PLANS=Object.freeze(['libre','coach','pro']);
+// ══ LES QUOTAS DES FORMULES COACH, APPLIQUÉS (09/10/2026) ════════════════
+//
+// La copie de tarifs.json → quotas_coach : le nombre d'athlètes actifs qu'une
+// formule permet de rattacher, et la durée maximale d'un code. `athletes:null`
+// dans le JSON veut dire « sans limite » (JSON ne connaît pas Infinity).
+//
+// ⚠ ILS BLOQUENT, désormais, et pas seulement à l'écran (demande de Kevin) :
+//   · au-delà du quota, un NOUVEAU rattachement est refusé, avec un écran qui
+//     propose la formule suivante (ouvrirEcranQuotaCoach) ;
+//   · un code plus long que la formule ne se crée pas — et database.rules.json
+//     le refuse aussi côté serveur (rc_codes/months, lu sur coach_paliers/,
+//     que seul le worker écrit).
+//   CE QUI NE BOUGE PAS : un athlète déjà rattaché garde son accès jusqu'à la
+//   fin de son code, quel que soit le compte du coach. Rien n'est coupé.
+const QUOTAS_COACH=(function(){
+  const q=TARIFS.quotas_coach||{}, o={};
+  for(const k of COACH_PLANS){
+    const x=q[k]||{};
+    o[k]=Object.freeze({athletes:(x.athletes===null)?Infinity:(Number(x.athletes)||1),
+      moisCode:Number(x.moisCode)||1});
+  }
+  return Object.freeze(o);
+})();
+/**
+ * PURE. Une formule permet-elle de rattacher UN athlète de plus ?
+ * @param {string} palier 'libre' | 'coach' | 'pro' (inconnu = libre)
+ * @param {number} nbActifs les athlètes déjà comptés (actifs, et codes en attente)
+ * @returns {boolean}
+ */
+function peutRattacher(palier,nbActifs){
+  const q=(QUOTAS_COACH[palier]||QUOTAS_COACH.libre).athletes;
+  return (Number(nbActifs)||0)<q;
+}
+/**
+ * PURE. La durée maximale d'un code d'accès, en mois, pour une formule.
+ * @param {string} palier 'libre' | 'coach' | 'pro' (inconnu = libre)
+ * @returns {number}
+ */
+function dureeCodeMax(palier){
+  return (QUOTAS_COACH[palier]||QUOTAS_COACH.libre).moisCode;
+}
 // Même forme que SUB_PALIERS, y compris `planId()` : _paliersDispo s'applique
 // tel quel, et une carte dont le plan PayPal n'existe pas encore ne s'affiche
 // pas du tout plutôt que d'échouer au moment de payer.
@@ -1686,13 +1727,13 @@ const COACH_PLANS=Object.freeze(['libre','coach','pro']);
 const PAYPAL_PLAN_ID_COACH='P-9JD300001T4718058NK2RF5Q';   // à créer sur developer.paypal.com — 19 EUR/mois
 const PAYPAL_PLAN_ID_PRO='P-1WS20264K4576284KNK2RF5Y';     // idem — 39 EUR/mois
 const COACH_PALIERS=Object.freeze([
-  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:1,
+  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:QUOTAS_COACH.libre.athletes,
    periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
    planId:()=>''}),
-  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:15,
+  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:QUOTAS_COACH.coach.athletes,
    periode:'par mois', detail:'Jusqu\'à quinze athlètes actifs.',
    planId:()=>PAYPAL_PLAN_ID_COACH}),
-  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:Infinity,
+  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:QUOTAS_COACH.pro.athletes,
    periode:'par mois', detail:'Sans limite de nombre.',
    planId:()=>PAYPAL_PLAN_ID_PRO}),
 ]);
@@ -1817,11 +1858,140 @@ function coachPalierRequis(n){
   const p=COACH_PALIERS.find(x=>n<=x.quota);
   return p?p.cle:'pro';
 }
-// PURE. Le quota est-il dépassé ? Le dépassement ALERTE, il ne bloque
-// jamais un rattachement : refuser un athlète parce qu'un paiement n'a pas
-// suivi punirait l'athlète pour une affaire entre le coach et nous.
+// PURE. Le quota est-il dépassé ? Depuis le 09/10/2026, un NOUVEAU
+// rattachement est refusé au-delà (refusQuotaCoach) ; ceux qui sont déjà
+// rattachés gardent leur accès jusqu'à la fin de leur code : on ne coupe
+// jamais un athlète pour une affaire entre le coach et nous.
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
+}
+/**
+ * PURE. La formule qui compte pour les quotas : celle du dossier tant que
+ * l'abonnement est actif, Libre sinon (une formule payée puis arrêtée ne
+ * garde pas son quota).
+ * @param {any} coach
+ * @returns {string}
+ */
+function palierEffectifCoach(coach){
+  return coachSubActif(coach)?coachPlanDe(coach):'libre';
+}
+/**
+ * PURE (users injectable). Ce que le quota compte avant un rattachement : les
+ * athlètes actifs (le même compte que le bandeau « N / M ») et les codes
+ * encore en attente — un code envoyé est une place promise. Sur un appareil
+ * dont le cache n'est pas fiable, les codes déjà rachetés et en cours tiennent
+ * lieu d'athlètes actifs : on ne laisse pas passer un dépassement faute de
+ * savoir compter.
+ * @param {any} coach
+ * @param {Object<string,any>} [users]
+ * @param {number} [maintenant]
+ * @returns {number}
+ */
+function nbPourQuota(coach,users,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const codes=Array.isArray(coach&&coach.studentCodes)?coach.studentCodes:[];
+  const enCours=c=>c&&c.active!==false&&(c.type||'athlete')==='athlete'&&Number(c.expiry)>t;
+  const rachete=c=>c.redeemed===true||!!c.usedBy||c.etat==='cree';
+  const attente=codes.filter(c=>enCours(c)&&!rachete(c)).length;
+  const rachetes=codes.filter(c=>enCours(c)&&rachete(c)).length;
+  const actifs=countActiveAthletesFiable(coach,users)?countActiveAthletes(coach,users):rachetes;
+  return actifs+attente;
+}
+/**
+ * PURE. La première formule qui permet un code de `mois` mois.
+ * @param {number} mois
+ * @returns {string} '' si aucune
+ */
+function palierPourDureeCode(mois){
+  const p=COACH_PALIERS.find(x=>dureeCodeMax(x.cle)>=Number(mois));
+  return p?p.cle:'';
+}
+/**
+ * PURE (users injectable). Ce nouveau rattachement est-il permis ? null s'il
+ * l'est, sinon la raison, de quoi l'écran a besoin pour la dire. Le créateur
+ * n'a pas de quota.
+ * @param {any} coach
+ * @param {Object<string,any>|undefined} users
+ * @param {number} mois la durée du code demandé
+ * @param {number} [maintenant]
+ * @returns {null|{raison:'athletes'|'duree',palier:string,quota:number,n:number,moisMax:number,mois:number,suivant:string}}
+ */
+function refusQuotaCoach(coach,users,mois,maintenant){
+  if(!coach||coach.email===CREATOR_EMAIL) return null;
+  const palier=palierEffectifCoach(coach);
+  const moisMax=dureeCodeMax(palier), m=Number(mois)||0;
+  const base={palier,quota:getCoachQuota(palier),moisMax,mois:m,n:0,suivant:''};
+  if(m>moisMax) return Object.assign(base,{raison:'duree',suivant:palierPourDureeCode(m)});
+  const n=nbPourQuota(coach,users,maintenant);
+  if(!peutRattacher(palier,n)) return Object.assign(base,{raison:'athletes',n,suivant:(_palierSuivant(palier)||{}).cle||''});
+  return null;
+}
+/**
+ * PURE. Ce que l'écran de refus dit, en une phrase.
+ * @param {ReturnType<typeof refusQuotaCoach>} r
+ * @returns {string}
+ */
+function texteRefusQuota(r){
+  if(!r) return '';
+  const pal=(COACH_PALIERS.find(x=>x.cle===r.palier)||COACH_PALIERS[0]).titre;
+  if(r.raison==='duree')
+    return 'Ta formule '+pal+' permet des codes de '+r.moisMax+' mois au plus'
+      +' (tu en as demandé '+r.mois+').';
+  return 'Ta formule '+pal+' permet de suivre '+_quotaTexte(r.quota)+' athlète'+(r.quota>1?'s':'')
+    +' actif'+(r.quota>1?'s':'')+', et tu en as déjà '+r.n+' (codes en attente compris).';
+}
+function erreurQuotaCoach(r){
+  const e=new Error(texteRefusQuota(r));
+  /** @type {any} */ (e)._quotaCoach=r;
+  return e;
+}
+// L'ÉCRAN DE REFUS : clair, et une seule action — la formule qui convient.
+// Ce n'est pas une alerte qu'on ferme sans comprendre : il dit pourquoi, ce
+// qui ne change pas pour les athlètes déjà suivis, et comment avancer.
+function ouvrirEcranQuotaCoach(r){
+  if(!r) return false;
+  const sv=COACH_PALIERS.find(x=>x.cle===r.suivant)||null;
+  const payable=!!(sv&&sv.planId());
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" id="quota-coach" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px">'
+    +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">'
+    +escapeHtml(sv?('Passe à la formule '+sv.titre):'Limite de ta formule')+'</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:10px">'+escapeHtml(texteRefusQuota(r))+'</p>'
+    +(sv?'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:10px">La formule '+escapeHtml(sv.titre)
+      +' : '+escapeHtml(sv.detail)+' Codes de '+dureeCodeMax(sv.cle)+' mois au plus. '
+      +(sv.prix?escapeHtml(sv.prix+' € par mois, sans engagement.'):'')+'</p>':'')
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">Tes athlètes déjà rattachés '
+    +'gardent leur accès jusqu’à la fin de leur code : rien n’est coupé.</p>'
+    +(sv?(payable
+      ?'<button class="btn btn-red" style="width:100%" onclick="closeModal();souscrireCoach(\''+sv.cle+'\')">Passer à la formule '+escapeHtml(sv.titre)+'</button>'
+      :'<button class="btn btn-red" style="width:100%" onclick="closeModal();ouvrirMonAbonnement()">Voir les formules</button>'):'')
+    +'<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="closeModal()">Plus tard</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// LE SÉLECTEUR DE DURÉE NE PROPOSE QUE CE QUE LA FORMULE PERMET : les durées
+// au-delà restent visibles, grisées, avec la formule qui les ouvre.
+function _poserDureesCode(sel,coach){
+  if(!sel) return false;
+  const c=coach||currentUser;
+  if(!c||c.email===CREATOR_EMAIL) return false;
+  const max=dureeCodeMax(palierEffectifCoach(c));
+  let retenue=null;
+  for(const o of Array.from(sel.options)){
+    const m=Number(o.value)||0;
+    const trop=m>max||m<=0;
+    o.disabled=trop;
+    if(!o.dataset.lib) o.dataset.lib=o.textContent;
+    const pal=COACH_PALIERS.find(x=>x.cle===palierPourDureeCode(m));
+    o.textContent=o.dataset.lib+((trop&&pal&&m>0)?' (formule '+pal.titre+')':'');
+    if(!trop&&(retenue===null||m>Number(retenue.value))) retenue=o;
+  }
+  if(sel.selectedOptions[0]&&sel.selectedOptions[0].disabled&&retenue) sel.value=retenue.value;
+  return true;
 }
 
 // ── Plafond de comptes Libres ────────────────────────────────────────────
@@ -2196,24 +2366,42 @@ function alertePalier(coach,users){
   const n=countActiveAthletes(u,users);
   const quota=getCoachQuota(cle);
   const suivant=_palierSuivant(cle);
-  // ── Falaise : N === M-1, et il existe un palier au-dessus ─────────────
+  // ⚠ DEPUIS LE 09/10/2026, LE QUOTA BLOQUE UN NOUVEAU RATTACHEMENT
+  //   (refusQuotaCoach). Les phrases le disent : ni « au prochain athlète, ta
+  //   formule passe à… » (rien ne bascule tout seul), ni « rien n'est
+  //   bloqué ». Ce qui reste vrai et qui est dit : les athlètes déjà
+  //   rattachés gardent leur accès jusqu'à la fin de leur code.
+  // ── Falaise : N === M-1, une place reste ──────────────────────────────
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
-      titre:'Au prochain athlète, ta formule passe à '+suivant.titre
+      titre:'Encore un athlète, et ta formule sera pleine : ensuite, '+suivant.titre
         +', '+suivant.prix+' €/mois.',
-      texte:'Tu peux ajouter cet athlète sans changer de formule maintenant. '
-        +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
+      texte:'Tu peux ajouter cet athlète sans changer de formule. Pour le suivant, '
+        +'il faudra la formule '+suivant.titre+' ; rien n\'est prélevé tant que tu ne '
+        +'l\'as pas décidé toi-même.'};
   }
-  // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
+  // ── Pleine : N === M ──────────────────────────────────────────────────
+  if(suivant&&n===quota){
+    return {type:'limite',palier:suivant.cle,
+      titre:'Ta formule est pleine : '+_quotaTexte(quota)+' athlète'+(quota>1?'s':'')+' actif'+(quota>1?'s':'')+'.',
+      texte:'Pour en rattacher un autre, passe à la formule '+suivant.titre+', '+suivant.prix
+        +' €/mois. Tes athlètes actuels gardent tout leur accès.'};
+  }
+  // ── Au-dessus : prévenu tout de suite, proposé après deux cycles ───────
   if(suivant&&n>quota){
     const c=paliersDe(u).cyclesAuDessus;
-    if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
+    if(c<PALIERS_CYCLES_AVANT_PROPOSITION)
+      return {type:'depasse',palier:suivant.cle,
+        titre:'Tu suis '+n+' athlètes pour une formule qui en prévoit '+_quotaTexte(quota)+'.',
+        texte:'Ils gardent leur accès jusqu’à la fin de leur code : rien n’est coupé. '
+          +'Pour en rattacher un nouveau, passe à la formule '+suivant.titre+', '+suivant.prix+' €/mois.'};
     return {type:'montee',palier:suivant.cle,
       titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
       texte:'La formule '+suivant.titre+' est à '+suivant.prix+' €/mois. '
         +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
-        +'tout leur accès, et ton prix actuel reste le tien.'};
+        +'tout leur accès jusqu’à la fin de leur code, et ton prix actuel reste le tien. '
+        +'Seul un nouveau rattachement demande la formule '+suivant.titre+'.'};
   }
   // ── Descente : il paie pour plus qu'il n'utilise ──────────────────────
   const inf=COACH_PALIERS.filter(x=>x.quota>=n&&x.prix<(COACH_PALIERS.find(y=>y.cle===cle)||{}).prix);
@@ -2372,11 +2560,13 @@ function _renderAbonnementCoach(users){
     <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
+    ${l('Durée des codes',dureeCodeMax(cle)+' mois au plus')}
     ${suivant?l('Formule suivante',suivant.titre+', '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
-      Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
+      Tes athlètes gardent tout leur accès jusqu'à la fin de leur code : rien n'est coupé.
+      Pour en rattacher un nouveau, il faut une formule plus grande.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>
@@ -22017,10 +22207,15 @@ function prospectContactNet(p){
   return null;
 }
 // PURE. La durée du code : celle de la formule, bornée.
-function prospectMoisInvitation(p,estCreateur){
+// ⚠ ET PAR LA FORMULE DU COACH (09/10/2026) : une invitation n'est pas une
+//   durée choisie, on la raccourcit à ce que la formule permet plutôt que de
+//   la refuser.
+function prospectMoisInvitation(p,estCreateur,coach){
   const m=Math.round(Number((OFFRES[p&&p.formule]||{}).mois)||0);
   const d=m>=1?m:3;
-  return estCreateur?d:Math.min(CODE_MOIS_MAX_AFFILIE,d);
+  if(estCreateur) return d;
+  const maxPalier=coach?dureeCodeMax(palierEffectifCoach(coach)):CODE_MOIS_MAX_AFFILIE;
+  return Math.min(CODE_MOIS_MAX_AFFILIE,maxPalier,d);
 }
 // PURE. L'entrée studentCodes, et la mise à jour du prospect.
 function prospectEntreeCode(p,gen,maintenant){
@@ -22041,8 +22236,10 @@ async function prospectInviter(id){
   try{
     const prenom=String(p.prenom||'').trim()||'Athlète';
     let gen;
-    try{ gen=await _genAccessCode(prenom,prospectMoisInvitation(p,currentUser.email===CREATOR_EMAIL)); }
-    catch(e){ toast(e.message||'Impossible de créer l’invitation : réessaie.','var(--red)'); return false; }
+    try{ gen=await _genAccessCode(prenom,prospectMoisInvitation(p,currentUser.email===CREATOR_EMAIL,currentUser)); }
+    catch(e){
+      if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return false; }
+      toast(e.message||'Impossible de créer l’invitation : réessaie.','var(--red)'); return false; }
     const {entree,maj}=prospectEntreeCode(Object.assign({id},p),gen,Date.now());
     if(!currentUser.studentCodes) currentUser.studentCodes=[];
     currentUser.studentCodes.push(entree);
@@ -125603,6 +125800,8 @@ function openAddAthlete(){
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
+  // Les durées que la formule permet (09/10/2026).
+  try{ _poserDureesCode(document.getElementById('aa-duration')); }catch(e){}
 }
 // Échap ferme la modale, quand le fond la ferme deja au clic. Le balisage
 // porte l'intention : `onclick="closeModal()"` sur l'overlay signifie
@@ -125731,6 +125930,10 @@ async function createAthlete(){
   if(!fn||!ln||!em||!pw){_err('Tous les champs sont obligatoires.');return;}
   if(pw.length<6){_err('Le mot de passe doit faire au moins 6 caractères.');return;}
   const users=DB.get('users')||{};
+  // LE QUOTA AVANT DE CRÉER LE COMPTE : refusé après, il laisserait un compte
+  // d'authentification sans dossier.
+  const _refusQ=estCreateur?null:refusQuotaCoach(currentUser,users,months);
+  if(_refusQ){ ouvrirEcranQuotaCoach(_refusQ); return; }
   // ══ ICI LA GARDE RESTE, MAIS ELLE DOIT DIRE CE QU'ELLE A TROUVÉ ════════
   //
   // ⚠ L'ANCRE D'ÉCRITURE N'EST PAS RECOPIÉE ICI : une sonde voisine repère la
@@ -125819,6 +126022,7 @@ async function createAthlete(){
   try{
     gen=await _genAccessCode(fn+' '+ln,months);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès : réessaie.';
     document.getElementById('aa-err').style.display='block';
     return;
@@ -129518,6 +129722,7 @@ async function _envoyerInvitation(){
   const dire=(m)=>{ if(err){ err.textContent=m; err.style.display='block'; } };
   if(err) err.style.display='none';
   const r=await inviterAthlete(v('inv-prenom'),v('inv-nom'));
+  if(!r.ok&&r.quota){ ouvrirEcranQuotaCoach(r.quota); return false; }
   if(!r.ok){ dire(r.raison); return false; }
   const p1=document.getElementById('inv-prenom'), p2=document.getElementById('inv-nom');
   if(p1) p1.value=''; if(p2) p2.value='';
@@ -129570,8 +129775,10 @@ async function inviterAthlete(prenom,nom){
     +((deja.prenom||deja.studentName||'cette personne'))+'. Relance-la plutôt '
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
-  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT); }
-  catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
+  // La durée de l'invitation : la valeur par défaut, bornée par la formule.
+  const _mois=(u.email===CREATOR_EMAIL)?INV_MOIS_DEFAUT:Math.min(INV_MOIS_DEFAUT,dureeCodeMax(palierEffectifCoach(u)));
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),_mois); }
+  catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.',quota:(e&&e._quotaCoach)||null}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
     createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,
     prenom:pn,nom:nm};
@@ -129692,6 +129899,14 @@ async function _genAccessCode(studentName,months,type){
   if(!isCreator&&months>CODE_MOIS_MAX_AFFILIE)
     throw new Error('Durée maximale : '+CODE_MOIS_MAX_AFFILIE+' mois par code. '
       +'Tu pourras en générer un nouveau à l\'échéance.');
+  // ⚠ LE QUOTA DE LA FORMULE, EN DERNIER VERROU (09/10/2026) : les quatre
+  //   chemins qui créent un code passent tous par ici. Les écrans le
+  //   vérifient avant (pour ne pas créer un compte pour rien), ceci tient si
+  //   l'un d'eux l'oubliait. Une invitation COACH n'est pas un rattachement.
+  if(!isCreator&&(type||'athlete')==='athlete'){
+    const refus=refusQuotaCoach(currentUser,DB.get('users')||{},months);
+    if(refus) throw erreurQuotaCoach(refus);
+  }
   const payload={
     coachId:currentUser.id,
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
@@ -129928,6 +130143,13 @@ async function _extendAccessCode(codeId,addMonths,token){
   const base=Math.max((data&&data.expiry)||0,Date.now());
   const newExpiry=base+addMonths*_MONTH_MS;
   const newMonths=((data&&data.months)||0)+addMonths;
+  // UNE PROLONGATION NE DÉPASSE PAS LA DURÉE DE LA FORMULE (09/10/2026) : le
+  // serveur la refuserait de toute façon (rc_codes/months).
+  if(currentUser&&currentUser.email!==CREATOR_EMAIL){
+    const pal=palierEffectifCoach(currentUser), max=dureeCodeMax(pal);
+    if(newMonths>max) throw erreurQuotaCoach({raison:'duree',palier:pal,quota:getCoachQuota(pal),
+      moisMax:max,mois:newMonths,n:0,suivant:palierPourDureeCode(newMonths)});
+  }
   await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({expiry:newExpiry,months:newMonths})});
   const payload={...(data||{}),expiry:newExpiry,months:newMonths};
@@ -129993,10 +130215,14 @@ async function generateStudentCode(){
   const name=document.getElementById('sc-name').value.trim();
   const months=parseInt(document.getElementById('sc-duration').value)||3;
   if(!name){toast('Entre le nom de l\'élève');return;}
+  // LE QUOTA AVANT TOUT RÉSEAU : un écran qui dit pourquoi, pas un toast.
+  const _refus=refusQuotaCoach(currentUser,DB.get('users')||{},months);
+  if(_refus){ ouvrirEcranQuotaCoach(_refus); return; }
   let gen;
   try{
     gen=await _genAccessCode(name,months);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     toast(e.message||'Impossible de générer le code : réessaie.','var(--red)');
     return;
   }
@@ -130041,6 +130267,8 @@ function loadStudentCodes(){
   // L'encart reste réservé à l'affilié : il porte le plafond de 12 mois,
   // qui ne s'applique pas au créateur.
   if(nonCreatorMsg) nonCreatorMsg.style.display=isCreator?'none':'';
+  // Les durées que la formule permet (09/10/2026).
+  try{ _poserDureesCode(document.getElementById('sc-duration')); }catch(e){}
   // L'invitation coach suit la même règle : réservée au créateur.
   const inviteCard=document.getElementById('sc-coach-invite-card');
   if(inviteCard) inviteCard.style.display=isCreator?'':'none';
@@ -130211,6 +130439,7 @@ async function extendStudentCode(i){
   try{
     res=await _extendAccessCode(c.codeId,3,c.token);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     toast(e.message||'Impossible de prolonger le code : réessaie.','var(--red)');
     return;
   }

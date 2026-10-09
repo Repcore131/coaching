@@ -117,7 +117,11 @@ function lireCoachPaliers() {
   if (fin < 0) throw new Error('fin de COACH_PALIERS introuvable');
   const bloc = src.slice(i, fin + 4).replace('const COACH_PALIERS=', 'var COACH_PALIERS=');
   // eslint-disable-next-line no-new-func
+  // LES QUOTAS (09/10/2026) : COACH_PALIERS lit son quota dans QUOTAS_COACH.
+  const tranche = (debut, fin) => { const k = src.indexOf(debut); if (k < 0) throw new Error(debut + ' introuvable');
+    return src.slice(k, src.indexOf(fin, k) + fin.length).replace(/^const /, 'var '); };
   return new Function(blocTarifs() + 'var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";'
+    + tranche('const COACH_PLANS=', ';') + tranche('const QUOTAS_COACH=(function(){', '})();')
     + bloc + ' return COACH_PALIERS;')();
 }
 const COACH_PALIERS = lireCoachPaliers();

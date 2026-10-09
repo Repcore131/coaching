@@ -207,9 +207,10 @@ function montantsInconnus(nom, html, T, blanche) {
     try {
       const src = [bloc('/* TARIFS:DEBUT */', '/* TARIFS:FIN */'), bloc('const _TC=', ';'),
         bloc('const OFFRES=Object.freeze({', '\n});'), 'var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";',
+        bloc('const COACH_PLANS=', ';'), bloc('const QUOTAS_COACH=(function(){', '})();'),
         bloc('const COACH_PALIERS=Object.freeze([', '\n]);'), bloc('const ESSAI_JOURS=', ';')].join('\n');
       // eslint-disable-next-line no-new-func
-      const r = new Function(src + '\nreturn {OFFRES, COACH_PALIERS, ESSAI_JOURS};')();
+      const r = new Function(src + '\nreturn {OFFRES, COACH_PALIERS, ESSAI_JOURS, QUOTAS_COACH};')();
       const attendu = [
         ['OFFRES.essentielle.prix', r.OFFRES.essentielle.prix, T.essentielle.mois],
         ['OFFRES.essentielle.prixAn', r.OFFRES.essentielle.prixAn, T.essentielle.an],
@@ -221,6 +222,13 @@ function montantsInconnus(nom, html, T, blanche) {
         ['ESSAI_JOURS', r.ESSAI_JOURS, T.essai.jours],
         ...['libre', 'coach', 'pro'].map((k) => ['COACH_PALIERS.' + k, (r.COACH_PALIERS.find((p) => p.cle === k) || {}).prix, T.coach[k]]),
         ...Object.keys(T.coaching).map((k) => ['OFFRES.' + k, r.OFFRES[k] && r.OFFRES[k].prix, T.coaching[k].prix]),
+        // LES QUOTAS COACH : null dans le JSON, Infinity dans l'app.
+        ...['libre', 'coach', 'pro'].flatMap((k) => {
+          const q = T.quotas_coach[k], a = q.athletes === null ? Infinity : q.athletes;
+          return [['QUOTAS_COACH.' + k + '.athletes', r.QUOTAS_COACH[k].athletes, a],
+            ['QUOTAS_COACH.' + k + '.moisCode', r.QUOTAS_COACH[k].moisCode, q.moisCode],
+            ['COACH_PALIERS.' + k + '.quota', (r.COACH_PALIERS.find((p) => p.cle === k) || {}).quota, a]];
+        }),
       ];
       for (const [quoi, vu, voulu] of attendu) if (vu !== voulu) e(nom + ' : ' + quoi + ' vaut ' + vu + ', tarifs.json dit ' + voulu);
     } catch (x) { e(nom + ' : OFFRES illisible (' + x.message + ')'); }
@@ -236,6 +244,24 @@ function montantsInconnus(nom, html, T, blanche) {
     const offres = code.slice(code.indexOf('const OFFRES=Object.freeze({'), code.indexOf('\n});', code.indexOf('const OFFRES=Object.freeze({')));
     if (/\bprix(An)?:\s*[1-9][0-9.]*/.test(offres)) e(nom + ' : un prix écrit en dur dans OFFRES — il doit venir de TARIFS');
     if (/moisApres\(Date\.now\(\),\s*12\)/.test(code)) e(nom + ' : la fin d’engagement est écrite en dur (12) au lieu de TARIFS.engagementMois');
+  }
+}
+
+// ── 7. La durée des codes, tenue AUSSI par le serveur ───────────────────────
+// database.rules.json refuse un code plus long que la formule du coach
+// (rc_codes/$code/months, lu sur coach_paliers/). Les valeurs doivent être
+// celles de tarifs.json → quotas_coach.
+{
+  const regles = readFileSync(RACINE + 'database.rules.json', 'utf8');
+  const m = regles.match(/"months":\s*\{\s*"\.validate":\s*"([^"]*)"/);
+  if (!m) e('database.rules.json : rc_codes/$code/months n’a plus de .validate');
+  else {
+    const v = m[1];
+    const Q = T.quotas_coach;
+    if (!v.includes('newData.val() <= ' + Q.libre.moisCode + ' ||')) e('database.rules.json : la durée Libre (' + Q.libre.moisCode + ' mois) n’est pas celle de tarifs.json');
+    for (const k of ['coach', 'pro'])
+      if (!v.includes('newData.val() <= ' + Q[k].moisCode + " && root.child('coach_paliers').child(auth.token.email.replace('.', ',')).child('palier').val() === '" + k + "'"))
+        e('database.rules.json : la durée ' + k + ' (' + Q[k].moisCode + ' mois) n’est pas celle de tarifs.json');
   }
 }
 

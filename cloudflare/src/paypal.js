@@ -293,7 +293,10 @@ export function creerPaypal(ctx) {
       }
       if (role === 'coach') {
         // LE PALIER PAYÉ REVIENT : une résiliation l'avait refermé (fins()).
-        if (plan && plan.coachPlan) { maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true; }
+        if (plan && plan.coachPlan) { maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true;
+          // LA FORMULE QUE LES RÈGLES CROIENT (09/10/2026) : rc_codes/months lit
+          // coach_paliers/, que le coach ne peut pas écrire lui-même.
+          maj['coach_paliers/' + cle] = { palier: plan.coachPlan, maj: t, source: 'paypal' }; }
       } else if (plan && plan.formule && statut !== 'COACHING_SUIVI') {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
         maj[b + 'abonnement/formule'] = plan.formule;
@@ -483,7 +486,8 @@ export function creerPaypal(ctx) {
     const [role, statut] = await Promise.all([lire(b + 'role'), lire(b + 'status')]);
     const maj = { [b + 'abonnement/statutPaypal']: 'REMBOURSE', [b + 'abonnement/finAccesPaypal']: t, [b + 'updatedAt']: t,
       ['paypal_fins/' + rec.cle]: null };
-    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false; }
+    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false;
+      maj['coach_paliers/' + rec.cle] = { palier: 'libre', maj: t, source: 'remboursement' }; }
     else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
     await db.ref().update(maj);
     if (role !== 'coach') await M.majDroits(rec.cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: t, source: 'paypal', abo: rec.abo || (x && x.abo) || null }));
@@ -646,7 +650,7 @@ export function creerPaypal(ctx) {
     const role = f.role || 'coach';          // les entrées d'avant ne portaient que les coachs
     if (role === 'coach') {
       await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
-        ['users/' + cle + '/updatedAt']: t });
+        ['users/' + cle + '/updatedAt']: t, ['coach_paliers/' + cle]: { palier: 'libre', maj: t, source: 'fin' } });
     } else if (Number(f.reserve) > 0) {
       const r = Number(f.reserve);
       await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));

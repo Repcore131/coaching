@@ -13207,20 +13207,137 @@ async function testExercices(){
             return _echec('un athlète connu mais inactif rend le compte non fiable');
           return !countActiveAthletesFiable(c,{b:_ath2('b','c2',3)})
             ?true:_echec('les athlètes d\'un AUTRE coach rendent le compte fiable');})());
-        ok('Le dépassement ALERTE et ne bloque AUCUN rattachement',(()=>{
+        ok('Le dépassement se tient à la CRÉATION du code ; l’athlète déjà rattaché n’est jamais refusé',(()=>{
           const c={id:'c1',coachPlan:'coach',coachSubActive:true};
           const m={};for(let i=0;i<16;i++) m['a'+i]=_ath2('a'+i,'c1',3);
           if(countActiveAthletes(c,m)!==16) return _echec('16 attendus');
           if(!coachQuotaDepasse(c,m)) return _echec('16 sur un quota de 15 ne dépasse pas');
           if(coachQuotaDepasse({id:'c1',coachPlan:'pro'},m))
             return _echec('le palier pro connaît une limite');
-          // LE POINT QUI COMPTE : aucun chemin de rattachement ne consulte le
-          // quota. On lit les fonctions RÉELLES, on ne se fie pas à l'intention.
+          // AUCUNE COUPURE RÉTROACTIVE (09/10/2026) : le quota ne se lit ni au
+          // rattachement par l'athlète, ni à son accès. On lit les fonctions RÉELLES.
           for(const f of [linkToCoach,checkAccess]){
-            if(/coachQuotaDepasse|getCoachQuota|countActiveAthletes/.test(String(f)))
+            if(/coachQuotaDepasse|getCoachQuota|countActiveAthletes|refusQuotaCoach|peutRattacher/.test(String(f)))
               return _echec('le quota est consulté par '+(f.name||'?'));
           }
+          // Il se lit là où un code naît : le dernier verrou de _genAccessCode.
+          return /refusQuotaCoach\(/.test(String(_genAccessCode))
+            ?true:_echec('_genAccessCode ne vérifie pas le quota');})());
+        // ══ LES QUOTAS APPLIQUÉS (09/10/2026) ═══════════════════════════════
+        ok('QUOTAS : la copie de tarifs.json, null lu comme l’infini',(()=>{
+          for(const k of ['libre','coach','pro']){
+            const q=TARIFS.quotas_coach[k];
+            if(QUOTAS_COACH[k].athletes!==(q.athletes===null?Infinity:q.athletes)) return _echec(k+' athletes : '+QUOTAS_COACH[k].athletes);
+            if(QUOTAS_COACH[k].moisCode!==q.moisCode) return _echec(k+' moisCode : '+QUOTAS_COACH[k].moisCode);
+            if(getCoachQuota(k)!==QUOTAS_COACH[k].athletes) return _echec(k+' : COACH_PALIERS ne lit pas QUOTAS_COACH');
+          }
+          if(!Object.isFrozen(QUOTAS_COACH)||!Object.isFrozen(QUOTAS_COACH.coach)) return _echec('QUOTAS_COACH n’est pas gelé');
+          // Ce que Kevin a fixé : 1 / 1, 15 / 6, sans limite / 12.
+          if(QUOTAS_COACH.libre.athletes!==1||QUOTAS_COACH.libre.moisCode!==1) return _echec('libre');
+          if(QUOTAS_COACH.coach.athletes!==15||QUOTAS_COACH.coach.moisCode!==6) return _echec('coach');
+          if(QUOTAS_COACH.pro.athletes!==Infinity||QUOTAS_COACH.pro.moisCode!==12) return _echec('pro');
           return true;})());
+        ok('QUOTAS : peutRattacher et dureeCodeMax, palier par palier',(()=>{
+          const cas=[['libre',0,true],['libre',1,false],['libre',5,false],['coach',14,true],['coach',15,false],
+            ['pro',0,true],['pro',100000,true],['platine',0,true],['platine',1,false],[undefined,1,false]];
+          for(const [p,n,att] of cas) if(peutRattacher(p,n)!==att) return _echec('peutRattacher('+p+', '+n+') = '+peutRattacher(p,n));
+          if(dureeCodeMax('libre')!==1||dureeCodeMax('coach')!==6||dureeCodeMax('pro')!==12||dureeCodeMax('platine')!==1)
+            return _echec('dureeCodeMax : '+['libre','coach','pro','platine'].map(dureeCodeMax).join('/'));
+          if(palierPourDureeCode(1)!=='libre'||palierPourDureeCode(3)!=='coach'||palierPourDureeCode(12)!=='pro'||palierPourDureeCode(24)!=='')
+            return _echec('palierPourDureeCode');
+          return true;})());
+        ok('QUOTAS : le refus dit pourquoi — au-delà du nombre, au-delà de la durée, formule arrêtée, créateur libre',(()=>{
+          const T=Date.now(), J=864e5;
+          const code=(x)=>Object.assign({type:'athlete',active:true,expiry:T+20*J},x);
+          // Libre, un athlète actif : le suivant est refusé, et Coach est proposé.
+          const libre={id:'c1',email:'l@t',role:'coach'};
+          const r1=refusQuotaCoach(libre,{a:_ath2('a','c1',3)},1,T);
+          if(!r1||r1.raison!=='athletes'||r1.n!==1||r1.quota!==1||r1.suivant!=='coach') return _echec('libre plein : '+JSON.stringify(r1));
+          if(!/Libre/.test(texteRefusQuota(r1))||!/1 athlète actif/.test(texteRefusQuota(r1))) return _echec('texte : '+texteRefusQuota(r1));
+          // Libre, aucun athlète : un code d'un mois passe, trois mois non (Coach les ouvre).
+          if(refusQuotaCoach(libre,{},1,T)!==null) return _echec('libre vide refusé');
+          const r2=refusQuotaCoach(libre,{},3,T);
+          if(!r2||r2.raison!=='duree'||r2.moisMax!==1||r2.suivant!=='coach') return _echec('libre 3 mois : '+JSON.stringify(r2));
+          // Un CODE EN ATTENTE est une place promise ; un code expiré ou désactivé ne compte pas.
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({})]}),{},1,T)===null) return _echec('un code en attente ne compte pas');
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({expiry:T-J}),code({active:false})]}),{},1,T)!==null)
+            return _echec('un code expiré ou désactivé compte');
+          // Cache non fiable : les codes rachetés en cours tiennent lieu d'athlètes.
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({redeemed:true,usedBy:'A'})]}),{},1,T)===null)
+            return _echec('un athlète rattaché (code racheté) ne compte pas sur cache vide');
+          // Coach : 15 actifs → refus, Pro proposé ; 12 mois → refus (Pro) ; 6 mois → permis.
+          const coach={id:'c2',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true};
+          const m15={};for(let i=0;i<15;i++) m15['b'+i]=_ath2('b'+i,'c2',3);
+          const r3=refusQuotaCoach(coach,m15,6,T);
+          if(!r3||r3.raison!=='athletes'||r3.suivant!=='pro') return _echec('coach plein : '+JSON.stringify(r3));
+          const m14={};for(let i=0;i<14;i++) m14['b'+i]=_ath2('b'+i,'c2',3);
+          if(refusQuotaCoach(coach,m14,6,T)!==null) return _echec('coach à 14 refusé');
+          const r4=refusQuotaCoach(coach,m14,12,T);
+          if(!r4||r4.raison!=='duree'||r4.suivant!=='pro') return _echec('coach 12 mois : '+JSON.stringify(r4));
+          // Formule arrêtée (coachSubActive faux) : les quotas de Libre.
+          if(palierEffectifCoach(Object.assign({},coach,{coachSubActive:false}))!=='libre') return _echec('formule arrêtée');
+          // Pro : 12 mois, cent athlètes, aucun refus ; le créateur, 24 mois.
+          const pro={id:'c3',email:'p@t',role:'coach',coachPlan:'pro',coachSubActive:true};
+          const m100={};for(let i=0;i<100;i++) m100['p'+i]=_ath2('p'+i,'c3',3);
+          if(refusQuotaCoach(pro,m100,12,T)!==null) return _echec('pro refusé');
+          if(refusQuotaCoach({id:'k',email:CREATOR_EMAIL,role:'coach'},m100,24,T)!==null) return _echec('le créateur a un quota');
+          return true;})());
+        ok('QUOTAS : au-delà, le coach est PRÉVENU et ses athlètes gardent leur accès jusqu’à la fin de leur code',(()=>{
+          const c={id:'c1',email:'c@t',role:'coach'};   // Libre, quota 1
+          const m={a:_ath2('a','c1',3),b:_ath2('b','c1',3),c:_ath2('c','c1',3)};
+          const a=alertePalier(c,m);
+          if(!a||a.type!=='depasse') return _echec('alerte : '+JSON.stringify(a));
+          if(!/fin de leur code/.test(a.texte)||!/rien n’est coupé/.test(a.texte)) return _echec('texte : '+a.texte);
+          if(!/Coach/.test(a.texte)) return _echec('la formule suivante n’est pas nommée');
+          // À la limite exacte : « pleine », pas encore un dépassement.
+          const l=alertePalier(c,{a:_ath2('a','c1',3)});
+          if(!l||l.type!=='limite') return _echec('à la limite : '+JSON.stringify(l));
+          // L'athlète rattaché au-delà du quota : son accès ne dépend que de son code.
+          const ath={id:'x',email:'x@t',role:'athlete',status:'COACHING_SUIVI',coachId:'c1',accessExpiry:Date.now()+30*864e5};
+          const sauve=localStorage.getItem(DROITS_CLE);
+          try{ localStorage.removeItem(DROITS_CLE); if(!checkAccess(ath)) return _echec('l’athlète au-delà du quota perd son accès'); }
+          finally{ if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve); }
+          return true;})());
+        ok('QUOTAS : l’écran de refus propose la formule suivante, avec son bouton d’abonnement',(()=>{
+          const r=refusQuotaCoach({id:'c1',email:'l@t',role:'coach'},{a:_ath2('a','c1',3)},1);
+          try{
+            if(!ouvrirEcranQuotaCoach(r)) return _echec('écran non ouvert');
+            const z=document.getElementById('quota-coach');
+            if(!z) return _echec('#quota-coach absent');
+            const t=z.textContent;
+            if(!/Passe à la formule Coach/.test(t)) return _echec('titre : '+t.slice(0,80));
+            if(!/gardent leur accès/.test(t)) return _echec('le sort des athlètes rattachés n’est pas dit');
+            const b=[...z.querySelectorAll('button')].map(x=>x.getAttribute('onclick')||'');
+            if(!b.some(x=>/souscrireCoach\('coach'\)|ouvrirMonAbonnement\(\)/.test(x))) return _echec('pas de bouton d’abonnement : '+b.join(' | '));
+            return true;
+          } finally { try{ closeModal(); }catch(e){} }})());
+        ok('QUOTAS : le sélecteur ne propose que les durées de la formule',(()=>{
+          const sel=document.createElement('select');
+          for(const v of [1,3,6,12]){ const o=document.createElement('option'); o.value=String(v); o.textContent=v+' mois'; sel.appendChild(o); }
+          sel.value='3';
+          _poserDureesCode(sel,{id:'c1',email:'l@t',role:'coach'});
+          const off=[...sel.options].filter(o=>o.disabled).map(o=>o.value).join();
+          if(off!=='3,6,12') return _echec('libre : '+off);
+          if(sel.value!=='1') return _echec('la durée choisie reste interdite : '+sel.value);
+          if(!/formule Coach/.test(sel.options[1].textContent)) return _echec('la formule qui l’ouvre n’est pas dite');
+          _poserDureesCode(sel,{id:'c2',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true});
+          if([...sel.options].filter(o=>o.disabled).map(o=>o.value).join()!=='12') return _echec('coach');
+          // Le créateur : rien n'est grisé par cette fonction.
+          return _poserDureesCode(sel,{email:CREATOR_EMAIL})===false?true:_echec('le créateur est plafonné');})());
+        okA('QUOTAS : générer un code au-delà du quota ouvre l’écran, et rien n’est créé',async()=>{
+          const sv=currentUser;
+          const nom=document.getElementById('sc-name'), duree=document.getElementById('sc-duration');
+          const nv=nom&&nom.value, dv=duree&&duree.value;
+          try{
+            currentUser={id:'cq',email:'cq@t',role:'coach',fname:'C',lname:'Q',
+              studentCodes:[{type:'athlete',active:true,expiry:Date.now()+20*864e5,redeemed:true,usedBy:'A',token:'RC-AAAA-BBBB'}]};
+            if(!nom||!duree) return _echec('#sc-name ou #sc-duration absent');
+            nom.value='Léo'; duree.value='1';
+            await generateStudentCode();
+            if(!document.getElementById('quota-coach')) return _echec('l’écran de refus ne s’ouvre pas');
+            if(currentUser.studentCodes.length!==1) return _echec('un code a été créé malgré le refus');
+            return true;
+          } finally { try{ closeModal(); }catch(e){} currentUser=sv; if(nom) nom.value=nv||''; if(duree&&dv) duree.value=dv; }});
         ok('coachPalierRequis nomme le palier suivant sans rien décider',(()=>{
           const att=[[0,'libre'],[1,'libre'],[2,'coach'],[15,'coach'],[16,'pro'],[900,'pro']];
           for(const [n,c] of att) if(coachPalierRequis(n)!==c)
@@ -13670,7 +13787,7 @@ async function testExercices(){
             }
             return true;
           } finally { currentUser=sauve; z.innerHTML=''; }})());
-        ok('Le dépassement de quota DIT qu\'il ne bloque rien',(()=>{
+        ok('Le dépassement de quota DIT que rien n\'est coupé',(()=>{
           const z=document.getElementById('coach-abo');
           const sauve=currentUser;
           try{
@@ -13681,7 +13798,7 @@ async function testExercices(){
             _renderAbonnementCoach(m);
             const h=z.innerHTML;
             if(!/3 \/ 1 athlètes actifs/.test(h)) return _echec('le compte réel n\'est pas dit');
-            return /Rien n'est bloqué/.test(h)
+            return /rien n'est coupé/.test(h)
               ?true:_echec('le dépassement ne rassure pas sur l\'accès des athlètes');
           } finally { currentUser=sauve; z.innerHTML=''; }})());
         ok('Aucune promesse de durée : ni « essai », ni « 14 jours »',(()=>{

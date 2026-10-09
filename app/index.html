@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1797';
+window.RC_BUILD='1798';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-09';
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1797.css">
+<link rel="stylesheet" href="./rc-style.1798.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1014,7 +1014,7 @@ const COACH_PHOTO='icons/coach.jpg';
              c'est vrai pour UN athlète, puis les paliers Coach et Pro s'appliquent.
              L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, ta formule suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:var(--text)">jusqu'à 12 mois</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie></span>, <span data-texte="engagement">sans engagement</span>.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, ta formule suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, dans la limite de ta formule : <strong style="color:var(--text)"><span data-nb="quotas_coach.libre.moisCode">1</span>&nbsp;mois en Libre, <span data-nb="quotas_coach.coach.moisCode">6</span> en Coach, <span data-nb="quotas_coach.pro.moisCode">12</span> en Pro</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie></span>, <span data-texte="engagement">sans engagement</span>.</div>
     </div>
   </div>
 </div>
@@ -1951,7 +1951,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Notice pour coachs non-créateur — géré dans loadStudentCodes() -->
         <div id="sc-noncreatormsg" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-4);padding:20px;margin-bottom:24px">
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:2px;margin-bottom:10px">ACCÈS ÉLÈVES</div>
-          <p style="font-size:var(--fs-sm);color:#aaa;line-height:1.7;margin:0">Chaque code que tu génères ouvre l'accès à ton athlète pour la durée choisie, jusqu'à 12 mois. Passé ce délai, tu lui en donnes un nouveau.</p>
+          <p style="font-size:var(--fs-sm);color:#aaa;line-height:1.7;margin:0">Chaque code que tu génères ouvre l'accès à ton athlète pour la durée choisie, dans la limite de ta formule : <span data-nb="quotas_coach.libre.moisCode">1</span>&nbsp;mois en Libre, <span data-nb="quotas_coach.coach.moisCode">6</span> en Coach, <span data-nb="quotas_coach.pro.moisCode">12</span> en Pro. Passé ce délai, tu lui en donnes un nouveau. Une formule suit aussi un nombre d'athlètes actifs : au-delà, un nouveau rattachement demande la formule suivante, et ceux déjà rattachés gardent leur accès jusqu'à la fin de leur code.</p>
         </div>
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -6070,5 +6070,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1797.js"></script>
+<script src="./rc-core.1798.js"></script>
 </body></html>

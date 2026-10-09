@@ -199,6 +199,21 @@ export function incoherences(T) {
   if (c2(T.ultime.mois * T.ultime_demi.part) !== T.ultime_demi.premierMois)
     e.push('ultime_demi.premierMois (' + T.ultime_demi.premierMois + ') n’est pas ' + T.ultime_demi.part + ' × ' + T.ultime.mois);
   if (T.essai.jours !== T.essai.mois * 30) e.push('essai : ' + T.essai.jours + ' jours pour ' + T.essai.mois + ' mois');
+  // LES QUOTAS COACH : les trois formules, des quotas qui MONTENT avec le prix,
+  // et une durée de code entre 1 et 12 mois (la consommation plafonne à 12).
+  const Q = T.quotas_coach || {};
+  const ordre = ['libre', 'coach', 'pro'];
+  const nb = (x) => (x === null ? Infinity : x);
+  for (const k of ordre) {
+    const q = Q[k];
+    if (!q) { e.push('quotas_coach.' + k + ' absent'); continue; }
+    if (!(q.athletes === null || (Number.isInteger(q.athletes) && q.athletes >= 1))) e.push('quotas_coach.' + k + '.athletes : un entier ≥ 1, ou null (sans limite)');
+    if (!(Number.isInteger(q.moisCode) && q.moisCode >= 1 && q.moisCode <= 12)) e.push('quotas_coach.' + k + '.moisCode : un entier de 1 à 12');
+  }
+  for (let i = 1; i < ordre.length; i++) {
+    const a = Q[ordre[i - 1]], b = Q[ordre[i]];
+    if (a && b && (nb(b.athletes) < nb(a.athletes) || b.moisCode < a.moisCode)) e.push('quotas_coach : ' + ordre[i] + ' permet moins que ' + ordre[i - 1]);
+  }
   return e;
 }
 

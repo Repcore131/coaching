@@ -14,6 +14,12 @@
   "essai": { "mois": 1, "jours": 30, "carte": false },
   "essai_parrainage": { "moisEnPlus": 1 },
   "coach": { "libre": 0, "coach": 19, "pro": 39 },
+  "quotas_coach": {
+    "_lisezmoi": "CE QUE CHAQUE FORMULE COACH PERMET : athletes = nombre d'athlètes actifs qu'on peut rattacher (null = sans limite : JSON ne connaît pas Infinity, l'app le lit comme Infinity) ; moisCode = durée maximale d'un code d'accès, en mois. Recopié dans l'app (QUOTAS_COACH) ; la durée est aussi tenue par database.rules.json (rc_codes/months), que scripts/verif/tarifs.mjs compare à ces valeurs.",
+    "libre": { "athletes": 1, "moisCode": 1 },
+    "coach": { "athletes": 15, "moisCode": 6 },
+    "pro": { "athletes": null, "moisCode": 12 }
+  },
   "coaching": {
     "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi." },
     "revision_prog": { "prix": 40, "mois": 1, "lib": "Révision de programme", "comprend": "Ton programme ajusté quand tu en as besoin, sans échéance." },
