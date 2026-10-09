@@ -1465,6 +1465,8 @@ function _prefetchCiqual(){
 // caféine se naviguent séparément, chacun avec sa propre date. Les confondre
 // ferait sauter le journal au jour de la caféine, ou l’inverse.
 function loadNutrition(dateAff,dateCaff){
+  // LA FRISE « AUTOUR DE TA SÉANCE » (build 1959), un jour de séance.
+  try{ rendreFriseSeance(currentUser); }catch(e){}
   // Les anciens clics du ±20 (voir ajustKcal) : chez un athlète SANS coach,
   // c'est ici qu'ils sont retirés ; avec un coach, sur sa fiche à lui, pour
   // qu'un même dossier ne soit pas corrigé deux fois.

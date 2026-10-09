@@ -76523,6 +76523,76 @@ async function testExercices(){
       if(!d.querySelector('[onclick="piloteDecider(\'applique\')"]')||!d.querySelector('.pl-raison li')) return _echec('boutons, raisonnement');
       return true;
     });
+    // ══ BUILD 1959 — LA FRISE AUTOUR DE LA SÉANCE ════════════════════════════════
+    const _fr59=(l,t)=>l.filter(x=>x.type===t);
+    ok('1959 — TIMING_SEANCE gelée, telle que demandée',()=>{
+      const T=TIMING_SEANCE;
+      if(!Object.isFrozen(T)||!Object.isFrozen(T.hydratationPendantMl)) return _echec('gel');
+      if(T.repasAvantMin!==90||T.repasAvantMax!==120||T.collationRapideMin!==20||T.collationRapideMax!==30||T.fenetreApresH!==2) return _echec('fenêtres');
+      if(T.lipidesAutourSeance!=='faibles'||T.hydratationPendantMl.parHeure!==750||T.glucidesIntraSiSeanceMin!==75||T.glucidesIntraParH.join()!=='20,50') return _echec('pendant');
+      return true;
+    });
+    ok('1959 — jour sans séance (ou heure inconnue) : aucune frise',()=>{
+      if(frisePeriSeance('',60,{p:160,g:300},'flexible').length||frisePeriSeance(null,60,[],'strict').length) return _echec('frise sans heure');
+      const u={frise:{heures:{'0':'18:00'}}};
+      if(heureSeanceDuJour(u,new Date(2027,2,1))!=='18:00'||heureSeanceDuJour(u,new Date(2027,2,2))!=='') return _echec('heure du lundi seulement');
+      return true;
+    });
+    ok('1959 — flexible, séance à 18 h : repas 16 h, collation 17 h 30, eau 750 mL/h, repas d’après 19 h 30, part des macros',()=>{
+      const l=frisePeriSeance('18:00',60,{p:160,g:300,l:70},'flexible',{reveil:'07:00'});
+      if(l.map(x=>x.heure+' '+x.type).join()!=='16:00 repas,17:30 collation,18:00 eau,19:30 repas') return _echec(l.map(x=>x.heure+' '+x.type).join());
+      const av=l[0];
+      if(av.cible.g!==90||av.cible.p!==40||!/30 % de tes glucides/.test(av.phrase)||!/lipides faibles/.test(av.phrase)||!/90 g de glucides et 40 g/.test(av.phrase)) return _echec(av.phrase);
+      if(l[2].cible.ml!==750||!/750 mL/.test(l[2].phrase)) return _echec('eau');
+      if(!/dans les 2 h/.test(l[3].phrase)) return _echec('après');
+      return true;
+    });
+    ok('1959 — séance tôt le matin : pas de repas 2 h avant, une collation légère ; séance longue : glucides pendant',()=>{
+      let l=frisePeriSeance('06:30',60,{p:160,g:300},'flexible',{reveil:'06:00'});
+      const av=l.filter(x=>x.min<hmMin('06:30'));
+      if(av.some(x=>x.type==='repas')) return _echec('un repas avant 6 h 30');
+      const c=_fr59(av,'collation')[0];
+      if(!c||c.heure!=='06:00'||!/pas de repas possible 2 h avant/.test(c.phrase)||c.cible.lipides!=='faibles') return _echec(JSON.stringify(c));
+      l=frisePeriSeance('09:00',120,{p:160,g:300},'flexible',{reveil:'06:00'});
+      const intra=l.find(x=>x.cible&&x.cible.gParH);
+      if(!intra||intra.heure!=='10:15'||!/20 à 50 g de glucides par heure/.test(intra.phrase)) return _echec('intra : '+JSON.stringify(intra));
+      if(_fr59(l,'eau')[0].cible.ml!==1500) return _echec('eau sur 2 h');
+      if(frisePeriSeance('09:00',75,{},'flexible').some(x=>x.cible&&x.cible.gParH)) return _echec('intra à 75 min pile');
+      return true;
+    });
+    ok('1959 — diète stricte : on déplace un repas du plan, jamais on n’en invente',()=>{
+      const plan=[{cle:'petit_dej',lib:'Petit-déjeuner'},{cle:'midi',lib:'Repas du midi'},{cle:'collation2',lib:'Collation 2'},{cle:'soir',lib:'Repas du soir'}];
+      let l=frisePeriSeance('18:00',60,plan,'strict',{reveil:'07:00'});
+      const r=_fr59(l,'repas');
+      if(r[0].cible.repas!=='collation2'||!/Déplace ton « Collation 2 » vers 16:00/.test(r[0].phrase)) return _echec(r[0].phrase);
+      if(r[1].cible.repas!=='soir'||!/Déplace ton « Repas du soir » vers 19:30/.test(r[1].phrase)) return _echec(r[1].phrase);
+      l=frisePeriSeance('18:00',60,[{cle:'avant',lib:'Avant séance'},{cle:'apres',lib:'Après séance'},{cle:'soir',lib:'Repas du soir'}],'strict');
+      if(_fr59(l,'repas')[0].cible.repas!=='avant'||_fr59(l,'repas')[1].cible.repas!=='apres') return _echec('avant/après du plan en premier');
+      l=frisePeriSeance('18:00',60,[],'strict');
+      if(_fr59(l,'repas').some(x=>x.cible)||!/Aucun repas de ton plan/.test(_fr59(l,'repas')[0].phrase)) return _echec('repas inventé');
+      return true;
+    });
+    ok('1959 — caféine : dose 30 à 60 min avant, rien après l’heure limite, jamais au-delà de 400 mg sur la journée',()=>{
+      let c=_fr59(frisePeriSeance('18:00',60,{},'flexible',{poidsKg:70,cafeine:{dejaMg:0,plafond:400,limite:'19:00'}}),'cafeine')[0];
+      if(!c||c.heure!=='17:15'||c.cible.mg!==210||!/jamais après 19:00/.test(c.phrase)) return _echec(JSON.stringify(c));
+      c=_fr59(frisePeriSeance('18:00',60,{},'flexible',{poidsKg:70,cafeine:{dejaMg:0,plafond:400,limite:'15:00'}}),'cafeine')[0];
+      if(c.cible.mg!==0||!/heure limite/.test(c.phrase)) return _echec('après la limite');
+      c=_fr59(frisePeriSeance('18:00',60,{},'flexible',{poidsKg:70,cafeine:{dejaMg:350,plafond:400,limite:null}}),'cafeine')[0];
+      if(c.cible.mg!==50) return _echec('reste du jour : '+c.cible.mg);
+      c=_fr59(frisePeriSeance('18:00',60,{},'flexible',{poidsKg:200,cafeine:{dejaMg:0,plafond:900,limite:null}}),'cafeine')[0];
+      if(c.cible.mg!==400) return _echec('plafond 400 : '+c.cible.mg);
+      c=_fr59(frisePeriSeance('18:00',60,{},'flexible',{poidsKg:70,cafeine:{dejaMg:400,plafond:400}}),'cafeine')[0];
+      if(c.cible.mg!==0||!/Plafond/.test(c.phrase)) return _echec('plafond atteint');
+      return true;
+    });
+    ok('1959 — notifications : 1 h 45 avant, 20 min avant, juste après ; frise rendue avec le lien caféine',()=>{
+      const n=notifsFrise('18:00',75);
+      if(n.map(x=>x.cle+'@'+x.heure).join()!=='avant@16:15,collation@17:40,apres@19:15') return _echec(n.map(x=>x.cle+'@'+x.heure).join());
+      const l=frisePeriSeance('18:00',60,{p:160,g:300},'flexible',{cafeine:{dejaMg:0,plafond:400,limite:null}});
+      const d=document.createElement('div'); d.innerHTML=htmlFrise(l,'18:00',60);
+      if(d.querySelectorAll('.fr-it').length!==l.length||!d.querySelector('.fr-cafeine [onclick="loadCaffeine()"]')||!d.querySelector('.fr-eau.fr-pendant')) return _echec('rendu');
+      return true;
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

@@ -91,6 +91,13 @@
           },
           "$autre": { ".validate": false }
         },
+        // LA FRISE AUTOUR DE LA SEANCE (build 1959) : l heure de seance par
+        // jour de la semaine (0 = lundi) et les rappels de l app.
+        "frise": {
+          "heures": { "$j": { ".validate": "$j.matches(/^[0-6]$/) && newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)" } },
+          "notifs": { ".validate": "newData.isBoolean()" },
+          "$autre": { ".validate": false }
+        },
         // LE MODE RAMADAN (build 1957) — la periode, les horaires du jour
         // (sahur, iftar), l heure de seance et le compteur d eau. Liste
         // blanche fermee ; l app controle avant d ecrire (enregistrerRamadan).

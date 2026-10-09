@@ -14080,3 +14080,19 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .pl-ath span{font-size:var(--fs-xs);color:var(--sub)}
 .pl-vol{display:flex;flex-direction:column;gap:2px;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 12px;margin:0 0 10px;font-size:var(--fs-xs);color:var(--text)}
 .pl-vol b{color:var(--text-strong)}
+/* LA FRISE AUTOUR DE LA SÉANCE (build 1959). */
+.fr-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin:0 0 14px}
+.fr-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:8px}
+.fr-ligne{display:flex;gap:8px;align-items:center;margin-top:6px}
+.fr-ligne input{flex:1}
+.fr-ligne .btn{width:auto;margin:0;flex:none}
+.fr-rail{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.fr-it{flex:0 0 172px;scroll-snap-align:start;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px;display:flex;flex-direction:column;gap:4px;background:var(--dark)}
+.fr-it.fr-pendant{border-color:var(--red)}
+.fr-h{font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong)}
+.fr-i{color:var(--sub)}
+.fr-repas .fr-i{color:var(--red)}
+.fr-p{font-size:var(--fs-xs);line-height:1.45;color:var(--text)}
+.fr-pied{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.fr-notif{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text);text-transform:none;letter-spacing:normal;font-weight:600}
+.fr-notif input{width:auto;margin:2px 0 0}
