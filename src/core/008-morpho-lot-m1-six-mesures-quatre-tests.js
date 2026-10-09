@@ -3124,6 +3124,12 @@ function _htmlMorphoLecture(user,cal,opts){
     h+=titre('L’instrument de suivi');
     h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">'+E(inst)+'</div>';
   }
+  // BUILD 1963 : les schémas. L'atlas qui explique chaque profil (M3), et le
+  // schéma personnel, tracé avec ses mesures (M2) — rien sans mesure.
+  const _atlas=(function(){ try{ return htmlAtlasProfils((res.profils||[]).map(p=>p.cle)); }catch(e){ return ''; } })();
+  if(_atlas) h+=titre('Ce que montrent tes profils')+'<div class="sch-atlas-l">'+_atlas+'</div>';
+  const _perso=(function(){ try{ return ['squat','souleve','developpe'].map(p=>htmlSchemaPersonnel(user,p)).join(''); }catch(e){ return ''; } })();
+  if(_perso) h+=titre('Ton schéma personnel')+'<div class="sch-perso-l">'+_perso+'</div>';
   return h;
 }
 

@@ -76843,6 +76843,85 @@ async function testExercices(){
       if(!BILAN_QUESTIONS.suivi.some(q=>q.k==='bil-fierte')||!BILAN_QUESTIONS.suivi.some(q=>q.k==='bil-objectif-semaine')) return _echec('affichage des réponses');
       return true;
     });
+    // ══ BUILD 1963 — LE MOTEUR DE SCHÉMAS ET L'ATLAS ═════════════════════════════
+    okA('1963 — rc-schemas se charge à la demande ; primitives pures, charte respectée',async()=>{
+      const R=await chargerSchemas();
+      if(!R||!Object.isFrozen(R)) return _echec('module');
+      if(R.CHARTE.encre!=='#141416'||R.CHARTE.accent!=='#E02020'||R.CHARTE.fond!=='#F2F2F4') return _echec('charte');
+      const s=R.segment({x:0,y:0},{x:10,y:5},3,'accent');
+      if(!/stroke-linecap="round"/.test(s)||!/#E02020/.test(s)) return _echec(s);
+      const c=R.cote({x:0,y:0},{x:100,y:0},'42 cm',10);
+      if((c.match(/<circle/g)||[]).length!==2||!/42 cm/.test(c)) return _echec('cote : deux points et son texte');
+      if(!/^<path d="M/.test(R.arcAngle({x:0,y:0},10,0,90))) return _echec('arc');
+      const svg=R.dessinerAtlas('femur_squat');
+      if(/font-family="(?!Arial, Helvetica, sans-serif)/.test(svg)||/@import|url\(/.test(svg)) return _echec('police externe');
+      const couleurs=(svg.match(/#[0-9A-Fa-f]{6}/g)||[]).map(x=>x.toUpperCase());
+      if(couleurs.some(x=>['#141416','#E02020','#F2F2F4','#9A9AA2'].indexOf(x)<0)) return _echec('couleur hors charte : '+couleurs.join());
+      return true;
+    });
+    okA('1963 — invariants : longueurs conservées dans chaque pose, barre à l’aplomb du milieu du pied, buste qui s’incline avec le fémur',async()=>{
+      const R=await chargerSchemas();
+      const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+      for(const nom of Object.keys(R.POSES)) for(const f of [0.21,0.245,0.28]){
+        const s=R.silhouette({femur:f,bras:f*0.76});
+        const p=R.POSES[nom](s,{});
+        if(!p.meta||p.meta.ok===false) return _echec(nom+' impossible à '+f);
+        for(const g of p.segs){ if(g[2]==null) continue; const e=Math.abs(d(p.pts[g[0]],p.pts[g[1]])-g[2]); if(e>1e-6) return _echec(nom+' : '+g[0]+'–'+g[1]+' '+e); }
+      }
+      for(const f of [0.21,0.26]){
+        const sq=R.POSES.squat(R.silhouette({femur:f}),{}), so=R.POSES.souleve(R.silhouette({femur:f}),{});
+        if(Math.abs(sq.pts.barre.x-sq.pts.milieuPied.x)>1e-9||Math.abs(sq.pts.epaule.x-sq.pts.barre.x)>1e-9) return _echec('squat : barre hors aplomb');
+        if(Math.abs(so.pts.barre.x-so.pts.milieuPied.x)>1e-9||Math.abs(so.pts.poignet.x-so.pts.barre.x)>1e-9) return _echec('soulevé : barre hors aplomb');
+      }
+      const b=[0.21,0.23,0.245,0.26,0.28].map(f=>R.POSES.squat(R.silhouette({femur:f}),{}).meta.buste);
+      for(let i=1;i<b.length;i++) if(!(b[i]>b[i-1])) return _echec('buste : '+b.join(', '));
+      // Tronc trop court pour un fémur très long : on le dit, on ne dessine pas faux.
+      if(R.POSES.squat(R.silhouette({femur:0.4,tronc:0.15}),{}).meta.ok!==false) return _echec('pose impossible acceptée');
+      // Plus le bras est long, plus la course de traction et du développé est longue ; le soulevé part plus haut.
+      const cours=k=>R.POSES.traction(R.silhouette({bras:k}),{}).meta.course;
+      if(!(cours(0.2)>cours(0.17))) return _echec('traction');
+      if(!(R.POSES.souleve(R.silhouette({bras:0.2,avantBras:0.157}),{}).meta.hanche>R.POSES.souleve(R.silhouette({bras:0.172,avantBras:0.135}),{}).meta.hanche)) return _echec('soulevé : hanche');
+      return true;
+    });
+    okA('1963 — ATLAS_SCHEMAS : 20 entrées gelées {cle, titre, legende, params, pose}, chacune rendue en SVG',async()=>{
+      const R=await chargerSchemas(), A=R.ATLAS_SCHEMAS;
+      if(A.length!==20||!Object.isFrozen(A)||new Set(A.map(e=>e.cle)).size!==20) return _echec('20 clés uniques');
+      for(const e of A){
+        if(!Object.isFrozen(e)||!e.titre||!e.legende||!R.POSES[e.pose]||typeof e.params!=='object') return _echec(e.cle+' : forme');
+        const s=R.dessinerAtlas(e.cle);
+        if(!/^<svg [^>]*viewBox/.test(s)||/NaN|undefined|Infinity/.test(s)) return _echec(e.cle+' : rendu');
+      }
+      const cles=A.map(e=>e.cle).join();
+      for(const k of ['femur_squat','squat_favorable','developpe_cage_fine','developpe_cage_epaisse','humerus_parallele','tractions_humerus','souleve_bras','envergure_taille','buste_court_long','valgus_coude','genoux_valgum','genoux_varum','bassin_anteversion','bassin_retroversion','cou_neutre_extension','elevations_horizontale','biceps_court_long','mollets_courts_longs','triceps_longue_portion','dorsaux_insertion'])
+        if(cles.indexOf(k)<0) return _echec('manque '+k);
+      return true;
+    });
+    ok('1963 — la silhouette du dossier : ses mesures, et rien de dessiné sans elles',()=>{
+      const sv=window.mesureMorpho, svT=window._tailleCm;
+      try{
+        const m={'deb-entrejambe':84,'deb-genou':50,'deb-bras':60,'deb-avantbras':26,'deb-epaules':40};
+        window.mesureMorpho=(u,k)=>({cm:m[k]||null}); window._tailleCm=()=>180;
+        const s=silhouetteDuDossier({});
+        if(s.params.taille!==180||s.params.femur!==Math.round((84-50+0.045*180)*10)/10||s.params.tibia!==Math.round((50-0.039*180)*10)/10||s.params.bras!==34||s.params.avantBras!==26||s.params.epaules!==40) return _echec(JSON.stringify(s));
+        const h=htmlSchemaPersonnel({},'squat','Ton squat');
+        if(!/class="sch-perso"/.test(h)||!/data-sch-pose="squat"/.test(h)) return _echec('emplacement');
+        window.mesureMorpho=()=>({cm:null});
+        if(htmlSchemaPersonnel({},'squat')!=='') return _echec('dessiné sans mesure');
+        if(htmlAtlasProfils(['P1','P2','P1','P99']).match(/<img/g).length!==2||!/femur_squat\.webp/.test(htmlAtlasProfils(['P1']))) return _echec('atlas des profils');
+        return true;
+      }finally{ window.mesureMorpho=sv; window._tailleCm=svT; }
+    });
+    okA('1963 — l’emplacement se peint avec le moteur, une seule fois',async()=>{
+      const z=document.createElement('div');
+      z.innerHTML='<div class="sch-perso" data-sch-pose="souleve" data-sch-params="{&quot;taille&quot;:180,&quot;bras&quot;:34}"></div>';
+      document.body.appendChild(z);
+      try{
+        const n=await peindreSchemas(z);
+        if(n!==1||!z.querySelector('svg')||!/Ton soulevé de terre/.test(z.textContent)) return _echec('peinture : '+n);
+        if(await peindreSchemas(z)!==0) return _echec('peint deux fois');
+        return true;
+      }finally{ z.remove(); }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

@@ -54,6 +54,8 @@ for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
   }
 }
 morceaux.push({fichier: 'app/motion-lab.js', debut: 1, texte: readFileSync(join(APP, 'motion-lab.js'), 'utf8')});
+// rc-schemas.js (build 1963), charge a la demande comme motion-lab.js.
+morceaux.push({fichier: 'app/rc-schemas.js', debut: 1, texte: readFileSync(join(APP, 'rc-schemas.js'), 'utf8')});
 
 // ── LE FICHIER CONCATENE, ET LA TABLE POUR REVENIR AUX ORIGINES ───────────
 const TMP = join(tmpdir(), 'repcore-lint');

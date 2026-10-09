@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1962';
+const CACHE = 'repcore-v1963';
 // ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
 // Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
 // (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
@@ -182,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1962.js', './rc-style.1962.css', './rc-theme.1962.css',
+const ASSETS = ['./index.html', './rc-core.1963.js', './rc-style.1963.css', './rc-theme.1963.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -402,7 +402,8 @@ self.addEventListener('activate', e => {
       // laisserait sans code jusqu'au rechargement, hors ligne compris.
       const _ACTIF = /\/rc-(?:core|style|theme)\.(\d+)\.(?:js|css)$/;
       // motion-lab.js?v=<build> : meme numero, meme regle de garde.
-      const _ML = /\/motion-lab\.js\?(?:[^#]*&)?v=(\d+)(?:&|#|$)/;
+      // rc-schemas.js?v=<build> (build 1963) : la meme regle que motion-lab.
+      const _ML = /\/(?:motion-lab|rc-schemas)\.js\?(?:[^#]*&)?v=(\d+)(?:&|#|$)/;
       const _versionActif = u => {
         const m = String(u).match(_ACTIF) || String(u).match(_ML);
         return m ? Number(m[1]) : null;

@@ -14176,3 +14176,8 @@ div.sn-alerte{font-size:var(--fs-xs);color:var(--orange);margin-top:4px}
 .reac-v.reac-lent b{color:var(--orange)}
 .reac-o{font-size:var(--fs-xs);color:var(--orange);margin-top:6px}
 .reac-p{font-size:var(--fs-xs);color:var(--sub);margin-top:6px}
+/* LES SCHÉMAS (build 1963). */
+.sch-bloc{margin:4px 0 8px}
+.sch-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:var(--red-text);margin-bottom:6px}
+.sch-perso svg,.sch-atlas{display:block;width:100%;height:auto;border-radius:var(--r-3)}
+.sch-perso-l,.sch-atlas-l{display:grid;gap:8px}
