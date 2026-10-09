@@ -129765,6 +129765,16 @@ function invitationExistante(prenom,nom,user){
   return invitationsEnAttente(user).find(c=>_clePersonne(c.prenom,c.nom)===k
     ||exKey(c.studentName||'')===k)||null;
 }
+/**
+ * PURE. La durée d'une invitation : la valeur par défaut, bornée par la
+ * formule du coach (le créateur n'a pas de plafond).
+ * @param {any} coach
+ * @returns {number}
+ */
+function moisInvitationCoach(coach){
+  if(!coach||coach.email===CREATOR_EMAIL) return INV_MOIS_DEFAUT;
+  return Math.min(INV_MOIS_DEFAUT,dureeCodeMax(palierEffectifCoach(coach)));
+}
 async function inviterAthlete(prenom,nom){
   const u=currentUser;
   if(!u||u.role!=='coach') return {ok:false,raison:'Réservé aux coachs.'};
@@ -129776,8 +129786,7 @@ async function inviterAthlete(prenom,nom){
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
   // La durée de l'invitation : la valeur par défaut, bornée par la formule.
-  const _mois=(u.email===CREATOR_EMAIL)?INV_MOIS_DEFAUT:Math.min(INV_MOIS_DEFAUT,dureeCodeMax(palierEffectifCoach(u)));
-  try{ gen=await _genAccessCode((pn+' '+nm).trim(),_mois); }
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),moisInvitationCoach(u)); }
   catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.',quota:(e&&e._quotaCoach)||null}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
     createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,

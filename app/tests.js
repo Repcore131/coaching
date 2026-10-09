@@ -35453,7 +35453,9 @@ async function testExercices(){
       okA('1626 — UN CODE REFUSÉ FAUTE DE SESSION LE DIT, ET NE PARLE PAS DE CONNEXION',async()=>{
         const sU=currentUser, sT=CLOUD._getToken, sF=window.fetch, sE=CLOUD._jetonEtranger;
         try{
-          currentUser={id:'u_c',email:'coach@t.fr',role:'coach',fname:'K',lname:'G'};
+          currentUser={id:'u_c',email:'coach@t.fr',role:'coach',fname:'K',lname:'G',
+            // Formule Pro : le sujet est la SESSION, pas le quota (09/10/2026).
+            coachPlan:'pro',coachSubActive:true};
           let appels=0; window.fetch=async()=>{ appels++; return {ok:false,status:401,json:async()=>({error:'Permission denied'})}; };
           // 1. Pas de jeton : rien n'est envoyé, le message nomme la session.
           CLOUD._getToken=async()=>null; CLOUD._jetonEtranger='';
