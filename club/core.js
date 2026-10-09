@@ -174,15 +174,17 @@ const LEVELS = [
 ];
 
 function emptyState() {
-  return {
+  const st = {
     meta: { version: 1, createdAt: Date.now() },
     clubs: {}, users: {}, kpis: JSON.parse(JSON.stringify(DEFAULT_KPIS)),
     targets: {}, entries: {}, imports: {}, monthly: {}, base: {},
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {},
   };
+  if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
+  return st;
 }
 function defaultLibrary() {
   const lib = {}; let n = 0;
@@ -430,6 +432,7 @@ function normalizeState(st) {
   if (st.kpis) for (const k of Object.values(st.kpis)) if (k && k.emoji !== undefined) { if (!k.icon) k.icon = KPI_ICON[k.id] || 'target'; delete k.emoji; }
   const base = emptyState();
   for (const k of Object.keys(base)) if (st[k] == null) st[k] = base[k];
+  if (typeof productFill === 'function') productFill(st);
   if (!st.tasks.library) st.tasks.library = defaultLibrary();
   if (!st.tasks.plan) st.tasks.plan = {};
   if (!st.tasks.done) st.tasks.done = {};

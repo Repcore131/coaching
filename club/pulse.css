@@ -1121,3 +1121,14 @@ html.is-demo #offline-bar { top: calc(var(--demo-h) + 8px); }
 html.is-demo .overlay, html.is-demo .cgu-gate, html.is-demo .tour { top: calc(var(--demo-h) + env(safe-area-inset-top, 0px)); }
 @media (max-width: 960px) { html.is-demo .side { height: auto; bottom: 0; } }
 @media (max-width: 420px) { #demo-bar { font-size: 12px; gap: 10px; padding-left: 12px; padding-right: 12px; } #demo-bar .btn { font-size: 12px; padding: 4px 10px; } }
+
+/* ── Suivi produit (#/produit) ── */
+.prod-count { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.prod-count .prod-devant::before { background: var(--ok); }
+.prod-count .prod-derriere::before { background: var(--bad); }
+.prod-t td { vertical-align: middle; }
+.prod-t td:first-child .input { min-width: 190px; font-weight: 600; }
+.prod-t td:nth-child(3) .input { min-width: 240px; width: 100%; }
+.prod-st.prod-devant { border-color: var(--ok); }
+.prod-st.prod-derriere { border-color: var(--bad); }
+@media (max-width: 640px) { .prod-count { gap: 8px; } .prod-count .rc-tile { padding: 12px; } }

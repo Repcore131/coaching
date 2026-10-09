@@ -213,6 +213,7 @@ function renderNowInner() {
   if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;
   if (!PAGES[r] || PAGES[r].auth === false) r = 'home';
   if (PAGES[r].manager && !isManager()) r = 'home';
+  if (PAGES[r].creator && !isCreator()) { r = 'home'; history.replaceState(null, '', location.pathname + location.search + '#/home'); }
   const keepScroll = UI._lastRoute === r ? window.scrollY : 0;
   const active = document.activeElement; const focusKey = active && active.dataset ? active.dataset.focus : null;
   app.innerHTML = shell(r, PAGES[r].render(args));
