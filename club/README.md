@@ -69,6 +69,11 @@ un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurit
 ## Deux modes
 
 - **Local** (par défaut) : les données restent dans le navigateur. Idéal pour essayer (bouton « données de démonstration »).
+- **Démonstration** (`?demo=1` ou bouton « Voir la démo » de la connexion) : à montrer à un prospect. Jeu fictif
+  généré par `seedDemo()` (`demo.js`) : « Club Démo Centre », 6 commerciaux, 3 mois d'historique, 40 relances,
+  12 impayés, 8 résiliations en cours, 2 défis. Ouvert sans connexion, aucun appel Firebase, tout le stockage du
+  navigateur passe par la seule clé `fp_demo`, ni logo ni nom de l'enseigne, bandeau « Données fictives de
+  démonstration » avec « Quitter la démo ». Recharger la page reste en démonstration.
 - **Partagé** (site en ligne) : base Firebase repcore-sync, nœud `/pulse`. Connexion e-mail + code depuis n'importe quel appareil : la clé SHA-256(e-mail|code) ouvre `/pulse_boot`, règles posées par `outils/fitpulse-serveur.mjs` (lancé à chaque mise en ligne et par `fitpulse-mail.yml`).
 
 ## Mettre en ligne (vraie adresse)

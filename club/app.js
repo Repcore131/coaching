@@ -12,6 +12,7 @@
     if (off) addEventListener('online', () => location.reload(), { once: true });
     return;
   }
+  if (DEMO) demoStart();
   if (backend.mode === 'firebase' && backend.user && !S) { db.replace(emptyState()); }
   // Premier lancement avec des comptes declares : le club et les comptes sont
   // crees d'office, on arrive directement sur la connexion.

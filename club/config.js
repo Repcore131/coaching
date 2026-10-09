@@ -11,7 +11,9 @@
 (function () {
   const h = location.hostname, q = new URLSearchParams(location.search);
   const enLigne = /\.(web\.app|firebaseapp\.com)$/.test(h) || q.get('partage') === '1';
-  window.PARKPULSE_FIREBASE = enLigne && q.get('demo') !== '1' ? {
+  // MODE DEMONSTRATION (?demo=1) : donnees fictives, aucune base, voir demo.js.
+  window.PARKPULSE_DEMO = q.get('demo') === '1';
+  window.PARKPULSE_FIREBASE = enLigne && !window.PARKPULSE_DEMO ? {
     apiKey: 'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
     authDomain: 'repcore-sync.firebaseapp.com',
     databaseURL: 'https://repcore-sync-default-rtdb.firebaseio.com',
@@ -49,3 +51,11 @@ window.PARKPULSE_ASSETS = {
   login: 'assets/hero-login.jpg',
   logo: 'assets/logo-fitness-park.svg',
 };
+
+// Demonstration : ni comptes reels, ni club reel, ni logo de l'enseigne.
+if (window.PARKPULSE_DEMO) {
+  window.PARKPULSE_ACCOUNTS = [];
+  window.PARKPULSE_CLUB = { id: 'demo-centre', name: 'Club Démo Centre', address: '1 place Centrale', city: 'Démoville' };
+  window.PARKPULSE_ASSETS.logo = null;
+  window.PARKPULSE_MAIL_AUTO = false;
+}

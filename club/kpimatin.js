@@ -241,7 +241,7 @@ function kmSyncCard() {
     <div class="row wrap" style="gap:8px;margin:4px 0 10px"><button class="btn sm primary" data-act="rsmSync">${ico('upload')} Lancer la mise à jour</button></div>
     ${armeeLigne}${etatLigne}
     <div style="padding:10px 12px;border:1px solid ${attente ? 'var(--warn)' : 'var(--line)'};border-radius:10px;${attente ? 'background:var(--warn-soft)' : ''}">
-      <b>Code Resamania</b> <span class="muted small">— dès que le robot démarre, Resamania vous envoie le code par e-mail : tapez-le ici et validez <b>sous 10 minutes</b>.</span>
+      <b>Code Resamania</b> <span class="muted small">Dès que le robot démarre, Resamania vous envoie le code par e-mail : tapez-le ici et validez <b>sous 10 minutes</b>.</span>
       <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:180px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div></div>`;
 }
 ACTIONS.rsmSync = () => { if (!isManager()) return; const c = kmProchainCreneau().toTimeString().slice(0, 5).replace(':', ' h '); db.set(['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }); toast(`Mise à jour armée : le robot démarre vers ${c}. Restez sur cette page et gardez le code Resamania à portée.`); };
