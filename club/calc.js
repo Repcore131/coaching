@@ -513,6 +513,15 @@ function loyaltyTasks(clubId) {
       if (Number(c.balance) > 0) cand.push({ type: 'impaye', due: t, since: c.balanceAt || '2000-01-01', amount: Number(c.balance) });
       if (c.noMandate) cand.push({ type: 'mandat', due: t, since: c.noMandateAt || '2000-01-01' });
       for (const x of cand) {
+        // Impayé : le dossier (dunning) fait foi ; Rétention n'en tient pas un second état.
+        if (x.type === 'impaye') {
+          const H = (c.dunning && c.dunning.history || []).filter(h => h && h.outcome).sort((a, b) => b.at - a.at);
+          const acts = H.map(h => ({ at: h.at, userId: h.by, outcome: h.outcome, note: h.note || '', dun: true }));
+          const st = typeof dunStatus === 'function' ? dunStatus(c) : 'arelancer';
+          const nx = c.dunning && c.dunning.next && c.dunning.next > t ? c.dunning.next : null;
+          const task = { client: c, ...x, acts, failed: typeof dunTentatives === 'function' ? dunTentatives(c).length : 0, state: st === 'perdu' ? 'lost' : 'todo', nextDate: nx, key: `${c.id}|impaye` };
+          task.valeurEnJeu = valueAtStake(task); out.push(task); continue;
+        }
         const sinceTs = dateOf(x.since).getTime();
         const cut = x.step ? dateOf(addDays(c.start, SUIVI_COUPURE)).getTime() : 0;
         let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs && (!x.step || (a.step ? a.step === x.step : x.step === 15 ? a.at < cut : a.at >= cut))).sort((a, b) => b.at - a.at);

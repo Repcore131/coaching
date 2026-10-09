@@ -334,6 +334,8 @@ function relSheet(key, channel = 'call') {
   const rl = relByKey(key); if (!rl) return;
   // prospect : la feuille dédiée (cases appel 1, appel 2, vocal, SMS, comportement, suite)
   if (rl.kind === 'prospect' && typeof prospSheet === 'function' && S.prospects[rl.refId]) return prospSheet(rl.refId);
+  // impayé : la feuille du dossier (dunning.history), la même que sur Impayés et Rétention
+  if (rl.kind === 'impaye' && rl.clientId && typeof dunSheet === 'function') return dunSheet(rl.clientId);
   const outs = ['joint', 'messagerie', 'pasreponse', 'mauvaisnumero', 'rappeler', ...(KIND_OUTCOMES[rl.kind] || []), 'refus', 'stop'];
   const motifs = (REFUS_MOTIFS[rl.kind] || (() => ['Pas intéressé', 'Autre']))();
   openModal({ title: `Résultat · ${rl.name}`, drawer: true, body: `<form id="rsf" class="grid">

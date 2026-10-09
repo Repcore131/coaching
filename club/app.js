@@ -32,6 +32,8 @@
     const cid = safeLS.get('fitpulse.club');
     if (ME && cid && S.clubs[cid] && (inClub(ME, cid) || ME.role === 'createur')) CLUB = S.clubs[cid];
   }
+  // Migrations uniques (drapeau dans les données, idempotentes) une fois connecté.
+  if (S && ME && typeof migrerLoyaltyImpayes === 'function') { const m = migrerLoyaltyImpayes(); if (m.length) db.batch(m); }
   db.onChange(render);
   render();
 })();

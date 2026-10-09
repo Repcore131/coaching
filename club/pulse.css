@@ -1332,3 +1332,16 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .depuis { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .depuis.warn { color: var(--warn); font-weight: 600; }
 .depuis.bad { color: var(--bad); font-weight: 700; }
+/* Feuille de résultat d'un impayé : gros boutons (56 px), script replié sur 2 lignes */
+.dsheet { display: grid; gap: 10px; }
+.dsheet-script summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; color: var(--muted); font-size: var(--t-13, 13px); list-style: none; }
+.dsheet-script summary::-webkit-details-marker { display: none; }
+.dsheet-script[open] summary { display: none; }
+.dsheet-outs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dsheet-out { min-height: 56px; font-size: var(--t-16, 16px); justify-content: center; white-space: normal; }
+.dsheet-out:first-child { grid-column: 1 / -1; }
+.dsheet-step { display: grid; gap: 8px; }
+.dsheet-ok { min-height: 52px; justify-content: center; }
+.dsheet-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dsheet-chips .btn { min-height: 48px; justify-content: center; }
+.dhist { padding: 9px 0; border-bottom: 1px solid var(--line); }

@@ -74,3 +74,21 @@ test('point 5 : incident depuis 69 jours, acompte : « 69 j », firstIncidentAt 
   importInc(run, csv); assert.equal(run(`S.clients['${id}'].firstIncidentAt`), d0); assert.equal(run(`recoveryDelay('k', '${r1.slice(0, 7)}')`), del);
   assert.equal(run(`recoveryDelay('k', '1999-01')`), null);
 });
+test('point 6 : « Pas de réponse » noté dans Rétention apparaît côté Impayés ; aucun « Joint, OK » ; mêmes comptes', () => {
+  const run = appli({ clients: { c1: client(), c2: client({ id: 'c2', num: '5002', balance: 30 }), c3: client({ id: 'c3', num: '5003', balance: 0 }) } });
+  run(`db.batch(dunIssueOps(S.clients.c1, 'pasreponse'))`);
+  const h = J(run, `S.clients.c1.dunning.history.slice(-1)[0]`); assert.equal(h.outcome, 'pasreponse'); assert.equal(h.by, 'u'); assert.ok(h.at);
+  assert.equal(run(`S.clients.c1.dunning.status`), 'relance'); assert.ok(run(`S.clients.c1.dunning.next`));
+  const t = J(run, `loyaltyTasks('k').find(x => x.type === 'impaye' && x.client.id === 'c1').acts[0].outcome`); assert.equal(t, 'pasreponse');
+  run(`UI.loyType = 'impaye'`); const html = run(`loyTasks(loyaltyTasks('k').filter(t => t.state === 'todo'))`);
+  assert.doesNotMatch(html, /data-o="ok"|Joint, renouvelle|RDV pris/); assert.match(html, /data-act="dunSheet"/);
+  assert.equal(run(`loyaltyTasks('k').filter(t => t.type === 'impaye' && t.state === 'todo').length`), run(`dunRows('k').filter(c => Number(c.balance) > 0 && dunStatus(c) !== 'perdu').length`));
+  assert.match(run(`(() => { UI.dunFilter = 'todo'; return dunTable(); })()`), /data-act="dunHistOpen"/);
+  assert.equal(J(run, `Object.keys(DUN_OUTCOMES).filter(k => /joint|rdv/i.test(k) && DUN_OUT_ORDRE.includes(k))`).length, 0);
+});
+test('point 6 : migration des anciennes actions Rétention de type impayé, une seule fois', () => {
+  const run = appli({ clients: { c1: client() }, loyalty: { l1: { id: 'l1', clientId: 'c1', type: 'impaye', outcome: 'noanswer', userId: 'v', at: 1000 }, l2: { id: 'l2', clientId: 'c1', type: 'suivi', outcome: 'ok', userId: 'v', at: 2000 } } });
+  run(`db.batch(migrerLoyaltyImpayes())`); assert.equal(run(`S.clients.c1.dunning.migratedLoyalty`), true);
+  assert.deepEqual(J(run, `S.clients.c1.dunning.history.map(h => h.outcome)`), ['pasreponse']);
+  assert.equal(J(run, `migrerLoyaltyImpayes()`).length, 0);
+});
