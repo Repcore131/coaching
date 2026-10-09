@@ -398,7 +398,7 @@ localBackend.precreate = async () => {};
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
 // En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
 // leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
-const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, product: `orgs_product/${ORG}`, benchmark: 'benchmark' } : { product: 'pulse_product', benchmark: 'benchmark' };
+const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, info: `orgs/${ORG}/info`, product: `orgs_product/${ORG}`, benchmark: 'benchmark' } : { product: 'pulse_product', benchmark: 'benchmark' };
 const SIDE_ROLE = { product: 'createur' }; // lecture réservée à ce rôle (sinon : tout membre)
 const SIDE_CACHE = {};
 function sideApply(st) { if (!st) return; for (const k of Object.keys(sidePaths())) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }

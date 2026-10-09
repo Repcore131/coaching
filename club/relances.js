@@ -246,7 +246,7 @@ PAGES.relances = {
     if (seg0 === 'resiliations') return head + PAGES.resiliations.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'impayes') return head + PAGES.impayes.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'perf') return head + relPerf();
-    if (seg0 === 'prospects') return head + prospRender();
+    if (seg0 === 'prospects') return head + `<div class="row" style="margin-top:10px">${seg('prMode', [['liste', 'Liste à relancer'], ['colonnes', 'Colonnes par étape']], UI.prMode || 'liste')}</div>` + (UI.prMode === 'colonnes' ? prospColonnes() : prospRender());
     if (seg0 === 'retention') return head + PAGES.loyalty.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     const Q = relQueue(CLUB.id, scope);
     const kf = UI.relKind || 'all';

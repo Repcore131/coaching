@@ -113,6 +113,13 @@ PAGES.recap = {
         ${tile('Churn en euros', ch == null ? 'n.d.' : fmtE(ch), ch == null ? '' : delta(ch, chP, { up: false, unit: 'eur' }), 'mensualités perdues par les résiliations du mois')}
         ${tile('Valeur d’un adhérent', fmtE(Math.round(prixMoyen(CLUB.id) * dureeVieMois(CLUB.id))), '', `${plur(dureeVieMois(CLUB.id), 'mois', 'mois')} de durée de vie moyenne`)}`; })()}
       </div>
+      ${(() => { const RR = resRecap(CLUB.id, mk); return `<div class="card rc-res" style="margin-bottom:18px"><div class="race-h"><div><div class="eyebrow">${esc(monthLabel(mk))}</div><h3>Résiliations</h3></div><span class="spacer"></span>${isManager() ? `<label class="small row" style="gap:6px">Préavis minimum <input class="input sm" style="width:64px" type="number" min="0" max="120" value="${RR.seuil}" data-change="preavisSet"> jours</label>` : `<span class="muted small">préavis minimum ${RR.seuil} jours</span>`}</div>
+        <div class="rc-grid">
+          ${tile('Préavis non respecté', `${RR.nonRespecte.length}<small> / ${RR.avecDate.length}</small>`, '', `demandes du mois avec moins de ${RR.seuil} jours entre réception et date d’effet`)}
+          ${tile('Sans date de réception', String(RR.sansDate.length), '', 'comptées à part, exclues du calcul du préavis')}
+          ${tile('Durée de vie médiane', RR.dureeMediane == null ? 'n.d.' : plur(RR.dureeMediane, 'mois', 'mois'), '', `de l’inscription à la résiliation (${plur(RR.durees.length, 'adhérent', 'adhérents')} parti${RR.durees.length > 1 ? 's' : ''} ce mois)`)}
+          ${tile('Taux de sauvetage', fmtP(F.tauxSauvetage), '', `${plur(F.sauvees, 'sauvée', 'sauvées')} sur ${F.sauvees + F.resiliees} issues`)}
+        </div>${RR.nonRespecte.length ? `<details style="margin-top:8px"><summary class="small">Voir les ${RR.nonRespecte.length} dossiers</summary><div class="small">${RR.nonRespecte.map(r => `${esc(r.client || 'Adhérent')} : reçue le ${esc(dmy(r.date))}, effet le ${esc(dmy(r.effective))} (${r.preavis} j)`).join('<br>')}</div></details>` : ''}</div>`; })()}
 
       <div class="g12">
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Entrées et sorties</h3></div><span class="spacer"></span><span class="muted small">solde</span> ${(() => { const out = x => x.sorties ?? x.resiliees; return delta(F.entrants - out(F), P.entrants - out(P)); })()}</div>
@@ -138,3 +145,18 @@ PAGES.recap = {
   },
 };
 ACTIONS.recapPrint = () => { document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50); };
+
+// Bloc Résiliations du récap : préavis (seuil réglable), dossiers sans date de réception
+// comptés à part, durée de vie médiane d'un abonné parti, taux de sauvetage (monthFigures).
+function resRecap(clubId, mk) {
+  const seuil = Number(deepGet(S, ['clubs', clubId, 'preavisJours'])) || 30;
+  const L = resList(clubId).filter(r => r.date ? r.date.slice(0, 7) === mk : (r.effective || '').slice(0, 7) === mk);
+  const sansDate = L.filter(r => !r.date);
+  const avecDate = L.filter(r => r.date && r.effective).map(r => ({ ...r, preavis: Math.round((dateOf(r.effective) - dateOf(r.date)) / 864e5) }));
+  const nonRespecte = avecDate.filter(r => r.preavis < seuil);
+  const byName = {}; clubClients(clubId).forEach(c => { byName[tokensKey(c.name || '')] = c; });
+  const durees = resList(clubId).filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date || '').slice(0, 7) === mk).map(r => { const c = (r.clientId && S.clients[r.clientId]) || byName[tokensKey(r.client || '')]; const fin = r.effective || r.date; if (!c || !c.start || !fin || fin < c.start) return null; return Math.round((dateOf(fin) - dateOf(c.start)) / (30.44 * 864e5) * 10) / 10; }).filter(x => x != null);
+  const t = durees.slice().sort((a, b) => a - b); const m = Math.floor(t.length / 2); const dureeMediane = t.length ? Math.round(t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2) : null;
+  return { seuil, demandes: L, sansDate, avecDate, nonRespecte, durees, dureeMediane };
+}
+ACTIONS.preavisSet = el => { const v = Math.max(0, Math.min(120, Math.round(Number(el.value) || 0))); db.set(['clubs', CLUB.id, 'preavisJours'], v || null); };

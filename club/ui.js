@@ -123,6 +123,7 @@ const NAV = [
   ['leaderboard', 'Classement', 'trophy'],
   ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
+  ['rapporte', 'Ce que Fit Pulse a rapporté', 'euro', true],
   ['team', 'Pilotage équipe', 'users', true],
   ['equipe', 'Matrice équipe', 'chart', true],
   ['b2b', 'Entreprise', 'briefcase'],
