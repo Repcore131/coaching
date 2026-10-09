@@ -14,93 +14,26 @@ une, puis `node scripts/tarifs.mjs` et `node scripts/verif/tarifs.mjs`.
 
 ---
 
-## 1. L'essai de la personne invitée : 1 mois ou 2 mois ?
+## 1 à 4. Tranchés par Kevin le 09/10/2026 — appliqués
 
-Cela concerne la personne qui arrive par un lien de parrainage (`?ref=`) ou par
-un code ambassadeur dont l'avantage est `essai+1mois`.
+Dans les quatre cas, ce qui tournait déjà est gardé ; les textes qui le
+contredisaient ont été réécrits (FAQ de la landing, /i, /a, app, CGV §4).
 
-| Ce qui dit **2 mois** (1 mois d'essai + 1 mois offert) | Ce qui dit **1 mois** (le mois d'essai, « offert par l'ami ») |
-|---|---|
-| `tarifs.json` : `essai_parrainage.moisEnPlus = 1` | `app/rc-core.*.js`, commentaire « LES AMBASSADEURS » : « Kevin, 28/09/2026 : un mois, pas deux — le même que le parrainage, `TARIFS.essai_parrainage.moisEnPlus = 0` » |
-| Worker `cloudflare/src/metier.js` : `BONUS_ESSAI_JOURS = 30` | `app/rc-core.*.js`, commentaire « LE PARRAINAGE » : « un mois, pas deux : `OFFRES.essai_parrainage` vaut 0 » |
-| CGV `terms.html` §4 : « un mois de plus […], soit 2 mois » | `index.html`, FAQ (visible et JSON-LD) : « Son lien t'offre ton premier mois » |
-| `i/index.html` : « 2 mois d'accès complet, dont un offert par ton ami » | `i/index.html` (script) : « <prénom> t'offre ton premier mois » |
-| App : `essaiDuree` (60 jours pour un filleul), carte d'invitation (`invitationDonnees`), `texteEssaiRestant` (« deux mois ») | App : `parrainageMessage` : « ton premier mois est offert » ; `a/index.html` : « leur premier mois offert grâce à toi » |
-| `index.html`, commentaire du script d'invitation : « son essai est doublé » | |
+1. **Essai de la personne invitée : 2 mois** (l'essai + un mois offert par
+   l'ami ou l'ambassadeur « essai+1mois »). App : `moisInvite()`,
+   `offreMoisInvite()`, `texteMoisOfferts()` lisent `tarifs.json`.
+2. **Récompense du parrain : aux quatre premières séances ou au premier
+   paiement**, le premier des deux, une fois par invité (worker inchangé).
+3. **Commission des ambassadeurs : 20 %, puis 25 % au-delà de 50 payants,
+   pendant 12 mois** (`AMB_DEFAUTS` inchangé).
+4. **Premier mois d'Ultime à moitié prix : après un suivi ET avec un code
+   ambassadeur « ultime_demi »** (CGV §4 complétée).
 
-**Ce qui tourne réellement :** 2 mois (`tarifs.json` et le worker).
+## 5. Abonnement sans engagement et annuel remisé — PUBLIÉ le 09/10/2026
 
-- **Option A — 2 mois.** Rien à changer dans `tarifs.json` ni dans le worker.
-  À réécrire : la FAQ de `index.html` (par exemple « Son lien t'offre un mois
-  de plus : <span data-nb="essai.moisParraine">2</span> mois, … »), le texte
-  du script de `i/index.html`, `parrainageMessage`, la note de `a/index.html`,
-  et les deux commentaires de rc-core qui disent `moisEnPlus = 0`.
-- **Option B — 1 mois.** `tarifs.json` : `essai_parrainage.moisEnPlus = 0` ;
-  worker : `BONUS_ESSAI_JOURS = 0` (puis `wrangler deploy`) ; CGV §4 (la
-  phrase « un mois de plus, soit 2 mois » disparaît) ; `i/index.html` (« 2
-  mois d'accès complet, dont un offert ») ; les tests de rc-core qui jouent
-  60 jours (« Parrainage : sur les 60 jours d'un filleul… »).
-
-## 2. La récompense du parrain : à quel moment ?
-
-| **Au premier paiement** de la personne invitée | **À ses quatre premières séances** |
-|---|---|
-| `index.html`, FAQ (visible et JSON-LD) : « le jour de ton premier paiement, ton ami gagne un mois » | CGV `terms.html` §4 : « lorsque la personne invitée a terminé ses quatre premières séances » |
-| `app/rc-core.*.js`, commentaire « LE PARRAINAGE » : « au PREMIER paiement du filleul, et rien avant (anti-fraude) » | App : `filleulStatut` (« 'actif' : ses quatre premières séances, le mois du parrain est tombé ») ; `essaiDuree` (« 60 aussi pour un parrain à l'essai dont le filleul a fait ses quatre séances ») |
-| `docs/RepCore-Plan-Viralite-Instagram.pdf` : « Récompense décidée : […] au PREMIER paiement du filleul » | |
-
-**Ce qui tourne réellement :** les deux, et c'est le premier des deux qui
-compte (`cloudflare/src/metier.js` : `parrainageSeuil` à 4 séances,
-`parrainagePaiement` au premier paiement, un seul mois par personne invitée).
-
-- **Option A — quatre séances (ou le premier paiement s'il arrive avant).**
-  C'est ce que fait le worker. À réécrire : la FAQ de `index.html` et le
-  commentaire de rc-core ; la CGV peut ajouter « ou à son premier paiement
-  s'il intervient avant ».
-- **Option B — premier paiement seulement.** Retirer le crédit à quatre
-  séances du worker (`parrainageSeuil` et son appel dans le cron, puis
-  `wrangler deploy`), réécrire la CGV §4, `filleulStatut` et le texte de
-  l'écran parrainage.
-
-## 3. La commission des ambassadeurs : 20 % / 25 % ou 30 % ?
-
-| **20 %, puis 25 % au-delà de 50 payants, pendant 12 mois** | **30 %** |
-|---|---|
-| `app/rc-core.*.js` : `AMB_DEFAUTS = {commissionPct:20, palierPct:25, palierSeuil:50, dureeMois:12}` | Cité dans la demande du 09/10/2026. **Je n'ai trouvé aucune source de 30 % dans le dépôt** (recherche dans `*.md`, `*.html`, `*.js`, `*.mjs` et le texte des PDF de `docs/`). |
-| `functions/README.md`, `functions/test/ambassadeurs.test.js`, `app/tests.js` | |
-| `a/index.html` affiche le taux de la fiche de chaque ambassadeur (pas de valeur en dur) | |
-
-Chaque ambassadeur a son propre taux, modifiable dans l'écran admin : la
-valeur par défaut ne change que les fiches **créées après coup**.
-
-- **Option A — 20 / 25 %.** Rien à changer. Dire d'où vient le 30 % pour le
-  corriger à la source (contrat, message, document hors dépôt).
-- **Option B — 30 %.** Changer `AMB_DEFAUTS` (et dire si le palier 25 %
-  disparaît ou passe à une autre valeur), les tests cités, `functions/README.md`,
-  et les fiches des ambassadeurs déjà créés (une à une dans l'écran admin).
-- **Dans les deux cas :** la commission n'est pas dans `tarifs.json`. L'y
-  mettre ferait contrôler ce taux comme les prix ; je ne l'ai pas fait sans ton
-  accord.
-
-## 4. Le premier mois d'Ultime à moitié prix : pour qui ?
-
-| **Après un suivi par un coach, une seule fois** | **Avec un code ambassadeur « ultime_demi »** |
-|---|---|
-| CGV `terms.html` §4 : « La personne dont le suivi par un coach prend fin peut se voir proposer, une seule fois… » | `i/index.html` : « L'OFFRE DE LANCEMENT d'un code ambassadeur ultime_demi » (« Avec ce code : ton 1er mois d'Ultime à 12,45 € ») |
-| `scripts/paypal_plans.mjs` : description du plan « Premier mois d'Ultime à moitié prix après un suivi » | Worker `cloudflare/src/metier.js` : `AVANTAGES_AMB = ['essai+1mois', 'ultime_demi']` ; `a/index.html` (« leur 1er mois d'Ultime à moitié prix ») |
-
-Le prix, lui, est cohérent partout (`ultime_demi.premierMois`), et
-l'engagement aussi : la CGV dit « durée, reconduction et résiliation sont
-celles de l'abonnement Ultime ». J'ai donc corrigé le « sans engagement » de
-`i/index.html` en « engagement 12 mois », sans attendre ce point.
-
-- **Option A — les deux publics.** Compléter la CGV §4 : « … ou la personne
-  qui s'inscrit avec un code ambassadeur portant cet avantage ».
-- **Option B — après un suivi seulement.** Retirer `ultime_demi` de
-  `AVANTAGES_AMB` (worker) et de l'écran admin des ambassadeurs, et le bloc
-  `offre-demi` de `i/index.html`.
-
-## 5. Abonnement sans engagement et annuel remisé — à confirmer AVANT de publier
+**a et b réglés** : 95 € et 249 € confirmés par Kevin, plans PayPal créés
+(`P-5WS33005ML186714UNLET2VI`, `P-2NY44820N2546090CNLET2VQ`), site et worker
+déployés le 09/10/2026, date de la version des CGV.
 
 Préparé sur la branche le 09/10/2026, **pas encore en ligne** (rien n'est
 publié tant que la branche n'est pas fusionnée et déployée). Valeurs posées
