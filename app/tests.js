@@ -60667,8 +60667,8 @@ async function testExercices(){
       if(surTitreRecord({})!=='NOUVEAU RECORD'||surTitreRecord({objectif:true})!=='OBJECTIF ATTEINT') return _echec('sur-titre');
       if(_dessinerCarteRecord.toString().indexOf('surTitreRecord(r)')<0) return _echec('la carte ne lit pas le sur-titre');
       const obj={nm:'Squat',charge:102.5,reps:5};
-      if(!objectifAtteint(obj,{nm:'Squat',curMax:102.5})||!objectifAtteint(obj,{nm:'Squat',curMax:105})) return _echec('atteint');
-      if(objectifAtteint(obj,{nm:'Squat',curMax:101.25})||objectifAtteint(obj,{nm:'Presse',curMax:200})||objectifAtteint(null,{nm:'Squat',curMax:200})) return _echec('pas atteint');
+      if(!objectifSeanceAtteint(obj,{nm:'Squat',curMax:102.5})||!objectifSeanceAtteint(obj,{nm:'Squat',curMax:105})) return _echec('atteint');
+      if(objectifSeanceAtteint(obj,{nm:'Squat',curMax:101.25})||objectifSeanceAtteint(obj,{nm:'Presse',curMax:200})||objectifSeanceAtteint(null,{nm:'Squat',curMax:200})) return _echec('pas atteint');
       _htmlRecordsFin({records:[{nm:'Squat',curMax:102.5,histMax:100,gain:2.5},{nm:'Presse',curMax:150,histMax:140,gain:10}],objectif:obj},_RT,'sd');
       const l=_recordsAffiches.sd.liste;
       const sq=l.find(r=>r.nm==='Squat'), pr=l.find(r=>r.nm==='Presse');
@@ -76234,9 +76234,10 @@ async function testExercices(){
     });
     // ── L'interface ──
     ok('1956 — galerie : sept cartes, la fiche porte règles, modes et classement',()=>{
-      const sU=currentUser, svG=window.go;
+      // Le classement est lu à part : sa requête ne doit pas déborder sur les tests suivants.
+      const sU=currentUser, svG=window.go, svL=window.lireClassementStreet;
       try{
-        window.go=()=>{};
+        window.go=()=>{}; window.lireClassementStreet=async()=>[];
         currentUser=_dsU();
         defiStreetEnregistrer(currentUser,'the100','solo',{valide:true,score:754,certifie:true},1);
         ouvrirDefisStreet();
@@ -76251,7 +76252,7 @@ async function testExercices(){
         ouvrirFormatStreet('onTheBar');
         if(/En équipe/.test(document.getElementById('modal-overlay').textContent)) return _echec('équipe sur un format filmé');
         return true;
-      }finally{ try{ closeModal(); }catch(e){} currentUser=sU; window.go=svG; }
+      }finally{ try{ closeModal(); }catch(e){} currentUser=sU; window.go=svG; window.lireClassementStreet=svL; }
     });
     okA('1956 — chrono solo : départ, étapes cochées, arrêt, score, record, carte story',async()=>{
       const sU=currentUser, svG=window.go, svS=window.saveUserOuDire;
@@ -76770,6 +76771,77 @@ async function testExercices(){
         if(document.getElementById('sn-0')) return _echec('bandeau resté');
         return true;
       }finally{ t.remove(); document.getElementById('sn-0')?.remove(); woState=svW; window.woPersist=svP; }
+    });
+    // ══ BUILD 1962 — OBJECTIF ATTEINT, CAP SUIVANT, RÉACTIVITÉ ═══════════════════
+    // 14 semaines de pesées quotidiennes, de 82,4 à 76,2 kg.
+    const _p62=(()=>{ const out=[], t0=Date.parse('2027-01-01T12:00:00Z'); for(let i=0;i<=98;i++) out.push({date:new Date(t0+i*864e5).toISOString().slice(0,10),v:Math.round((82.4-6.2*i/98)*100)/100}); return out; })();
+    const _d62={fin:'2027-04-09',poids:_p62,debut:{date:'2027-01-01',poids:82.4,taille:92},taille:[{date:'2027-01-01',v:92},{date:'2027-04-02',v:85}]};
+    ok('1962 — objectifAtteint, poids et tour de taille : tendance 7 jours, preuves chiffrées',()=>{
+      let r=objectifAtteint({type:'poids',cible:76.5},_d62);
+      // La preuve porte sur la MOYENNE des 7 derniers jours (76,4), pas sur la dernière pesée.
+      if(r.etat!=='atteint'||!r.preuves.length||r.preuves[0]!=='−6 kg en 14 semaines (82,4 → 76,4 kg)') return _echec(JSON.stringify(r));
+      if(objectifAtteint({type:'poids',cible:75.5},_d62).etat!=='proche') return _echec('proche');
+      if(objectifAtteint({type:'poids',cible:70},_d62).etat!=='loin') return _echec('loin');
+      r=objectifAtteint({type:'taille',cible:86},_d62);
+      if(r.etat!=='atteint'||r.preuves[0]!=='Tour de taille −7 cm en 14 semaines (92 → 85 cm)') return _echec(JSON.stringify(r));
+      if(objectifAtteint({type:'taille',cible:84.5},_d62).etat!=='proche') return _echec('taille proche');
+      // Une prise : le sens se lit du départ.
+      if(objectifAtteint({type:'poids',cible:80},{fin:'2027-04-09',poids:_p62.map(x=>({date:x.date,v:160-x.v})),debut:{date:'2027-01-01',poids:77.6}}).etat!=='atteint') return _echec('prise');
+      return true;
+    });
+    ok('1962 — sans preuve, c’est « loin » : trop peu de pesées, aucune mesure, pas de record fiable',()=>{
+      const peu=_p62.slice(-2);
+      let r=objectifAtteint({type:'poids',cible:90},{fin:'2027-04-09',poids:peu});
+      if(r.etat!=='loin'||r.preuves.length) return _echec('2 pesées : '+JSON.stringify(r));
+      if(objectifAtteint({type:'taille',cible:90},{fin:'2027-04-09',taille:[{date:'2027-01-01',v:85}]}).preuves.length) return _echec('mesure trop ancienne');
+      r=objectifAtteint({type:'record',cible:100},{fin:'2027-04-09',record:null});
+      if(r.etat!=='loin'||r.preuves.length) return _echec('record');
+      if(objectifAtteint({type:'semaines',cible:4},{semaines:0}).etat!=='loin'||objectifAtteint(null,{}).etat!=='loin'||objectifAtteint({type:'inconnu',cible:3},{}).etat!=='loin') return _echec('vide');
+      return true;
+    });
+    ok('1962 — record visé et semaines tenues',()=>{
+      let r=objectifAtteint({type:'record',cible:150,exo:'SQUAT'},{record:{exo:'SQUAT',e1:147.5}});
+      if(r.etat!=='proche'||!/squat : 147,5 kg estimés/.test(r.preuves[0])) return _echec(JSON.stringify(r));
+      if(objectifAtteint({type:'record',cible:145},{record:{e1:147.5}}).etat!=='atteint'||objectifAtteint({type:'record',cible:160},{record:{e1:147.5}}).etat!=='loin') return _echec('record');
+      const t=Date.parse('2027-04-07T12:00:00'), l=_lundiDe(new Date(t)).getTime(), s=[];
+      for(let w=1;w<=12;w++) for(let k=0;k<3;k++) s.push({date:l-w*604800000+k*864e5+3600e3});
+      s.push({date:l-13*604800000+3600e3});
+      if(semainesTenues(s,3,t)!==12||semainesTenues(s,4,t)!==0||semainesTenues(s,1,t)!==13) return _echec('semaines : '+semainesTenues(s,3,t));
+      if(objectifAtteint({type:'semaines',cible:12},{semaines:12}).etat!=='atteint'||objectifAtteint({type:'semaines',cible:12},{semaines:11}).etat!=='proche') return _echec('semaines tenues');
+      return true;
+    });
+    ok('1962 — CAPS_SUIVANTS gelés, message pré-rédigé avec les preuves (rien n’est envoyé seul)',()=>{
+      const t=k=>CAPS_SUIVANTS[k].map(c=>c.titre).join(' / ');
+      if(t('seche')!=='Recomposition / Prise propre'||t('prise')!=='Mini-sèche / Cycle de force'||t('force')!=='Compétition / Bloc hypertrophie'||t('forme')!=='Défi 28 jours / Premier test de tractions') return _echec('caps');
+      for(const k of Object.keys(CAPS_SUIVANTS)) for(const c of CAPS_SUIVANTS[k]) if(!Object.isFrozen(c)||!c.duree||!c.pourquoi||!c.premiereEtape) return _echec(k+' : forme');
+      const m=messageCap('Léa',['−6,2 kg en 14 semaines (82,4 → 76,2 kg)','Tour de taille −7 cm'],CAPS_SUIVANTS.seche[0],true);
+      if(!/^Léa, objectif atteint : −6,2 kg en 14 semaines .*Tour de taille −7 cm\./.test(m)||!/La suite que je te propose : Recomposition/.test(m)||!/Première étape/.test(m)) return _echec(m);
+      if(messageCap('',[],null,false)!=='Tu y es presque.\n\nOn en parle ?') return _echec('sans preuve');
+      const o=objectifCapDepuis({taille:'85,5',recordExo:'squat',recordKg:'150',semaines:'12'},5);
+      if(o.erreur||o.objectifCap.taille!==85.5||o.objectifCap.recordExo!=='SQUAT'||o.objectifCap.semaines!==12) return _echec(JSON.stringify(o));
+      if(!objectifCapDepuis({recordKg:'150'}).erreur||!objectifCapDepuis({taille:'20'}).erreur) return _echec('bornes');
+      return true;
+    });
+    ok('1962 — réactivité : délai médian sur 30 jours, demandes ouvertes, fils de messages',()=>{
+      const t=Date.parse('2027-04-09T12:00:00Z'), h=3600e3;
+      const e=[{date:t-2*864e5,reponseDate:t-2*864e5+2*h},{date:t-5*864e5,reponseDate:t-5*864e5+10*h},{date:t-9*864e5,reponseDate:t-9*864e5+30*h},
+        {date:t-12*864e5,reponseDate:t-12*864e5+50*h},{date:t-864e5,reponseDate:null},{date:t-40*864e5,reponseDate:t-40*864e5+h}];
+      const r=reactiviteCoach(e,t);
+      if(r.medianeH!==20||r.n!==4||r.ouverts!==1||r.verdict!=='bon') return _echec(JSON.stringify(r));
+      if(reactiviteCoach([{date:t-864e5,reponseDate:t-864e5+40*h}],t).verdict!=='correct'||reactiviteCoach([{date:t-3*864e5,reponseDate:t}],t).verdict!=='lent') return _echec('verdicts');
+      if(reactiviteCoach([],t).medianeH!==null) return _echec('vide');
+      const t0=1e12, f=delaisDepuisFil([{de:'athlete',at:t0},{de:'athlete',at:t0+h},{de:'coach',at:t0+5*h},{de:'coach',at:t0+6*h},{de:'athlete',at:t0+10*h}]);
+      if(f.paires.length!==1||f.paires[0].reponse-f.paires[0].demande!==5*h||f.ouverts!==1||f.attente!==t0+10*h) return _echec(JSON.stringify(f));
+      return true;
+    });
+    ok('1962 — bilan : fierté et objectif de la semaine, facultatifs, repris dans la réponse du coach',()=>{
+      const u={fname:'Léa',bilans:[],sessions:[]};
+      const b={date:Date.now(),type:'suivi','bil-fierte':'10 tractions d’affilée','bil-objectif-semaine':'3 séances'};
+      const r=brouillonBilan(u,b,{},{});
+      if(!/Ta fierté de la semaine : « 10 tractions d’affilée »/.test(r.texte)||!/Ton objectif pour la semaine prochaine : « 3 séances »/.test(r.texte)) return _echec(r.texte);
+      if(brouillonBilan(u,{date:Date.now(),type:'suivi'},{},{}).repris.length) return _echec('rien à reprendre');
+      if(!BILAN_QUESTIONS.suivi.some(q=>q.k==='bil-fierte')||!BILAN_QUESTIONS.suivi.some(q=>q.k==='bil-objectif-semaine')) return _echec('affichage des réponses');
+      return true;
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

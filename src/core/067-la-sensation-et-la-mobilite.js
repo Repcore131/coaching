@@ -289,7 +289,7 @@ function mobLancer(){
 function _mobTic(){
   const s=_mobEtat; if(!s||!s.fin) return _mobArreter();
   const reste=Math.max(0,Math.ceil((s.fin-Date.now())/1000));
-  const z=document.getElementById('mob-chrono'); if(z) z.textContent=_fmtRepos(reste);
+  const z=document.getElementById('mbs-chrono'); if(z) z.textContent=_fmtRepos(reste);
   if(reste<=0){ _mobArreter(); try{ arcHaptique('finRepos'); }catch(e){} mobSuivante(); }
 }
 function mobSuivante(){
@@ -304,18 +304,18 @@ function rendreMobilite(){
   const z=document.getElementById('mob-contenu'); if(!z) return false;
   const s=_mobEtat; if(!s){ z.innerHTML=''; return false; }
   const E=escapeHtml;
-  const titre='<div class="mob-t">Séance '+s.r.n+' · '+E(s.r.zones.map(k=>MOBILITE_ZONES[k].lib).join(' et '))+'</div>'
-    +'<p class="sub mob-pourquoi">'+(s.profils.length?'Choisie pour ton profil : '+E(s.profils.map(k=>(MORPHO_PROFILS.find(p=>p.cle===k)||{}).lib||k).join(', '))+'.':'Aucun profil fonctionnel actif : les huit séances tournent.')+'</p>';
-  if(s.finie){ z.innerHTML=titre+'<div class="mob-fin">Séance terminée. À demain.</div>'; return true; }
+  const titre='<div class="mbs-t">Séance '+s.r.n+' · '+E(s.r.zones.map(k=>MOBILITE_ZONES[k].lib).join(' et '))+'</div>'
+    +'<p class="sub mbs-pourquoi">'+(s.profils.length?'Choisie pour ton profil : '+E(s.profils.map(k=>(MORPHO_PROFILS.find(p=>p.cle===k)||{}).lib||k).join(', '))+'.':'Aucun profil fonctionnel actif : les huit séances tournent.')+'</p>';
+  if(s.finie){ z.innerHTML=titre+'<div class="mbs-fin">Séance terminée. À demain.</div>'; return true; }
   const e=s.etapes[s.i];
   z.innerHTML=titre
-    +'<div class="mob-etape"><div class="mob-n">'+(s.i+1)+' / '+s.etapes.length+' · '+E(e.lib)+'</div>'
-    +'<div class="mob-ex">'+E(e.exercice)+'</div><p class="mob-c">'+E(e.consigne)+'</p>'
-    +'<div class="mob-chrono" id="mob-chrono" role="timer">'+_fmtRepos(s.fin?Math.max(0,Math.ceil((s.fin-Date.now())/1000)):e.duree)+'</div>'
+    +'<div class="mbs-etape"><div class="mbs-n">'+(s.i+1)+' / '+s.etapes.length+' · '+E(e.lib)+'</div>'
+    +'<div class="mbs-ex">'+E(e.exercice)+'</div><p class="mbs-c">'+E(e.consigne)+'</p>'
+    +'<div class="mbs-chrono" id="mbs-chrono" role="timer">'+_fmtRepos(s.fin?Math.max(0,Math.ceil((s.fin-Date.now())/1000)):e.duree)+'</div>'
     +(s.fin?'<button type="button" class="btn btn-outline" style="width:100%" onclick="mobSuivante()">Suivant</button>'
       :'<button type="button" class="btn btn-red" style="width:100%" onclick="mobLancer()">Lancer</button>'
         +'<button type="button" class="rb-lien" onclick="mobSuivante()">Passer cette étape</button>')
     +'</div>'
-    +'<ol class="mob-liste">'+s.etapes.map((x,i)=>'<li class="'+(i<s.i?'fait':i===s.i?'cours':'')+'">'+E(x.exercice)+'</li>').join('')+'</ol>';
+    +'<ol class="mbs-liste">'+s.etapes.map((x,i)=>'<li class="'+(i<s.i?'fait':i===s.i?'cours':'')+'">'+E(x.exercice)+'</li>').join('')+'</ol>';
   return true;
 }

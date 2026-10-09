@@ -91,6 +91,15 @@
           },
           "$autre": { ".validate": false }
         },
+        // LES OBJECTIFS MESURABLES (build 1962), poses par le coach.
+        "objectifCap": {
+          "taille":    { ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 200" },
+          "recordExo": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+          "recordKg":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 600" },
+          "semaines":  { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 104" },
+          "fixeLe":    { ".validate": "newData.isNumber()" },
+          "$autre":    { ".validate": false }
+        },
         // LES GABARITS DE FORCE (build 1960) : 6 plans au plus, chacun genere
         // (genererGabarit) et borne : 13 semaines, 4 seances, 16 series.
         "gabaritsForce": {

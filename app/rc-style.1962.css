@@ -14139,14 +14139,40 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .sn-act .btn{width:auto;margin:0}
 .sn-act .sub{font-size:var(--fs-xs)}
 div.sn-alerte{font-size:var(--fs-xs);color:var(--orange);margin-top:4px}
-.mob-t{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text-strong)}
-.mob-pourquoi{font-size:var(--fs-xs);margin:2px 0 12px}
-.mob-etape{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center}
-.mob-n{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
-.mob-ex{font-size:var(--fs-lg);font-weight:800;color:var(--text-strong);margin:6px 0}
-.mob-c{font-size:var(--fs-sm);color:var(--text);line-height:1.55;margin:0 0 8px}
-.mob-chrono{font-family:var(--pile-titre);font-size:var(--fs-3xl);color:var(--text-strong);margin:6px 0 12px;font-variant-numeric:tabular-nums}
-.mob-fin{font-size:var(--fs-md);font-weight:800;color:var(--text-strong);text-align:center;padding:20px 0}
-.mob-liste{font-size:var(--fs-xs);color:var(--sub);padding-left:18px;line-height:1.7}
-.mob-liste li.fait{text-decoration:line-through}
-.mob-liste li.cours{color:var(--text-strong);font-weight:800}
+.mbs-t{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text-strong)}
+.mbs-pourquoi{font-size:var(--fs-xs);margin:2px 0 12px}
+.mbs-etape{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center}
+.mbs-n{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.mbs-ex{font-size:var(--fs-lg);font-weight:800;color:var(--text-strong);margin:6px 0}
+.mbs-c{font-size:var(--fs-sm);color:var(--text);line-height:1.55;margin:0 0 8px}
+.mbs-chrono{font-family:var(--pile-titre);font-size:var(--fs-3xl);color:var(--text-strong);margin:6px 0 12px;font-variant-numeric:tabular-nums}
+.mbs-fin{font-size:var(--fs-md);font-weight:800;color:var(--text-strong);text-align:center;padding:20px 0}
+.mbs-liste{font-size:var(--fs-xs);color:var(--sub);padding-left:18px;line-height:1.7}
+.mbs-liste li.fait{text-decoration:line-through}
+.mbs-liste li.cours{color:var(--text-strong);font-weight:800}
+/* LE CAP SUIVANT ET LA RÉACTIVITÉ (build 1962). */
+.cap-carte,.reac-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin:0 0 12px}
+.cap-t,.cap-lab,.reac-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.cap-lab{margin:12px 0 6px}
+.cap-l{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding:4px 0 4px 8px;margin:6px 0}
+.cap-l b{font-size:var(--fs-sm);color:var(--text-strong)}
+.cap-l span{font-size:var(--fs-xs);color:var(--sub)}
+.cap-l.cap-proche{border-left-color:var(--orange)}
+.cap-l.cap-atteint{border-left-color:var(--green)}
+.cap-choix{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.cap-c{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px;background:var(--dark);color:var(--text)}
+.cap-c b{font-size:var(--fs-sm)}
+.cap-c span{font-size:var(--fs-xs);color:var(--sub)}
+.cap-c.actif{border-color:var(--red)}
+.cap-reg{margin-top:10px}
+.cap-reg summary{font-size:var(--fs-xs);font-weight:800;color:var(--sub);cursor:pointer}
+.cap-f{display:grid;gap:8px;margin-top:8px}
+.cap-f label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs)}
+.cap-f .btn{margin:0}
+.reac-v{display:flex;flex-direction:column;gap:2px}
+.reac-v b{font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text-strong)}
+.reac-v span{font-size:var(--fs-xs);color:var(--sub)}
+.reac-v.reac-bon b{color:var(--green)}
+.reac-v.reac-lent b{color:var(--orange)}
+.reac-o{font-size:var(--fs-xs);color:var(--orange);margin-top:6px}
+.reac-p{font-size:var(--fs-xs);color:var(--sub);margin-top:6px}

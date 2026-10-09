@@ -413,6 +413,7 @@ function loadCoachHome(){
   // LE POINT DE LA SEMAINE (05/10/2026) : les résumés du jour, puis la carte.
   // Sans attendre : le tableau de bord ne dépend ni de l'un ni de l'autre.
   try{ majHebdoEntrees().catch(()=>{}); renderPointSemaine().catch(()=>{}); }catch(e){}
+  try{ renderReactivite(); }catch(e){}
   // N1.11 — les trois compteurs sont comptes par agregerPortefeuille, avec
   // les memes fonctions, et rendus par renderPortefeuille depuis
   // renderClientList. Un seul comptage, un seul rendu.

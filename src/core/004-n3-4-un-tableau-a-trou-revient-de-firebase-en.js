@@ -757,6 +757,8 @@ const CHAMPS_SANTE=Object.freeze([
   'masseGrasseLog',
   // L'objectif de poids (05/10/2026) : une cible de poids, donnée de santé.
   'objectifPoids',
+  // Les objectifs mesurables du coach (build 1962) : tour de taille, record, semaines.
+  'objectifCap',
   // Le point de la semaine (lot N1) : la vitesse du poids, semaine par semaine.
   'pointsSemaine','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.

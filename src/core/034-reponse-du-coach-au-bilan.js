@@ -610,9 +610,14 @@ function brouillonBilan(athlete,bilan,signaux,opts){
   const ctx={prenom:u.fname||''};
   const ouv=templateResoudre(String(f.ouverture!=null?f.ouverture:BROUILLON_FORMULES_DEFAUT.ouverture),ctx).texte.trim();
   const clo=templateResoudre(String(f.cloture!=null?f.cloture:BROUILLON_FORMULES_DEFAUT.cloture),ctx).texte.trim();
-  const blocs=[bouge.join(' '),accroche.join(' '),question].filter(Boolean);
+  // BUILD 1962 : la fierté et l'objectif de la semaine, repris tels quels.
+  const repris=[];
+  const _fi=String(b['bil-fierte']||'').trim(), _ob=String(b['bil-objectif-semaine']||'').trim();
+  if(_fi) repris.push('Ta fierté de la semaine : « '+_fi.slice(0,300)+' ». Bravo pour ça.');
+  if(_ob) repris.push('Ton objectif pour la semaine prochaine : « '+_ob.slice(0,300)+' ». On le suit ensemble.');
+  const blocs=[bouge.join(' '),repris.join(' '),accroche.join(' '),question].filter(Boolean);
   const texte=[ouv].concat(blocs,[clo]).filter(Boolean).join('\n\n');
-  return {texte,bouge,accroche,question,signaux:retenus};
+  return {texte,bouge,accroche,question,signaux:retenus,repris};
 }
 
 // La formule du coach : son réglage, sinon celle par défaut.
@@ -1509,7 +1514,10 @@ const BIL_STEPS=[
     `<div>${bC('bil-stress',BIL_OPTS_STRESS.slice())}</div>`+
     _bilSi('bil-stress',bLbl('Peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...'))+
     bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Facultatif...')+
-    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
+    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')+
+    // BUILD 1962 : deux questions facultatives, reprises dans la réponse du coach.
+    bLbl('Ta fierté de la semaine ?')+bTA('bil-fierte','Facultatif...')+
+    bLbl('Ton objectif pour la semaine prochaine ?')+bTA('bil-objectif-semaine','Facultatif...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
   // Rend une chaîne VIDE le reste du temps : bSec n'est même pas appelé, il

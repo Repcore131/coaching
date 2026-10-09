@@ -316,6 +316,7 @@ const ACCUEIL_BLOCS=Object.freeze([
   {cle:'point',lib:'Le point de la semaine'},
   {cle:'todo',lib:'Mes notifications',fixe:true},
   {cle:'inactifs',lib:'Athlètes silencieux'},
+  {cle:'reactivite',lib:'Ma réactivité'},
   {cle:'lundi',lib:'Le point du lundi'},
   {cle:'recettes',lib:'Mes recettes'},
   {cle:'messages',lib:'Messages'},

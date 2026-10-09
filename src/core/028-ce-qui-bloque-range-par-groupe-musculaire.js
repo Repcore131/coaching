@@ -2095,7 +2095,7 @@ function _htmlRecordsFin(ctx,date,cle){
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
     .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4)
     // L'objectif de la séance battu : la carte le dira (« OBJECTIF ATTEINT »).
-    .map(r=>objectifAtteint(ctx&&ctx.objectif,r)?Object.assign({},r,{objectif:true}):r);
+    .map(r=>objectifSeanceAtteint(ctx&&ctx.objectif,r)?Object.assign({},r,{objectif:true}):r);
   if(!rec.length) return '';
   const nb=v=>Number(v).toLocaleString('fr-FR');
   const k=(cle==='wd'||cle==='sd')?cle:'';

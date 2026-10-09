@@ -670,7 +670,7 @@ function _eclairObjectif(idx,i){
   return '<span class="rpo-eclair" title="'+escapeHtml(texteRecordAPortee(o))+'">'+_ECLAIR_SVG+'</span>';
 }
 // PURE. Le record d'une séance a-t-il atteint l'objectif qu'elle portait ?
-function objectifAtteint(objectif,record){
+function objectifSeanceAtteint(objectif,record){
   if(!objectif||!record||!(Number(objectif.charge)>0)) return false;
   const a=String(objectif.nm||''), b=String(record.nm||'');
   const meme=a===b||(()=>{ try{ return exKey(a)===exKey(b); }catch(e){ return false; } })();
