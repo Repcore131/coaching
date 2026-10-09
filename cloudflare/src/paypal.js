@@ -76,8 +76,8 @@ const OFFRES_FIXES = {
 // les crée et colle chaque identifiant ICI (champ `id`) et dans rc-core.
 // Vide, l'entrée est ignorée — et l'app ne propose pas l'annuel (constante vide).
 export const PLANS_ANNUELS_SANS_ENGAGEMENT = Object.freeze({
-  PAYPAL_PLAN_ID_ANNUEL_SE: Object.freeze({ id: '', formule: 'essentielle', montants: Object.freeze(['95.00']) }),
-  PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE: Object.freeze({ id: '', formule: 'ultime', montants: Object.freeze(['249.00']) }),
+  PAYPAL_PLAN_ID_ANNUEL_SE: Object.freeze({ id: 'P-5WS33005ML186714UNLET2VI', formule: 'essentielle', montants: Object.freeze(['95.00']) }),
+  PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE: Object.freeze({ id: 'P-2NY44820N2546090CNLET2VQ', formule: 'ultime', montants: Object.freeze(['249.00']) }),
 });
 export const OFFRES_PAYPAL = Object.freeze(Object.assign({}, OFFRES_FIXES,
   Object.fromEntries(Object.values(PLANS_ANNUELS_SANS_ENGAGEMENT).filter((p) => /^P-[A-Z0-9]+$/.test(p.id))

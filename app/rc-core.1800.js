@@ -1221,8 +1221,8 @@ const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
 //   les cree et colle ici leur identifiant (et dans cloudflare/src/paypal.js).
 //   VIDES, L'ANNUEL N'EST PAS PROPOSE : l'ecran retombe sur le mensuel, plutot
 //   que d'annoncer le nouveau prix et de facturer l'ancien.
-const PAYPAL_PLAN_ID_ANNUEL_SE='';
-const PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE='';
+const PAYPAL_PLAN_ID_ANNUEL_SE='P-5WS33005ML186714UNLET2VI';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE='P-2NY44820N2546090CNLET2VQ';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a TARIFS.ultime_demi.premierMois et les
