@@ -56,6 +56,13 @@ on:
   #   (DECISIONS-A-PRENDRE.md). Creer un plan facturable est une decision, pas
   #   un effet de bord d'un push.
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "creer (les plans qui manquent) | verifier | plan-test (cree le plan de TEST a 1 EUR et affiche sa page de paiement) | plan-test-off (le desactive)"
+        required: false
+        default: creer
+        type: choice
+        options: [creer, verifier, plan-test, plan-test-off]
 
 permissions:
   contents: read
@@ -131,7 +138,28 @@ jobs:
       # Le premier appel echoue par construction quand un plan manque : c'est
       # ce qu'on vient chercher, d'ou le `|| true`. Le dernier, lui, decide de
       # la couleur du travail.
+      # LE PLAN DE TEST A 1 EUR (09/10/2026) : cree ou retrouve, sa page de
+      # paiement dans le resume ; plan-test-off le desactive apres l'achat test.
+      - name: Plan de test a 1 EUR
+        if: inputs.mode == 'plan-test' || inputs.mode == 'plan-test-off'
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: |
+          { echo '## Plan de test a 1 EUR'; echo; echo '```'; } >> $GITHUB_STEP_SUMMARY
+          node scripts/paypal_plans.mjs --${{ inputs.mode }} 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Verifier seulement
+        if: inputs.mode == 'verifier'
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: |
+          { echo '## Etat'; echo; echo '```'; } >> $GITHUB_STEP_SUMMARY
+          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $GITHUB_STEP_SUMMARY; c=${PIPESTATUS[0]}
+          echo '```' >> $GITHUB_STEP_SUMMARY; exit $c
+
       - name: Regarder, creer, regarder a nouveau
+        if: inputs.mode == '' || inputs.mode == 'creer'
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
         run: |
