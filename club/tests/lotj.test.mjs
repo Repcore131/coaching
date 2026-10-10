@@ -133,3 +133,13 @@ test('J4 : 4 lignes avec état, dernier fichier et nombre du mois ; aucun secret
   const h = run('arriveeExportsCard()'); assert.equal((h.match(/<tr data-canal=/g) || []).length, 4);
   assert.doesNotMatch(h, /[–—]/);
 });
+
+test('J5 : aucun identifiant ni en-tête Resamania dans le front (sources du bundle et fichier construit)', async () => {
+  const { existsSync } = await import('node:fs');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const fichiers = html.match(/src="[a-z0-9-]+\.js"/g).map(s => s.slice(5, -1));
+  const INTERDIT = /gravitee|RSM_API_KEY|RSM_CLIENT_(ID|SECRET)|RSM_HOOK_SECRET|client_secret|x-user-club-id|x-user-network-node-id|clientToken/i;
+  for (const f of fichiers) assert.doesNotMatch(readFileSync(new URL('../' + f, import.meta.url), 'utf8'), INTERDIT, f);
+  const dist = new URL('../_dist/fitpulse.html', import.meta.url);
+  if (existsSync(dist)) assert.doesNotMatch(readFileSync(dist, 'utf8'), INTERDIT, '_dist/fitpulse.html');
+});

@@ -6,3 +6,4 @@ export { graphPoll } from './graphPoll.js';
 export { resEscalate } from './resEscalate.js';
 export { resMorning } from './resMorning.js';
 export { resNightly } from './resPlanifie.js';
+export { rsmHook, rsmEvenement, rsmReconcile } from './resamania/fonctions.js';

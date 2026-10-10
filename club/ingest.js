@@ -16,6 +16,8 @@ const INGEST_CANAUX = [
   ['manual', 'Dépôt manuel', 'Glisser-déposer dans Imports. Toujours actif, en secours.'],
 ];
 const INGEST_ETATS = ['actif', 'en attente', 'inactif'];
+// Rapports d'ingestion lus dans /ingest/{clubId}/reports (managers et créateur ; voir plus bas).
+let INGEST_RAPPORTS = {};
 const ingestConfig = (clubId = CLUB.id) => deepGet(S, ['ingestConfig', clubId]) || {};
 // Canaux affichés : ceux qui ont une configuration, et le dépôt manuel, toujours actif.
 function ingestCanaux(clubId = CLUB.id) {
@@ -27,7 +29,7 @@ const canalDeJournal = x => (['api', 'mail', 'drive', 'manual'].includes(x.canal
 function ingestFichiers(clubId = CLUB.id) {
   const L = [];
   Object.values(deepGet(S, ['rsm', 'autoLog', clubId]) || {}).forEach(x => { if (x && x.at) L.push({ canal: canalDeJournal(x), at: x.at, name: x.name || 'fichier' }); });
-  Object.values((typeof INGEST_RAPPORTS === 'object' && INGEST_RAPPORTS[clubId]) || {}).forEach(x => { if (x && x.receivedAt) L.push({ canal: x.canal || 'mail', at: x.receivedAt, name: x.file || 'fichier' }); });
+  Object.values(INGEST_RAPPORTS[clubId] || {}).forEach(x => { if (x && x.receivedAt) L.push({ canal: x.canal || 'mail', at: x.receivedAt, name: x.file || 'fichier' }); });
   Object.values(S.imports || {}).forEach(i => { if (i && i.clubId === clubId && !i.auto && i.at && (!i.by || !String(i.by).startsWith('auto:'))) L.push({ canal: 'manual', at: i.at, name: i.name || 'fichier' }); });
   return L.sort((a, b) => b.at - a.at);
 }
