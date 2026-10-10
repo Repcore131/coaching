@@ -377,7 +377,7 @@ function profPersonal() {
 const profPatch = patch => setPref('profil', { ...profilOf(ME), ...patch });
 ACTIONS.profSave = () => { const f = formData($('#ppf2')); profPatch({ poste: (f.poste || '').trim().slice(0, 60) || null, tel: (f.tel || '').trim().slice(0, 20) || null, bio: (f.bio || '').trim().slice(0, 140) || null }); toast('1 profil enregistré'); };
 function profAccount() {
-  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">${profPersonal()}
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">${typeof photoCard === 'function' ? photoCard() : ''}${profPersonal()}
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
     ${monAppliCard()}

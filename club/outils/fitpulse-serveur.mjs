@@ -67,7 +67,7 @@ export const REGLE = `${DEBUT}
       "users": {
         "$uid": {
           ".write": ${j(FICHE)},
-          "first": { ".write": ${j(SOIMEME)} }, "last": { ".write": ${j(SOIMEME)} }, "avatar": { ".write": ${j(SOIMEME)} },
+          "first": { ".write": ${j(SOIMEME)} }, "last": { ".write": ${j(SOIMEME)} }, "avatar": { ".write": ${j(SOIMEME)} }, "photo": { ".write": ${j(SOIMEME)}, ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 82000)" },
           "salt": { ".write": ${j(SOIMEME)} }, "codeHash": { ".write": ${j(SOIMEME)} }, "bootKey": { ".write": ${j(SOIMEME)} },
           "status": { ".write": ${j(`${SOIMEME} && data.val() === 'pending' && newData.val() === 'active'`)} }
         }

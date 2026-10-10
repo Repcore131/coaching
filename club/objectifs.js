@@ -59,11 +59,15 @@ function dailyGoals(userId = ME.id, d = today(), clubId = CLUB.id) {
   else out.push({ id: 'b', target: 1, value: faites, done: faites >= 1, label: 'Traiter 1 relance', link: '#/relances' });
   // c. défi perso de la semaine, sinon le 2e KPI en retard
   const g = ME && ME.id === userId ? prefsOf(userId).goal : ((S.prefs || {})[userId] || {}).goal;
-  if (g && g.week === semaineIso(d) && S.kpis[g.kpiId]) {
-    const k = S.kpis[g.kpiId]; const lundi = weekStart(d); const avant = d > lundi ? sumRange(clubId, userId, g.kpiId, lundi, addDays(d, -1)) : 0;
+  if (g && g.week === semaineIso(d) && (S.kpis[g.kpiId] || (typeof DEFI_RELANCES === 'string' && g.kpiId === DEFI_RELANCES))) {
+    // défi de la semaine : la part du jour (relances notées ou KPI), jusqu'au dimanche
+    const rel = g.kpiId === DEFI_RELANCES; const k = S.kpis[g.kpiId]; const lundi = weekStart(d);
+    const val = (a, b) => (rel ? defiValeur(userId, clubId, g.kpiId, a, b) : sumRange(clubId, userId, g.kpiId, a, b));
+    const avant = d > lundi ? val(lundi, addDays(d, -1)) : 0;
     const reste = Math.max(0, g.target - avant); const jours = Math.max(1, workdays(userId, clubId, d, addDays(lundi, 6)));
-    const q = reste ? Math.max(k.unit === 'eur' ? EUR_MIN : 1, Math.ceil(reste / jours)) : 0; const f = faitKpi(userId, clubId, g.kpiId, d, q);
-    out.push({ id: 'c', kpiId: g.kpiId, target: q, value: f.value, done: !q || f.done, label: q ? `Défi perso : ${fmtU(q, k)} en ${k.label}` : `Défi perso tenu : ${fmtU(g.target, k)}`, link: '#/home' });
+    const q = reste ? Math.max(k && k.unit === 'eur' ? EUR_MIN : 1, Math.ceil(reste / jours)) : 0; const v = val(d, d);
+    const u = n => (rel ? plur(n, 'relance', 'relances') : `${fmtU(n, k)} en ${k.label}`);
+    out.push({ id: 'c', kpiId: g.kpiId, target: q, value: v, done: !q || v >= q - 1e-9, label: q ? `Défi perso : ${u(q)}` : `Défi perso tenu : ${u(g.target)}`, link: '#/home' });
   } else {
     const x = R.find(y => !out.some(o => o.kpiId === y.k.id));
     if (x) out.push(objectifKpi(userId, clubId, x, d, 'c'));

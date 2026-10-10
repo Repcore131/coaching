@@ -68,7 +68,8 @@ const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (
 
 // ── Avatars : pastille d'initiales, sans photo ni couleur choisie ──────────
 const profilOf = u => (u && S && S.prefs && S.prefs[u.id] && S.prefs[u.id].profil) || {};
-function avatar(u, cls = '') { return `<span class="avatar ${cls}" title="${esc(fullName(u))}">${esc(initials(u))}</span>`; }
+// Photo du profil si elle existe (60 Ko au plus), sinon les initiales.
+function avatar(u, cls = '') { return u && u.photo && /^data:image\/jpeg;base64,/.test(u.photo) ? `<span class="avatar photo ${cls}" title="${esc(fullName(u))}"><img src="${esc(u.photo)}" alt=""></span>` : `<span class="avatar ${cls}" title="${esc(fullName(u))}">${esc(initials(u))}</span>`; }
 
 // ── Graphiques SVG ────────────────────────────────────────────────────────
 function barChart({ labels, series, height = 220, fmt = fmtN }) {

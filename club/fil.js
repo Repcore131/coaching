@@ -87,6 +87,7 @@ function feedEvents(clubIds, sinceTs = 0) {
     if (typeof duelEvenements === 'function') out.push(...duelEvenements(clubs));
     if (typeof kudosEvenements === 'function') out.push(...kudosEvenements(clubs));
     if (typeof bilanEvenements === 'function') out.push(...bilanEvenements(clubs));
+    if (typeof defiEvenements === 'function') out.push(...defiEvenements(clubs));
     for (const m of Object.values(S.chat || {})) if (m && m.annonce && C.has(m.channel)) out.push({ id: `an_${m.id}`, type: 'manager', at: m.at, userId: m.userId, clubId: m.channel, label: 'Annonce du manager', sub: m.text, link: '#/pouls' });
     return out.sort((a, b) => b.at - a.at);
   });

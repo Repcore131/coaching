@@ -1482,3 +1482,13 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .fil-com-l { font-size: var(--t-14); }
 .fil-com-f { gap: 6px; }
 .fil-com-f .input { min-height: 40px; }
+/* Photo de profil, mascotte, défi de la semaine */
+.avatar.photo { padding: 0; overflow: hidden; background: none; }
+.avatar.photo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+.mascotte { display: inline-grid; place-items: center; flex: none; border-radius: 50%; border: 2px solid var(--fil-or, #F2C500); color: var(--text); overflow: hidden; margin-right: 12px; }
+.mascotte .ico { width: 60%; height: 60%; }
+.mascotte.photo img { width: 100%; height: 100%; object-fit: cover; }
+.defi-props { display: grid; gap: 8px; }
+.defi-prop { display: grid; gap: 2px; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.defi-prop small { color: var(--muted); }
+.defi-prop:hover, .defi-prop:focus-visible { border-color: var(--fil-or, #F2C500); }

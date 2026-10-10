@@ -31,7 +31,7 @@ const HOME_CARDS = {
   feed: { label: TXT.pages.pouls, icon: 'pouls', roles: ['membre', 'manager'], default: false, render: () => (typeof filAccueilCard === 'function' ? filAccueilCard(3) : '') },
 };
 // Accueil conseillé, dans cet ordre (la dernière visite d'abord).
-const HOME_CONSEILLE = { membre: ['delta', 'day', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'], manager: ['delta', 'cockpit', 'day', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'] };
+const HOME_CONSEILLE = { membre: ['delta', 'day', 'goal', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'], manager: ['delta', 'cockpit', 'day', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'] };
 const roleAccueil = () => (isManager() ? 'manager' : 'membre');
 const carteVisible = id => HOME_CARDS[id] && HOME_CARDS[id].roles.includes(roleAccueil());
 function homeCartes() {

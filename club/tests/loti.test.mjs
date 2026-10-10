@@ -121,3 +121,22 @@ test('I4 : Partager à l’équipe crée une carte dans le fil ; image du bilan 
   const c = J(run, `commentairesDe('${ev.id}')`); assert.equal(c.length, 1); assert.equal(c[0].to, 'a0');
   assert.equal(J(run, `commentOps('x', 'a0', 'y'.repeat(300))`)[0][1].text.length, 140);
 });
+test('I4 : la photo apparaît dans le fil, le classement et le chat ; fichier non image refusé', () => {
+  const run = appli(reseau(), 'a0'); const photo = 'data:image/jpeg;base64,' + 'A'.repeat(400);
+  run(`S.users.a0.photo = '${photo}'; S.entries.p1 = { id: 'p1', userId: 'a0', clubId: 'a', kpiId: 'contrats', date: today(), value: 1, source: 'manual', at: Date.now() }; S.chat.m1 = { id: 'm1', channel: 'a', userId: 'a0', at: Date.now(), text: 'Bonjour' }; REV++`);
+  const img = /<img src="data:image\/jpeg;base64,A{10}/;
+  assert.match(run(`filCarte(feedEvents(['a']).find(e => e.id === 'p1'))`), img);
+  run(`UI.lbTab = 'classement'; UI.lbView = 'rang'`); assert.match(run('PAGES.leaderboard.render()'), img);
+  run(`UI.chatCh = 'a'`); assert.match(run('PAGES.chat.render()'), img);
+  run(`ME = S.users.a1; S.users.a1.photo = 'javascript:alert(1)'`); assert.doesNotMatch(run(`avatar(S.users.a1)`), /<img/);
+});
+test('I4 : défi choisi le lundi visible dans Ma journée jusqu’au dimanche ; 3 propositions ; trophée Défi tenu', () => {
+  const run = appli(reseau(), 'a0'); const lundi = run('weekStart(today())');
+  const P = J(run, 'propositionsDefi()'); assert.equal(P.length, 3); assert.ok(P.some(p => p.kpiId === '_relances'));
+  run(`ACTIONS.defiChoisir({ dataset: { k: 'contrats', n: '3' } })`);
+  for (let i = 0; i < 7; i++) assert.match(J(run, `dailyGoals('a0', addDays('${lundi}', ${i}), 'a').find(g => g.id === 'c').label`), /^Défi perso/);
+  assert.ok(!J(run, `dailyGoals('a0', addDays('${lundi}', 7), 'a').some(g => /^Défi perso/.test(g.label))`));
+  run(`S.entries.d1 = { id: 'd1', userId: 'a0', clubId: 'a', kpiId: 'contrats', date: today(), value: 3, source: 'manual', at: Date.now() }; REV++`);
+  assert.ok(J(run, `allTrophies().some(t => t.userId === 'a0' && /^Défi tenu/.test(t.label))`));
+  assert.ok(J(run, `feedEvents(['a']).some(e => /a tenu son défi de la semaine/.test(e.label))`));
+});

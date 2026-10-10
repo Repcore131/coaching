@@ -413,6 +413,8 @@ function allTrophies() {
     if (typeof tropheesDuels === 'function') out.push(...tropheesDuels());
     // Coup de coeur du manager (kudos.js)
     if (typeof tropheesCoeur === 'function') out.push(...tropheesCoeur());
+    // défis de la semaine tenus (photo-defi.js)
+    if (typeof tropheesDefi === 'function') out.push(...tropheesDefi());
     // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now() || ch.type === 'team') continue;
