@@ -11,6 +11,7 @@
 //    chacun respectées, une seule fois par événement (journal dédoublonné).
 // Jamais de nom de client dans une notification.
 import crypto from 'node:crypto';
+import { chargerAppli } from './fitpulse-rapport.mjs';
 
 const b64u = b => Buffer.from(b).toString('base64url');
 const unb64u = s => Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
@@ -90,14 +91,22 @@ const WEEK = ['ventes', 'clients-incident', 'sans-mandat', 'incidents', 'paiemen
 const MONTH = ['ventes', 'factures', 'evolution', 'tti', 'web', 'perf', 'incidents', 'resil', 'prospects', 'paiements'];
 
 // Liste des notifications à envoyer : { key, uid, rule, title, body, url, ttl, urgent }.
-export function plan(S, state, now = new Date()) {
+// catalogue(uid, ctx) : notifications commerciales calculées par le code de l'appli (notif-types.js).
+export function plan(S, state, now = new Date(), { catalogue = null } = {}) {
   const P = paris(now); const last = Number(state.lastRun) || (now.getTime() - 10 * 60000); const out = [];
   const t = P.day, mk = t.slice(0, 7), dom = Number(t.slice(8)), ferie = FERIES.includes(t) || P.dow.startsWith('dim');
   const users = Object.values(S.users || {}).filter(active); const clubs = Object.keys(S.clubs || {});
   const at = (hm, min = 60) => { const [h, m] = hm.split(':').map(Number); const cur = P.h * 60 + Number(P.hm.slice(3)); return cur >= h * 60 + m && cur < h * 60 + m + min; };
   const add = (uid, rule, key, title, body, url, o = {}) => out.push({ uid, rule, key: `${key}|${uid}`, title, body, url, ttl: o.ttl || 4 * 3600, urgent: !!o.urgent });
   const team = club => users.filter(u => inClub(u, club)); const mgrs = club => team(club).filter(isMgr);
-  const st = state.watch || {}; const next = { balances: {}, pal: { ...(st.pal || {}) }, rec: { ...(st.rec || {}) }, flash: { ...(st.flash || {}) } };
+  const st = state.watch || {}; const next = { balances: {}, pal: { ...(st.pal || {}) }, rec: { ...(st.rec || {}) }, flash: { ...(st.flash || {}) }, cat: { ...(st.cat || {}) } };
+  const repos = {};
+  // Catalogue commercial (début de journée, relances dues, dépassé, défi, bravos, palier proche, fin de journée, bilan du mois).
+  if (catalogue) for (const u of users) {
+    let r = null; try { r = catalogue(u.id, { jour: t, hm: P.hm, last, W: next.cat[u.id] || {} }); } catch (e) { r = null; }
+    if (!r) continue; next.cat[u.id] = r.W || {}; if (r.repos) repos[u.id] = true;
+    for (const it of r.items || []) out.push({ uid: u.id, rule: it.type, key: `${it.key}|${u.id}`, title: it.title, body: it.body, url: it.url, ttl: 4 * 3600, urgent: false, cat: true, on: it.on !== false, priority: it.priority || 'normal', cooldownMin: Number(it.cooldownMin) || 0 });
+  }
   // Événements (immédiat, regroupés par passage)
   for (const club of clubs) {
     const fresh = Object.values(S.resiliations || {}).filter(r => r && r.clubId === club && r.at > last && now - r.at < 864e5 && resOpen(r));
@@ -159,31 +168,38 @@ export function plan(S, state, now = new Date()) {
   }
   // Pause décidée par le manager : la boîte de réception seulement.
   const paused = club => !!((S.clubs || {})[club] || {}).notifPaused;
-  const items = out.filter(x => ruleOn(S, x.uid, x.rule)).map(x => { const u = (S.users || {})[x.uid] || {}; return { ...x, push: !(u.clubs || []).every(paused) && (x.urgent || !quiet(S, x.uid, P)) }; });
+  // Type décoché : plus d'envoi ; s'il est prioritaire, il reste dans la boîte de réception. Jour de repos : aucun envoi.
+  const items = out.filter(x => (x.cat ? x.on || x.priority === 'high' : ruleOn(S, x.uid, x.rule))).map(x => { const u = (S.users || {})[x.uid] || {}; return { ...x, push: (!x.cat || x.on) && !(repos[x.uid] && !x.urgent) && !(u.clubs || []).every(paused) && (x.urgent || !quiet(S, x.uid, P)) }; });
   return { P, items, watch: next };
 }
 // Passage complet : clés, plan, boîte de réception, envois, journal, statistiques.
-export async function passagePush(api, tk, S, mail = null) {
+export async function passagePush(api, tk, S, mail = null, { catalogue: catTest = null, now = new Date() } = {}) {
   const state = (await (await api(tk, 'fitpulse_secret.json')).json()) || {};
   let vapid = state.vapid;
   if (!vapid) { vapid = newVapid(); await api(tk, 'fitpulse_secret/vapid.json', { method: 'PUT', body: JSON.stringify(vapid) }); }
   if (!S.serveur || S.serveur.vapidPublic !== vapid.publicKey) await api(tk, 'pulse/serveur/vapidPublic.json', { method: 'PUT', body: JSON.stringify(vapid.publicKey) });
   const subs = (await (await api(tk, 'pulse_push.json')).json()) || {};
-  const log = state.log || {}; const { P, items: all, watch } = plan(S, state);
+  const log = state.log || {};
+  // Le vrai code de l'appli, chargé une fois par passage, calcule le catalogue (mêmes fonctions que l'interface).
+  let run = null; try { run = chargerAppli(S); } catch (e) { console.log('catalogue indisponible :', e.message); }
+  const catalogue = catTest || (run ? (uid, ctx) => JSON.parse(run(`JSON.stringify(notifCatalogue(${JSON.stringify(uid)}, ${JSON.stringify(ctx)}))`)) : null);
+  const { P, items: all, watch } = plan(S, state, now, { catalogue });
   // Premier passage : on mémorise l'état (paliers, records, soldes) sans envoyer de rafale.
   const items = state.watch ? all : all.filter(x => !['palier', 'record', 'dun_new'].includes(x.rule));
-  let sent = 0; const dead = []; const perDay = {}; const inbox = {}; const stats = {};
-  Object.entries(log).forEach(([k, v]) => { const uid = k.split('|').pop(); if (v && v.day === P.day && v.push) perDay[uid] = (perDay[uid] || 0) + 1; });
+  let sent = 0; const dead = []; const perDay = {}; const inbox = {}; const stats = {}; const lastPush = {};
+  Object.entries(log).forEach(([k, v]) => { const uid = k.split('|').pop(); if (v && v.day === P.day && v.push) perDay[uid] = (perDay[uid] || 0) + 1; if (v && v.push && v.rule) { const g = `${uid}|${v.rule}`; lastPush[g] = Math.max(lastPush[g] || 0, v.at || 0); } });
   for (const it of items) {
     const lk = it.key.replace(/[.#$/[\]]/g, ','); if (log[lk]) continue;
     const id = crypto.createHash('sha1').update(lk).digest('hex').slice(0, 20);
-    inbox[`${it.uid}/${id}`] = { title: it.title, body: it.body, url: it.url, kind: it.rule, at: Date.now() };
     stats[it.rule] = (stats[it.rule] || 0) + 1;
-    const devices = Object.entries(subs[it.uid] || {}); const canPush = it.push && devices.length && (it.urgent || (perDay[it.uid] || 0) < maxOf(S, it.uid));
-    log[lk] = { day: P.day, at: Date.now(), push: !!canPush };
-    if (!canPush) continue; perDay[it.uid] = (perDay[it.uid] || 0) + 1;
+    // Regroupement : même type pour la même personne en moins de 10 minutes (ou dans son délai propre) = une seule alerte.
+    const g = `${it.uid}|${it.rule}`; const espace = Math.max(10, it.cooldownMin || 0) * 60000; const groupe = !it.urgent && Date.now() - (lastPush[g] || 0) < espace;
+    const devices = Object.entries(subs[it.uid] || {}); const canPush = it.push && !groupe && devices.length && (it.urgent || (perDay[it.uid] || 0) < maxOf(S, it.uid));
+    inbox[`${it.uid}/${id}`] = { title: it.title, body: it.body, url: it.url, kind: it.rule, at: Date.now(), push: !!canPush };
+    log[lk] = { day: P.day, at: Date.now(), push: !!canPush, rule: it.rule };
+    if (!canPush) continue; perDay[it.uid] = (perDay[it.uid] || 0) + 1; lastPush[g] = Date.now();
     for (const [h, sub] of devices) {
-      try { const st = await sendPush(sub, { title: it.title, body: it.body, url: it.url, tag: it.key.split('|')[0] }, vapid, { ttl: it.ttl }); if (st === 404 || st === 410) dead.push(`${it.uid}/${h}`); else if (st < 300) sent++; else console.log(`push ${st}`); }
+      try { const st = await sendPush(sub, { title: it.title, body: it.body, url: it.url, tag: it.key.split('|')[0], id }, vapid, { ttl: it.ttl }); if (st === 404 || st === 410) dead.push(`${it.uid}/${h}`); else if (st < 300) sent++; else console.log(`push ${st}`); }
       catch (e) { console.log('push échec :', e.message); }
     }
   }
@@ -199,8 +215,28 @@ export async function passagePush(api, tk, S, mail = null) {
   await api(tk, 'fitpulse_secret/lastRun.json', { method: 'PUT', body: JSON.stringify(Date.now()) });
   for (const d of dead) await api(tk, `pulse_push/${d}.json`, { method: 'DELETE' });
   // purge de la boîte de réception (30 jours), une fois par jour
-  if (P.h === 3) { const ib = (await (await api(tk, 'pulse_inbox.json?shallow=false')).json()) || {}; const lim = Date.now() - 30 * 864e5; const del = {}; Object.entries(ib).forEach(([u, L]) => Object.entries(L || {}).forEach(([k, v]) => { if (!v || v.at < lim) del[`${u}/${k}`] = null; })); if (Object.keys(del).length) await api(tk, 'pulse_inbox.json', { method: 'PATCH', body: JSON.stringify(del) }); }
+  if (P.h === 3) { const ib = (await (await api(tk, 'pulse_inbox.json?shallow=false')).json()) || {}; const lim = Date.now() - 30 * 864e5; const del = {}; Object.entries(ib).forEach(([u, L]) => Object.entries(L || {}).forEach(([k, v]) => { if (!v || v.at < lim) del[`${u}/${k}`] = null; })); if (Object.keys(del).length) await api(tk, 'pulse_inbox.json', { method: 'PATCH', body: JSON.stringify(del) });
+    // Mesure : un type ouvert moins de 5 % du temps sur 30 jours est mis en pause pour ce compte, avec un message dans la boîte.
+    const labels = run ? JSON.parse(run('JSON.stringify(Object.fromEntries(Object.entries(NOTIF_TYPES).map(([k, v]) => [k, v.label])))')) : {};
+    const pz = pausesAuto(S, ib, Date.now(), labels);
+    if (Object.keys(pz.prefs).length) await api(tk, 'pulse/prefs.json', { method: 'PATCH', body: JSON.stringify(pz.prefs) });
+    if (Object.keys(pz.inbox).length) await api(tk, 'pulse_inbox.json', { method: 'PATCH', body: JSON.stringify(pz.inbox) }); }
   return { sent, planned: items.length, inbox: Object.keys(inbox).length, dead: dead.length, devices: Object.values(subs).reduce((s, x) => s + Object.keys(x || {}).length, 0) };
+}
+// Envois des 30 derniers jours par compte et par type : au moins 20 alertes poussées et moins de 5 % ouvertes = pause.
+export const PAUSE_MIN_ENVOIS = 20;
+export function pausesAuto(S, ib, now, labels = {}) {
+  const prefs = {}, inbox = {}; const lim = now - 30 * 864e5;
+  for (const [u, L] of Object.entries(ib || {})) {
+    const by = {}; Object.values(L || {}).forEach(x => { if (!x || !x.push || !x.kind || x.at < lim) return; const b = by[x.kind] = by[x.kind] || { n: 0, o: 0 }; b.n++; if (x.readAt) b.o++; });
+    const n = ((S.prefs || {})[u] || {}).notif || {};
+    for (const [kind, b] of Object.entries(by)) {
+      if (b.n < PAUSE_MIN_ENVOIS || b.o / b.n >= 0.05 || (n.rules || {})[kind] === false) continue;
+      prefs[`${u}/notif/rules/${kind}`] = false; prefs[`${u}/notif/pauses/${kind}`] = now;
+      inbox[`${u}/pause_${kind}`] = { title: 'Notifications', body: `Nous avons mis en pause ce type de notification${labels[kind] ? ` : ${labels[kind]}` : ''}. Réactivez-le dans Profil, Notifications.`, url: '#/profile', kind: 'info', at: now };
+    }
+  }
+  return { prefs, inbox };
 }
 async function mailsBilan(S, P, log, mail) {
   const users = Object.values(S.users || {}).filter(u => active(u) && u.email); const t = P.day; const ferie = FERIES.includes(t) || P.dow.startsWith('dim');

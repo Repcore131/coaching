@@ -2,7 +2,7 @@
 // Fit Pulse : service worker minimal. Pages et scripts toujours pris sur le
 // réseau d'abord (une mise à jour passe au chargement suivant), icônes et
 // polices en cache. Au clic sur une alerte : ouvre la bonne page.
-const VERSION = 'fp-v4'; // v4 : nouveau logo et nouvelles polices (lot D)
+const VERSION = 'fp-v5'; // v5 : ouverture des alertes mesurée // v4 : nouveau logo et nouvelles polices (lot D)
 const STATIC = /\.(png|woff2?|ttf|svg|webp)$/;
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n !== VERSION).map(n => caches.delete(n)))).then(() => self.clients.claim())));
@@ -18,14 +18,14 @@ self.addEventListener('fetch', e => {
 // Notification envoyée par le serveur Fit Pulse (téléphone fermé compris).
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { title: 'Fit Pulse', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Fit Pulse', { body: d.body || '', tag: d.tag || 'fitpulse', icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || '#/home' } }));
+  e.waitUntil(self.registration.showNotification(d.title || 'Fit Pulse', { body: d.body || '', tag: d.tag || 'fitpulse', icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || '#/home', id: d.id || null } }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '#/home';
+  const url = (e.notification.data && e.notification.data.url) || '#/home'; const id = (e.notification.data && e.notification.data.id) || null;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     const w = list.find(c => c.url.startsWith(self.registration.scope));
-    if (w) { w.postMessage({ type: 'notif-click', url }); return w.focus(); }
-    return self.clients.openWindow(self.registration.scope + url.replace(/^\.?\//, ''));
+    if (w) { w.postMessage({ type: 'notif-click', url, id }); return w.focus(); }
+    return self.clients.openWindow(self.registration.scope + (id ? '?notif=' + encodeURIComponent(id) : '') + url.replace(/^\.?\//, ''));
   }));
 });

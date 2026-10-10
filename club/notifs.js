@@ -34,7 +34,7 @@ function inQuiet() { const q = notifPrefs().quiet; const d = new Date(); const h
 
 const inboxKey = () => 'fitpulse.inbox.' + (ME ? ME.id : '');
 function inbox() { try { const L = JSON.parse(safeLS.get(inboxKey()) || '[]'); return Array.isArray(L) ? L.filter(x => x && Date.now() - x.at < 30 * 864e5) : []; } catch (_) { return []; } }
-const saveInbox = L => safeLS.set(inboxKey(), JSON.stringify(L.slice(0, 60)));
+const saveInbox = L => safeLS.set(inboxKey(), JSON.stringify(L.slice(0, 50))); // les 50 dernières, même si le push est refusé
 const unread = () => inbox().filter(x => !x.readAt).length;
 
 function notify(kind, text, href = '', { title = 'Fit Pulse', key = '', toastIt = true } = {}) {
@@ -74,7 +74,7 @@ ACTIONS.bell = () => {
     foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
 };
 const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: TXT.notifs.cloture, dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: TXT.mots.sprint, live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
-const NOTIF_ICON = { am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
+const NOTIF_ICON = { dayStart: 'sun', dueFollowup: 'phone', overtaken: 'ranking', challengeStart: 'bolt', kudos: 'sparkle', palierNear: 'flag', dayWrap: 'chart', wrapReady: 'report', info: 'bell', am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
 ACTIONS.notifOpen = el => { const L = inbox(); const x = L.find(m => m.id === el.dataset.id); if (!x) return; x.readAt = Date.now(); saveInbox(L); closeModal(); bellRefresh(); if (x.url) location.hash = x.url; };
 ACTIONS.notifAllRead = () => { const L = inbox(); L.forEach(x => { x.readAt = x.readAt || Date.now(); }); saveInbox(L); closeModal(); bellRefresh(); };
 
@@ -132,21 +132,25 @@ function notifCard() {
     <div class="row wrap" style="gap:8px;margin:6px 0 12px"><span class="tag ${'Notification' in window && Notification.permission === 'granted' ? 'is-ok' : ''}">${st}</span>${'Notification' in window && Notification.permission === 'default' ? '<button class="btn sm primary" data-act="notifEnable">Activer les alertes sur cet appareil</button>' : ''}</div>
     ${isStandalone() ? '' : INSTALL_EVT ? '<button class="btn sm" data-act="installApp">Installer Fit Pulse</button>' : isIos() ? '<p class="small">Pour recevoir les alertes sur iPhone : touchez Partager, puis Sur l’écran d’accueil, puis ouvrez Fit Pulse depuis l’icône.</p>' : ''}
     <p class="muted small">${deepGet(S, ['serveur', 'vapidPublic']) ? 'Une fois activées, les alertes arrivent même téléphone fermé (sur iPhone : appli installée sur l’écran d’accueil).' : 'Les alertes s’affichent quand Fit Pulse est ouverte, même en arrière-plan.'} Elles ne contiennent jamais le nom d’un client.</p>
+    ${typeof NOTIF_TYPES === 'object' ? `<h4 class="t-16" style="margin:6px 0 4px">Commercial</h4><div class="nt-rules" id="nt-types">${Object.entries(NOTIF_TYPES).map(([id, T]) => { const n = prefsOf().notif; const pause = (n.pauses || {})[id] && (n.rules || {})[id] === false; return `<label class="row"><input type="checkbox" data-change="notifType" data-id="${id}" ${typeActif(ME.id, id) ? 'checked' : ''}><span class="spacer">${esc(T.label)}${T.priority === 'high' ? ' <span class="tag">prioritaire</span>' : ''}<small class="muted">Exemple : ${esc(T.ex)}${pause ? ' Mis en pause : rarement ouvert.' : ''}</small></span></label>`; }).join('')}</div><p class="muted small" style="margin:4px 0 10px">6 alertes par jour au plus, aucune pendant les heures calmes ni un jour de repos. Une alerte prioritaire décochée reste dans la boîte de réception.</p><h4 class="t-16" style="margin:6px 0 4px">Suivi du club</h4>` : ''}
     <div class="nt-rules">${Object.entries(NOTIF_RULES).filter(([id, r]) => (!r.manager || mgr) && (id !== 'digest' || digestEnvoye())).map(([id, r]) => `<label class="row"><input type="checkbox" data-change="notifRule" data-id="${id}" ${ruleOn(id) ? 'checked' : ''}><span class="spacer">${r.label}<small class="muted">${esc(r.ex)}</small></span></label>`).join('')}</div>
     <p class="muted small" style="margin:8px 0 0">Heures calmes : dans la carte Mon appli.</p>
     <label class="row small" style="margin-top:8px"><input type="checkbox" data-change="notifQuiet" data-k="sunday" ${P.quiet.sunday ? 'checked' : ''}> Silence le dimanche</label>
     <label class="field" style="margin-top:8px"><span>Au plus, par jour</span><select class="input" data-change="notifMax">${[3, 6, 10, 20].map(n => `<option value="${n}" ${P.max === n ? 'selected' : ''}>${n} alertes</option>`).join('')}</select></label></div>`;
 }
 ACTIONS.notifRule = el => { const id = el.dataset.id; if (id === 'live') return setPrefPath(['notif', 'liveBanner'], el.checked); if (id === 'digest') return setPrefPath(['notif', 'digest'], el.checked); setPrefPath(['notif', 'rules', id], el.checked); };
+ACTIONS.notifType = el => { setPrefPath(['notif', 'rules', el.dataset.id], el.checked); if (el.checked) setPrefPath(['notif', 'pauses', el.dataset.id], null); };
 ACTIONS.notifQuiet = el => { const k = { from: 'quietFrom', to: 'quietTo', sunday: 'sunday' }[el.dataset.k]; if (k) setPrefPath(['notif', k], el.type === 'checkbox' ? el.checked : el.value); };
 ACTIONS.notifMax = el => setPrefPath(['notif', 'maxPerDay'], Number(el.value) || 6);
 ACTIONS.notifEnable = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') pushSubscribe().catch(() => null); toast(r === 'granted' ? 'Alertes activées sur cet appareil.' : 'Alertes non autorisées.'); render(); } catch (_) { toast('Ce navigateur ne permet pas les alertes.'); } };
 ACTIONS.installApp = async () => { if (!INSTALL_EVT) return; INSTALL_EVT.prompt(); await INSTALL_EVT.userChoice.catch(() => null); INSTALL_EVT = null; render(); };
 
+// Ouverture d'une alerte poussée : mesurée (openedAt = readAt dans la boîte du serveur).
+function notifOuverte(id) { if (!id || !ME || backend.mode !== 'firebase' || !backend.fb) return; backend.fb.database().ref(fbPath(`pulse_inbox/${ME.id}/${id}/readAt`)).set(Date.now()).catch(() => null); }
 // Service worker : seulement en ligne (https), jamais en fichier local.
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => null));
-  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'notif-click' && e.data.url) location.hash = e.data.url.replace(/^.*#/, '#'); });
+  navigator.serviceWorker.addEventListener('message', e => { if (!e.data || e.data.type !== 'notif-click') return; notifOuverte(e.data.id); if (e.data.url) location.hash = e.data.url.replace(/^.*#/, '#'); });
 }
 
 // ── Abonnement push de cet appareil (alertes téléphone fermé) ────────────
@@ -169,6 +173,8 @@ setTimeout(() => { pushSubscribe().catch(() => null); }, 6000);
 // ── Boîte de réception du serveur (notifications envoyées téléphone fermé) ─
 let INBOX_REF = null;
 function inboxListen() {
+  // Appli ouverte depuis une alerte (?notif=…) : ouverture comptée une fois connecté.
+  const q = new URLSearchParams(location.search); if (q.get('notif') && ME && backend.mode === 'firebase') { notifOuverte(q.get('notif')); q.delete('notif'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
   if (INBOX_REF || !ME || backend.mode !== 'firebase' || !backend.fb) return;
   INBOX_REF = backend.fb.database().ref(fbPath(`pulse_inbox/${ME.id}`)).orderByChild('at').limitToLast(50);
   INBOX_REF.on('value', snap => { const srv = snap.val() || {}; const L = inbox(); let changed = false;

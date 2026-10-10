@@ -100,7 +100,9 @@ const feedEnPause = () => Number(prefsOf().feed.muteUntil || 0) > Date.now();
 // Compteur de non-lus : les événements des autres, acceptés par mes réglages, depuis ma dernière lecture.
 function unseenFeed() {
   if (!ME || !CLUB || feedEnPause()) return 0;
-  return feedEvents(feedClubs(), prefsOf().seen.feed).filter(e => e.userId !== ME.id && feedAccepte(e)).length;
+  // Jamais lu : seulement les 7 derniers jours (un compte neuf ne démarre pas à 99).
+  const depuis = Math.max(Number(prefsOf().seen.feed) || 0, Date.now() - 7 * 864e5);
+  return feedEvents(feedClubs(), depuis).filter(e => e.userId !== ME.id && feedAccepte(e)).length;
 }
 
 // ── Carte d'un événement ─────────────────────────────────────────────────
