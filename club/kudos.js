@@ -67,7 +67,7 @@ function coeurCard(mk) {
 }
 ACTIONS.coeurChoisir = el => { if (!isManager()) return; const v = ($('#coeur-u') || {}).value || null; db.set(['clubs', CLUB.id, 'coeur', el.dataset.mk], v); toast(v ? `Coup de coeur : ${S.users[v].first}` : 'Coup de coeur retiré : 0 membre'); };
 const MEM_CARNETS = memCarnets;
-memCarnets = function () { return coeurCard(UI.recMonth || addMonths(curMonth(), -1)) + MEM_CARNETS(); }; // eslint-disable-line no-func-assign
+memCarnets = function () { return coeurCard(UI.recMonth || addMonths(curMonth(), -1)) + MEM_CARNETS(); };
 // Bravo des collègues : 3 par jour au plus et par personne (fil et chat).
 for (const act of ['react', 'chatReact']) {
   const avant = ACTIONS[act];

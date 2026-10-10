@@ -63,7 +63,7 @@ function drawWrapCard(uid, mk, canvas = document.createElement('canvas')) {
   const B = bilanPartage(uid, mk); const u = S.users[uid]; const W = 1080, H = 1350; canvas.width = W; canvas.height = H;
   const c = canvas.getContext('2d'); const police = FONT_PAIR === 'plex' ? '"IBM Plex Sans"' : 'Geist';
   c.fillStyle = '#111317'; c.fillRect(0, 0, W, H); c.fillStyle = '#F2C500'; c.fillRect(0, 0, W, 16);
-  const txt = (t, x, y, taille, coul = '#FFFFFF', poids = 600) => { c.fillStyle = coul; c.font = `${poids} ${taille}px ${police}, sans-serif`; c.fillText(String(t).replace(/[€–—]/g, ''), x, y); };
+  const txt = (t, x, y, taille, coul = '#FFFFFF', poids = 600) => { c.fillStyle = coul; c.font = `${poids} ${taille}px ${police}, sans-serif`; c.fillText(String(t).replace(/[€\u2013\u2014]/g, ''), x, y); };
   txt('Fit Pulse', 80, 130, 40, '#F2C500', 700); txt(`Bilan de ${monthLabel(mk).toLowerCase()}`, 80, 200, 44, '#C9CCD3', 500);
   txt(fullName(u), 80, 290, 72, '#FFFFFF', 700);
   bilanLignes(B).forEach(([l, v], i) => { const y = 430 + i * 140; c.fillStyle = '#1C1F25'; c.fillRect(80, y - 70, W - 160, 112); txt(l, 120, y, 34, '#C9CCD3', 500); c.textAlign = 'right'; txt(v, W - 120, y + 8, 52, '#FFFFFF', 700); c.textAlign = 'left'; });

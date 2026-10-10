@@ -31,7 +31,7 @@ test('I1 : 3 clubs, 15 commerciaux : groupes équilibrés, jamais d’un seul cl
   const tous = J(run3, `Object.values(S.leagues[weekStart(today())].divisions).flat(2)`); assert.ok(tous.length === 10 && tous.every(id => id[0] !== 'c'));
 });
 test('I1 : le lundi suivant, les 3 premiers d’un groupe argent sont en or ; les 2 derniers redescendent', () => {
-  const data = reseau(4); const run = appli(data, 'ma'); const lundi = run('weekStart(today())'); const prec = run(`addDays(weekStart(today()), -7)`);
+  const data = reseau(4); const run = appli(data, 'ma'); const prec = run(`addDays(weekStart(today()), -7)`);
   const ids = Object.keys(data.users).filter(id => /^[abc]\d$/.test(id));
   run(`S.leagueMember = ${JSON.stringify(Object.fromEntries(ids.map(id => [id, { division: 'argent', since: '2026-01-05', optIn: true }])))};
     S.leagues['${prec}'] = { divisions: { argent: [${JSON.stringify(ids)}] } };

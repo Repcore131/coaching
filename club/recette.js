@@ -5,7 +5,7 @@
 // ?demo=1 puis Lancer la démo) ; chaque fonction renvoie true ou false et
 // ne laisse aucune trace : elle travaille sur une copie, puis rend l'état.
 //   1. checkFilFiltrable()          le fil se filtre par type (puces et réglages)
-//   2. checkBandeauReglable()       le bandeau en direct suit les réglages du fil
+//   2. checkBandeauReglable()       les alertes en direct suivent les réglages du fil
 //   3. checkRangVoisin()            un membre voit ses voisins de classement
 //   4. checkLigue()                 ligue de la semaine : groupes de 8 à 12, clubs mélangés
 //   5. checkObjectifsJour()         toujours 3 objectifs du jour
@@ -42,7 +42,7 @@ function checkFilFiltrable() {
 function checkBandeauReglable() {
   return avecCopie(() => {
     commeVendeur(); const e = Object.values(S.entries).find(x => x.source === 'manual' && x.userId !== ME.id && x.clubId === CLUB.id && x.kpiId === 'contrats'); if (!e) return false;
-    const t = liveTexte(e); if (!t || /[–—]|\p{Extended_Pictographic}/u.test(t)) return false;
+    const t = liveTexte(e); if (!t || /[\u2013\u2014]|\p{Extended_Pictographic}/u.test(t)) return false;
     S.prefs[ME.id] = { ...(S.prefs[ME.id] || {}), v: 2, feed: { ...prefsOf().feed, kpis: { contrats: false } } }; REV++;
     return liveTexte(e) === null;
   });
@@ -109,7 +109,7 @@ function checkImageSansEuro() {
   return avecCopie(() => {
     commeVendeur(); const T = []; const ctx = new Proxy({}, { get: (o, k) => (k === 'fillText' ? (t => T.push(String(t))) : k === 'measureText' ? () => ({ width: 10 }) : () => {}), set: () => true });
     drawWrapCard(ME.id, addMonths(curMonth(), -1), { getContext: () => ctx });
-    return T.length > 4 && T.every(t => !/€|[–—]/.test(t));
+    return T.length > 4 && T.every(t => !/€|[\u2013\u2014]/.test(t));
   });
 }
 function checkPlafondNotifications() {

@@ -9,7 +9,8 @@
 // record perso sur un KPI, nombre de relances) ou une cible libre ; tenu, il
 // donne le trophée personnel « Défi tenu » et, si je l'accepte, un événement
 // dans le fil. prefs.goal = { week, kpiId, target } ; historique prefs.goalHist[semaine].
-const PHOTO_COTE = 256, PHOTO_MAX_OCTETS = 60 * 1024;
+const PHOTO_COTE = 256;
+const PHOTO_MAX_OCTETS = 60 * 1024;
 const DEFI_RELANCES = '_relances';
 const MASCOTTES = { pouls: ['pouls', 'Pouls'], cible: ['target', 'Cible'], eclair: ['bolt', 'Éclair'], couronne: ['crown', 'Couronne'] };
 
@@ -84,7 +85,7 @@ function defiDeLaSemaine(uid = ME.id, d = today()) { const g = uid === (ME && ME
 function defiAvancement(uid, clubId, g, d = today()) { const lundi = dateDeSemaine(g.week); return defiValeur(uid, clubId, g.kpiId, lundi, d < addDays(lundi, 6) ? d : addDays(lundi, 6)); }
 // Lundi d'une semaine ISO « AAAA-Wnn ».
 function dateDeSemaine(w) { const [a, n] = w.split('-W').map(Number); const j4 = new Date(a, 0, 4); const lundi1 = new Date(a, 0, 4 - ((j4.getDay() + 6) % 7)); return isoOf(new Date(lundi1.getFullYear(), lundi1.getMonth(), lundi1.getDate() + (n - 1) * 7)); }
-defiPersoCard = function () { // eslint-disable-line no-func-assign
+defiPersoCard = function () {
   const g = defiDeLaSemaine();
   if (!g) {
     const P = propositionsDefi();

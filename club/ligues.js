@@ -13,8 +13,13 @@
 //   S.clubs[cid].leagueOptIn (réglage du manager, coché par défaut)
 const DIVISIONS = ['bronze', 'argent', 'or', 'platine'];
 const DIV_LABEL = { bronze: 'Bronze', argent: 'Argent', or: 'Or', platine: 'Platine' };
-const LIGUE_MIN = 8, LIGUE_MAX = 12, LIGUE_MONTENT = 3, LIGUE_DESCENDENT = 2, LIGUE_ACTION_MAX = 300;
-const SAISON_SEMAINES = 4, SAISON_ORIGINE = '2026-01-05'; // un lundi : saison 1 = 4 semaines à partir de cette date
+const LIGUE_MIN = 8;
+const LIGUE_MAX = 12;
+const LIGUE_MONTENT = 3;
+const LIGUE_DESCENDENT = 2;
+const LIGUE_ACTION_MAX = 300;
+const SAISON_SEMAINES = 4;
+const SAISON_ORIGINE = '2026-01-05'; // un lundi : saison 1 = 4 semaines à partir de cette date
 
 const clubEnLigue = cid => !!S.clubs[cid] && S.clubs[cid].leagueOptIn !== false;
 const membreLigue = uid => ((S.leagueMember || {})[uid]) || null;
