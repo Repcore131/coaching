@@ -156,7 +156,7 @@ PAGES.dashboard = {
       ${seg('dashView', [['perso', isManager() ? 'Vue perso' : 'Moi'], ['club', isManager() ? 'Vue club' : 'L’équipe']], view)}
       ${view === 'perso' && isManager() ? `<select class="input sm" style="width:auto" data-change="dashUser">${members.map(u => `<option value="${u.id}" ${u.id === who ? 'selected' : ''}>${esc(fullName(u))}${u.id === ME.id ? ' (moi)' : ''}</option>`).join('')}</select>` : ''}
       <span class="spacer"></span>${monthNav('dashMonth', mk)}</div>`;
-    const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(nomAffiche()) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
+    const head = `<div class="page-head">${typeof mascotte === 'function' ? mascotte(44) : ''}<div><h1>${view === 'club' ? esc(nomAffiche()) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
     return head + (tab === 'plan' ? '' : filters) + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], [isManager() ? 'analyses' : 'historique', isManager() ? 'Analyses' : 'Mon historique'], ['entonnoir', 'Entonnoir'], ['plan', 'Plan T4'], ['opportunites', 'Opportunités']], tab)}</div>` +
       (tab === 'plan' ? planPage() : tab === 'opportunites' ? subPage(PAGES.opportunites.render()) : tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : tab === 'historique' || !isManager() ? myHistory(who || ME.id) : dashAnalyses(r, who));
   },
@@ -503,7 +503,7 @@ PAGES.chat = {
   render() {
     const chans = [...myClubs().map(c => [c.id, c.name]), ...(Object.keys(S.clubs).length > 1 ? [['all', 'Tous nos clubs']] : [])];
     const ch = chans.find(c => c[0] === UI.chatCh) ? UI.chatCh : CLUB.id;
-    const msgs = Object.values(S.chat).filter(m => m.channel === ch).sort((a, b) => a.at - b.at);
+    const msgs = Object.values(S.chat).filter(m => m.channel === ch && !m.wrap).sort((a, b) => a.at - b.at);
     const roots = msgs.filter(m => !m.parentId);
     const replies = id => msgs.filter(m => m.parentId === id);
     let lastDay = '';

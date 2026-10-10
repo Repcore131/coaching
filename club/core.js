@@ -11,7 +11,7 @@
 // Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
 const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
 CFG.assets = CFG.assets || {};
-const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.9' };
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.10' };
 // ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
 // Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
 // Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.
@@ -98,6 +98,8 @@ const ICONS = {
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
   pouls: '<path d="M2 12h4l2-5 4 10 3-7 2 2h5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
+  // Applaudissements stylisés (réaction Bravo) : deux mains au trait et trois traits d'élan.
+  clap: '<path d="M8.5 10.5 6.2 8.2a1.3 1.3 0 0 0-1.9 1.9l4.6 4.6"/><path d="m10.6 8.4-2.3-2.3a1.3 1.3 0 0 0-1.9 1.9l4.2 4.2"/><path d="m12.7 6.3-1.4-1.4a1.3 1.3 0 0 0-1.9 1.9l4 4"/><path d="m13.4 9.3.9-2.6a1.4 1.4 0 0 1 2.7.6l-.5 3.4a6 6 0 0 1-1.7 3.4l-1.6 1.6a5 5 0 0 1-7.1 0l-2.2-2.2"/><path d="M15 2.5v2M18.5 3.5l-1.2 1.6M20.5 6.5l-1.8.6"/>',
   mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
@@ -163,16 +165,17 @@ const kpiIconName = k => (k && ICONS[k.icon]) ? k.icon : (k && KPI_ICON[k.id]) |
 const kpiIcon = (k, cls = 'ico') => ico(kpiIconName(k), cls);
 // Reactions : les cles historiques restent (pas de perte), l'affichage passe
 // en icones. Toute autre cle est ignoree (jamais injectee dans la page).
-// Réactions du fil et du chat : Vu, Bravo, Question. Les anciennes clés (pictogrammes) sont
-// relues sous la nouvelle (feu, biceps, applaudissements : Bravo ; pouce : Vu) : aucun compteur perdu.
-const REACTIONS = { vu: ['check', 'Vu'], bravo: ['sparkle', 'Bravo'], question: ['info', 'Question'] };
-const REACT_MIGR = { '\u{1F525}': 'bravo', '\u{1F4AA}': 'bravo', '\u{1F44F}': 'bravo', '\u{1F44D}': 'vu' };
-// rx : { cle: { uid: true } } (nouvelles et anciennes clés mêlées) -> { vu: [uid…], bravo: [uid…], question: [uid…] }
-function reactionsDe(rx) { const o = { vu: new Set(), bravo: new Set(), question: new Set() }; for (const [k, w] of Object.entries(rx || {})) { const n = REACTIONS[k] ? k : REACT_MIGR[k]; if (n) Object.keys(w || {}).filter(id => w[id]).forEach(id => o[n].add(id)); } return { vu: [...o.vu], bravo: [...o.bravo], question: [...o.question] }; }
+// Réactions du fil et du chat : Bravo, Fort, Merci, avec une icône au trait. Les anciennes clés
+// (pictogrammes, puis Vu et Question) sont relues sous la nouvelle au chargement : aucun compteur perdu.
+// Applaudissements : Bravo ; feu et biceps : Fort ; pouce, Vu et Question : Merci.
+const REACTIONS = { bravo: ['clap', 'Bravo'], fort: ['bolt', 'Fort'], merci: ['heart', 'Merci'] };
+const REACT_MIGR = { '\u{1F44F}': 'bravo', '\u{1F525}': 'fort', '\u{1F4AA}': 'fort', '\u{1F44D}': 'merci', vu: 'merci', question: 'merci' };
+// rx : { cle: { uid: heure } } (nouvelles et anciennes clés mêlées) -> { bravo: [uid…], fort: [uid…], merci: [uid…] }
+function reactionsDe(rx) { const o = Object.fromEntries(Object.keys(REACTIONS).map(k => [k, new Set()])); for (const [k, w] of Object.entries(rx || {})) { const n = REACTIONS[k] ? k : REACT_MIGR[k]; if (n) Object.keys(w || {}).filter(id => w[id]).forEach(id => o[n].add(id)); } return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, [...v]])); }
 // Bascule de ma réaction : écrit la nouvelle clé et efface les anciennes clés équivalentes.
 // La valeur d'une réaction est son heure (fil d'équipe, dernière visite) ; les anciennes valent true.
 function reactOps(base, rx, cle) { const mine = reactionsDe(rx)[cle].includes(ME.id); const ops = [[[...base, cle, ME.id], mine ? null : Date.now()]]; for (const [old, n] of Object.entries(REACT_MIGR)) if (n === cle && deepGet(rx || {}, [old, ME.id])) ops.push([[...base, old, ME.id], null]); return ops; }
-const reactBtns = (act, id, rx, cls = '') => { const R = reactionsDe(rx); return Object.entries(REACTIONS).map(([k, [ic, l]]) => `<button class="${cls} ${R[k].includes(ME.id) ? 'on' : ''}" data-act="${act}" data-id="${id}" data-em="${k}" aria-pressed="${R[k].includes(ME.id)}" title="${esc([l, ...R[k].map(u => fullName(S.users[u] || { first: '?' }))].join(', '))}">${ico(ic, 'ico ico-xs')} ${l}${R[k].length ? ` <span class="num">${R[k].length}</span>` : ''}</button>`).join(''); };
+const reactBtns = (act, id, rx, cls = '') => { const R = reactionsDe(rx); return Object.entries(REACTIONS).map(([k, [ic, l]]) => `<button class="${cls} ${R[k].includes(ME.id) ? 'on' : ''}" data-act="${act}" data-id="${id}" data-em="${k}" aria-pressed="${R[k].includes(ME.id)}" title="${esc(`${l} : ${R[k].map(u => (S.users[u] || { first: '?' }).first).join(', ') || 'personne pour l’instant'}`)}" data-noms="${esc(`${l} : ${R[k].map(u => (S.users[u] || { first: '?' }).first).join(', ') || 'personne pour l’instant'}`)}">${ico(ic, 'ico ico-xs')} ${l}${R[k].length ? ` <span class="num">${R[k].length}</span>` : ''}</button>`).join(''); };
 // Image du chat : uniquement une image encodee (data:), jamais un texte qui pourrait sortir de l'attribut.
 const safeImg = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -218,7 +221,7 @@ function etatInitial() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {}, celebrated: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, tarifs: {}, transferts: {}, roiCfg: {}, scriptsReseau: {}, billing: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, tarifs: {}, transferts: {}, roiCfg: {}, leagues: {}, leagueMember: {}, duels: {}, kudos: {}, comments: {}, scriptsReseau: {}, billing: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
   };
   if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
   return st;

@@ -49,6 +49,8 @@ function demoStart() {
   // Capture : connexion d'office ; démo : l'écran de connexion propose « Lancer la démo ».
   if (CFG.capture && (!safeLS.get(SESSION_KEY) || !S.users[safeLS.get(SESSION_KEY)])) safeLS.set(SESSION_KEY, DEMO_USER);
   if (!CFG.capture) demoRecaler(S);
+  // ligue de la semaine du réseau de démonstration
+  if (!CFG.capture && typeof repartitionOps === 'function' && S && S.users) { const ME0 = ME; ME = ME || S.users.u1; const ops = repartitionOps(); ME = ME0; if (ops.length) { ops.forEach(([p, v]) => setPath(S, p, v)); REV++; backend.replaceAll(); } }
 }
 // Démonstration : les dossiers de résiliation gardent leur âge (« reçue il y a 2 h ») et la relève date
 // de 12 minutes, quelle que soit l'heure d'ouverture. Décale tous les horodatages du même écart.
@@ -63,6 +65,9 @@ function demoRecaler(st, maintenant = Date.now()) {
     if (r.rsm) dec(r.rsm, 'at'); (r.actions || []).forEach(a => dec(a, 'at')); Object.values(r.log || {}).forEach(a => dec(a, 'at'));
     const sv = (st.entries || {})['sv_' + r.id]; if (sv) dec(sv, 'at');
   });
+  // réseau de démonstration : le duel garde son avance (3 jours faits, 4 à venir)
+  Object.values(st.duels || {}).forEach(x => ['start', 'end', 'at'].forEach(k => dec(x, k)));
+  Object.values(st.kudos || {}).forEach(x => dec(x, 'at'));
   return st;
 }
 

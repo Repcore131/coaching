@@ -1457,3 +1457,47 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .delta-l { list-style: none; margin: 0; padding: 0; display: grid; }
 .delta-l li a { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-weight: 600; }
 .delta-l li:last-child a { border-bottom: 0; }
+/* Ligues du réseau */
+.ligue-l { display: grid; gap: 4px; }
+.ligue-r { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 10px; border-radius: var(--r-md); border: 1px solid transparent; }
+.ligue-r.monte { background: rgba(242, 197, 0, .16); border-color: var(--fil-or, #F2C500); }
+.ligue-r.descend { background: var(--surface-2, #EEE); color: var(--muted); }
+.ligue-r.moi { outline: 2px solid var(--accent); }
+.ligue-n { width: 24px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Duels de clubs et défis d'équipe */
+.duel-face { display: grid; gap: 10px; }
+.duel-c { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; }
+.duel-bar { height: 12px; border-radius: 6px; background: var(--surface-2, var(--line)); overflow: hidden; }
+.duel-bar i { display: block; height: 100%; border-radius: 6px; background: var(--muted); }
+.duel-c.nous .duel-bar i { background: var(--fil-or, #F2C500); }
+.duel-l { padding: 8px 0; border-bottom: 1px solid var(--line); gap: 6px; }
+.defi-e { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+/* Félicitations du manager */
+.bj-r { min-height: 48px; border-bottom: 1px solid var(--line); gap: 8px; }
+.kudos-raisons { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 8px; }
+.kudos-raisons .btn { min-height: 48px; }
+.fil-epingle { margin-top: 8px; font-size: var(--t-12); font-weight: 700; color: var(--fil-or-texte, #8A6D00); }
+/* Commentaires du fil */
+.fil-com { margin-top: 8px; display: grid; gap: 4px; }
+.fil-com-l { font-size: var(--t-14); }
+.fil-com-f { gap: 6px; }
+.fil-com-f .input { min-height: 40px; }
+/* Photo de profil, mascotte, défi de la semaine */
+.avatar.photo { padding: 0; overflow: hidden; background: none; }
+.avatar.photo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+.mascotte { display: inline-grid; place-items: center; flex: none; border-radius: 50%; border: 2px solid var(--fil-or, #F2C500); color: var(--text); overflow: hidden; margin-right: 12px; }
+.mascotte .ico { width: 60%; height: 60%; }
+.mascotte.photo img { width: 100%; height: 100%; object-fit: cover; }
+.defi-props { display: grid; gap: 8px; }
+.defi-prop { display: grid; gap: 2px; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.defi-prop small { color: var(--muted); }
+.defi-prop:hover, .defi-prop:focus-visible { border-color: var(--fil-or, #F2C500); }
+/* Démonstration commerciale en stories */
+.stories { max-width: 520px; margin: 0 auto; display: grid; gap: 12px; }
+.story-barres { display: grid; grid-auto-flow: column; gap: 4px; }
+.story-barres i { height: 4px; border-radius: 2px; background: var(--line); }
+.story-barres i.vu, .story-barres i.en-cours { background: var(--fil-or, #F2C500); }
+.story-tete { display: flex; align-items: baseline; gap: 8px; }
+.story-corps { min-height: 360px; }
+.story-liste { display: grid; gap: 6px; }
+.story-liste .row { min-height: 48px; border: 1px solid var(--line); border-radius: var(--r-md); padding: 0 10px; gap: 10px; }

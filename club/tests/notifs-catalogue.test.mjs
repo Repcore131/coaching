@@ -15,10 +15,10 @@ const cat = n => (uid, ctx) => ({ W: ctx.W, items: [...Array(n)].map((_, i) => (
 test('chaque type ouvre l’écran indiqué ; aucun montant ni nom de client', () => {
   const run = chargerAppli(S0()); run(`CLUB = S.clubs.k; ME = S.users.v`);
   const L = JSON.parse(run(`JSON.stringify(Object.entries(NOTIF_TYPES).map(([id, T]) => [id, T.ex, T.label]))`));
-  assert.deepEqual(L.map(x => x[0]), ['dayStart', 'dueFollowup', 'overtaken', 'challengeStart', 'kudos', 'palierNear', 'dayWrap', 'wrapReady']);
+  assert.deepEqual(L.map(x => x[0]), ['dayStart', 'dueFollowup', 'overtaken', 'challengeStart', 'kudos', 'kudosRappel', 'palierNear', 'dayWrap', 'wrapReady']);
   const urls = JSON.parse(run(`JSON.stringify(Object.values(NOTIF_TYPES).map(T => T.build({ n: 2, r: 1, qui: 'Lucas', k: 'contrats', d: 1, t: 'Défi', end: Date.now() + 36e5, reste: 3, f: 2, s: 12, mk: '2026-09', uid: 'v' })))`));
   for (const u of urls) { const route = u.url.replace(/^#\//, '').split('/')[0]; assert.equal(run(`!!PAGES['${route}']`), true, u.url); assert.doesNotMatch(u.title + u.body, /€|[–—]|\p{Extended_Pictographic}/u); }
-  assert.equal(urls[1].body, '2 relances dues.');
+  assert.equal(urls[1].body, '2 relances dues.'); assert.equal(urls.length, 9);
 });
 test('au plus 6 push par jour, jamais entre 20 h 30 et 8 h, rien un jour de repos', async () => {
   const S = S0(); const ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys();

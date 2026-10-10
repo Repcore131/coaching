@@ -67,7 +67,7 @@ export const REGLE = `${DEBUT}
       "users": {
         "$uid": {
           ".write": ${j(FICHE)},
-          "first": { ".write": ${j(SOIMEME)} }, "last": { ".write": ${j(SOIMEME)} }, "avatar": { ".write": ${j(SOIMEME)} },
+          "first": { ".write": ${j(SOIMEME)} }, "last": { ".write": ${j(SOIMEME)} }, "avatar": { ".write": ${j(SOIMEME)} }, "photo": { ".write": ${j(SOIMEME)}, ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:image/jpeg;base64,') && newData.val().length <= 82000)" },
           "salt": { ".write": ${j(SOIMEME)} }, "codeHash": { ".write": ${j(SOIMEME)} }, "bootKey": { ".write": ${j(SOIMEME)} },
           "status": { ".write": ${j(`${SOIMEME} && data.val() === 'pending' && newData.val() === 'active'`)} }
         }
@@ -97,6 +97,7 @@ export const REGLE = `${DEBUT}
       "clients": { ".write": ${j(MEMBRE)} },
       "loyalty": { ".write": ${j(MEMBRE)} },
       "transferts": { ".write": ${j(MEMBRE)} },
+      "leagues": { ".write": ${j(MEMBRE)} }, "leagueMember": { ".write": ${j(MEMBRE)} }, "duels": { ".write": ${j(MEMBRE)} }, "comments": { ".write": ${j(MEMBRE)} },
       // Dossiers relevés dans la boîte accueil (« ml… ») : créés et tenus à jour par le seul compte de service
       // (fonction ingestResiliations) ; l'équipe les traite (statut, responsable, journal) sans toucher au fil e-mail.
       "resiliations": { "$id": {
@@ -116,7 +117,8 @@ export const REGLE = `${DEBUT}
       "companies": { ".write": ${j(MEMBRE)} },
       "prospects": { ".write": ${j(MEMBRE)} },
       "opps": { ".write": ${j(MEMBRE)} },
-      "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
+      // Félicitations du manager et bravos (kudos.js) : un objet par félicitation.
+      "kudos": { ".write": ${j(MEMBRE)} },
       "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },
       "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } } } },
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} }, "$k": { ".write": ${j(MGR)} } } },

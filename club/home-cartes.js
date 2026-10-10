@@ -17,11 +17,12 @@ const carte = (cls, eyebrow, titre, corps, extra = '') => `<div class="card ${cl
 
 const HOME_CARDS = {
   delta: { label: 'Depuis ta dernière visite', icon: 'chart', roles: ['membre', 'manager'], default: true, render: () => (typeof deltaCard === 'function' ? deltaCard() : '') },
-  cockpit: { label: 'Cockpit du manager', icon: 'dashboard', roles: ['manager'], default: true, render: ctx => `<div class="col12">${managerCockpit()}</div>${ctx.manager ? `<div class="card col6"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(ctx.mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, ctx.mk)}</div>
+  cockpit: { label: 'Cockpit du manager', icon: 'dashboard', roles: ['manager'], default: true, render: ctx => `${typeof bienJoueTile === 'function' ? bienJoueTile() : ''}<div class="col12">${managerCockpit()}</div>${ctx.manager ? `<div class="card col6"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(ctx.mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, ctx.mk)}</div>
       <div class="card col6"><div class="race-h"><div><div class="eyebrow">Tous canaux</div><h3>Impayés récupérés</h3></div></div>${stackRows(ctx.recovRows, Object.entries(RECOV_CHANNELS).map(([key, c]) => ({ key, label: c.label, color: c.color })))}</div>` : ''}` },
   day: { label: 'Ma journée', icon: 'cal', roles: ['membre', 'manager'], default: true, render: ctx => (typeof maJourneeCard === 'function' ? maJourneeCard(ctx) : '') },
   todo: { label: 'À faire maintenant', icon: 'clock', roles: ['membre', 'manager'], default: true, render: () => `${typeof appelsDuJour === 'function' && appelsDuJour(3) ? `<div class="col12">${appelsDuJour(3)}</div>` : ''}${carte('col6', 'Classé en euros attendus', 'À faire maintenant', oppHomeList(5), '<a class="btn ghost sm" href="#/opportunites">Tout voir</a>')}` },
   quick: { label: 'Saisir', icon: 'edit', roles: ['membre', 'manager'], default: true, render: () => carte('col6', 'Saisie rapide', 'Saisir', quickPad()) },
+  duel: { label: 'Duel en cours', icon: 'bolt', roles: ['membre', 'manager'], default: true, render: () => (typeof duelCard === 'function' ? duelCard() : '') },
   challenge: { label: 'Défi en cours', icon: 'target', roles: ['membre', 'manager'], default: true, render: () => defiEnCoursCard() },
   goal: { label: 'Mon défi perso', icon: 'flag', roles: ['membre', 'manager'], default: false, render: () => defiPersoCard() },
   top: { label: 'Top 5', icon: 'users', roles: ['membre', 'manager'], default: true, render: ctx => carte('col6', 'Ce mois-ci', 'Les 5 premiers', ctx.top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span>${ctx.manager || x.u.id === ME.id ? `<i class="hdot ${h.cls}" title="${h.label}"></i>` : ''}<b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>', '<a class="btn ghost sm" href="#/leaderboard">Classement</a>') },
@@ -30,7 +31,7 @@ const HOME_CARDS = {
   feed: { label: TXT.pages.pouls, icon: 'pouls', roles: ['membre', 'manager'], default: false, render: () => (typeof filAccueilCard === 'function' ? filAccueilCard(3) : '') },
 };
 // Accueil conseillé, dans cet ordre (la dernière visite d'abord).
-const HOME_CONSEILLE = { membre: ['delta', 'day', 'todo', 'quick', 'challenge', 'top', 'paliers'], manager: ['delta', 'cockpit', 'day', 'todo', 'quick', 'challenge', 'top', 'paliers'] };
+const HOME_CONSEILLE = { membre: ['delta', 'day', 'goal', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'], manager: ['delta', 'cockpit', 'day', 'duel', 'todo', 'quick', 'challenge', 'top', 'paliers'] };
 const roleAccueil = () => (isManager() ? 'manager' : 'membre');
 const carteVisible = id => HOME_CARDS[id] && HOME_CARDS[id].roles.includes(roleAccueil());
 function homeCartes() {
@@ -42,10 +43,12 @@ function homeCartes() {
 function homeToutes() { const on = homeCartes(); return [...on, ...Object.keys(HOME_CARDS).filter(id => carteVisible(id) && !on.includes(id))]; }
 
 // ── Défi en cours (sprint du club) ────────────────────────────────────────
-function defiEnCours() { const n = Date.now(); return Object.values(S.challenges || {}).filter(ch => ch.clubId === CLUB.id && ch.start <= n && ch.end > n).sort((a, b) => a.end - b.end)[0] || null; }
+function defiEnCours() { const n = Date.now(); return Object.values(S.challenges || {}).filter(ch => ch.clubId === CLUB.id && ch.start <= n && ch.end > n && ch.type !== 'team').sort((a, b) => a.end - b.end)[0] || null; }
 function finDans(ts) { const h = Math.max(0, Math.round((ts - Date.now()) / 3600e3)); return h < 48 ? plur(h, 'heure', 'heures') : plur(Math.round(h / 24), 'jour', 'jours'); }
 function defiEnCoursCard() {
-  const ch = defiEnCours(); if (!ch) return '';
+  const ch = defiEnCours();
+  // pas de sprint : le défi d'équipe en cours, barre commune
+  if (!ch) { const t = typeof defisEquipe === 'function' ? defisEquipe(CLUB.id).find(c => c.start <= Date.now() && c.end > Date.now()) : null; if (!t) return ''; const s = defiEquipeEtat(t); const k = S.kpis[t.kpiId]; return carte('col6', `Défi d’équipe · fin dans ${finDans(t.end)}`, esc(t.title), `${progressBar(Math.min(1, s.pct))}<p class="small" style="margin:6px 0 0">${esc(fmtU(s.v, k))} sur ${esc(fmtU(t.target, k))} ensemble</p>`, '<a class="btn ghost sm" href="#/challenges">Défis</a>'); }
   const R = challengeRanking(ch); const moi = R.findIndex(x => x.u.id === ME.id);
   return carte('col6', `Fin dans ${finDans(ch.end)}`, esc(ch.title || 'Défi'), `${moi >= 0 ? `<p style="margin:0 0 8px">Vous êtes <b>${moi + 1}<sup>${moi ? 'e' : 'er'}</sup></b> sur ${R.length}.</p>` : ''}${R.slice(0, 3).map((x, i) => `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span></div>`).join('')}`, '<a class="btn ghost sm" href="#/leaderboard">Classement</a>');
 }

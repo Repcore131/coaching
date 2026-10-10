@@ -407,9 +407,17 @@ function allTrophies() {
     }
     // trophées personnels de la semaine, non compétitifs (objectifs.js)
     if (typeof tropheesPersoSemaine === 'function') for (const c of Object.values(S.clubs)) out.push(...tropheesPersoSemaine(c.id));
+    // badges de saison des ligues (ligues.js)
+    if (typeof tropheesLigue === 'function') out.push(...tropheesLigue());
+    // duels gagnés et défis d'équipe réussis (duels.js)
+    if (typeof tropheesDuels === 'function') out.push(...tropheesDuels());
+    // Coup de coeur du manager (kudos.js)
+    if (typeof tropheesCoeur === 'function') out.push(...tropheesCoeur());
+    // défis de la semaine tenus (photo-defi.js)
+    if (typeof tropheesDefi === 'function') out.push(...tropheesDefi());
     // sprints termines
     for (const ch of Object.values(S.challenges)) {
-      if (ch.end > Date.now()) continue;
+      if (ch.end > Date.now() || ch.type === 'team') continue;
       const w = challengeRanking(ch)[0];
       if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `${TXT.mots.sprint} : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), at: ch.end, clubId: ch.clubId });
     }

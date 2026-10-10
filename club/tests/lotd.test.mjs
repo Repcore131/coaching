@@ -130,13 +130,15 @@ test('célébration : seulement le palier d’équipe, une fois par palier et pa
   run(`celebrate('Impayé récupéré', '120 €, Léa Martin', { kind: 'win' }); celebrate('Impayé récupéré', '45 €, Paul Roy', { kind: 'win' }); celebrate('Client sauvé', 'Léa Martin reste au club', { kind: 'win' })`);
   assert.equal(run('N'), 1); assert.equal(run('T.length'), 3); assert.match(run('T[0]'), /^Impayé récupéré : 120/);
 });
-test('réactions Vu, Bravo, Question : les anciennes sont reprises sans perte', () => {
+test('réactions Bravo, Fort, Merci : les anciennes (pictogrammes, Vu, Question) sont reprises sans perte', () => {
   const run = appli({});
-  const r = J(run, `reactionsDe({ '\\u{1F525}': { a: true }, '\\u{1F4AA}': { b: true, a: true }, '\\u{1F44F}': { c: true }, '\\u{1F44D}': { d: true }, question: { e: true } })`);
-  assert.deepEqual(r, { vu: ['d'], bravo: ['a', 'b', 'c'], question: ['e'] });
+  const r = J(run, `reactionsDe({ '\\u{1F525}': { a: true }, '\\u{1F4AA}': { b: true, a: true }, '\\u{1F44F}': { c: true }, '\\u{1F44D}': { d: true }, question: { e: true }, vu: { f: 1 } })`);
+  assert.deepEqual(r, { bravo: ['c'], fort: ['a', 'b'], merci: ['d', 'e', 'f'] });
   run(`S.reactions.x = { '\\u{1F525}': { u: true } }; REV++`);
-  const ops = J(run, `reactOps(['reactions', 'x'], S.reactions.x, 'bravo')`);
-  assert.deepEqual(ops, [[['reactions', 'x', 'bravo', 'u'], null], [['reactions', 'x', '\u{1F525}', 'u'], null]]);
+  const ops = J(run, `reactOps(['reactions', 'x'], S.reactions.x, 'fort')`);
+  assert.deepEqual(ops, [[['reactions', 'x', 'fort', 'u'], null], [['reactions', 'x', '\u{1F525}', 'u'], null]]);
+  const h = run(`reactBtns('react', 'x', { bravo: { u: 1 } })`);
+  assert.match(h, /Bravo <span class="num">1<\/span>/); assert.match(h, /data-noms="Bravo : /); assert.doesNotMatch(h, /\p{Extended_Pictographic}/u);
 });
 test('niveaux : Recrue, Confirmé, Expert, Référent ; insignes 24 et 64 px', () => {
   const run = chargerAppli(base());

@@ -1,5 +1,13 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.10 (octobre 2026)
+- Ligues hebdomadaires du réseau : bronze, argent, or, platine ; groupes de 8 à 12 commerciaux, clubs mélangés ; 3 montent, 2 descendent ; saisons de 4 semaines ; Classement > Ma ligue ; un club peut ne pas participer, chacun peut masquer son nom hors de son club.
+- Duels de clubs d'une semaine comparés au pourcentage de l'objectif, carte Duel en cours, trophée Duel gagné ; défis d'équipe à objectif commun (Classement > Défis).
+- Félicitations du manager en 2 taps (Bien joué aujourd'hui), épinglables 24 h, comptées au profil ; Coup de coeur du manager ; 3 bravos par jour entre collègues ; rappel du vendredi.
+- Réactions Bravo, Fort, Merci (icônes au trait, anciennes réactions conservées) ; commentaires courts sous le fil ; bilan du mois partagé à l'équipe et image sans aucun montant.
+- Photo de profil (60 Ko au plus), mascotte du tableau de bord, défi de la semaine en 3 propositions et trophée Défi tenu.
+- Démonstration commerciale en 6 écrans (#/demo-commerciale) et recette de 10 vérifications exécutables dans la console.
+
 ## 2026.10.9 (octobre 2026)
 - Préférences du compte en version 2 (prefsOf, setPrefPath), suivies d'un appareil à l'autre : thème, accueil, ordre des indicateurs par club, fil, sons, vibrations, animations, heures calmes ; migration unique de l'ancien format ; carte Mon appli dans Profil.
 - Accueil personnalisable : cartes choisies et ordonnées par chacun (feuille Personnaliser, Revenir à l'accueil conseillé) ; déplacement au doigt par appui long, à la souris et au clavier, aussi pour les indicateurs du tableau de bord.

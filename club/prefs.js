@@ -117,10 +117,10 @@ function monAppliCard() {
   const choix = (act, cle, val, label, on) => `<button class="btn sm ${on ? 'primary' : ''}" data-act="${act}" data-k="${cle}" data-v="${val}" aria-pressed="${on}">${label}</button>`;
   const inter = (cle, label, detail, on) => `<label class="row"><input type="checkbox" data-change="senseSet" data-k="${cle}" ${on ? 'checked' : ''}><span class="spacer">${label}<small class="muted">${detail}</small></span></label>`;
   return `<div class="card" id="mon-appli"><h3>Mon appli</h3><p class="muted small" style="margin-top:-4px">Réglages de votre compte : ils vous suivent sur tous vos appareils.</p>
-    <div class="field"><span>Thème</span><div class="row wrap" style="gap:6px">${[['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Comme l’appareil']].map(([k, l]) => choix('themeSet', 'theme', k, l, t === k)).join('')}</div></div>
+    <div class="field"><span>Thème</span><div class="row wrap" style="gap:6px">${[['auto', 'Automatique'], ['dark', 'Sombre'], ['light', 'Clair']].map(([k, l]) => choix('themeSet', 'theme', k, l, t === k)).join('')}</div></div>
     <div class="nt-rules" style="margin-top:10px">${inter('haptics', 'Vibrations', 'Une vibration courte à chaque saisie et au début d’un déplacement.', P.sense.haptics)}${inter('sound', 'Sons', 'Un bip discret à chaque saisie.', P.sense.sound)}${inter('motion', 'Animations réduites', 'Moins de mouvements à l’écran.', P.sense.motion === 'reduced')}</div>
     <div class="form-grid" style="margin-top:10px"><label class="field"><span>Heures calmes : de</span><input class="input" type="time" value="${esc(P.notif.quietFrom)}" data-change="calmeSet" data-k="quietFrom"></label><label class="field"><span>à</span><input class="input" type="time" value="${esc(P.notif.quietTo)}" data-change="calmeSet" data-k="quietTo"></label></div>
-    <p class="muted small" style="margin:6px 0 0">Aucune alerte pendant les heures calmes.</p></div>`;
+    <p class="muted small" style="margin:6px 0 0">Aucune alerte pendant les heures calmes.</p>${typeof mascotteChoix === 'function' ? mascotteChoix() : ''}</div>`;
 }
 ACTIONS.themeSet = el => choisirTheme(el.dataset.v || el.dataset.t);
 ACTIONS.senseSet = el => { const k = el.dataset.k; setPrefPath(['sense', k], k === 'motion' ? (el.checked ? 'reduced' : 'auto') : el.checked); PREFS_APPLIQUE = ''; };

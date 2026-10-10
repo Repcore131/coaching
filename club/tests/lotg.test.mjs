@@ -217,7 +217,7 @@ test('point 1 : démo vendable, 38 dossiers pour 4 120 €, 5 canaux, part équi
   const D = J(run, `(() => { const o = dunRows('demo').filter(c => Number(c.balance) > 0); return { n: o.length, total: Math.round(o.reduce((s, c) => s + Number(c.balance), 0) * 100) / 100, sans: o.filter(c => !dunOf(c).ownerId).length, prom: o.filter(c => dunOf(c).status === 'promesse').length, ages: o.map(c => incidentDepuis(c)) }; })()`);
   assert.equal(D.n, 38); assert.equal(D.total, 4120); assert.equal(D.sans, 9); assert.equal(D.prom, 6); assert.equal(Math.min(...D.ages), 1); assert.equal(Math.max(...D.ages), 75);
   run(`UI.dunFilter = 'todo'`); assert.match(run(`dunTable()`), /Total dû<\/span><b>4\s120\s€<\/b>/);
-  assert.equal(run(`Object.keys(S.clients).length`), 420); assert.equal(run(`Object.values(S.users).filter(u => u.role === 'membre' && !u.virtual).length`), 5);
+  assert.equal(run(`Object.keys(S.clients).length`), 420); assert.equal(run(`Object.values(S.users).filter(u => u.role === 'membre' && !u.virtual && u.clubs.includes('demo')).length`), 5); assert.equal(run(`Object.values(S.users).filter(u => u.role === 'membre' && !u.virtual).length`), 11); // 6 du réseau de démonstration (lot I)
   for (let i = 0; i < 6; i++) {
     const mk = run(`addMonths(curMonth(), -${i})`); const rg = `{ from: '${mk}-01', to: '${mk}-31' }`;
     const p = J(run, `recoveredParts('demo', ${rg})`); const tot = run(`recoveredFor('demo', ${rg})`);
