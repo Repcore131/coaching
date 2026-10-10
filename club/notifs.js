@@ -24,8 +24,12 @@ const NOTIF_RULES = {
   mgr_silent: { label: 'Commercial sans saisie depuis 2 jours', ex: 'Lucas n’a rien saisi depuis 2 jours.', manager: true },
   rsm: { label: 'Imports Resamania à faire', ex: '4 sur 7 exports faits.', manager: true },
 };
-const notifPrefs = () => { const p = pref('notif', null) || {}; return { rules: p.rules || {}, quiet: { from: '20:30', to: '08:00', sunday: true, ...(p.quiet || {}) }, max: Number(p.max) || 6 }; };
-const ruleOn = id => id === 'live' ? pref('liveBanner', true) !== false : id === 'digest' ? pref('digest', true) !== false : notifPrefs().rules[id] !== false;
+// Réglages du compte (prefs.notif, voir prefs.js) : mêmes valeurs pour l'appli et le serveur d'envoi.
+const notifPrefs = () => { const n = prefsOf().notif; return { rules: n.rules || {}, quiet: { from: n.quietFrom, to: n.quietTo, sunday: n.sunday !== false }, max: Number(n.maxPerDay) || 6 }; };
+const ruleOn = id => { const n = prefsOf().notif; return id === 'live' ? n.liveBanner !== false : id === 'digest' ? n.digest !== false && digestEnvoye() : (n.rules || {})[id] !== false; };
+// TODO digest relié au moteur d'alertes : la case n'apparaît que si un envoi existe réellement.
+// Bilan de la semaine : envoyé par le serveur d'envoi, seulement si sa messagerie est réglée et qu'il tourne.
+const digestEnvoye = () => { const srv = (S && S.serveur) || {}; return !!(srv.mail && srv.at && Date.now() - srv.at < 3 * 3600e3); };
 function inQuiet() { const q = notifPrefs().quiet; const d = new Date(); const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`; if (q.sunday && d.getDay() === 0) return true; return q.from > q.to ? (hm >= q.from || hm < q.to) : (hm >= q.from && hm < q.to); }
 
 const inboxKey = () => 'fitpulse.inbox.' + (ME ? ME.id : '');
@@ -128,15 +132,14 @@ function notifCard() {
     <div class="row wrap" style="gap:8px;margin:6px 0 12px"><span class="tag ${'Notification' in window && Notification.permission === 'granted' ? 'is-ok' : ''}">${st}</span>${'Notification' in window && Notification.permission === 'default' ? '<button class="btn sm primary" data-act="notifEnable">Activer les alertes sur cet appareil</button>' : ''}</div>
     ${isStandalone() ? '' : INSTALL_EVT ? '<button class="btn sm" data-act="installApp">Installer Fit Pulse</button>' : isIos() ? '<p class="small">Pour recevoir les alertes sur iPhone : touchez Partager, puis Sur l’écran d’accueil, puis ouvrez Fit Pulse depuis l’icône.</p>' : ''}
     <p class="muted small">${deepGet(S, ['serveur', 'vapidPublic']) ? 'Une fois activées, les alertes arrivent même téléphone fermé (sur iPhone : appli installée sur l’écran d’accueil).' : 'Les alertes s’affichent quand Fit Pulse est ouverte, même en arrière-plan.'} Elles ne contiennent jamais le nom d’un client.</p>
-    <div class="nt-rules">${Object.entries(NOTIF_RULES).filter(([, r]) => !r.manager || mgr).map(([id, r]) => `<label class="row"><input type="checkbox" data-change="notifRule" data-id="${id}" ${ruleOn(id) ? 'checked' : ''}><span class="spacer">${r.label}<small class="muted">${esc(r.ex)}</small></span></label>`).join('')}</div>
-    <div class="form-grid" style="margin-top:10px"><label class="field"><span>Heures calmes : de</span><input class="input" type="time" value="${P.quiet.from}" data-change="notifQuiet" data-k="from"></label><label class="field"><span>à</span><input class="input" type="time" value="${P.quiet.to}" data-change="notifQuiet" data-k="to"></label></div>
+    <div class="nt-rules">${Object.entries(NOTIF_RULES).filter(([id, r]) => (!r.manager || mgr) && (id !== 'digest' || digestEnvoye())).map(([id, r]) => `<label class="row"><input type="checkbox" data-change="notifRule" data-id="${id}" ${ruleOn(id) ? 'checked' : ''}><span class="spacer">${r.label}<small class="muted">${esc(r.ex)}</small></span></label>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">Heures calmes : dans la carte Mon appli.</p>
     <label class="row small" style="margin-top:8px"><input type="checkbox" data-change="notifQuiet" data-k="sunday" ${P.quiet.sunday ? 'checked' : ''}> Silence le dimanche</label>
     <label class="field" style="margin-top:8px"><span>Au plus, par jour</span><select class="input" data-change="notifMax">${[3, 6, 10, 20].map(n => `<option value="${n}" ${P.max === n ? 'selected' : ''}>${n} alertes</option>`).join('')}</select></label></div>`;
 }
-const saveNotif = P => setPref('notif', { rules: P.rules, quiet: P.quiet, max: P.max });
-ACTIONS.notifRule = el => { const id = el.dataset.id; if (id === 'live') return setPref('liveBanner', el.checked); if (id === 'digest') return setPref('digest', el.checked); const P = notifPrefs(); P.rules[id] = el.checked; saveNotif(P); };
-ACTIONS.notifQuiet = el => { const P = notifPrefs(); P.quiet[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; saveNotif(P); };
-ACTIONS.notifMax = el => { const P = notifPrefs(); P.max = Number(el.value) || 6; saveNotif(P); };
+ACTIONS.notifRule = el => { const id = el.dataset.id; if (id === 'live') return setPrefPath(['notif', 'liveBanner'], el.checked); if (id === 'digest') return setPrefPath(['notif', 'digest'], el.checked); setPrefPath(['notif', 'rules', id], el.checked); };
+ACTIONS.notifQuiet = el => { const k = { from: 'quietFrom', to: 'quietTo', sunday: 'sunday' }[el.dataset.k]; if (k) setPrefPath(['notif', k], el.type === 'checkbox' ? el.checked : el.value); };
+ACTIONS.notifMax = el => setPrefPath(['notif', 'maxPerDay'], Number(el.value) || 6);
 ACTIONS.notifEnable = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') pushSubscribe().catch(() => null); toast(r === 'granted' ? 'Alertes activées sur cet appareil.' : 'Alertes non autorisées.'); render(); } catch (_) { toast('Ce navigateur ne permet pas les alertes.'); } };
 ACTIONS.installApp = async () => { if (!INSTALL_EVT) return; INSTALL_EVT.prompt(); await INSTALL_EVT.userChoice.catch(() => null); INSTALL_EVT = null; render(); };
 

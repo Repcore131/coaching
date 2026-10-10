@@ -371,16 +371,15 @@ function profPersonal() {
       <label class="field"><span>Téléphone professionnel</span><input class="input" name="tel" type="tel" maxlength="20" value="${esc(p.tel || '')}" placeholder="Facultatif"></label>
       <label class="field"><span>Ma devise ou une phrase sur moi</span><input class="input" name="bio" maxlength="140" value="${esc(p.bio || '')}" placeholder="Ex. Toujours partant pour un défi"></label>
       <button class="btn primary" type="button" data-act="profSave">Enregistrer mon profil</button></form>
-    <div class="field" style="margin-top:12px"><span>Thème</span><div class="row" style="gap:6px">${[['light', 'Clair', 'sun'], ['dark', 'Sombre', 'moon'], ['auto', 'Comme l’appareil', 'repeat']].map(([k, l, i]) => { const on = k === 'auto' ? !document.documentElement.dataset.theme : document.documentElement.dataset.theme === k; return `<button class="btn sm ${on ? 'primary' : ''}" data-act="themeSet" data-t="${k}" aria-pressed="${on}">${ico(i)} ${l}</button>`; }).join('')}</div></div>
     <button class="btn danger" style="margin-top:14px" data-act="logout">${ico('logout')} Se déconnecter</button></div>`;
 }
 const profPatch = patch => setPref('profil', { ...profilOf(ME), ...patch });
 ACTIONS.profSave = () => { const f = formData($('#ppf2')); profPatch({ poste: (f.poste || '').trim().slice(0, 60) || null, tel: (f.tel || '').trim().slice(0, 20) || null, bio: (f.bio || '').trim().slice(0, 140) || null }); toast('1 profil enregistré'); };
-ACTIONS.themeSet = el => { const t = el.dataset.t; if (t === 'auto') { delete document.documentElement.dataset.theme; safeLS.del('fitpulse.theme'); } else { document.documentElement.dataset.theme = t; safeLS.set('fitpulse.theme', t); } render(); };
 function profAccount() {
   return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">${profPersonal()}
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
+    ${monAppliCard()}
     ${notifCard()}
     <div class="card"><h3>Données personnelles</h3><p class="small">Ce que Fit Pulse garde sur l’équipe et les adhérents, pourquoi et combien de temps.</p><a class="btn sm" href="#/donnees">Lire la notice</a><p class="muted small" style="margin:10px 0 0">Version ${APP_VERSION}</p></div>
     <div class="card"><h3>Sécurité</h3>${`<p class="small">Connexion par e-mail et code d’accès personnel.</p><form id="cc" class="grid"><label class="field"><span>Code actuel</span><input class="input" name="cur" id="cc-cur" placeholder="FP-XXXX-XXXX-XXXX" autocomplete="current-password"></label><button class="btn" type="button" data-act="changeMyCode">${ico('shield')} Générer un nouveau code</button></form><p class="muted small">${backend.mode === 'firebase' ? 'Votre code ouvre la base de l’équipe depuis n’importe quel appareil. Le nouveau code remplace l’ancien partout.' : 'En mode local, les données restent dans ce navigateur : le code protège l’accès à l’écran.'}</p>`}</div></div>`;

@@ -11,8 +11,10 @@ const ACTIONS = {};       // data-act -> fonction(el, event)
 const isCreator = () => ME && ME.role === 'createur';
 const isManager = () => ME && (ME.role === 'manager' || ME.role === 'createur');
 const myClubs = () => (ME ? (ME.role === 'createur' ? Object.keys(S.clubs) : (ME.clubs || [])) : []).map(id => S.clubs[id]).filter(Boolean);
-const pref = (k, d) => { const p = (S.prefs[ME.id] || {})[k]; return p === undefined ? d : p; };
-const setPref = (k, v) => db.set(['prefs', ME.id, k], v);
+// Ancien accès par clé : gardé comme alias. Les clés du modèle v2 (prefs.js) sont redirigées.
+const PREF_ALIAS = { feedSeen: ['seen', 'feed'], chatSeen: ['seen', 'chat'], liveBanner: ['notif', 'liveBanner'], digest: ['notif', 'digest'], tipDrag: ['tips', 'drag'], vibrate: ['sense', 'haptics'] };
+const pref = (k, d) => { if (PREF_ALIAS[k]) { const v = deepGet(prefsOf(), PREF_ALIAS[k]); return v === undefined ? d : v; } const p = (S.prefs[ME.id] || {})[k]; return p === undefined ? d : p; };
+const setPref = (k, v) => (PREF_ALIAS[k] ? setPrefPath(PREF_ALIAS[k], v) : db.set(['prefs', ME.id, k], v));
 
 // ── Toasts, modales, confirmations ────────────────────────────────────────
 function toast(msg, ms = 3200) {
@@ -61,7 +63,7 @@ function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
       onClose: () => { if (!done) res(false); } });
   });
 }
-const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reducedMotion = () => document.documentElement.dataset.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches;
 const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; else if (!(el.name in o)) o[el.name] = ''; return; } o[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return o; };
 
 // ── Avatars : pastille d'initiales, sans photo ni couleur choisie ──────────
@@ -207,12 +209,12 @@ const NAV = [
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
 function unseenPouls() {
-  const seen = pref('feedSeen', 0);
+  const seen = prefsOf().seen.feed;
   const clubs = ME.clubs || [];
   return Object.values(S.entries).filter(e => e.source === 'manual' && e.at > seen && e.userId !== ME.id && clubs.includes(e.clubId)).length;
 }
 function unseenChat() {
-  const seen = pref('chatSeen', 0);
+  const seen = prefsOf().seen.chat;
   const ch = new Set([...(ME.clubs || []), 'all']);
   return Object.values(S.chat).filter(m => m.at > seen && m.userId !== ME.id && ch.has(m.channel)).length;
 }
@@ -282,6 +284,7 @@ function renderNowInner() {
   if (!CLUB || !S.clubs[CLUB.id] || !myClubs().some(c => c.id === CLUB.id)) CLUB = myClubs()[0] || null;
   else CLUB = S.clubs[CLUB.id];
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
+  prefsSync();
   appliquerCouleurClub();
   if (typeof purgeAuto === 'function') purgeAuto();
   let { r, args } = currentRoute();
@@ -345,7 +348,7 @@ const policesPretes = () => (document.fonts ? Promise.all([document.fonts.load('
 // Thème clair par défaut ; sombre si l'appareil le demande ou si l'utilisateur l'a choisi.
 const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S) themeFor(CLUB); }); } catch (e) { /* ancien navigateur */ }
-ACTIONS.theme = () => { const t = curTheme() === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; safeLS.set('fitpulse.theme', t); render(); };
+ACTIONS.theme = () => choisirTheme(curTheme() === 'dark' ? 'light' : 'dark');
 ACTIONS.logout = () => logout();
 ACTIONS.pickClub = el => { CLUB = S.clubs[el.value]; safeLS.set('fitpulse.club', CLUB.id); UI.dashUser = null; render(); };
 ACTIONS.go = el => { location.hash = el.dataset.href; };

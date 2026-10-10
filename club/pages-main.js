@@ -470,7 +470,7 @@ PAGES.pouls = {
     const scope = multi ? (UI.poulsScope || 'club') : 'club';
     const clubs = scope === 'club' ? [CLUB.id] : (ME.clubs || []);
     const list = Object.values(S.entries).filter(e => e.source === 'manual' && clubs.includes(e.clubId)).sort((a, b) => b.at - a.at).slice(0, 120);
-    setTimeout(() => { if (unseenPouls()) setPref('feedSeen', Date.now()); }, 600);
+    setTimeout(() => { if (unseenPouls()) setPrefPath(['seen', 'feed'], Date.now()); }, 600);
     let lastDay = '';
     const items = list.map(e => {
       const u = S.users[e.userId], k = S.kpis[e.kpiId], c = S.clubs[e.clubId];
@@ -515,7 +515,7 @@ PAGES.chat = {
       </div></div>`;
     };
     const list = roots.map(m => { const d = isoOf(new Date(m.at)); const sep = d !== lastDay ? `<div class="day-sep">${d === today() ? 'Aujourd’hui' : dayLabel(d)}</div>` : ''; lastDay = d; return sep + bubble(m); }).join('');
-    setTimeout(() => { if (unseenChat()) setPref('chatSeen', Date.now()); const l = $('#chat-list'); if (l) l.scrollTop = l.scrollHeight; }, 50);
+    setTimeout(() => { if (unseenChat()) setPrefPath(['seen', 'chat'], Date.now()); const l = $('#chat-list'); if (l) l.scrollTop = l.scrollHeight; }, 50);
     const rep = UI.chatReply && S.chat[UI.chatReply];
     return `<div class="card chat-wrap"><div class="chat-head"><h3>Canal</h3>${seg('chatCh', chans.map(([id, n]) => [id, esc(n)]), ch)}<span class="spacer"></span><span class="muted small">${ch === 'all' ? 'Toutes les équipes de nos clubs' : 'L’équipe du club uniquement'}</span></div>
       <div class="chat-list" id="chat-list">${list || emptyBox({ art: 'chat', title: 'Aucun message', text: 'Lancez la discussion avec votre équipe.', cta: '<button class="btn sm" data-act="chatFocus">Écrire un message</button>' })}</div>

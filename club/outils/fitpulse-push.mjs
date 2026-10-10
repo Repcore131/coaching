@@ -60,9 +60,11 @@ function parisMidnight(day) {
   return Date.parse(day + 'T00:00:00Z') - offMin * 60000;
 }
 const prefsOf = (S, uid) => ((S.prefs || {})[uid] || {});
-function ruleOn(S, uid, rule) { const p = prefsOf(S, uid); if (rule === 'digest') return p.digest !== false; const n = p.notif || {}; return (n.rules || {})[rule] !== false; }
-function quiet(S, uid, P) { const q = { from: '20:30', to: '08:00', sunday: true, ...((prefsOf(S, uid).notif || {}).quiet || {}) }; if (q.sunday && P.dow.startsWith('dim')) return true; return q.from > q.to ? (P.hm >= q.from || P.hm < q.to) : (P.hm >= q.from && P.hm < q.to); }
-const maxOf = (S, uid) => Number((prefsOf(S, uid).notif || {}).max) || 6;
+// Préférences v2 (notif.quietFrom, quietTo, maxPerDay, digest) ; l'ancien format reste lu tant que l'appli n'a pas migré le compte.
+const digestOn = p => (p.notif && p.notif.digest !== undefined ? p.notif.digest : p.digest) !== false;
+function ruleOn(S, uid, rule) { const p = prefsOf(S, uid); if (rule === 'digest') return digestOn(p); const n = p.notif || {}; return (n.rules || {})[rule] !== false; }
+function quiet(S, uid, P) { const n = prefsOf(S, uid).notif || {}; const o = n.quiet || {}; const q = { from: n.quietFrom || o.from || '20:30', to: n.quietTo || o.to || '08:00', sunday: (n.sunday !== undefined ? n.sunday : o.sunday) !== false }; if (q.sunday && P.dow.startsWith('dim')) return true; return q.from > q.to ? (P.hm >= q.from || P.hm < q.to) : (P.hm >= q.from && P.hm < q.to); }
+const maxOf = (S, uid) => { const n = prefsOf(S, uid).notif || {}; return Number(n.maxPerDay || n.max) || 6; };
 const active = u => u && !u.virtual && u.status !== 'archived' && u.status !== 'pending';
 const inClub = (u, c) => (u.clubs || []).includes(c) || u.role === 'createur';
 const resOpen = r => ['nouvelle', 'traitement'].includes(r.status || (r.saved ? 'sauvee' : 'resiliee'));
@@ -208,7 +210,7 @@ async function mailsBilan(S, P, log, mail) {
     const lines = (u.clubs || Object.keys(S.clubs || {})).map(club => { const c = sum(S, e => e.clubId === club && e.kpiId === 'contrats' && e.date === t); const n = Object.values(S.entries || {}).filter(e => e && e.clubId === club && e.source === 'manual' && e.date === t).length; const res = Object.values(S.resiliations || {}).filter(r => r && r.clubId === club && resOpen(r)).length; return `${((S.clubs || {})[club] || {}).name || club} : ${plurFr(Math.round(c), 'contrat', 'contrats')} aujourd’hui, ${plurFr(n, 'saisie', 'saisies')}, ${plurFr(res, 'résiliation ouverte', 'résiliations ouvertes')}.`; });
     await mail(u.email, `Bilan du jour Fit Pulse, ${t.split('-').reverse().join('/')}`, [`Bonjour ${u.first || ''},`, '', ...lines, '', 'Détails dans Fit Pulse.'].join('\n'));
   });
-  if (P.dow.startsWith('lun') && hm >= 8 * 60 + 15 && hm < 9 * 60 + 15) for (const u of users.filter(x => prefsOf(S, x.id).digest !== false)) await once(`mailwk|${u.id}|${t}`, async () => {
+  if (P.dow.startsWith('lun') && hm >= 8 * 60 + 15 && hm < 9 * 60 + 15) for (const u of users.filter(x => digestOn(prefsOf(S, x.id)))) await once(`mailwk|${u.id}|${t}`, async () => {
     const from = addDays(t, -7), to = addDays(t, -1), pf = addDays(t, -14), pt = addDays(t, -8);
     const mine = (a, b) => sum(S, e => e.userId === u.id && e.kpiId === 'contrats' && e.date >= a && e.date <= b);
     const club = (u.clubs || [])[0]; const cl = (a, b) => sum(S, e => e.clubId === club && e.kpiId === 'contrats' && e.date >= a && e.date <= b);

@@ -32,7 +32,7 @@ export function quandBrief(now = new Date()) {
 }
 // Destinataires : managers actifs du club, avec une adresse, préférence digest active.
 export function destinataires(S, clubId) {
-  return Object.values(S.users || {}).filter(u => u && u.role === 'manager' && u.status !== 'archived' && (u.clubs || []).includes(clubId) && ((S.prefs || {})[u.id] || {}).digest !== false);
+  return Object.values(S.users || {}).filter(u => u && u.role === 'manager' && u.status !== 'archived' && (u.clubs || []).includes(clubId) && (p => (p.notif && p.notif.digest !== undefined ? p.notif.digest : p.digest) !== false)((S.prefs || {})[u.id] || {}));
 }
 export function briefPour(S, clubId, run = chargerAppli(S)) {
   run(`CLUB = S.clubs[${JSON.stringify(clubId)}]; ME = Object.values(S.users || {}).find(u => u.role === 'manager' && (u.clubs || []).includes(CLUB.id)) || { id: 'serveur', role: 'manager', clubs: [CLUB.id] };`);

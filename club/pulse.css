@@ -1401,3 +1401,5 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
   body.print-roi .roi-v { color: #111; background: var(--roi-jaune); padding: 0 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 .appels-liste { display: grid; gap: 10px; }
+/* Animations réduites choisies dans Mon appli (préférence du compte) */
+html[data-motion=reduced] *, html[data-motion=reduced] *::before, html[data-motion=reduced] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

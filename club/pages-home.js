@@ -84,7 +84,7 @@ function quickAdd(kpiId, value, userId = ME.id) {
   if (rk0 && rk && rk.rank < rk0.rank) parts.push(`vous passez ${rk.rank}${rk.rank === 1 ? 'er' : 'e'}`);
   let pending = null;
   if (tierHit) pending = setTimeout(() => stepBanner(`${k.label} : ${tierHit * 100} % de l’objectif, ${fmtU(row.real, k)}`), 300);
-  if (navigator.vibrate && pref('vibrate', true)) navigator.vibrate(tierHit ? [30, 40, 30, 40, 30] : 15);
+  vibrer(tierHit ? [30, 40, 30, 40, 30] : 15); bip(tierHit);
   toastUndo(parts.join('. '), () => { clearTimeout(pending); db.set(['entries', id], null); });
   checkPalierCrossed(before);
 }
