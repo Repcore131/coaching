@@ -35,6 +35,11 @@ const COUT_RELANCE = 24;
 
 export function travaux(M) {
   return [
+    // LES CONTACTS E-MAIL (brevo.js) : CHAQUE MINUTE, 30 requêtes au plus.
+    // ⚠ EN TÊTE (11/10/2026) : placé après les travaux du jour, il arrivait
+    //   l'après-midi avec moins de 16 requêtes de budget (une lecture d'état
+    //   par travail déjà fini) et ne démarrait jamais.
+    { nom: 'emails', minute: true, quand: () => true, une: (t) => (M.emails ? M.emails.minute(t) : null) },
     { nom: 'stats_badges', quand: (p) => apres(p, 3, 17), cles: () => M.coachsEtUsers(), un: (c, t, acc) => M.statsBadgesUn(c, acc), fin: M.statsBadgesFin, cout: 3 },
     // Le 1er du mois : l'idempotence PayPal de plus de 90 jours.
     { nom: 'purge_paypal', quand: (p) => p.date === 1 && apres(p, 4, 10), une: (t) => (M.paypal ? M.paypal.purgerEvenements(t) : null) },
@@ -92,8 +97,6 @@ export function travaux(M) {
     // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
     // LES CONNEXIONS SIMULTANÉES (09/10/2026) : CHAQUE MINUTE (minute: true),
     // comptées depuis /presence, alerte à Kevin à 70 (affluence.js).
-    // LES CONTACTS E-MAIL (brevo.js) : CHAQUE MINUTE, 30 requêtes au plus.
-    { nom: 'emails', minute: true, quand: () => true, une: (t) => (M.emails ? M.emails.minute(t) : null) },
     { nom: 'affluence', minute: true, quand: () => true, une: (t) => (M.affluence ? M.affluence.minute(t) : null) },
     // Et chaque nuit, les présences de plus de 24 h.
     { nom: 'presence_purge', quand: (p) => apres(p, 4, 40), une: (t) => (M.affluence ? M.affluence.purger(t) : null) },

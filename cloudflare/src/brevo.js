@@ -71,7 +71,7 @@ export function statutContact(u) {
 }
 
 // UN APPEL À BREVO, compté. Rend {statut, corps, attente} ; 0 = réseau.
-class Arret extends Error { constructor(statut, etape, attente) { super('Brevo ' + etape + ' ' + statut); this.statut = statut; this.etape = etape; this.attente = attente || 0; } }
+class Arret extends Error { constructor(statut, etape, attente, detail) { super('Brevo ' + etape + ' ' + statut); this.statut = statut; this.etape = etape; this.attente = attente || 0; this.detail = detail || null; } }
 function client(env, fetchImpl, compteur) {
   const F = fetchImpl || fetch;
   const cle = String(env.BREVO_API_KEY || '').trim();
@@ -89,7 +89,9 @@ function client(env, fetchImpl, compteur) {
     return { statut: r.status, corps: j, attente: h('Retry-After') || h('x-sib-ratelimit-reset') };
   };
 }
-const exiger = (r, etape, ok) => { if (!(ok || [200, 201, 204]).includes(r.statut)) throw new Arret(r.statut, etape, r.attente); return r.corps; };
+// Le message d'erreur de Brevo (code + texte, tronqués) : il ne contient jamais la clé.
+const detailDe = (c) => (c && typeof c === 'object' ? String((c.code || '') + ' ' + (c.message || '')).trim().slice(0, 160) : null);
+const exiger = (r, etape, ok) => { if (!(ok || [200, 201, 204]).includes(r.statut)) throw new Arret(r.statut, etape, r.attente, detailDe(r.corps)); return r.corps; };
 
 // CRÉER OU METTRE À JOUR un contact (un seul appel, updateEnabled). Un 400 sur
 // des attributs inconnus de Brevo : on réessaie avec le seul prénom, puis sans
@@ -239,9 +241,13 @@ export function creerBrevo(ctx) {
     let pause = 0;
     if (Object.keys(l).length) {
       // La préparation (5 appels, une fois) ne commence que si le budget la permet.
-      if ((await lire('worker/email/prepare')) !== PREPARATION && (compteur.n + 11 > EMAIL_PAR_MINUTE || reste() < 16)) return Object.assign(bilan, { etat: 'budget' });
+      if ((await lire('worker/email/prepare')) !== PREPARATION && (compteur.n + 11 > EMAIL_PAR_MINUTE || reste() < 16)) return false;   // pas fini : repris au réveil suivant
       try { bilan.preparation = await preparer(api); }
-      catch (e) { return Object.assign(bilan, { etat: 'preparation_' + (e && e.statut) }); }
+      catch (e) {
+        // Noté (code et étape, jamais la clé) : c'est la première chose à lire si rien ne part.
+        await db.ref('worker/email/dernier').set({ etat: 'preparation_' + (e && e.statut), etape: (e && e.etape) || null, detail: (e && e.detail) || null, le: t });
+        return Object.assign(bilan, { etat: 'preparation_' + (e && e.statut) });
+      }
     }
     for (const id of Object.keys(l).sort()) {
       const op = l[id];
@@ -316,5 +322,18 @@ export function creerBrevo(ctx) {
     return { ok: false, raison: 'action' };
   }
 
-  return { minute, enfiler, contactDuCompte, lead, leadOuvert, appel, executer };
+  // L'ÉTAT, sans aucune donnée personnelle (GET /email/etat) : des compteurs
+  // et des codes, pour vérifier la configuration sans accès à la base.
+  async function etat() {
+    const [file, echecs, prepare, debit, job] = await Promise.all([db.ref('email_file').shallow(), db.ref('email_echecs').shallow(),
+      lire('worker/email/prepare'), lire('worker/email/debit'), lire('worker/jobs/emails')]);
+    const ech = (await lire('email_echecs')) || {};
+    const dernier = await lire('worker/email/dernier');
+    return { configure: configure(), dernier: dernier || null, file: file.length, echecs: echecs.length, prepare: prepare || null,
+      appelsMinute: (debit && debit.n) || 0, pause: !!(debit && debit.pauseJusqua),
+      dernierEchec: Object.values(ech).slice(-3).map((x) => ({ statut: x.statut || null, etape: x.etape || null, raison: x.raison || null })),
+      job: job ? { periode: job.jour || null, fini: !!job.fini, erreur: job.erreur ? String(job.erreur).slice(0, 120) : null } : null };
+  }
+
+  return { minute, enfiler, contactDuCompte, lead, leadOuvert, appel, executer, etat };
 }
