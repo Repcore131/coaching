@@ -54,6 +54,9 @@ await test('PURE texteFinEssai : les vrais chiffres avec séances, aucun chiffre
   assert.equal(v.title, 'Ton essai se termine dans 3 jours');
   assert.doesNotMatch(v.title + v.body, /\d+ séance|record/);
   assert.match(texteFinEssai({ palier: 'j0' }).title, /aujourd’hui/);
+  const inc = texteFinEssai({ palier: 'j3', prenom: 'Léa' });   // résumé pas encore publié
+  assert.doesNotMatch(inc.title + inc.body, /séance|record/);
+  assert.match(inc.body, /^Léa, ton programme/);
 });
 
 await test('essai AVEC séances, J-3 : notification « 12 séances, 3 records », une seule fois', async () => {
