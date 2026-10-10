@@ -8,7 +8,8 @@
 #  - envoie les notifications push (club/outils/fitpulse-push.mjs) ;
 #  - envoie le rapport du lundi 15 h au directeur (club/outils/fitpulse-rapport.mjs).
 # Le planning (cron) ne tourne que depuis la branche principale : ce fichier y
-# est copie, et il lit le code Fit Pulse sur la branche de travail.
+# est copie, et il lit le code Fit Pulse sur main (depuis le 10/10/2026 : la branche de
+# travail d'avant avait 109 commits de retard, le serveur tournait sur du code du 08/10).
 name: Fit Pulse envois
 
 on:
@@ -65,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: claude/eloquent-lamport-0qxwdd
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -99,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: claude/eloquent-lamport-0qxwdd
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
