@@ -76,6 +76,54 @@ lisent là.
   Aucun abonné annuel engagé n'est connu à ce jour (note de `paypal_plans.mjs`,
   24/09/2026) : à vérifier dans PayPal avant de choisir.
 
+
+## 6. Google Play : comment vend-on l'abonnement dans la version Play ?
+
+*Ajouté le 10/10/2026.* Google Play impose sa propre facturation pour tout
+contenu numérique vendu **dans** une app qu'il distribue : abonnements
+Essentielle et Ultime, programmes de la boutique, formules coach. L'app ne
+doit pas non plus y renvoyer vers un autre moyen de paiement par un lien, un
+bouton ou un appel à payer ailleurs. RepCore n'entre pas dans l'exception des
+« apps de lecture » : elle ne couvre que les livres, la musique, la vidéo et
+la presse.
+
+**Ce qui est codé aujourd'hui : l'option 1.** La version Play (AAB, canal
+`play`, ouverte avec `?src=play`) n'affiche aucun paiement PayPal. L'écran
+d'abonnement montre « Ton abonnement se gère sur repcore-sync.web.app », sans
+lien. L'achat de programme et le paiement au coach ne s'ouvrent pas. Les
+accès déjà acquis (abonnement web, essai, code coach) fonctionnent
+normalement : Google l'autorise.
+
+| | **Option 1 : pas de vente dans l'app Play** (codée) | **Option 2 : Google Play Billing** (API Digital Goods) |
+|---|---|---|
+| Ce que voit l'utilisateur Play | Un message sans lien, aucun bouton pour payer | Le bouton d'achat natif de Google Play |
+| Commission | Aucune, puisque rien ne se vend dans l'app | **15 %** sur les abonnements prélevés par Google. Pour un achat unique (programme de la boutique) : 15 % sur le premier million de dollars de l'année si tu t'inscris au programme de frais réduits de Google, sinon 30 % |
+| Conversion | Faible : il faut que l'utilisateur pense à aller sur le site, et l'app ne peut pas l'y inviter | Achat en deux gestes, carte déjà enregistrée chez Google |
+| Prix | Les mêmes partout | Mêmes prix (moins de marge) ou prix Play plus élevés : à décider, et à écrire dans les CGV |
+| Travail | Fait | Gros chantier, détaillé ci-dessous |
+| Risque de refus Google | Moyen sur la phrase : Google peut y voir un renvoi vers le web. Variante plus sûre, prête à poser : « L'abonnement n'est pas disponible dans cette version. » | Faible, c'est la voie standard |
+| Résiliation, CGV | Rien ne change | Résiliation dans Google Play (« Abonnements ») : la mention L215-1-1 et les CGV §5 doivent le dire. Remboursements gérés par Google |
+
+**Le chantier de l'option 2 :**
+- **Play Console** : créer les produits et abonnements, avec les mêmes
+  identifiants pour les formules mensuelles et annuelles.
+- **Android** : fonction « Play Billing » de Bubblewrap (`DigitalGoodsService`).
+- **App** : `getDigitalGoodsService` et Payment Request API dans `rc-core`,
+  à la place du SDK PayPal quand `canalApp() === 'play'`.
+- **Worker** : vérifier chaque achat auprès de la Google Play Developer API
+  (compte de service), reconnaître (`acknowledge`) sous 3 jours sinon Google
+  rembourse, et suivre les renouvellements et résiliations par les
+  notifications en temps réel (Pub/Sub, qui pousse vers le worker).
+- **Tests** : des achats de test avec les comptes testeurs.
+
+**À trancher :**
+- **a. Option 1 ou option 2.** Ma recommandation : publier d'abord en
+  option 1. Le test fermé de 14 jours arrive de toute façon avant la mise en
+  production. Passer en option 2 quand la version Play attire du monde.
+- **b. La phrase de l'option 1.** « Ton abonnement se gère sur
+  repcore-sync.web.app » (posée, à ta demande) ou la variante plus sûre
+  ci-dessus. Changer `CANAL_PLAY_TEXTE` dans `rc-core`.
+
 ---
 
 *Ce fichier se vide au fur et à mesure : une fois un point tranché et

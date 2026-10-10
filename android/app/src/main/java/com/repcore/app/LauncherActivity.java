@@ -44,7 +44,10 @@ public class LauncherActivity
         // fond : la fenêtre ne l'attend pas) et la recherche d'une version plus
         // récente de l'APK. Aucune des deux ne peut empêcher l'ouverture.
         try { com.repcore.app.sante.PlanifSante.lancerMaintenant(this); } catch (Exception e) { }
-        try { MiseAJour.verifierEnFond(this); } catch (Exception e) { }
+        // La version Google Play ne cherche pas de mise à jour hors du Play Store.
+        if (!"play".equals(BuildConfig.CANAL)) {
+            try { MiseAJour.verifierEnFond(this); } catch (Exception e) { }
+        }
     }
 
     @Override
@@ -59,6 +62,12 @@ public class LauncherActivity
             uri = uri.buildUpon()
                     .appendQueryParameter("apk", String.valueOf(BuildConfig.VERSION_CODE))
                     .build();
+        }
+        // REPCORE : ?src=play pour la version Google Play. La page n'y montre
+        // aucun paiement de contenu numérique (règle de facturation de Google
+        // Play), et l'inscription est attribuée à Play (origine.src).
+        if (uri != null && "play".equals(BuildConfig.CANAL) && uri.getQueryParameter("src") == null) {
+            uri = uri.buildUpon().appendQueryParameter("src", "play").build();
         }
         return uri;
     }

@@ -18,6 +18,22 @@ changement d'`android/` sur main. Il lui faut, une fois, quatre secrets du dép�
 `RC_KEYSTORE_B64` (le .keystore en base64), `RC_KEYSTORE_PASS`, `RC_KEY_ALIAS`,
 `RC_KEY_PASS`. Pour publier une nouvelle version : augmenter `versionCode`.
 
+## Deux canaux : l'APK GitHub et le bundle Google Play (10/10/2026)
+
+Même code, propriété Gradle `canal` :
+- `./gradlew assembleRelease` (canal `apk`, par défaut) : l'APK des releases
+  GitHub. Il cherche ses mises à jour (`MiseAJour`) et ouvre l'app avec
+  `?apk=<versionCode>`.
+- `./gradlew bundleRelease -Pcanal=play` : le bundle **AAB** pour Google Play.
+  Il ouvre l'app avec `?apk=<versionCode>&src=play`. Dans cette session,
+  l'app n'affiche **aucun paiement** de contenu numérique, comme le veut la
+  règle de facturation de Google Play (`canalApp()` dans rc-core). Il ne
+  cherche **jamais** de mise à jour hors du Play Store, ce que Play interdit.
+
+Le workflow produit les deux, signés avec la même clé. Celle-ci sert de clé
+d'importation pour Play : voir `docs/play/SIGNATURE.md` et
+`docs/play/CHECKLIST.md`.
+
 ## Compiler et publier à la main (secours, Git Bash)
 
 Aucune clé, aucun mot de passe dans le dépôt (`.gitignore` : `*.keystore`, `*.jks`,
@@ -27,7 +43,7 @@ certificat n'est pas celui de `well-known/assetlinks.json`.
 
 ## Tester sur un téléphone Android
 
-1. Installer `RepCore-4.apk` **par-dessus** l'ancien (sans désinstaller).
+1. Installer `RepCore-5.apk` **par-dessus** l'ancien (sans désinstaller).
 2. Garmin Connect (ou Samsung Health…) > Health Connect : partage activé.
 3. RepCore > Lifestyle > Synchronisation automatique > Autoriser ; confirmer le compte.
 4. Retour dans RepCore : les pas et les nuits des 30 derniers jours sont là.

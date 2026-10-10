@@ -37484,6 +37484,44 @@ async function testExercices(){
           return true;
         }finally{ BOITE_COACH._es=sv.es; BOITE_COACH._voulu=sv.voulu; BOITE_COACH.ouvrir=sv.ouvrir; BOITE_COACH._geste=sv.geste; BOITE_COACH._dort=sv.dort; BOITE_COACH._fermerFlux(); }
       })());
+      ok('PLAY — PURE : le canal se lit à ?src=play ou à la mémoire de session, et le bloc Play n’a ni lien ni bouton',(()=>{
+        if(canalDepuis('play','')!=='play'||canalDepuis('','play')!=='play') return _echec('play non reconnu');
+        if(canalDepuis('','')!=='web'||canalDepuis('instagram','')!=='web'||canalDepuis('PLAY','')!=='web') return _echec('web');
+        const h=htmlCanalPlay();
+        if(h.indexOf(CANAL_PLAY_TEXTE)<0) return _echec('le message manque');
+        if(/<a[\s>]|href=|<button|onclick|paypal/i.test(h)) return _echec('un lien, un bouton ou PayPal dans le bloc Play : '+h);
+        return true;})());
+      ok('PLAY — écran d’abonnement en version Play : ni prix, ni case, ni PayPal, le message à la place ; le SDK ne se charge pas',(()=>{
+        const sv=currentUser, svCanal=sessionStorage.getItem(CANAL_PLAY_CLE);
+        const z=document.createElement('div');
+        z.innerHTML='<div id="sub-formule">F</div><div id="sub-paliers">P</div><label><input type="checkbox" id="sub-renonciation"></label>'
+          +'<div id="sub-renonc-msg">M</div><div id="paypal-btn-container"><button>Souscrire</button></div><div id="pp-badge">PayPal</div>';
+        const ids=['sub-formule','sub-paliers','sub-renonciation','sub-renonc-msg','paypal-btn-container'];
+        const anciens=ids.map(id=>{ const e=document.getElementById(id); if(e) e.id=id+'-ecarte'; return e; });
+        document.body.appendChild(z);
+        try{
+          sessionStorage.removeItem(CANAL_PLAY_CLE);
+          if(_subCanalPlay()) return _echec('hors Play, l’écran est changé');
+          sessionStorage.setItem(CANAL_PLAY_CLE,'play');
+          currentUser={id:'pl',email:'pl@t.fr',role:'athlete',status:'FREE'};
+          const avant=!!document.getElementById('paypal-sdk');
+          initPaypalSubscription();
+          if(!avant&&document.getElementById('paypal-sdk')) return _echec('le SDK PayPal est chargé en version Play');
+          const pp=document.getElementById('paypal-btn-container');
+          if(!pp.querySelector('[data-canal-play]')||/Souscrire/.test(pp.textContent)) return _echec('bloc : '+pp.innerHTML);
+          for(const id of ['sub-formule','sub-paliers','sub-renonc-msg']) if(document.getElementById(id).style.display!=='none') return _echec(id+' visible');
+          if(document.getElementById('sub-renonciation').closest('label').style.display!=='none') return _echec('la case reste');
+          if(document.getElementById('pp-badge').style.display!=='none') return _echec('le badge PayPal reste');
+          return true;
+        }finally{
+          z.remove(); anciens.forEach((e,i)=>{ if(e) e.id=ids[i]; });
+          currentUser=sv; if(svCanal) sessionStorage.setItem(CANAL_PLAY_CLE,svCanal); else sessionStorage.removeItem(CANAL_PLAY_CLE);
+        }
+      })());
+      ok('PLAY — l’achat d’un programme et le paiement au coach ne s’ouvrent pas en version Play',(()=>{
+        if(String(_chargerPaypalAchat).indexOf("canalApp()==='play'")<0) return _echec('achat');
+        if(String(pcProposerPaiement).indexOf("canalApp()==='play'")<0) return _echec('paiement coach');
+        return true;})());
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{
