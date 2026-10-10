@@ -29,11 +29,17 @@
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
+import { avisDu, texteAvis, etiqueterSystemeio } from './renouvellement.js';
 
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
 const EN_COURS_MAX_MS = 10 * 60 * 1000;
-const PROGRAMME_MS = 3 * MOIS_MS;          // OFFRES.boutique_prog.mois de l'app
+// UN PROGRAMME DE LA BOUTIQUE (09/10/2026) : le programme À VIE (users/<clé>/
+// programmesAchetes/<id>), et 30 jours d'Ultime à partir de l'achat
+// (tarifs.json : coaching.boutique_prog.mois × 30 jours ; un test les compare).
+// Jusqu'au 09/10/2026 c'étaient trois mois : les achats faits avant gardent
+// leur échéance, rien ne la raccourcit.
+export const PROGRAMME_MS = 1 * MOIS_MS;
 const cleEmail = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 const net = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
@@ -46,18 +52,36 @@ const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.
 // ⚠ PLUSIEURS MONTANTS PAR PLAN : un prix qui a changé chez PayPal laisse des
 //   abonnés à l'ancien tarif (9,95 puis 9,50 ; 99 puis 114 ; 249 puis 298,80),
 //   et le plan « demi » facture 12,45 le premier mois puis 24,90.
-export const OFFRES_PAYPAL = Object.freeze({
+// ⚠ LES DEUX ANNUELS CI-DESSOUS (…LZWY, …LZXI) SONT CEUX DES CONTRATS ENGAGÉS
+//   (tarifs.json, contrats_engages : 114 et 298,80). Depuis le passage sans
+//   engagement (09/10/2026), les NOUVEAUX annuels (95 et 249) passent par de
+//   NOUVEAUX plans (PLANS_ANNUELS_SANS_ENGAGEMENT) : modifier le prix des
+//   anciens aurait changé celui des abonnés en cours. Les deux coexistent
+//   pendant la transition, et tant qu'un ancien abonné paie.
+const OFFRES_FIXES = {
   'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'] },
-  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'] },
+  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'], annuel: true },
   'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'] },
-  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'] },
+  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'], annuel: true },
   // `demi` : le 1er mois d'Ultime à moitié prix — UNE fois par compte
   // (droits.demiPackUtilise, posé à l'ouverture), sortie de pack ou code
   // ambassadeur « ultime_demi ».
   'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true },
   'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'] },
   'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'] },
+};
+// LES ANNUELS SANS ENGAGEMENT (tarifs.json : essentielle.an, ultime.an). Leurs
+// identifiants n'existent qu'une fois les plans créés chez PayPal :
+//   PAYPAL_CLIENT_SECRET=… node scripts/paypal_plans.mjs --tarifs --ecrire
+// les crée et colle chaque identifiant ICI (champ `id`) et dans rc-core.
+// Vide, l'entrée est ignorée — et l'app ne propose pas l'annuel (constante vide).
+export const PLANS_ANNUELS_SANS_ENGAGEMENT = Object.freeze({
+  PAYPAL_PLAN_ID_ANNUEL_SE: Object.freeze({ id: 'P-5WS33005ML186714UNLET2VI', formule: 'essentielle', montants: Object.freeze(['95.00']) }),
+  PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE: Object.freeze({ id: 'P-2NY44820N2546090CNLET2VQ', formule: 'ultime', montants: Object.freeze(['249.00']) }),
 });
+export const OFFRES_PAYPAL = Object.freeze(Object.assign({}, OFFRES_FIXES,
+  Object.fromEntries(Object.values(PLANS_ANNUELS_SANS_ENGAGEMENT).filter((p) => /^P-[A-Z0-9]+$/.test(p.id))
+    .map((p) => [p.id, { formule: p.formule, montants: [...p.montants], annuel: true }]))));
 function montantValide(plan, montant, devise, role) {
   if (!plan || String(devise || '').toUpperCase() !== 'EUR') return false;
   if ((role === 'coach') !== !!plan.coachPlan) return false;
@@ -242,7 +266,9 @@ export function creerPaypal(ctx) {
     const reserveComptee = fin === calculee ? reserve : Number(finNotee && finNotee.reserve) || 0;
     const maj = { ['users/' + cle + '/abonnement/statutPaypal']: type, ['users/' + cle + '/abonnement/finAccesPaypal']: fin,
       ['users/' + cle + '/abonnement/resilieLe']: t, ['users/' + cle + '/updatedAt']: t,
-      ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }) };
+      ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }),
+      // Résilié : plus de reconduction, donc plus d'avis L215-1 (renouvellement.js).
+      ['renouvellements/' + cle]: null };
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
@@ -270,10 +296,23 @@ export function creerPaypal(ctx) {
       }
       if (role === 'coach') {
         // LE PALIER PAYÉ REVIENT : une résiliation l'avait refermé (fins()).
-        if (plan && plan.coachPlan) { maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true; }
+        if (plan && plan.coachPlan) { maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true;
+          // LA FORMULE QUE LES RÈGLES CROIENT (09/10/2026) : rc_codes/months lit
+          // coach_paliers/, que le coach ne peut pas écrire lui-même.
+          maj['coach_paliers/' + cle] = { palier: plan.coachPlan, maj: t, source: 'paypal' }; }
       } else if (plan && plan.formule && statut !== 'COACHING_SUIVI') {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
         maj[b + 'abonnement/formule'] = plan.formule;
+      }
+      // UN ANNUEL : la prochaine date anniversaire, pour l'avis L215-1
+      // (renouvellement.js). L'avis déjà parti pour CETTE échéance est gardé.
+      const prochaine = plan && plan.annuel && sub.billing_info && Date.parse(sub.billing_info.next_billing_time || '');
+      if (Number(prochaine) > t) {
+        const avant = await lire('renouvellements/' + cle);
+        maj['renouvellements/' + cle] = { abo, echeance: Number(prochaine), formule: plan.formule,
+          montant: centimes(ress.amount && (ress.amount.total || ress.amount.value)) || null,
+          avisPour: avant && Number(avant.avisPour) === Number(prochaine) ? avant.avisPour : null,
+          avisLe: avant && Number(avant.avisPour) === Number(prochaine) ? avant.avisLe || null : null };
       }
       await db.ref().update(maj);
       if (role !== 'coach') await droitsOuverts(cle, abo, plan);
@@ -312,12 +351,23 @@ export function creerPaypal(ctx) {
       && devise(pu.amount) === 'EUR' && devise(ress.amount) === 'EUR'
       && centimes(pu.amount.value) === Number(prixCts) && centimes(ress.amount.value) === Number(prixCts);
     const premier = valide ? await premierPaiement(cle, null, ress) : false;
-    // LE PROGRAMME OUVRE ULTIME TROIS MOIS, par-dessus le palier de
-    // l'abonnement (ultimeJusqu), sans le remplacer.
+    // LE PROGRAMME OUVRE ULTIME 30 JOURS À PARTIR DE L'ACHAT, par-dessus le
+    // palier de l'abonnement (ultimeJusqu), sans le remplacer ni raccourcir une
+    // échéance déjà plus lointaine (un achat d'avant, un mois de parrainage).
+    // ET L'ACHAT EST ENREGISTRÉ À VIE dans le dossier, champ par champ : la
+    // date du premier enregistrement (celui de l'app, s'il est passé avant)
+    // n'est pas réécrite, et rien de ce que l'app y a mis n'est effacé.
     if (valide) {
       const t = now();
+      const fin = t + PROGRAMME_MS;
       await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
-        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
+        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, fin) }));
+      const b = 'users/' + cle + '/programmesAchetes/' + prog + '/';
+      const deja = await lire('users/' + cle + '/programmesAchetes/' + prog);
+      const maj = { [b + 'prixCts']: Number(prixCts), [b + 'source']: 'paypal', [b + 'ordre']: net(idCommande),
+        [b + 'ouvertJusqu']: Math.max(Number(deja && deja.ouvertJusqu) || 0, fin), ['users/' + cle + '/updatedAt']: t };
+      if (!(deja && (Number(deja.date) > 0 || Number(deja.le) > 0))) maj[b + 'date'] = t;
+      await db.ref().update(maj);
     }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
@@ -437,8 +487,11 @@ export function creerPaypal(ctx) {
   async function fermerAcces(rec, t) {
     const b = 'users/' + rec.cle + '/';
     if (rec.type === 'programme') {
+      // REMBOURSÉ, LE PROGRAMME N'EST PLUS ACQUIS : l'accès à vie tombe avec
+      // l'argent (rembourseLe, lu par programmeAcquis dans l'app).
       if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
-        await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t, [b + 'updatedAt']: t });
+        await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t,
+          [b + 'programmesAchetes/' + rec.prog + '/rembourseLe']: t, [b + 'updatedAt']: t });
       }
       const d = await M.majDroits(rec.cle, (x) => (x && Number(x.ultimeJusqu) > t ? { ultimeJusqu: t } : null));
       return (d || rec.prog) ? 'programme fermé au ' + dateFr(t) : null;
@@ -446,7 +499,8 @@ export function creerPaypal(ctx) {
     const [role, statut] = await Promise.all([lire(b + 'role'), lire(b + 'status')]);
     const maj = { [b + 'abonnement/statutPaypal']: 'REMBOURSE', [b + 'abonnement/finAccesPaypal']: t, [b + 'updatedAt']: t,
       ['paypal_fins/' + rec.cle]: null };
-    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false; }
+    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false;
+      maj['coach_paliers/' + rec.cle] = { palier: 'libre', maj: t, source: 'remboursement' }; }
     else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
     await db.ref().update(maj);
     if (role !== 'coach') await M.majDroits(rec.cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: t, source: 'paypal', abo: rec.abo || (x && x.abo) || null }));
@@ -609,7 +663,7 @@ export function creerPaypal(ctx) {
     const role = f.role || 'coach';          // les entrées d'avant ne portaient que les coachs
     if (role === 'coach') {
       await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
-        ['users/' + cle + '/updatedAt']: t });
+        ['users/' + cle + '/updatedAt']: t, ['coach_paliers/' + cle]: { palier: 'libre', maj: t, source: 'fin' } });
     } else if (Number(f.reserve) > 0) {
       const r = Number(f.reserve);
       await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));
@@ -654,7 +708,35 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements };
+  // ── L'AVIS AVANT LE RENOUVELLEMENT ANNUEL (art. L215-1) ────────────────
+  // Une clé par jour de travail (planif.js). Notification urgente ET e-mail
+  // Systeme.io (s'il est configuré) ; l'avis est noté parti dès qu'UN des
+  // deux canaux a porté, sinon il se retente le lendemain.
+  const renouvellementsCles = async () => Object.keys((await lire('renouvellements')) || {});
+  async function avisRenouvellementUn(cle, t0) {
+    const t = t0 || now();
+    const r = await lire('renouvellements/' + cle);
+    if (!r) return 'aucun';
+    const d = avisDu(r.echeance, t, r.avisPour);
+    if (!d.envoyer) return Number(r.echeance) > t ? 'pas_encore' : 'echu';
+    const [fname, email] = await Promise.all([lire('users/' + cle + '/fname'), lire('users/' + cle + '/email')]);
+    const x = texteAvis({ prenom: fname || '', formule: r.formule, echeance: Number(r.echeance), montantCentimes: r.montant });
+    let push = 0, mail = 'non_configure';
+    try {
+      const p = await M.envoyerPush(cle, { type: 'acces', url: './', tag: 'renouvellement-' + r.echeance, title: x.title, body: x.body }, { urgent: true });
+      push = Number(p && p.envoye) || 0;
+    } catch (e) { push = 0; }
+    try {
+      mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', date: x.date, montant: x.montant });
+    } catch (e) { mail = 'erreur : ' + String(e && e.message || e).slice(0, 80); }
+    const parti = push > 0 || mail === 'envoye';
+    await db.ref('renouvellements/' + cle).update(parti
+      ? { avisPour: Number(r.echeance), avisLe: t, push, email: mail, tardif: d.tardif || null, dernierEchec: null }
+      : { dernierEchec: { le: t, push, email: mail } });
+    return parti ? 'avis_envoye' : 'avis_en_echec';
+  }
+
+  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════

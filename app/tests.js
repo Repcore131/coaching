@@ -12270,7 +12270,9 @@ async function testExercices(){
         ok('Les cinq arguments respectent leur format',(()=>{
           const z=document.getElementById('s-subscribe');
           if(!z) return _echec('écran de souscription absent');
-          const verts=[...z.querySelectorAll('div[style*="var(--green)"] span')]
+          // Un argument = le <span> d'une ligne, enfant direct : le nombre lié
+          // à tarifs.json (<span data-nb>) qu'il contient n'en est pas un sixième.
+          const verts=[...z.querySelectorAll('div[style*="var(--green)"] > div > span')]
             .map(e=>(e.textContent||'').trim()).filter(Boolean);
           if(verts.length!==5) return _echec(verts.length+' argument(s) au lieu de 5');
           const trop=verts.filter(t=>t.split(/\s+/).length>8);
@@ -13205,20 +13207,137 @@ async function testExercices(){
             return _echec('un athlète connu mais inactif rend le compte non fiable');
           return !countActiveAthletesFiable(c,{b:_ath2('b','c2',3)})
             ?true:_echec('les athlètes d\'un AUTRE coach rendent le compte fiable');})());
-        ok('Le dépassement ALERTE et ne bloque AUCUN rattachement',(()=>{
+        ok('Le dépassement se tient à la CRÉATION du code ; l’athlète déjà rattaché n’est jamais refusé',(()=>{
           const c={id:'c1',coachPlan:'coach',coachSubActive:true};
           const m={};for(let i=0;i<16;i++) m['a'+i]=_ath2('a'+i,'c1',3);
           if(countActiveAthletes(c,m)!==16) return _echec('16 attendus');
           if(!coachQuotaDepasse(c,m)) return _echec('16 sur un quota de 15 ne dépasse pas');
           if(coachQuotaDepasse({id:'c1',coachPlan:'pro'},m))
             return _echec('le palier pro connaît une limite');
-          // LE POINT QUI COMPTE : aucun chemin de rattachement ne consulte le
-          // quota. On lit les fonctions RÉELLES, on ne se fie pas à l'intention.
+          // AUCUNE COUPURE RÉTROACTIVE (09/10/2026) : le quota ne se lit ni au
+          // rattachement par l'athlète, ni à son accès. On lit les fonctions RÉELLES.
           for(const f of [linkToCoach,checkAccess]){
-            if(/coachQuotaDepasse|getCoachQuota|countActiveAthletes/.test(String(f)))
+            if(/coachQuotaDepasse|getCoachQuota|countActiveAthletes|refusQuotaCoach|peutRattacher/.test(String(f)))
               return _echec('le quota est consulté par '+(f.name||'?'));
           }
+          // Il se lit là où un code naît : le dernier verrou de _genAccessCode.
+          return /refusQuotaCoach\(/.test(String(_genAccessCode))
+            ?true:_echec('_genAccessCode ne vérifie pas le quota');})());
+        // ══ LES QUOTAS APPLIQUÉS (09/10/2026) ═══════════════════════════════
+        ok('QUOTAS : la copie de tarifs.json, null lu comme l’infini',(()=>{
+          for(const k of ['libre','coach','pro']){
+            const q=TARIFS.quotas_coach[k];
+            if(QUOTAS_COACH[k].athletes!==(q.athletes===null?Infinity:q.athletes)) return _echec(k+' athletes : '+QUOTAS_COACH[k].athletes);
+            if(QUOTAS_COACH[k].moisCode!==q.moisCode) return _echec(k+' moisCode : '+QUOTAS_COACH[k].moisCode);
+            if(getCoachQuota(k)!==QUOTAS_COACH[k].athletes) return _echec(k+' : COACH_PALIERS ne lit pas QUOTAS_COACH');
+          }
+          if(!Object.isFrozen(QUOTAS_COACH)||!Object.isFrozen(QUOTAS_COACH.coach)) return _echec('QUOTAS_COACH n’est pas gelé');
+          // Ce que Kevin a fixé : 1 / 1, 15 / 6, sans limite / 12.
+          if(QUOTAS_COACH.libre.athletes!==1||QUOTAS_COACH.libre.moisCode!==1) return _echec('libre');
+          if(QUOTAS_COACH.coach.athletes!==15||QUOTAS_COACH.coach.moisCode!==6) return _echec('coach');
+          if(QUOTAS_COACH.pro.athletes!==Infinity||QUOTAS_COACH.pro.moisCode!==12) return _echec('pro');
           return true;})());
+        ok('QUOTAS : peutRattacher et dureeCodeMax, palier par palier',(()=>{
+          const cas=[['libre',0,true],['libre',1,false],['libre',5,false],['coach',14,true],['coach',15,false],
+            ['pro',0,true],['pro',100000,true],['platine',0,true],['platine',1,false],[undefined,1,false]];
+          for(const [p,n,att] of cas) if(peutRattacher(p,n)!==att) return _echec('peutRattacher('+p+', '+n+') = '+peutRattacher(p,n));
+          if(dureeCodeMax('libre')!==1||dureeCodeMax('coach')!==6||dureeCodeMax('pro')!==12||dureeCodeMax('platine')!==1)
+            return _echec('dureeCodeMax : '+['libre','coach','pro','platine'].map(dureeCodeMax).join('/'));
+          if(palierPourDureeCode(1)!=='libre'||palierPourDureeCode(3)!=='coach'||palierPourDureeCode(12)!=='pro'||palierPourDureeCode(24)!=='')
+            return _echec('palierPourDureeCode');
+          return true;})());
+        ok('QUOTAS : le refus dit pourquoi — au-delà du nombre, au-delà de la durée, formule arrêtée, créateur libre',(()=>{
+          const T=Date.now(), J=864e5;
+          const code=(x)=>Object.assign({type:'athlete',active:true,expiry:T+20*J},x);
+          // Libre, un athlète actif : le suivant est refusé, et Coach est proposé.
+          const libre={id:'c1',email:'l@t',role:'coach'};
+          const r1=refusQuotaCoach(libre,{a:_ath2('a','c1',3)},1,T);
+          if(!r1||r1.raison!=='athletes'||r1.n!==1||r1.quota!==1||r1.suivant!=='coach') return _echec('libre plein : '+JSON.stringify(r1));
+          if(!/Libre/.test(texteRefusQuota(r1))||!/1 athlète actif/.test(texteRefusQuota(r1))) return _echec('texte : '+texteRefusQuota(r1));
+          // Libre, aucun athlète : un code d'un mois passe, trois mois non (Coach les ouvre).
+          if(refusQuotaCoach(libre,{},1,T)!==null) return _echec('libre vide refusé');
+          const r2=refusQuotaCoach(libre,{},3,T);
+          if(!r2||r2.raison!=='duree'||r2.moisMax!==1||r2.suivant!=='coach') return _echec('libre 3 mois : '+JSON.stringify(r2));
+          // Un CODE EN ATTENTE est une place promise ; un code expiré ou désactivé ne compte pas.
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({})]}),{},1,T)===null) return _echec('un code en attente ne compte pas');
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({expiry:T-J}),code({active:false})]}),{},1,T)!==null)
+            return _echec('un code expiré ou désactivé compte');
+          // Cache non fiable : les codes rachetés en cours tiennent lieu d'athlètes.
+          if(refusQuotaCoach(Object.assign({},libre,{studentCodes:[code({redeemed:true,usedBy:'A'})]}),{},1,T)===null)
+            return _echec('un athlète rattaché (code racheté) ne compte pas sur cache vide');
+          // Coach : 15 actifs → refus, Pro proposé ; 12 mois → refus (Pro) ; 6 mois → permis.
+          const coach={id:'c2',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true};
+          const m15={};for(let i=0;i<15;i++) m15['b'+i]=_ath2('b'+i,'c2',3);
+          const r3=refusQuotaCoach(coach,m15,6,T);
+          if(!r3||r3.raison!=='athletes'||r3.suivant!=='pro') return _echec('coach plein : '+JSON.stringify(r3));
+          const m14={};for(let i=0;i<14;i++) m14['b'+i]=_ath2('b'+i,'c2',3);
+          if(refusQuotaCoach(coach,m14,6,T)!==null) return _echec('coach à 14 refusé');
+          const r4=refusQuotaCoach(coach,m14,12,T);
+          if(!r4||r4.raison!=='duree'||r4.suivant!=='pro') return _echec('coach 12 mois : '+JSON.stringify(r4));
+          // Formule arrêtée (coachSubActive faux) : les quotas de Libre.
+          if(palierEffectifCoach(Object.assign({},coach,{coachSubActive:false}))!=='libre') return _echec('formule arrêtée');
+          // Pro : 12 mois, cent athlètes, aucun refus ; le créateur, 24 mois.
+          const pro={id:'c3',email:'p@t',role:'coach',coachPlan:'pro',coachSubActive:true};
+          const m100={};for(let i=0;i<100;i++) m100['p'+i]=_ath2('p'+i,'c3',3);
+          if(refusQuotaCoach(pro,m100,12,T)!==null) return _echec('pro refusé');
+          if(refusQuotaCoach({id:'k',email:CREATOR_EMAIL,role:'coach'},m100,24,T)!==null) return _echec('le créateur a un quota');
+          return true;})());
+        ok('QUOTAS : au-delà, le coach est PRÉVENU et ses athlètes gardent leur accès jusqu’à la fin de leur code',(()=>{
+          const c={id:'c1',email:'c@t',role:'coach'};   // Libre, quota 1
+          const m={a:_ath2('a','c1',3),b:_ath2('b','c1',3),c:_ath2('c','c1',3)};
+          const a=alertePalier(c,m);
+          if(!a||a.type!=='depasse') return _echec('alerte : '+JSON.stringify(a));
+          if(!/fin de leur code/.test(a.texte)||!/rien n’est coupé/.test(a.texte)) return _echec('texte : '+a.texte);
+          if(!/Coach/.test(a.texte)) return _echec('la formule suivante n’est pas nommée');
+          // À la limite exacte : « pleine », pas encore un dépassement.
+          const l=alertePalier(c,{a:_ath2('a','c1',3)});
+          if(!l||l.type!=='limite') return _echec('à la limite : '+JSON.stringify(l));
+          // L'athlète rattaché au-delà du quota : son accès ne dépend que de son code.
+          const ath={id:'x',email:'x@t',role:'athlete',status:'COACHING_SUIVI',coachId:'c1',accessExpiry:Date.now()+30*864e5};
+          const sauve=localStorage.getItem(DROITS_CLE);
+          try{ localStorage.removeItem(DROITS_CLE); if(!checkAccess(ath)) return _echec('l’athlète au-delà du quota perd son accès'); }
+          finally{ if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve); }
+          return true;})());
+        ok('QUOTAS : l’écran de refus propose la formule suivante, avec son bouton d’abonnement',(()=>{
+          const r=refusQuotaCoach({id:'c1',email:'l@t',role:'coach'},{a:_ath2('a','c1',3)},1);
+          try{
+            if(!ouvrirEcranQuotaCoach(r)) return _echec('écran non ouvert');
+            const z=document.getElementById('quota-coach');
+            if(!z) return _echec('#quota-coach absent');
+            const t=z.textContent;
+            if(!/Passe à la formule Coach/.test(t)) return _echec('titre : '+t.slice(0,80));
+            if(!/gardent leur accès/.test(t)) return _echec('le sort des athlètes rattachés n’est pas dit');
+            const b=[...z.querySelectorAll('button')].map(x=>x.getAttribute('onclick')||'');
+            if(!b.some(x=>/souscrireCoach\('coach'\)|ouvrirMonAbonnement\(\)/.test(x))) return _echec('pas de bouton d’abonnement : '+b.join(' | '));
+            return true;
+          } finally { try{ closeModal(); }catch(e){} }})());
+        ok('QUOTAS : le sélecteur ne propose que les durées de la formule',(()=>{
+          const sel=document.createElement('select');
+          for(const v of [1,3,6,12]){ const o=document.createElement('option'); o.value=String(v); o.textContent=v+' mois'; sel.appendChild(o); }
+          sel.value='3';
+          _poserDureesCode(sel,{id:'c1',email:'l@t',role:'coach'});
+          const off=[...sel.options].filter(o=>o.disabled).map(o=>o.value).join();
+          if(off!=='3,6,12') return _echec('libre : '+off);
+          if(sel.value!=='1') return _echec('la durée choisie reste interdite : '+sel.value);
+          if(!/formule Coach/.test(sel.options[1].textContent)) return _echec('la formule qui l’ouvre n’est pas dite');
+          _poserDureesCode(sel,{id:'c2',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true});
+          if([...sel.options].filter(o=>o.disabled).map(o=>o.value).join()!=='12') return _echec('coach');
+          // Le créateur : rien n'est grisé par cette fonction.
+          return _poserDureesCode(sel,{email:CREATOR_EMAIL})===false?true:_echec('le créateur est plafonné');})());
+        okA('QUOTAS : générer un code au-delà du quota ouvre l’écran, et rien n’est créé',async()=>{
+          const sv=currentUser;
+          const nom=document.getElementById('sc-name'), duree=document.getElementById('sc-duration');
+          const nv=nom&&nom.value, dv=duree&&duree.value;
+          try{
+            currentUser={id:'cq',email:'cq@t',role:'coach',fname:'C',lname:'Q',
+              studentCodes:[{type:'athlete',active:true,expiry:Date.now()+20*864e5,redeemed:true,usedBy:'A',token:'RC-AAAA-BBBB'}]};
+            if(!nom||!duree) return _echec('#sc-name ou #sc-duration absent');
+            nom.value='Léo'; duree.value='1';
+            await generateStudentCode();
+            if(!document.getElementById('quota-coach')) return _echec('l’écran de refus ne s’ouvre pas');
+            if(currentUser.studentCodes.length!==1) return _echec('un code a été créé malgré le refus');
+            return true;
+          } finally { try{ closeModal(); }catch(e){} currentUser=sv; if(nom) nom.value=nv||''; if(duree&&dv) duree.value=dv; }});
         ok('coachPalierRequis nomme le palier suivant sans rien décider',(()=>{
           const att=[[0,'libre'],[1,'libre'],[2,'coach'],[15,'coach'],[16,'pro'],[900,'pro']];
           for(const [n,c] of att) if(coachPalierRequis(n)!==c)
@@ -13423,7 +13542,9 @@ async function testExercices(){
             const bas=txt.toLowerCase();
             if(bas.indexOf('essentielle')<0||bas.indexOf('ultime')<0)
               return _echec('les deux formules ne sont pas nommées sur l’arrivée');
-            for(const p of [prixMoisAnnuel('essentielle'),prixMoisAnnuel('ultime')])
+            // Le prix de la période affichée : « Chaque mois » par défaut (09/10/2026).
+            const _pp=k=>_accueilAnnuel?prixMoisAnnuel(k):prixOffre(k);
+            for(const p of [_pp('essentielle'),_pp('ultime')])
               if(txt.indexOf(p.replace(nbsp,' '))<0&&txt.indexOf(p)<0)
                 return _echec('le prix '+p+' ne se lit pas sur l’arrivée');
             const champs=w.querySelectorAll('input[type="email"],input[type="password"],input[type="text"]');
@@ -13666,7 +13787,7 @@ async function testExercices(){
             }
             return true;
           } finally { currentUser=sauve; z.innerHTML=''; }})());
-        ok('Le dépassement de quota DIT qu\'il ne bloque rien',(()=>{
+        ok('Le dépassement de quota DIT que rien n\'est coupé',(()=>{
           const z=document.getElementById('coach-abo');
           const sauve=currentUser;
           try{
@@ -13677,7 +13798,7 @@ async function testExercices(){
             _renderAbonnementCoach(m);
             const h=z.innerHTML;
             if(!/3 \/ 1 athlètes actifs/.test(h)) return _echec('le compte réel n\'est pas dit');
-            return /Rien n'est bloqué/.test(h)
+            return /rien n'est coupé/.test(h)
               ?true:_echec('le dépassement ne rassure pas sur l\'accès des athlètes');
           } finally { currentUser=sauve; z.innerHTML=''; }})());
         ok('Aucune promesse de durée : ni « essai », ni « 14 jours »',(()=>{
@@ -35332,7 +35453,9 @@ async function testExercices(){
       okA('1626 — UN CODE REFUSÉ FAUTE DE SESSION LE DIT, ET NE PARLE PAS DE CONNEXION',async()=>{
         const sU=currentUser, sT=CLOUD._getToken, sF=window.fetch, sE=CLOUD._jetonEtranger;
         try{
-          currentUser={id:'u_c',email:'coach@t.fr',role:'coach',fname:'K',lname:'G'};
+          currentUser={id:'u_c',email:'coach@t.fr',role:'coach',fname:'K',lname:'G',
+            // Formule Pro : le sujet est la SESSION, pas le quota (09/10/2026).
+            coachPlan:'pro',coachSubActive:true};
           let appels=0; window.fetch=async()=>{ appels++; return {ok:false,status:401,json:async()=>({error:'Permission denied'})}; };
           // 1. Pas de jeton : rien n'est envoyé, le message nomme la session.
           CLOUD._getToken=async()=>null; CLOUD._jetonEtranger='';
@@ -35636,7 +35759,7 @@ async function testExercices(){
         return /bonne\s*charge/.test(titre)&&/série\./.test(titre)
           ?true:_echec('l’accroche a changé : '+titre);})());
 
-      ok('LOT 2 — LES DEUX FORMULES, L’ANNUEL PAR DÉFAUT, LE PRIX AU MOIS EN GROS',(()=>{
+      ok('LOT 2 — LES DEUX FORMULES, LE PRIX AU MOIS EN GROS, LA REMISE DE L’ANNUEL CALCULÉE',(()=>{
         const sauve=_accueilAnnuel;
         try{
           accueilPeriode(true);
@@ -35676,7 +35799,8 @@ async function testExercices(){
           const badge=document.getElementById('wel-badge');
           if(badge&&badge.style.display!=='none') return _echec('le bandeau reste affiché en mensuel');
           accueilPeriode(true);
-          const _rem=_economie('essentielle').pourcent;
+          // La remise de l'annuel : « 2 mois offerts », calculée (09/10/2026).
+          const _rem=texteRemiseAnnuelle('essentielle');
           const b2=document.getElementById('wel-badge');
           if(b2){
             const vu=b2.style.display!=='none';
@@ -35694,7 +35818,7 @@ async function testExercices(){
         const txt=w.textContent.replace(/\s+/g,' ');
         // L'ANCRAGE PRECEDE LES PRIX : lu apres, il ne sert plus a rien.
         const iAncre=txt.indexOf('50 à 80 € la séance');
-        const iPrix=txt.indexOf('Annuel');
+        const iPrix=txt.indexOf('Chaque mois');
         if(iAncre<0) return _echec('la phrase d’ancrage a disparu');
         if(!(iAncre<iPrix)) return _echec('l’ancrage est passé après les prix');
         if(txt.indexOf('Ton premier mois est offert, sans carte bancaire')<0)
@@ -35897,7 +36021,7 @@ async function testExercices(){
               return _echec(c+' ne mène pas à Ultime');
             // LES CHIFFRES VENDENT, et ils viennent de la table des offres.
             const p=(d.querySelector('.vrr-p')||{}).textContent||'';
-            if(p.indexOf(prixMoisAnnuel('ultime'))<0||p.indexOf(prixOffre('ultime'))<0)
+            if(p.indexOf(prixDeuxFacons('ultime'))<0)
               return _echec(c+' : le prix d’Ultime ne se lit pas');
           }
           // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
@@ -36150,7 +36274,8 @@ async function testExercices(){
           const src=String(_enregistrerAchat);
           if(src.indexOf('verifierAchatProgramme')<0)
             return _echec('l’achat ne demande rien au serveur');
-          return src.indexOf('ouvertJusqu')>=0
+          // La fiche d'achat (ficheAchatProgramme, 09/10/2026) porte la fenêtre.
+          return (src.indexOf('ficheAchatProgramme')>=0&&String(ficheAchatProgramme).indexOf('ouvertJusqu')>=0)
             ?true:_echec('l’achat ne pose aucune fenêtre côté dossier');
         } finally {
           if(sauve==null) localStorage.removeItem(DROITS_CLE);
@@ -36940,12 +37065,12 @@ async function testExercices(){
       ok('LOT 1 — LES OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
         const attendu={
           programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
-          boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
+          // boutique_prog : 1 mois (30 jours d'app) et le programme à vie, depuis le 09/10/2026.
+          boutique_prog:[14.9,'ultime',1], coaching_essentiel:[150,'suivi',1],
           coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
-          // ⚠ 9,50 ET NON 9,95 DEPUIS LE 24/09/2026 : l'abonnement s'engage sur
-          //   douze mois, et l'annee payee d'un coup vaut douze mensualites.
-          //   C'est LE test qui empeche un tarif de bouger en silence : les
-          //   chiffres y sont ecrits a la main, et c'est voulu.
+          // ⚠ C'est LE test qui empeche un tarif de bouger en silence : les
+          //   chiffres y sont ecrits a la main, et c'est voulu. 9,50 et 24,90
+          //   au mois ; l'annuel, sans engagement et remise, plus bas.
           essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
           // PARRAINAGE : UN MOIS EN PLUS, SCIEMMENT (lot C, 29/09/2026). Le
           // filleul a le mois de tout le monde PLUS le mois offert par son
@@ -36964,32 +37089,34 @@ async function testExercices(){
           if(o.palier!==a[1]) return _echec(k+' ouvre '+o.palier+' au lieu de '+a[1]);
           if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
         }
-        // LES DEUX TARIFS ANNUELS, et les deux seuls.
-        if(OFFRES.essentielle.prixAn!==114||OFFRES.ultime.prixAn!==298.80)
+        // LES DEUX TARIFS ANNUELS, et les deux seuls (09/10/2026, sans
+        // engagement : 95 et 249, deux mois offerts chacun). Écrits à la main.
+        if(OFFRES.essentielle.prixAn!==95||OFFRES.ultime.prixAn!==249)
           return _echec('les tarifs annuels ont changé');
-        // ⚠ ET L'ANNEE VAUT EXACTEMENT DOUZE MENSUALITES. C'est le coeur du
-        //   choix du 24/09/2026 : payer d'avance ne coute ni plus ni moins.
-        //   En centimes entiers — 24,90 × 12 vaut 298,80000000000005 en
-        //   virgule flottante, et la comparaison directe echouerait.
+        // ⚠ ET L'ANNEE COUTE MOINS QUE DOUZE MENSUALITES, sinon « payer
+        //   d'avance » n'a pas de sens. En centimes entiers — 24,90 × 12 vaut
+        //   298,80000000000005 en virgule flottante.
         for(const k of ['essentielle','ultime']){
           const o=OFFRES[k];
-          if(Math.round(o.prixAn*100)!==Math.round(o.prix*100)*12)
-            return _echec(k+' : l’année ('+o.prixAn+') ne fait pas douze fois '+o.prix);
+          if(!(Math.round(o.prixAn*100)<Math.round(o.prix*100)*12))
+            return _echec(k+' : l’année ('+o.prixAn+') ne coûte pas moins que douze fois '+o.prix);
         }
-        // DONC AUCUNE REMISE A ANNONCER, et rien ne doit en annoncer une.
-        if(_economie('essentielle').texte||_economie('ultime').texte)
-          return _echec('une économie est annoncée alors que l’année vaut douze mois');
+        if(moisOffertsAnnuel('essentielle')!==2||moisOffertsAnnuel('ultime')!==2)
+          return _echec('mois offerts : '+moisOffertsAnnuel('essentielle')+' / '+moisOffertsAnnuel('ultime'));
+        // LES CONTRATS ENGAGÉS GARDENT LEURS PRIX : écrits à la main eux aussi.
+        if(TARIFS.contrats_engages.essentielle.an!==114||TARIFS.contrats_engages.ultime.an!==298.8||TARIFS.contrats_engages.engagementMois!==12)
+          return _echec('les prix des contrats engagés ont bougé');
+        if(TARIFS.engagementMois!==0) return _echec('engagementMois : '+TARIFS.engagementMois);
         // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
         // espace insecable avant le symbole.
         const nbsp=String.fromCharCode(160);
         if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
         if(prixOffre('essentielle')!=='9,50'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
         if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
-        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE EST LE MEME QUE LE MENSUEL,
-        // maintenant qu'il n'y a plus de remise. Les deux lignes le verifient
-        // plutot que de recopier un chiffre qui redeviendrait faux.
-        if(prixMoisAnnuel('ultime')!==prixOffre('ultime')) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
-        if(prixMoisAnnuel('essentielle')!==prixOffre('essentielle')) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE est l'annuel divise par douze,
+        // calcule sur TARIFS plutot que recopie (il redeviendrait faux).
+        if(prixMoisAnnuel('ultime')!==_euros(Math.round(TARIFS.ultime.an/12*100)/100)) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
+        if(prixMoisAnnuel('essentielle')!==_euros(Math.round(TARIFS.essentielle.an/12*100)/100)) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
         // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
         // l'offre, il ne doit pas survivre dans un identifiant oublie.
         const src=_prodSrc();
@@ -37014,6 +37141,387 @@ async function testExercices(){
         }
         return fautes.length?_echec(fautes.join('  ·  ')):true;})());
 
+      ok('TARIFS — prixDeuxFacons : le mensuel, puis l’année en une fois et sa remise calculée, jamais deux fois le même montant',(()=>{
+        for(const cle of ['essentielle','ultime']){
+          const t=prixDeuxFacons(cle), rem=texteRemiseAnnuelle(cle);
+          const attendu=prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' l’année en une fois'+(rem?' ('+rem+')':'');
+          if(t!==attendu) return _echec(cle+' : « '+t+' »');
+          if(t.split(prixOffre(cle)).length!==2) return _echec(cle+' : le mensuel est dit deux fois : « '+t+' »');
+        }
+        // Les montants viennent de TARIFS, et rien n'est écrit en dur.
+        if(prixDeuxFacons('ultime').indexOf(_euros(TARIFS.ultime.an))<0) return _echec('le total d’Ultime ne vient pas de TARIFS');
+        if(prixDeuxFacons('essentielle').indexOf(_euros(TARIFS.essentielle.mois))!==0) return _echec('Essentielle : '+prixDeuxFacons('essentielle'));
+        // Une offre sans annuel, et une offre inconnue.
+        if(prixDeuxFacons('ultime_demi')!==prixOffre('ultime_demi')+' par mois') return _echec('ultime_demi : '+prixDeuxFacons('ultime_demi'));
+        if(prixDeuxFacons('rien')!=='') return _echec('offre inconnue');
+        // Les trois écrans qui la disaient passent par prixDeuxFacons.
+        if([rcVerrouBloc,texteEssaiRestant,rendreEssaiBilan].some(f=>/prixMoisAnnuel/.test(String(f))))
+          return _echec('« … par mois en annuel, ou … au mois » est encore écrit à la main');
+        return true;})());
+
+      // ══ SANS ENGAGEMENT, ANNUEL REMISÉ (09/10/2026) ══════════════════════
+      ok('TARIFS — la remise de l’annuel se CALCULE : mois offerts entiers, sinon le pourcentage, sinon rien',(()=>{
+        // Le calcul lui-même, sur deux montants.
+        const M=moisOffertsDe, X=texteRemiseDe;
+        if(M(9.5,95)!==2) return _echec('9,50 / 95 : '+M(9.5,95));
+        if(M(24.9,249)!==2) return _echec('24,90 / 249 : '+M(24.9,249));
+        // 24,90 × 12 = 298,80 : en flottant, 298,80000000000005 — aucune remise.
+        if(M(24.9,298.8)!==0||X(24.9,298.8)!=='') return _echec('douze mensualités pleines : '+M(24.9,298.8)+' / '+X(24.9,298.8));
+        if(M(10,110)!==1||X(10,110)!=='1 mois offert') return _echec('un mois : '+X(10,110));
+        if(X(9.5,95)!=='2 mois offerts') return _echec('pluriel : '+X(9.5,95));
+        // Une remise qui ne tombe pas sur un mois rond : pas de « 1,4 mois », le pourcentage.
+        if(M(10,106)!==0||!/%/.test(X(10,106))) return _echec('remise non ronde : '+X(10,106));
+        if(M(10,130)!==0||X(10,130)!=='') return _echec('annuel plus cher : '+X(10,130));
+        if(M(10,0)!==0||X(10,0)!=='') return _echec('sans annuel');
+        if(moisOffertsAnnuel('rien')!==0||texteRemiseAnnuelle('rien')!=='') return _echec('offre inconnue');
+        // Et sur les vrais tarifs : douze mensualités moins l'annuel, en mensualités.
+        for(const k of ['essentielle','ultime']){
+          const n=Math.round((TARIFS[k].mois*12-TARIFS[k].an)/TARIFS[k].mois);
+          const rond=Math.abs((TARIFS[k].mois*12-TARIFS[k].an)/TARIFS[k].mois-n)<0.001&&n>0;
+          if(moisOffertsAnnuel(k)!==(rond?n:0)) return _echec(k+' : '+moisOffertsAnnuel(k)+' mois offerts');
+          if(rond&&texteRemiseAnnuelle(k)!==n+' mois offert'+(n>1?'s':'')) return _echec(k+' : « '+texteRemiseAnnuelle(k)+' »');
+        }
+        // La carte annuelle de l'écran d'abonnement porte cette remise, et rien d'écrit à la main.
+        const an=SUB_PALIERS.find(p=>p.cle==='annuel');
+        if(!an||an.remise!==texteRemiseAnnuelle('essentielle')) return _echec('carte annuelle : '+(an&&an.remise));
+        if(/mois offerts?'/.test(String(accueilPeriode))) return _echec('« mois offerts » écrit à la main dans le bandeau');
+        return true;})());
+
+      ok('TARIFS — « Chaque mois » d’abord et par défaut, l’annuel seulement sur son plan sans engagement',(()=>{
+        if(SUB_PALIERS[0].cle!=='mensuel'||SUB_PALIERS[0].titre!=='Chaque mois') return _echec('premier palier : '+SUB_PALIERS[0].cle);
+        if(SUB_PALIERS[1].titre!=='En une fois') return _echec('second palier : '+SUB_PALIERS[1].titre);
+        const u=subPaliersDe('ultime').map(p=>p.cle).join(',');
+        if(u.indexOf('mensuel')!==0) return _echec('Ultime : '+u);
+        const d=[{cle:'mensuel'},{cle:'annuel'}];
+        if(subPalierParDefaut(d,'')!=='mensuel') return _echec('défaut : '+subPalierParDefaut(d,''));
+        if(subPalierParDefaut(d,'1')!=='annuel') return _echec('annuel demandé sur l’accueil : '+subPalierParDefaut(d,'1'));
+        if(subPalierParDefaut([{cle:'mensuel'}],'1')!=='mensuel') return _echec('annuel demandé mais indisponible');
+        if(subPalierParDefaut([],'')!=='') return _echec('rien de payable');
+        // La valeur initiale se lit dans la source : un test précédent a pu cliquer.
+        if(!/let _accueilAnnuel=false;/.test(_prodSrc())) return _echec('l’accueil ne montre plus « Chaque mois » par défaut');
+        // L'ANNUEL DES NOUVEAUX PASSE PAR SES PLANS NEUFS : jamais par celui des contrats engagés.
+        if(planIdOffre('essentielle',true)!==PAYPAL_PLAN_ID_ANNUEL_SE) return _echec('Essentielle annuel : '+planIdOffre('essentielle',true));
+        if(planIdOffre('ultime',true)!==PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE) return _echec('Ultime annuel : '+planIdOffre('ultime',true));
+        // Plan vide : l'annuel n'est pas proposé (plutôt qu'annoncer 95 et facturer 114).
+        if(!PAYPAL_PLAN_ID_ANNUEL_SE&&SUB_PALIERS.find(p=>p.cle==='annuel').planId()) return _echec('annuel proposé sans plan');
+        // Les anciens plans restent reconnus : un ancien abonné garde sa formule.
+        if(formuleDuPlan(PAYPAL_PLAN_ID_ANNUEL)!=='essentielle'||formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('anciens plans non reconnus');
+        return true;})());
+
+      ok('TARIFS — abonné engagé ou non : ses conditions, sa ligne d’engagement, son texte de résiliation',(()=>{
+        const t=Date.now(), J=864e5;
+        const ancien={id:'a1',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'essentielle',engagementJusqu:t+200*J}};
+        const echu={id:'a2',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'ultime',engagementJusqu:t-J}};
+        const nouveau={id:'n1',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'annuel',formule:'essentielle',prixSouscrit:TARIFS.essentielle.an}};
+        const mensuel={id:'n2',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{palier:'mensuel',formule:'ultime'}};
+        if(!abonneEngage(ancien)||abonneEngage(echu)||abonneEngage(nouveau)||abonneEngage({role:'coach',abonnement:{engagementJusqu:t+J}}))
+          return _echec('abonneEngage');
+        if(abonneEngage(ancien,t+201*J)) return _echec('le terme passé, il n’est plus engagé');
+        // L'ANCIEN GARDE SON PRIX (contrats_engages), PAS CELUI D'AUJOURD'HUI.
+        const ca=conditionsAbonnement(ancien);
+        if(ca.prix!==_euros(TARIFS.contrats_engages.essentielle.an)||!ca.engage||!/^jusqu’au /.test(ca.engagement)) return _echec('ancien : '+JSON.stringify(ca));
+        if(conditionsAbonnement(echu).prix!==_euros(TARIFS.contrats_engages.ultime.an)) return _echec('ancien échu : '+conditionsAbonnement(echu).prix);
+        if(conditionsAbonnement(echu).engagement!=='Sans engagement') return _echec('ancien échu : '+conditionsAbonnement(echu).engagement);
+        const cn=conditionsAbonnement(nouveau);
+        if(cn.prix!==_euros(TARIFS.essentielle.an)||cn.engage||cn.engagement!=='Sans engagement'||cn.periode!=='par an') return _echec('nouveau : '+JSON.stringify(cn));
+        if(conditionsAbonnement(mensuel).prix!==_euros(TARIFS.ultime.mois)||conditionsAbonnement(mensuel).titre!=='Ultime, mensuel') return _echec('mensuel : '+JSON.stringify(conditionsAbonnement(mensuel)));
+        // Résiliation : le terme pour l'engagé, la fin de la période payée pour les autres.
+        if(texteResilMoyens(ancien)!==RESIL_MOYENS||texteResilMoyens(nouveau)!==RESIL_MOYENS_SANS) return _echec('textes de résiliation');
+        if(/terme des/.test(RESIL_MOYENS_SANS)||!/fin de la période/.test(RESIL_MOYENS_SANS)) return _echec('RESIL_MOYENS_SANS : '+RESIL_MOYENS_SANS);
+        // finAccesAbonnement : le terme seulement tant qu'il court.
+        if(finAccesAbonnement(ancien)!==ancien.abonnement.engagementJusqu) return _echec('fin d’accès de l’engagé');
+        if(finAccesAbonnement(echu)===echu.abonnement.engagementJusqu) return _echec('un terme échu sert encore de fin d’accès');
+        if(prixSouscritDe('ultime','annuel')!==TARIFS.ultime.an||prixSouscritDe('essentielle','mensuel')!==TARIFS.essentielle.mois) return _echec('prixSouscritDe');
+        // L'ÉCRAN « MON ABONNEMENT » : « Sans engagement » pour le nouveau, le terme pour l'ancien.
+        const z=document.getElementById('cr-abo'), sv=currentUser;
+        if(!z) return _echec('#cr-abo absent');
+        try{
+          currentUser=nouveau; _renderAbonnement();
+          const tn=z.textContent.replace(/\s+/g,' ');
+          if(!/Engagement\s*Sans engagement/.test(tn)) return _echec('nouveau, écran : '+tn.slice(0,200));
+          if(/Engagement jusqu/.test(tn)) return _echec('nouveau : un terme affiché');
+          currentUser=ancien; _renderAbonnement();
+          const ta=z.textContent.replace(/\s+/g,' ');
+          if(!/Engagement\s*jusqu’au/.test(ta)||/Sans engagement/.test(ta)) return _echec('ancien, écran : '+ta.slice(0,200));
+          if(ta.indexOf(_euros(TARIFS.contrats_engages.essentielle.an).replace(String.fromCharCode(160),' '))<0&&ta.indexOf(_euros(TARIFS.contrats_engages.essentielle.an))<0) return _echec('ancien : son prix ne se lit pas');
+        } finally { currentUser=sv; try{ _renderAbonnement(); }catch(e){} }
+        // L'ACTIVATION NE POSE PLUS DE TERME sans engagement, et garde celui d'un contrat engagé.
+        const src=String(_prodSrc());
+        if(!/TARIFS\.engagementMois>0\)\?\{engagementJusqu:moisApres\(Date\.now\(\),TARIFS\.engagementMois\)\}:\{\}/.test(src)) return _echec('l’activation pose un terme sans condition');
+        return true;})());
+
+      // ══ BOUTIQUE : LE PROGRAMME À VIE, 30 JOURS D'APP (09/10/2026) ══════
+      ok('BOUTIQUE — achat : le programme à vie, 30 jours d’Ultime à partir de l’achat',(()=>{
+        const J=864e5, t=Date.UTC(2026,9,10,10);
+        if(joursAppProgramme()!==TARIFS.coaching.boutique_prog.mois*30||joursAppProgramme()!==30) return _echec('jours : '+joursAppProgramme());
+        if(TARIFS.coaching.boutique_prog.acces!=='vie') return _echec('acces : '+TARIFS.coaching.boutique_prog.acces);
+        const f=ficheAchatProgramme({prixCts:1490},'ORDX',t);
+        if(f.date!==t||f.prixCts!==1490||f.source!=='paypal'||f.ordre!=='ORDX'||f.ouvertJusqu!==t+30*J) return _echec('fiche : '+JSON.stringify(f));
+        const o=ficheAchatProgramme({prixCts:1490},'offert',t,'offert');
+        if(o.source!=='offert'||o.prixCts!==0||o.ouvertJusqu!==0) return _echec('offert : '+JSON.stringify(o));
+        const u={id:'b1',email:'b1@t.fr',role:'athlete',status:'FREE',programmesAchetes:{fondations:f}};
+        // PENDANT 30 JOURS : Ultime ouvert (repli du dossier) ; APRÈS : plus d'Ultime…
+        if(!programmeOuvreUltime(u,t+29*J)) return _echec('29e jour : Ultime fermé');
+        if(programmeOuvreUltime(u,t+31*J)) return _echec('31e jour : Ultime encore ouvert');
+        // …MAIS LE PROGRAMME RESTE ACQUIS, sans échéance.
+        if(!programmeAcquis(u,'fondations')) return _echec('le programme n’est pas acquis');
+        if(programmesAcquisDe(u).join()!=='fondations') return _echec('programmesAcquisDe : '+programmesAcquisDe(u).join());
+        // Un achat d'avant (`le`, trois mois) reste acquis, et garde son échéance.
+        const vieux={programmesAchetes:{fondations:{le:t-10*J,prixCts:1490,ordre:'O',ouvertJusqu:t+80*J}}};
+        if(!programmeAcquis(vieux,'fondations')||!programmeOuvreUltime(vieux,t+79*J)) return _echec('un achat d’avant a perdu ses droits');
+        // Remboursé : plus acquis.
+        const remb={programmesAchetes:{fondations:Object.assign({},f,{rembourseLe:t+2*J})}};
+        if(programmeAcquis(remb,'fondations')||programmesAcquisDe(remb).length) return _echec('un programme remboursé reste acquis');
+        // Ce que l'achat donne est écrit avant de payer, avec la durée de TARIFS.
+        const ta=texteAchatProgramme();
+        if(!/à vie/.test(ta)||ta.indexOf(joursAppProgramme()+' jours')<0||!/Essentielle/.test(ta)) return _echec('texte : '+ta);
+        if(/3 mois|trois mois/.test(String(ouvrirMerciAchat))) return _echec('le remerciement parle encore de trois mois');
+        return true;})());
+
+      ok('BOUTIQUE — fin des 30 jours : sans abonnement, le programme se lit (écran de fin d’essai compris)',(()=>{
+        const J=864e5, t=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE), sv=currentUser;
+        const u={id:'b2',email:'b2@t.fr',fname:'A',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t-90*J,finit:t-60*J},sessions:[],sessions_config:[],
+          programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDY',t-40*J)}};
+        try{
+          // Le serveur a parlé : rien de payé en cours, l'Ultime du programme est échu.
+          localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:{palier:'aucun',echeance:0,ultimeJusqu:t-10*J,maj:t},vide:false,lu:t}}));
+          if(palierDe(u)!=='aucun') return _echec('palier : '+palierDe(u));
+          if(peut(u,'bibliothequeExercices')) return _echec('la bibliothèque reste ouverte après 30 jours');
+          // Le programme, lui, se lit : ses séances et leurs exercices.
+          const p=programmeDuCatalogue('fondations');
+          const html=htmlLectureProgramme(p,'H');
+          const ex=((_seancesProgramme(p,'H').find(j=>j&&j.active!==false&&(j.exercises||[]).length)||{}).exercises||[])[0];
+          if(!ex||html.indexOf(escapeHtml(ex.name))<0) return _echec('la lecture ne montre pas les exercices');
+          currentUser=u;
+          if(!ouvrirLectureProgramme('fondations')) return _echec('la lecture refuse un programme acquis');
+          const m=document.getElementById('lecture-programme');
+          if(!m||m.textContent.indexOf(ex.name)<0) return _echec('la feuille de lecture est vide');
+          closeModal();
+          // L'écran de fin d'essai y mène.
+          if(!rendreEssaiBilan(u)) return _echec('écran de fin d’essai');
+          const porte=document.querySelector('#eb-corps [data-eb-programmes]');
+          if(!porte) return _echec('l’écran de fin d’essai ne mène pas au programme');
+          // Sans achat : pas de porte, et pas de lecture.
+          const sans=Object.assign({},u,{programmesAchetes:{}});
+          currentUser=sans; rendreEssaiBilan(sans);
+          if(document.querySelector('#eb-corps [data-eb-programmes]')) return _echec('une porte sans programme acheté');
+          if(ouvrirLectureProgramme('fondations')) return _echec('lecture sans achat');
+          return true;
+        } finally {
+          try{ closeModal(); }catch(e){}
+          currentUser=sv;
+          if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('BOUTIQUE — pendant les 30 jours puis avec un abonnement Ultime : tout ouvert ; Essentielle : le programme en séance',(()=>{
+        const J=864e5, t=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE);
+        const u={id:'b3',email:'b3@t.fr',role:'athlete',status:'FREE',
+          programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDZ',t-5*J)}};
+        const poser=d=>localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:Object.assign({echeance:0,maj:t},d),vide:false,lu:t}}));
+        const ULT=['bibliothequeExercices','planification','dieteCalculee','volume'];
+        try{
+          // Pendant les 30 jours (ultimeJusqu posé par le worker) : Ultime.
+          poser({palier:'aucun',ultimeJusqu:t+25*J});
+          if(palierDe(u)!=='ultime') return _echec('pendant les 30 jours : '+palierDe(u));
+          for(const c of ULT) if(!peut(u,c)) return _echec('pendant les 30 jours, '+c+' fermé');
+          // Abonnement Ultime, l'achat échu : tout ouvert.
+          poser({palier:'ultime',ultimeJusqu:t-J});
+          for(const c of ULT.concat(['composerSeances','seance'])) if(!peut(u,c)) return _echec('Ultime : '+c+' fermé');
+          // Essentielle, l'achat échu : le programme se suit en séance, les fonctions Ultime restent fermées.
+          poser({palier:'essentielle',ultimeJusqu:t-J});
+          if(!peut(u,'composerSeances')||!peut(u,'seance')) return _echec('Essentielle : séances fermées');
+          if(peut(u,'bibliothequeExercices')) return _echec('Essentielle ouvre la bibliothèque');
+          if(!programmeAcquis(u,'fondations')) return _echec('Essentielle : le programme n’est plus acquis');
+          return true;
+        } finally { if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve); }})());
+
+      ok('BOUTIQUE — les quatre emplacements attendent leur fiche : aucun contenu inventé, aucun ne se vend',(()=>{
+        const vides=RC_PROGRAMMES.filter(p=>p.aCompleter);
+        if(vides.length!==4) return _echec(vides.length+' emplacements');
+        for(const p of vides){
+          if(p.seances!==null||p.description||p.accroche||(p.tags&&p.tags.length)||p.prixCts) return _echec(p.id+' porte un contenu : '+JSON.stringify(p));
+          if(programmeVendable(programmeDuCatalogue(p.id)||p)&&!_programmePublie(p.id)) return _echec(p.id+' se vend vide');
+          const manque=ficheACompleter(p);
+          for(const lib of ['promesse','durée (semaines)','séances (le contenu)','prix'])
+            if(manque.indexOf(lib)<0) return _echec(p.id+' : « '+lib+' » non signalé à remplir ('+manque.join(', ')+')');
+          if(manque.indexOf('nom')>=0) return _echec(p.id+' : le nom est déjà posé');
+        }
+        // Fondations, complète, ne manque de rien.
+        const f=ficheACompleter(RC_PROGRAMMES.find(p=>p.id==='fondations'));
+        if(f.length&&!(f.length===1&&f[0]==='prix')) return _echec('Fondations : '+f.join(', '));
+        return true;})());
+
+      // ══ PAIEMENT PAR CARTE : JAMAIS UN CADRE VIDE (09/10/2026) ═════════
+      ok('CARTE — le lien de la page PayPal hébergée et le numéro d’abonnement collé',(()=>{
+        const l=lienPaiementHeberge(PAYPAL_PLAN_ID);
+        if(l!=='https://www.paypal.com/webapps/billing/plans/subscribe?plan_id='+PAYPAL_PLAN_ID) return _echec('lien : '+l);
+        for(const x of ['', 'P-1', 'javascript:alert(1)', 'P-ABC"><img']) if(lienPaiementHeberge(x)!=='') return _echec('identifiant accepté : '+x);
+        if(idAbonnementColle('  i-abc12345678 ')!=='I-ABC12345678') return _echec('nettoyage');
+        if(idAbonnementColle('I-AB')!==''||idAbonnementColle('P-ABC12345678')!==''||idAbonnementColle('I-ABC 123 456 78')!=='I-ABC12345678') return _echec('validation');
+        // Le bloc : un message, le chemin PayPal, et — pour un abonnement — la page hébergée et la saisie.
+        const a=htmlSecoursCarte('abonnement',PAYPAL_PLAN_ID), b=htmlSecoursCarte('achat','');
+        if(a.indexOf('data-carte-secours')<0||a.indexOf(l)<0||a.indexOf('carte-secours-id')<0) return _echec('abonnement : '+a.slice(0,120));
+        if(b.indexOf('webapps/billing')>=0||b.indexOf('carte-secours-id')>=0) return _echec('un achat ne propose pas de page hébergée');
+        if(!/Payer par carte/.test(b)) return _echec('le chemin par le bouton PayPal n’est pas dit');
+        // Sans SDK : la case des CGV est dans le bloc, et le lien reste caché tant qu'elle n'est pas cochée.
+        const c=htmlSecoursCarte('abonnement',PAYPAL_PLAN_ID,true);
+        if(c.indexOf('secours-cgv')<0||!/id="secours-lien"[^>]*display:none/.test(c)) return _echec('sans SDK, le lien contourne les CGV');
+        if(/bouton PayPal ci-dessus/.test(c)) return _echec('sans SDK, le texte renvoie à un bouton absent');
+        if(a.indexOf('secours-cgv')>=0) return _echec('avec SDK, la case est en double');
+        return true;})());
+      ok('CARTE — bouton non éligible, rendu en échec, rien au bout du délai : le secours prend la place',(()=>{
+        const z=document.createElement('div'); z.id='carte-essai'; document.body.appendChild(z);
+        try{
+          if(_rendreBoutonCarteOuSecours({isEligible:()=>false},'carte-essai','abonnement',PAYPAL_PLAN_ID)!==false) return _echec('non éligible rendu');
+          if(!z.querySelector('[data-carte-secours]')) return _echec('non éligible : pas de secours');
+          z.innerHTML='';
+          _rendreBoutonCarteOuSecours({isEligible:()=>true,render:()=>{ throw new Error('x'); }},'carte-essai','achat','');
+          if(!z.querySelector('[data-carte-secours]')) return _echec('rendu en échec : pas de secours');
+          z.innerHTML='';
+          if(_rendreBoutonCarteOuSecours(null,'carte-essai','achat','')!==false||!z.querySelector('[data-carte-secours]')) return _echec('sans bouton : pas de secours');
+          // Un bouton rendu n'est pas recouvert.
+          z.innerHTML='';
+          _rendreBoutonCarteOuSecours({isEligible:()=>true,render:()=>{ z.innerHTML='<iframe></iframe>'; return Promise.resolve(); }},'carte-essai','achat','');
+          if(z.querySelector('[data-carte-secours]')) return _echec('le secours recouvre un bouton rendu');
+          return true;
+        } finally { z.remove(); }})());
+      ok('CARTE — le numéro collé est posé sur le dossier et signalé, sans remplacer un abonnement déjà relié',(()=>{
+        const sv=currentUser, sSave=window.saveUser, sSig=window.abonnementSignaler;
+        const z=document.createElement('div'); z.innerHTML='<input id="carte-secours-id">'; document.body.appendChild(z);
+        const signales=[];
+        try{
+          window.saveUser=()=>true; window.abonnementSignaler=(id,f)=>signales.push([id,f]);
+          currentUser={id:'cs',email:'cs@t.fr',role:'athlete',status:'FREE'};
+          document.getElementById('carte-secours-id').value='i-abc12345678';
+          if(!signalerAbonnementColle()) return _echec('refusé');
+          if(currentUser.paypalSubscriptionId!=='I-ABC12345678') return _echec('pas posé : '+currentUser.paypalSubscriptionId);
+          if(signales.length!==1||signales[0][0]!=='I-ABC12345678'||signales[0][1]!==true) return _echec('pas signalé : '+JSON.stringify(signales));
+          // Un autre numéro, alors qu'un abonnement est déjà relié : refusé.
+          document.getElementById('carte-secours-id').value='I-ZZZ99999999';
+          if(signalerAbonnementColle()) return _echec('un second abonnement remplace le premier');
+          if(currentUser.paypalSubscriptionId!=='I-ABC12345678') return _echec('le premier a bougé');
+          // Un numéro mal formé : refusé.
+          currentUser={id:'cs2',email:'cs2@t.fr',role:'athlete'};
+          document.getElementById('carte-secours-id').value='12345';
+          return signalerAbonnementColle()===false&&!currentUser.paypalSubscriptionId?true:_echec('numéro mal formé accepté');
+        } finally { z.remove(); currentUser=sv; window.saveUser=sSave; window.abonnementSignaler=sSig; }})());
+
+      ok('AFFLUENCE — PURE : les refus reconnus, le délai croissant et borné avec son aléa, la synchro coupée app cachée',(()=>{
+        if(!estRefusAffluence(429)||!estRefusAffluence(503)||!estRefusAffluence(402)) return _echec('un refus de la base n’est pas reconnu');
+        if(estRefusAffluence(200)||estRefusAffluence(401)||estRefusAffluence(404)||estRefusAffluence(500)||estRefusAffluence(0)) return _echec('un autre statut passe pour un refus');
+        if(delaiReessaiAffluence(0,0.5)!==30000||delaiReessaiAffluence(1,0.5)!==60000||delaiReessaiAffluence(2,0.5)!==120000) return _echec('paliers : '+[0,1,2].map(n=>delaiReessaiAffluence(n,0.5)));
+        if(delaiReessaiAffluence(9,0.5)!==300000) return _echec('plafond : '+delaiReessaiAffluence(9,0.5));
+        if(delaiReessaiAffluence(0,0)!==24000||delaiReessaiAffluence(0,1)!==36000) return _echec('aléa ± 20 % : '+delaiReessaiAffluence(0,0)+' / '+delaiReessaiAffluence(0,1));
+        if(syncPeriodiqueUtile(true,false)||syncPeriodiqueUtile(false,true)||!syncPeriodiqueUtile(false,false)) return _echec('synchro périodique');
+        const x=texteAffluence(45000);
+        if(x.titre!=='Forte affluence'||!/Ta séance continue/.test(x.texte)||!/Nouvel essai dans 45 s\./.test(x.texte)) return _echec(JSON.stringify(x));
+        if(!/dans 3 min\./.test(texteAffluence(150000).texte)||!/en cours/.test(texteAffluence(0).texte)) return _echec('minutes / en cours');
+        if(fluxDoitDormir(0,FLUX_SOMMEIL_MS-1)||!fluxDoitDormir(0,FLUX_SOMMEIL_MS)) return _echec('sommeil du flux');
+        return true;})());
+      okA('AFFLUENCE — refus simulé (503) : bandeau, plus d’envoi ni de flux, réessai à la sonde ; un 503 de plus le garde, un 200 le referme et vide la file',async()=>{
+        const sv={fetch:window.fetch,tok:CLOUD._getToken,sonder:CLOUD.sonder,vider:CLOUD.viderFile,user:currentUser,ouvrir:BOITE_COACH.ouvrir,voulu:BOITE_COACH._voulu};
+        const urls=[]; let statut=503, vides=0, ouverts=0;
+        try{
+          clearTimeout(AFFLUENCE._minuteur); AFFLUENCE._actif=false;
+          currentUser={id:'af',email:'af@t.fr',role:'coach',status:'FREE'};
+          CLOUD._getToken=async()=>'tok';
+          window.fetch=async(u)=>{ urls.push(String(u)); return {ok:statut<300,status:statut,headers:{get:()=>null},text:async()=>'null',json:async()=>null}; };
+          // 1. Une lecture ordinaire tombe sur « trop de monde ».
+          await CLOUD.pullUser('af@t.fr');
+          if(!AFFLUENCE.actif()) return _echec('le 503 n’a pas allumé la forte affluence');
+          const b=document.getElementById('affluence-bandeau');
+          if(!b||!/Forte affluence/.test(b.textContent)||!/Ta séance continue/.test(b.textContent)) return _echec('bandeau : '+(b?b.textContent:'absent'));
+          if(!(AFFLUENCE._prochain>Date.now()+20000)) return _echec('pas de réessai planifié');
+          // 2. Plus rien ne part : ni présence, ni flux du coach.
+          const n0=urls.length;
+          if(await CLOUD.presence()) return _echec('la présence part en affluence');
+          BOITE_COACH._voulu=true;
+          if(BOITE_COACH.ouvrir()!==false) return _echec('le flux du coach s’ouvre en affluence');
+          if(urls.length!==n0) return _echec('une requête est partie : '+urls.slice(n0).join(' | '));
+          // 3. Réessai : la base refuse encore → on attend plus longtemps.
+          CLOUD.sonder=async()=>503;
+          CLOUD.viderFile=async()=>{ vides++; return 0; };
+          BOITE_COACH.ouvrir=function(){ ouverts++; return true; };
+          const e1=AFFLUENCE._essais;
+          if(await AFFLUENCE.reessayer()) return _echec('reprise annoncée sur un 503');
+          if(!AFFLUENCE.actif()||AFFLUENCE._essais!==e1+1) return _echec('le palier n’a pas avancé');
+          // 4. La base répond : bandeau fermé, file vidée, flux rouvert.
+          CLOUD.sonder=async()=>200;
+          if(!(await AFFLUENCE.reessayer())) return _echec('la reprise n’est pas vue');
+          if(AFFLUENCE.actif()||document.getElementById('affluence-bandeau')) return _echec('le bandeau reste');
+          if(vides!==1||ouverts!==1) return _echec('file vidée '+vides+' fois, flux rouvert '+ouverts+' fois');
+          // 5. Un succès ordinaire suffit aussi à refermer.
+          AFFLUENCE.signaler(); statut=200;
+          await CLOUD.pullUser('af@t.fr');
+          if(AFFLUENCE.actif()) return _echec('un 200 en lecture ne referme pas');
+          return true;
+        }finally{
+          clearTimeout(AFFLUENCE._minuteur); AFFLUENCE._actif=false; AFFLUENCE._essais=0; AFFLUENCE._peindre();
+          window.fetch=sv.fetch; CLOUD._getToken=sv.tok; CLOUD.sonder=sv.sonder; CLOUD.viderFile=sv.vider; currentUser=sv.user;
+          BOITE_COACH.ouvrir=sv.ouvrir; BOITE_COACH._voulu=sv.voulu; BOITE_COACH._fermerFlux();
+        }
+      });
+      ok('AFFLUENCE — un envoi pendant la forte affluence part en file (erreur rejouable), le toast d’échec se tait',(()=>{
+        const src=String(CLOUD._doPushOne);
+        if(src.indexOf('if(AFFLUENCE.actif()) throw new Error(')<0) return _echec('_doPushOne envoie en affluence');
+        if(String(toastSync).indexOf('AFFLUENCE.actif()')<0) return _echec('toastSync ne se tait pas');
+        if(String(_descenteAuRetour).indexOf('AFFLUENCE.actif()')<0) return _echec('le retour au premier plan redescend en affluence');
+        return true;})());
+      ok('FLUX DU COACH — endormi après 10 min sans geste, réveillé au premier toucher',(()=>{
+        const sv={es:BOITE_COACH._es,voulu:BOITE_COACH._voulu,ouvrir:BOITE_COACH.ouvrir,geste:BOITE_COACH._geste,dort:BOITE_COACH._dort};
+        let ouverts=0;
+        try{
+          BOITE_COACH._voulu=true; BOITE_COACH._dort=false; BOITE_COACH._geste=1000;
+          BOITE_COACH._es={close(){}};
+          if(BOITE_COACH.veiller(1000+FLUX_SOMMEIL_MS-1)) return _echec('endormi trop tôt');
+          if(!BOITE_COACH.veiller(1000+FLUX_SOMMEIL_MS)||BOITE_COACH._es||!BOITE_COACH._dort) return _echec('pas endormi');
+          BOITE_COACH.ouvrir=function(){ ouverts++; this._dort=false; return true; };
+          BOITE_COACH.geste(Date.now());
+          if(ouverts!==1||BOITE_COACH._dort) return _echec('pas réveillé');
+          return true;
+        }finally{ BOITE_COACH._es=sv.es; BOITE_COACH._voulu=sv.voulu; BOITE_COACH.ouvrir=sv.ouvrir; BOITE_COACH._geste=sv.geste; BOITE_COACH._dort=sv.dort; BOITE_COACH._fermerFlux(); }
+      })());
+      ok('PLAY — PURE : le canal se lit à ?src=play ou à la mémoire de session, et le bloc Play n’a ni lien ni bouton',(()=>{
+        if(canalDepuis('play','')!=='play'||canalDepuis('','play')!=='play') return _echec('play non reconnu');
+        if(canalDepuis('','')!=='web'||canalDepuis('instagram','')!=='web'||canalDepuis('PLAY','')!=='web') return _echec('web');
+        const h=htmlCanalPlay();
+        if(h.indexOf(CANAL_PLAY_TEXTE)<0) return _echec('le message manque');
+        if(/<a[\s>]|href=|<button|onclick|paypal/i.test(h)) return _echec('un lien, un bouton ou PayPal dans le bloc Play : '+h);
+        return true;})());
+      ok('PLAY — écran d’abonnement en version Play : ni prix, ni case, ni PayPal, le message à la place ; le SDK ne se charge pas',(()=>{
+        const sv=currentUser, svCanal=sessionStorage.getItem(CANAL_PLAY_CLE);
+        const z=document.createElement('div');
+        z.innerHTML='<div id="sub-formule">F</div><div id="sub-paliers">P</div><label><input type="checkbox" id="sub-renonciation"></label>'
+          +'<div id="sub-renonc-msg">M</div><div id="paypal-btn-container"><button>Souscrire</button></div><div id="pp-badge">PayPal</div>';
+        const ids=['sub-formule','sub-paliers','sub-renonciation','sub-renonc-msg','paypal-btn-container'];
+        const anciens=ids.map(id=>{ const e=document.getElementById(id); if(e) e.id=id+'-ecarte'; return e; });
+        document.body.appendChild(z);
+        try{
+          sessionStorage.removeItem(CANAL_PLAY_CLE);
+          if(_subCanalPlay()) return _echec('hors Play, l’écran est changé');
+          sessionStorage.setItem(CANAL_PLAY_CLE,'play');
+          currentUser={id:'pl',email:'pl@t.fr',role:'athlete',status:'FREE'};
+          const avant=!!document.getElementById('paypal-sdk');
+          initPaypalSubscription();
+          if(!avant&&document.getElementById('paypal-sdk')) return _echec('le SDK PayPal est chargé en version Play');
+          const pp=document.getElementById('paypal-btn-container');
+          if(!pp.querySelector('[data-canal-play]')||/Souscrire/.test(pp.textContent)) return _echec('bloc : '+pp.innerHTML);
+          for(const id of ['sub-formule','sub-paliers','sub-renonc-msg']) if(document.getElementById(id).style.display!=='none') return _echec(id+' visible');
+          if(document.getElementById('sub-renonciation').closest('label').style.display!=='none') return _echec('la case reste');
+          if(document.getElementById('pp-badge').style.display!=='none') return _echec('le badge PayPal reste');
+          return true;
+        }finally{
+          z.remove(); anciens.forEach((e,i)=>{ if(e) e.id=ids[i]; });
+          currentUser=sv; if(svCanal) sessionStorage.setItem(CANAL_PLAY_CLE,svCanal); else sessionStorage.removeItem(CANAL_PLAY_CLE);
+        }
+      })());
+      ok('PLAY — l’achat d’un programme et le paiement au coach ne s’ouvrent pas en version Play',(()=>{
+        if(String(_chargerPaypalAchat).indexOf("canalApp()==='play'")<0) return _echec('achat');
+        if(String(pcProposerPaiement).indexOf("canalApp()==='play'")<0) return _echec('paiement coach');
+        return true;})());
       ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{
@@ -53792,13 +54300,19 @@ async function testExercices(){
       if(!/^JULIE[A-Z2-9]{3}$/.test(a)||!/^ELOR/.test(b)||!/^MAXIMI[A-Z2-9]{3}$/.test(c)||!/^REPC/.test(d)) return _echec([a,b,c,d].join());
       for(let i=0;i<200;i++){ const x=parrainageCodeDe('Léa-Marie'); if(!PARRAINAGE_CODE_RE.test(x)||/[01IO]$|[01IO].$|[01IO]..$/.test(x.slice(-3))) return _echec(x); }
       return true;})());
+    ok('Parrainage : l’invité a l’essai + le mois offert (tarifs.json, Kevin 09/10/2026), et les phrases le disent',(()=>{
+      const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+      if(moisInvite()!==n||n!==2) return _echec('moisInvite '+moisInvite()+' / '+n);
+      if(offreMoisInvite()!=='tes 2 premiers mois') return _echec(offreMoisInvite());
+      if(texteMoisOfferts()!=='tes 2 premiers mois sont offerts') return _echec(texteMoisOfferts());
+      return true;})());
     ok('Parrainage : le lien personnel porte ?ref= quand il y a un code, et pas sinon',(()=>{
       const u={parrainage:{code:'JULIE7K2'}};
       const l=lienPerso('',u);
       if(l!==RC_LIEN_COURT+(RC_LIEN_COURT.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2') return _echec(l);
       if(lienPerso('',{})!==RC_LIEN_COURT) return _echec('lien sans code : '+lienPerso('',{}));
       const m=parrainageMessage('JULIE7K2',l);
-      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/premier mois est offert/.test(m)&&!/2 mois|au lieu/.test(m))?true:_echec(m);})());
+      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/tes 2 premiers mois sont offerts/.test(m)&&!/au lieu/.test(m))?true:_echec(m);})());
     ok('Parrainage : /i/ garde ?ref= jusqu’à /app/, y compris dans Instagram',(()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
@@ -54368,13 +54882,13 @@ async function testExercices(){
       return bon?true:_echec('lien de l’aperçu : '+(a?a.outerHTML:'absent'));})());
     ok('Partage : le message de parrainage se lit, et le lien n’apparaît pas deux fois',(()=>{
       const m=parrainageMessage('JULIE7K2','https://x/?ref=JULIE7K2');
-      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, ton premier mois est offert')!==0) return _echec(m);
+      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, tes 2 premiers mois sont offerts')!==0) return _echec(m);
       if(!/https:\/\/x\/\?ref=JULIE7K2$/.test(m)) return _echec('le lien manque à la fin');
       if(/https?:/.test(parrainageMessage('JULIE7K2',''))) return _echec('lien vide : il ne doit rien ajouter');
       if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
       if(!/text:parrainageMessage\(c,l\?'':undefined\),url:l/.test(String(parrainagePartager))) return _echec('le partage répète le lien dans le texte');
       const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
-      if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
+      if(/ : [^ ]+ : /.test(r)||!(TARIFS.engagementMois?new RegExp('engagement '+TARIFS.engagementMois+' mois'):/sans engagement/).test(r)) return _echec(r);
       return true;})());
     ok('Records (28/09/2026) : plus de partage ni de choix image/vidéo, une phrase par record',(()=>{
       const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
@@ -54402,7 +54916,7 @@ async function testExercices(){
       if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
       return true;})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
-    okA('Accueil /i : « Julie t’invite », son rang et « Julie t’offre ton premier mois » avant le bouton, le défi d’abord quand il y en a un ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+    okA('Accueil /i : « Julie t’invite », son rang et « Julie t’offre un mois de plus » avant le bouton, le défi d’abord quand il y en a un ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
       if(!m) return _echec('script de /i introuvable');
@@ -54435,13 +54949,13 @@ async function testExercices(){
       if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
       r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
       if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
-        ||r.el['interne-invite'].textContent.indexOf('Julie t’offre ton premier mois')!==0)
+        ||r.el['interne-invite'].textContent.indexOf('Julie t’offre un mois de plus\u00a0: 2 mois d’accès complet')!==0)
         return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
       if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
       // Le lien d'un duel porte aussi le code : le défi en titre, le cadeau dessous, avant « Commencer ».
       r=await run('?ref=JULIE7K2&duel=dabcdefghijk',SF,{prenom:'Julie',rang:4,mesure:'seances',duree:14});
       if(r.el.titre.textContent!=='Julie te défie : 14 jours de régularité') return _echec('duel + code, titre : '+r.el.titre.textContent);
-      if(r.el.promesse.textContent.indexOf('Julie t’offre ton premier mois')!==0) return _echec('duel + code, cadeau : '+r.el.promesse.textContent);
+      if(r.el.promesse.textContent.indexOf('Julie t’offre un mois de plus\u00a0: 2 mois d’accès complet')!==0) return _echec('duel + code, cadeau : '+r.el.promesse.textContent);
       if(h.indexOf('id="promesse"')>h.indexOf('id="commencer"')) return _echec('le cadeau est dit après le bouton');
       if(/essai gratuit/i.test(h)) return _echec('« essai gratuit » sur /i');
       r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
@@ -54500,14 +55014,14 @@ async function testExercices(){
       if(!r.el.tuto.hidden||!r.parti) return _echec('sans invitation : pas de tuto, l’app s’ouvre');
       return true;
     });
-    ok('Inscription : « Julie t’offre ton premier mois » en haut, avant le formulaire, et le code demandé en haut sur iPhone installé',(()=>{
-      if(phraseInvitationInscription('Julie')!=='Julie t’offre ton premier mois') return _echec(phraseInvitationInscription('Julie'));
-      if(ligneCadeauInscription('Julie t’offre ton premier mois',{prenom:'Julie',mesure:'seances',duree:14})!=='Julie te défie : 14 jours de régularité. Julie t’offre ton premier mois.')
-        return _echec('défi puis cadeau : '+ligneCadeauInscription('Julie t’offre ton premier mois',{prenom:'Julie',mesure:'seances',duree:14}));
+    ok('Inscription : « Julie t’offre tes 2 premiers mois » en haut, avant le formulaire, et le code demandé en haut sur iPhone installé',(()=>{
+      if(phraseInvitationInscription('Julie')!=='Julie t’offre tes 2 premiers mois') return _echec(phraseInvitationInscription('Julie'));
+      if(ligneCadeauInscription('Julie t’offre tes 2 premiers mois',{prenom:'Julie',mesure:'seances',duree:14})!=='Julie te défie : 14 jours de régularité. Julie t’offre tes 2 premiers mois.')
+        return _echec('défi puis cadeau : '+ligneCadeauInscription('Julie t’offre tes 2 premiers mois',{prenom:'Julie',mesure:'seances',duree:14}));
       { const f=document.querySelector('#s-register .scroll-area'), c=document.getElementById('r-cadeau');
         if(!f||!c||f.firstElementChild!==c) return _echec('le cadeau n’est pas le premier élément du formulaire'); }
-      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, ton premier mois est offert') return _echec('ambassadeur');
-      if(!/t’offre ton premier mois/.test(phraseInvitationInscription(''))) return _echec('sans code');
+      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, tes 2 premiers mois sont offerts') return _echec('ambassadeur');
+      if(!/t’offre tes 2 premiers mois/.test(phraseInvitationInscription(''))) return _echec('sans code');
       if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
       if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
         return _echec('demandé à tort');
@@ -54952,7 +55466,7 @@ async function testExercices(){
       }finally{ currentUser=sv; }
       const ph=phraseInvitationInscription('','Julie Fit','ultime_demi');
       if(!/Grâce à Julie Fit/.test(ph)||!/Ultime est à/.test(ph)||ph.indexOf(prixOffre('ultime_demi'))<0) return _echec(ph);
-      if(!/Grâce à Julie Fit, ton premier mois est offert/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
+      if(!/Grâce à Julie Fit, tes 2 premiers mois sont offerts/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
       if(ambFiche({code:'LANCE',nom:'L',avantage:'ultime_demi'},{}).fiche.avantage!=='ultime_demi') return _echec('création');
       if(ambFiche({code:'JULIE',nom:'J',avantage:'nimporte'},{}).fiche.avantage!=='essai+1mois') return _echec('valeur hors liste');
       return /ultime_demi/.test(String(ambassadeurApresInscription))&&/jours:demi\?0:/.test(String(ambassadeurApresInscription))?true:_echec('inscription');})());
@@ -57458,7 +57972,7 @@ async function testExercices(){
         return _echec('le vingt-et-unième jour ne rappelle rien : « '+j21+' »');
       const j27=texteEssaiRestant(dans(26));
       if(!/Plus que 3 jours/.test(j27)) return _echec('le vingt-septième jour ne chiffre pas : « '+j27+' »');
-      if(j27.indexOf(prixOffre('ultime'))<0||j27.indexOf(prixMoisAnnuel('ultime'))<0)
+      if(j27.indexOf(prixDeuxFacons('ultime'))<0)
         return _echec('la relance finale ne dit pas le prix d’Ultime');
       // ET ELLE PARLE DE SON PROGRAMME A LUI : deux exercices posés, donc deux
       // exercices annoncés.
@@ -57499,7 +58013,7 @@ async function testExercices(){
         //   on normalise donc aussi le prix attendu, sans quoi « 24,90 € »
         //   cherche un caractere que la lecture vient de remplacer.
         const _nb=String.fromCharCode(160);
-        for(const p of [prixOffre('ultime'),prixMoisAnnuel('ultime'),prixOffre('essentielle'),prixMoisAnnuel('essentielle')])
+        for(const p of [prixOffre('ultime'),prixOffre('ultime',true),prixOffre('essentielle'),prixOffre('essentielle',true)])
           if(txt.indexOf(p.split(_nb).join(' '))<0) return _echec('le prix '+p+' ne se lit pas');
         // ET DES PORTES, PAS UN MUR : Ultime, Essentielle, le coaching, le code.
         const b=[...z.querySelectorAll('button,a')];

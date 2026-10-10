@@ -41,6 +41,10 @@ export function travaux(M) {
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
+    // L'avis avant le renouvellement d'un annuel (art. L215-1), une fois par
+    // échéance : notification et e-mail Systeme.io (renouvellement.js).
+    { nom: 'renouvellement', quand: (p) => apres(p, 10, 45) && p.heure < 21, cles: () => (M.paypal && M.paypal.renouvellementsCles ? M.paypal.renouvellementsCles() : []),
+      un: (k, t) => M.paypal.avisRenouvellementUn(k, t), cout: 12 },
     // « Ton accès se termine dans N jours », une fois par échéance.
     { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
@@ -77,6 +81,11 @@ export function travaux(M) {
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur
     // collectif, les badges Édition, les annonces (lancement, mi-parcours, J-2, fin).
     // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
+    // LES CONNEXIONS SIMULTANÉES (09/10/2026) : CHAQUE MINUTE (minute: true),
+    // comptées depuis /presence, alerte à Kevin à 70 (affluence.js).
+    { nom: 'affluence', minute: true, quand: () => true, une: (t) => (M.affluence ? M.affluence.minute(t) : null) },
+    // Et chaque nuit, les présences de plus de 24 h.
+    { nom: 'presence_purge', quand: (p) => apres(p, 4, 40), une: (t) => (M.affluence ? M.affluence.purger(t) : null) },
     { nom: 'canal_programmes', heure: true, quand: () => true, une: (t) => (M.canalProgrammesHeure ? M.canalProgrammesHeure(t) : null) },
     // Les prospects sans réponse depuis 48 h (lot C6) : CHAQUE HEURE, au coach.
     { nom: 'prospects', heure: true, quand: (p) => p.heure >= 8 && p.heure < 21, une: (t) => (M.prospectsRelanceHeure ? M.prospectsRelanceHeure(t) : null) },
@@ -181,7 +190,8 @@ export async function minute({ db, M, compteur, maintenant, source }) {
       const ref = db.ref('worker/jobs/' + w.nom);
       let etat = (await ref.get()).val();
       // Un travail HORAIRE (heure: true) repart à chaque heure de Paris.
-      const periode = w.heure ? p.jour + 'h' + p.heure : p.jour;
+      // Un travail MINUTE (minute: true) repart à chaque minute.
+      const periode = w.minute ? p.jour + 'h' + p.heure + 'm' + p.minute : (w.heure ? p.jour + 'h' + p.heure : p.jour);
       if (!etat || etat.jour !== periode) etat = { jour: periode, curseur: 0, fini: false, acc: {} };
       if (etat.fini) continue;
       // Firebase ne garde pas un objet vide : relu, il revient null.

@@ -7,7 +7,11 @@
 #      sinon il s'arrête : une autre clé obligerait chaque athlète Android à
 #      désinstaller puis réinstaller ;
 #   4. publie la release GitHub apk-<versionCode> (RepCore-<v>.apk, SHA-256
-#      dans les notes), une seule fois par versionCode.
+#      dans les notes), une seule fois par versionCode ;
+#   5. (10/10/2026) compile AUSSI le bundle Google Play (AAB, canal « play » :
+#      ?src=play, aucune mise à jour hors du Play Store), signé avec la MÊME
+#      clé, qui sert de clé d'importation (Play App Signing, voir
+#      docs/play/SIGNATURE.md), vérifié, joint à la release et en artefact.
 #
 # LES QUATRE SECRETS (Settings > Secrets and variables > Actions), posés une
 # fois par Kevin, jamais dans le dépôt :
@@ -87,6 +91,8 @@ jobs:
           export RC_KEYSTORE="$RUNNER_TEMP/cle.keystore"
           chmod +x gradlew
           ./gradlew --no-daemon testReleaseUnitTest assembleRelease
+          # Le bundle Google Play : même code, canal « play ».
+          ./gradlew --no-daemon bundleRelease -Pcanal=play
 
       - name: Vérifier la signature contre assetlinks.json
         if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
@@ -101,6 +107,14 @@ jobs:
             exit 1
           fi
           echo "CERT=$CERT" >> "$GITHUB_ENV"
+          # LE BUNDLE PLAY : signé par la même clé (clé d'importation).
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          CERT_AAB=$(keytool -printcert -jarfile "$AAB" | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | tr 'a-f' 'A-F')
+          echo "certificat du bundle : $CERT_AAB"
+          if [ -z "$CERT_AAB" ] || [ "$CERT_AAB" != "$PUBLIE" ]; then
+            echo "::error::Le bundle Play n'est pas signé par la clé attendue. Rien n'est publié."
+            exit 1
+          fi
 
       - name: Publier la release
         if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
@@ -114,8 +128,18 @@ jobs:
             "- Aide : https://repcore-sync.web.app/aide-apk.html" "" \
             "SHA-256 du fichier RepCore-$V.apk :" "$SHA" "" \
             "Empreinte du certificat de signature (identique à /.well-known/assetlinks.json) :" "$CERT" > notes.md
-          gh release create "apk-$V" "RepCore-$V.apk" --repo "$GITHUB_REPOSITORY" --title "RepCore Android $V" --notes-file notes.md
+          cp android/app/build/outputs/bundle/release/app-release.aab "RepCore-play-$V.aab"
+          printf '%s\n' "" "Bundle Google Play (à importer dans la Play Console, canal « play ») : RepCore-play-$V.aab" >> notes.md
+          gh release create "apk-$V" "RepCore-$V.apk" "RepCore-play-$V.aab" --repo "$GITHUB_REPOSITORY" --title "RepCore Android $V" --notes-file notes.md
           echo "::notice::Publiée : https://github.com/$GITHUB_REPOSITORY/releases/tag/apk-$V"
+
+      - name: Le bundle Play en artefact
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RepCore-play-${{ steps.deja.outputs.v }}
+          path: RepCore-play-${{ steps.deja.outputs.v }}.aab
+          retention-days: 90
 
       - name: Nettoyer la clé
         if: always()

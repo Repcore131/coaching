@@ -120,6 +120,13 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
           endAt: JSON.stringify(fin), limitToFirst: limite ? String(limite) : undefined }), c);
         return v && typeof v === 'object' ? v : {};
       },
+      // LES PLUS RÉCENTS : `champ` >= `debut`, `limite` au plus, filtrés par le
+      // serveur (".indexOn" requis). Rend { clé: valeur }.
+      async depuis(champ, debut, limite) {
+        const v = await lireJson(await appel('GET', c, undefined, { orderBy: JSON.stringify(champ),
+          startAt: JSON.stringify(debut), limitToFirst: limite ? String(limite) : undefined }), c);
+        return v && typeof v === 'object' ? v : {};
+      },
       async shallow() {
         const v = await lireJson(await appel('GET', c, undefined, { shallow: 'true' }), c);
         return v && typeof v === 'object' ? Object.keys(v) : [];

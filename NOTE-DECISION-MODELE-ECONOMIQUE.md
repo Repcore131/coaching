@@ -3,12 +3,34 @@
 **Rédigée le 27/07/2026** · Décision attendue de Kevin Guellec
 **Statut : EN ATTENTE D'ARBITRAGE** — à dater et signer ci-dessous.
 
+> **Mise à jour du 09/10/2026 — ce qui a changé depuis la rédaction.**
+>
+> - **Les prix ne s'écrivent plus ici.** Ils vivent dans `tarifs.json` (racine
+>   du dépôt), recopiés dans l'app, la page de vente, les CGV et PayPal par
+>   `node scripts/tarifs.mjs` et contrôlés par `node scripts/verif/tarifs.mjs`.
+>   Les montants ci-dessous sont ceux de `tarifs.json` au 09/10/2026 :
+>   Essentielle 9,50 €/mois ou 114 € en une fois, Ultime 24,90 €/mois ou
+>   298,80 € en une fois, **engagement 12 mois** (`engagementMois`). Le
+>   9,95 €/mois sans engagement de la version du 27/07 n'existe plus.
+> - **Les formules coach existent** dans `tarifs.json` (`coach` : Libre 0 €,
+>   Coach 19 €/mois, Pro 39 €/mois) et dans les CGV §4 — c'est le tarif
+>   proposé en §4 (option B) ; la note ne tranche toujours pas A contre B.
+> - **Les trois textes de reversement** (« Les paiements sont centralisés sur
+>   le compte du créateur ») **ne sont plus dans `app/index.html`** (vérifié
+>   par recherche le 09/10/2026). Les numéros de ligne cités plus bas sont
+>   ceux du 27/07.
+> - Les tableaux de MRR de l'option A sont recalculés à 9,50 € (même
+>   méthode : nombre d'abonnés × prix mensuel d'Essentielle).
+> - Les points encore contradictoires entre les sources (essai de l'invité,
+>   récompense du parrain, commission des ambassadeurs, offre à moitié prix)
+>   sont listés dans `DECISIONS-A-PRENDRE.md`.
+
 ---
 
 ## 1. Le problème, en une phrase
 
 Un coach tiers s'inscrit librement, recrute ses athlètes, ceux-ci paient
-9,95 €/mois — et **100 % de cet argent arrive sur le compte PayPal du créateur**,
+l'abonnement (9,95 €/mois au 27/07 ; 9,50 €/mois au 09/10, voir `tarifs.json`) — et **100 % de cet argent arrive sur le compte PayPal du créateur**,
 sans qu'aucune ligne de code ne prévoie de reversement.
 
 L'application le dit elle-même à l'écran, à trois endroits (`app/index.html`
@@ -46,15 +68,15 @@ Restent deux modèles cohérents.
 RepCore cesse d'être une plateforme ouverte. Aucun coach tiers ne s'inscrit.
 L'app devient l'outil de travail d'un seul coach : Kevin.
 
-**Revenus.** L'abonnement 9,95 €/mois ne subsiste que pour l'accès autonome
+**Revenus.** L'abonnement Essentielle (9,50 €/mois, `tarifs.json`) ne subsiste que pour l'accès autonome
 (athlète sans coach). Les athlètes suivis par Kevin ont l'app **incluse dans
 leur prestation de coaching**, qui se facture hors application.
 
 | Utilisateurs payants | MRR application |
 |---|---|
-| 10 | **99,50 €** |
-| 50 | **497,50 €** |
-| 200 | **1 990,00 €** |
+| 10 | **95,00 €** |
+| 50 | **475,00 €** |
+| 200 | **1 900,00 €** |
 
 *Lecture : « utilisateurs » = athlètes en accès autonome. Les athlètes coachés
 par Kevin ne génèrent pas de MRR applicatif ; leur valeur est dans le tarif du
@@ -138,8 +160,8 @@ plafonnée.
    recopier un indicateur d'abonnement dans le nœud de l'athlète au moment du
    rattachement.
 4. Supprimer les trois textes de reversement.
-5. Réécrire l'écran d'abonnement et les neuf textes annonçant « 9,95 €/mois »
-   comme prix athlète.
+5. Réécrire l'écran d'abonnement et les textes annonçant le prix athlète
+   (au 09/10/2026, ils lisent tous `tarifs.json` : un seul fichier à changer).
 
 **Point dur, à ne pas sous-estimer.** Sans fonction serveur (plan Spark), rien
 n'empêche techniquement un coach de se déclarer abonné en modifiant son propre
@@ -162,9 +184,9 @@ sous-traitant. S'ajoute la TVA sur prestation B2B.
 
 | | **A — outil propriétaire** | **B — abonnement coach** |
 |---|---|---|
-| MRR à 10 | 99,50 € | 19 € |
-| MRR à 50 | 497,50 € | 114 € |
-| MRR à 200 | 1 990 € | 418-550 € |
+| MRR à 10 | 95 € | 19 € |
+| MRR à 50 | 475 € | 114 € |
+| MRR à 200 | 1 900 € | 418-550 € |
 | Effort de code | **S** (½ journée) | **L** (plusieurs jours) |
 | Risque juridique | **faible** | moyen (RGPD art. 28, TVA) |
 | Plafond de croissance | la clientèle d'un seul coach | aucun |
@@ -194,10 +216,10 @@ de Kevin, ou un produit ?
 > c'etait ». Ni A ni B n'est retenue ; le modele actuel est maintenu tel quel,
 > et aucune modification de code n'a ete appliquee.
 >
-> **CE QUI RESTE DONC VRAI, ET DOIT ETRE SU :** les trois textes de reversement
-> (`app/index.html` l. 716, 1093, 1127) sont TOUJOURS AFFICHES. Un coach tiers
-> qui s'inscrit lit encore que les paiements de ses athletes sont centralises
-> sur le compte du createur. L'exposition decrite en §1 n'est pas levee.
+> **CE QUI ETAIT VRAI AU 27/07 :** les trois textes de reversement
+> (`app/index.html` l. 716, 1093, 1127) etaient affiches. **Au 09/10/2026, ils
+> n'y sont plus** (voir l'encadre en tete) ; l'absence de tout mecanisme de
+> reversement reste decrite en tete de `app/rc-core.<build>.js`.
 >
 > Cette note reste ouverte : elle pourra etre reprise sans travail
 > supplementaire le jour ou l'arbitrage sera fait.

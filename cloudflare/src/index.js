@@ -29,6 +29,7 @@ import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
+import { creerAffluence } from './affluence.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
@@ -55,6 +56,8 @@ function outils(env) {
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
+  // Les connexions simultanées estimées, chaque minute, et l'alerte à 70.
+  M.affluence = creerAffluence({ db, M });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });

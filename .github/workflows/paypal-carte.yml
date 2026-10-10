@@ -1,0 +1,94 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LE BOUTON « PAYER PAR CARTE » EST-IL TOUJOURS LÀ ? (chaque lundi)
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI. Le paiement par carte sans compte PayPal dépend de PayPal : un
+#  réglage du compte (« Compte PayPal facultatif »), l'éligibilité, le SDK. Le
+#  jour où le bouton disparaît, rien ne casse : il manque, et ceux qui
+#  voulaient payer par carte repartent. Ce travail ouvre le VRAI écran
+#  d'abonnement du site en ligne, sur un iPhone 13 et un Pixel 7 émulés, et
+#  vérifie que le bouton carte est rendu et que le formulaire carte de PayPal
+#  s'ouvre. IL NE PAIE RIEN : il ferme la fenêtre avant toute saisie.
+#
+#  S'IL MANQUE : le travail est rouge, une issue « Le bouton Payer par carte
+#  n'apparaît plus » est ouverte (une seule à la fois), et un courriel part
+#  si MAIL_MOT_DE_PASSE est posé (le même secret que le rapport payeur).
+#  Les captures sont jointes au travail (onglet Actions), 30 jours.
+#
+#  À la demande : onglet Actions > Paiement par carte > Run workflow.
+# ══════════════════════════════════════════════════════════════════════════
+name: Paiement par carte
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'     # le lundi, 6 h 17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: paypal-carte
+  cancel-in-progress: false
+
+jobs:
+  carte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Un secret ne se lit pas dans un `if` : sa présence, si.
+    env:
+      VU_MAIL: ${{ secrets.MAIL_MOT_DE_PASSE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Playwright et Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Le bouton carte, sur iPhone 13 et Pixel 7
+        id: verif
+        run: |
+          set +e
+          node scripts/verif/paypal-carte.mjs https://repcore-sync.web.app/app/index.html captures-carte | tee resultat.txt
+          code=${PIPESTATUS[0]}
+          { echo '## Paiement par carte'; echo; echo '```'; cat resultat.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
+          echo "code=$code" >> $GITHUB_OUTPUT
+          exit 0
+      - name: Les captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-paiement-carte
+          path: captures-carte/
+          retention-days: 30
+      - name: Alerter Kevin (issue)
+        if: steps.verif.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          titre="Le bouton « Payer par carte » n'apparaît plus"
+          deja=$(gh issue list --state open --search "in:title \"$titre\"" --json number --jq '.[0].number')
+          corps="Le contrôle du $(date -u +%d/%m/%Y) n'a pas trouvé le bouton carte sur l'écran d'abonnement.
+
+          $(cat resultat.txt)
+
+          À vérifier, dans cet ordre : paypal.com → Paramètres du compte → Paiements sur le site web → « Compte PayPal facultatif » = Activé ; le compte est Business et vérifié. Les captures sont jointes au travail : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          En attendant, l'app affiche un message et la page de paiement PayPal à la place du bouton (htmlSecoursCarte)."
+          if [ -n "$deja" ]; then gh issue comment "$deja" --body "$corps"; else gh issue create --title "$titre" --body "$corps"; fi
+      - name: Alerter Kevin (courriel)
+        if: steps.verif.outputs.code != '0' && env.VU_MAIL == 'true'
+        env:
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com' }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
+        run: |
+          { echo "# Le bouton « Payer par carte » n'apparaît plus"; echo; cat resultat.txt; echo;
+            echo "Détails et captures : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; } > alerte-carte.md
+          node scripts/envoyer_mail.mjs alerte-carte.md "RepCore : le paiement par carte ne s'affiche plus"
+      - name: Rouge si le bouton manque
+        if: steps.verif.outputs.code != '0'
+        run: exit 1

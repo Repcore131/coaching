@@ -223,7 +223,8 @@ function offreRevision(){
 // la revision : reviser un plan qu'on n'a pas ne veut rien dire.
 //
 // DEUX CHEMINS, et le second existe parce que le premier ne passe pas par
-// l'application : le programme personnalise se vend hors de l'app (99 €), et
+// l'application : le programme personnalise se vend hors de l'app
+// (TARIFS.coaching.programme_perso), et
 // c'est le coach qui pose le marqueur en livrant.
 function programmePersoLivre(u){
   const x=u||currentUser;
@@ -440,7 +441,172 @@ function programmeAcquis(u,id){
   if(p&&!p.prixCts) return true;          // un programme a zero euro est libre
   const a=u&&u.programmesAchetes;
   if(!a||typeof a!=='object'||typeof id!=='string') return false;
-  return Object.prototype.hasOwnProperty.call(a,id)&&!!a[id];
+  if(!Object.prototype.hasOwnProperty.call(a,id)||!a[id]) return false;
+  // ⚠ ACQUIS À VIE, SAUF REMBOURSÉ (09/10/2026). L'accès au programme ne
+  //   dépend plus d'aucun abonnement ni d'aucune échéance : seul un
+  //   remboursement (rembourseLe, posé par le worker) le retire.
+  const x=a[id];
+  return !(x&&typeof x==='object'&&Number(x.rembourseLe)>0);
+}
+// ══ UN PROGRAMME DE LA BOUTIQUE : À VIE, ET 30 JOURS D'APP (09/10/2026) ══
+//
+// Kevin : « un programme boutique = accès au programme à vie + 30 jours d'app,
+// puis lecture du programme incluse dans Essentielle ». Trois choses, et
+// chacune a sa règle :
+//   · LE PROGRAMME, À VIE : programmeAcquis, sans échéance. Il se RELIT
+//     toujours (ouvrirLectureProgramme), même sans abonnement, même quand
+//     l'app est fermée par ailleurs — l'écran de fin d'essai y mène ;
+//   · L'APP COMPLÈTE (Ultime), 30 JOURS À PARTIR DE L'ACHAT : ouvertJusqu dans
+//     le dossier, ultimeJusqu dans droits/ (posé par le worker) ;
+//   · ENSUITE, le suivre EN SÉANCE demande un abonnement, et Essentielle
+//     suffit (composer et enchaîner ses séances en fait partie). Les fonctions
+//     Ultime (bibliothèque, charge du bloc, diète) restent à Ultime.
+// Les achats faits avant (trois mois) gardent leur échéance : rien ne la relit.
+/**
+ * PURE. Les jours d'app complète qu'ouvre un programme de la boutique
+ * (TARIFS.coaching.boutique_prog.mois × 30, comme le worker les compte).
+ * @returns {number}
+ */
+function joursAppProgramme(){
+  return Math.round((Number((offre('boutique_prog')||{}).mois)||0)*30);
+}
+/**
+ * PURE. La fiche d'un achat, telle qu'elle s'écrit dans programmesAchetes.
+ * @param {{prixCts:number}} p le programme
+ * @param {string} ordre l'identifiant de la commande PayPal ('offert' pour un cadeau du coach)
+ * @param {number} t la date de l'achat (ms)
+ * @param {string} [source] 'paypal' (défaut) | 'offert'
+ * @returns {{date:number,prixCts:number,source:string,ordre:string,ouvertJusqu:number}}
+ */
+function ficheAchatProgramme(p,ordre,t,source){
+  const src=source==='offert'?'offert':'paypal';
+  return {date:t,prixCts:src==='offert'?0:(Number(p&&p.prixCts)||0),source:src,
+    ordre:String(ordre||'').slice(0,64),
+    // Un programme offert par le coach n'ouvre pas l'app : il ne s'est rien payé.
+    ouvertJusqu:src==='offert'?0:t+joursAppProgramme()*86400000};
+}
+/**
+ * PURE. Les programmes acquis (à vie, non remboursés) qui existent dans la
+ * boutique et se lisent — pas les services (la révision).
+ * @param {any} u
+ * @returns {string[]}
+ */
+function programmesAcquisDe(u){
+  const a=u&&u.programmesAchetes;
+  if(!a||typeof a!=='object') return [];
+  return Object.keys(a).filter(id=>{
+    if(!programmeAcquis(u,id)) return false;
+    const p=programmeDuCatalogue(id);
+    return !!(p&&!p.service);
+  });
+}
+/**
+ * PURE. Ce que l'achat donne, écrit AVANT de payer.
+ * @returns {string}
+ */
+function texteAchatProgramme(){
+  const j=joursAppProgramme();
+  return 'Le programme est à toi, à vie : tu le relis quand tu veux, même sans abonnement. '
+    +(j?'L’achat ouvre aussi toute l’application (Ultime) pendant '+j+' jours. ':'')
+    +'Ensuite, pour le suivre en séance dans l’app, l’abonnement Essentielle suffit.';
+}
+/**
+ * PURE. Le programme à lire : ses séances et leurs exercices, tels qu'ils sont
+ * écrits. Rien n'est résumé ni deviné : ce qui n'est pas dans le programme
+ * n'apparaît pas.
+ * @param {any} p le programme (programmeDuCatalogue)
+ * @param {string} genre 'H' | 'F'
+ * @returns {string} du HTML échappé
+ */
+function htmlLectureProgramme(p,genre){
+  if(!p) return '';
+  const faits=faitsProgramme(p);
+  const jours=_seancesProgramme(p,genre).filter(j=>j&&j.active!==false
+    &&Array.isArray(j.exercises)&&j.exercises.some(e=>e&&String(e.name||'').trim()));
+  let h='<div class="lp"><div class="lp-t">'+escapeHtml(p.nom||'Programme')+'</div>'
+    +(faits.length?'<div class="lp-f">'+faits.map(escapeHtml).join(' · ')+'</div>':'');
+  if(!jours.length) return h+'<p class="lp-vide">Ce programme n’a pas encore de séances.</p></div>';
+  for(const j of jours){
+    const titre=[String(j.day||'').trim(),String(j.name||'').trim()].filter(Boolean).join(' · ');
+    h+='<div class="lp-s">'+(titre?'<div class="lp-s-t">'+escapeHtml(titre)+'</div>':'')+'<ol class="lp-l">';
+    for(const e of j.exercises){
+      const n=String((e&&e.name)||'').trim();
+      if(!n) continue;
+      const detail=[(Number(e.series)>0&&String(e.reps||'').trim())?(Number(e.series)+' × '+String(e.reps).trim()):'',
+        String(e.repos||'').trim()?('repos '+String(e.repos).trim()):''].filter(Boolean).join(', ');
+      h+='<li><span class="lp-n">'+escapeHtml(n)+'</span>'+(detail?'<span class="lp-d">'+escapeHtml(detail)+'</span>':'')+'</li>';
+    }
+    h+='</ol></div>';
+  }
+  return h+'</div>';
+}
+// LA LECTURE, EN FEUILLE. Elle ne demande AUCUN accès à l'app : seulement
+// d'avoir le programme. C'est ce qui la rend atteignable depuis l'écran de
+// fin d'essai, où tout le reste est fermé.
+function ouvrirLectureProgramme(id){
+  const u=currentUser;
+  const p=programmeDuCatalogue(id);
+  if(!p||!programmeAcquis(u,id)){ toast('Ce programme n’est pas dans tes achats.','var(--orange)'); return false; }
+  let g='H'; try{ g=_genreProgramme(u)||'H'; }catch(e){ g='H'; }
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" id="lecture-programme" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +htmlLectureProgramme(p,g)
+    +'<button class="btn btn-outline" style="width:100%;margin-top:14px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// PLUSIEURS PROGRAMMES : la liste d'abord ; un seul : il s'ouvre.
+function ouvrirMesProgrammesAchetes(){
+  const l=programmesAcquisDe(currentUser);
+  if(!l.length){ toast('Aucun programme acheté.','var(--sub)'); return false; }
+  if(l.length===1) return ouvrirLectureProgramme(l[0]);
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px">'
+    +'<h2 style="margin-bottom:12px;font-size:var(--fs-lg)">Mes programmes</h2>'
+    +l.map(id=>{ const p=programmeDuCatalogue(id);
+      return '<button class="btn btn-outline" style="width:100%;margin-bottom:10px" onclick="ouvrirLectureProgramme(\''
+        +escapeHtml(id)+'\')">'+escapeHtml((p&&p.nom)||id)+'</button>'; }).join('')
+    +'<button class="btn btn-outline" style="width:100%" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// ══ LES FICHES À REMPLIR (09/10/2026) ════════════════════════════════════
+// Ce que Kevin écrit pour qu'un emplacement de RC_PROGRAMMES s'ouvre à la
+// vente. Les libellés sont les siens (nom, promesse, durée, séances) ; la
+// colonne de droite est le champ du catalogue qui les porte.
+const FICHE_PROGRAMME=Object.freeze([
+  Object.freeze({champ:'nom',            lib:'nom'}),
+  Object.freeze({champ:'accroche',       lib:'promesse'}),
+  Object.freeze({champ:'description',    lib:'description'}),
+  Object.freeze({champ:'semaines',       lib:'durée (semaines)'}),
+  Object.freeze({champ:'seancesSemaine', lib:'séances par semaine'}),
+  Object.freeze({champ:'seances',        lib:'séances (le contenu)'}),
+  Object.freeze({champ:'prixCts',        lib:'prix'}),
+]);
+/**
+ * PURE. Ce qui manque à la fiche d'un programme pour se vendre, en libellés.
+ * Une liste vide veut dire que la fiche est complète (programmeVendable dit
+ * le reste : `aCompleter` retiré).
+ * @param {any} p
+ * @returns {string[]}
+ */
+function ficheACompleter(p){
+  if(!p) return FICHE_PROGRAMME.map(f=>f.lib);
+  return FICHE_PROGRAMME.filter(f=>{
+    const v=p[f.champ];
+    if(f.champ==='seances') return !_seancesProgramme(p,'H').length&&!_seancesProgramme(p,'F').length;
+    if(f.champ==='prixCts'||f.champ==='seancesSemaine') return !(Number(v)>0);
+    return !String(v||'').trim();
+  }).map(f=>f.lib);
 }
 // Le lien de contact. Vide s'il n'y a pas de numero : voir RC_WHATSAPP.
 function lienWhatsApp(texte){
@@ -1023,17 +1189,18 @@ const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,'')
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
-//   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
+//   Abonnement Essentielle mensuel — prix : TARIFS.essentielle.mois (tarifs.json).
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
-// Palier annuel — 99 EUR/an, soit 17 % de moins que 12 × 9,95.
+// Palier annuel Essentielle — prix : TARIFS.essentielle.an (douze mensualités).
 // VIDE TANT QUE LE PLAN N'EST PAS CRÉÉ SUR PAYPAL. Un identifiant ne s'invente
 // pas : tant que cette constante est vide, l'offre annuelle n'est PAS proposée
 // du tout, et l'écran retombe sur le seul mensuel. Mieux vaut une offre de
 // moins qu'un bouton qui échoue au moment de payer.
 // Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
-// « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
+// « RepCore Annuel » au prix de TARIFS.essentielle.an, cycle YEAR (ou
+// node scripts/paypal_plans.mjs), puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
 const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 // ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
@@ -1041,16 +1208,27 @@ const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 //   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
 //   du tout : mieux vaut une offre de moins qu'un bouton qui echoue au moment
 //   de payer.
-//     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
-//     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
+//     « RepCore Ultime mensuel »  TARIFS.ultime.mois, cycle MONTH
+//     « RepCore Ultime annuel »   TARIFS.ultime.an, cycle YEAR
 const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
 const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
+// ⚠ LES ANNUELS SANS ENGAGEMENT (09/10/2026). PAYPAL_PLAN_ID_ANNUEL et
+//   PAYPAL_PLAN_ID_ULTIME_ANNUEL restent ceux des CONTRATS ENGAGES (tarifs.json,
+//   contrats_engages) : leurs abonnes continuent d'y payer leur prix, et en
+//   changer le montant chez PayPal aurait change le leur. Les nouveaux annuels
+//   (TARIFS.essentielle.an, TARIFS.ultime.an) passent par deux plans NEUFS :
+//     PAYPAL_CLIENT_SECRET=… node scripts/paypal_plans.mjs --tarifs --ecrire
+//   les cree et colle ici leur identifiant (et dans cloudflare/src/paypal.js).
+//   VIDES, L'ANNUEL N'EST PAS PROPOSE : l'ecran retombe sur le mensuel, plutot
+//   que d'annoncer le nouveau prix et de facturer l'ancien.
+const PAYPAL_PLAN_ID_ANNUEL_SE='P-5WS33005ML186714UNLET2VI';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE='P-2NY44820N2546090CNLET2VQ';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
-//   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
-//     PayPal → Billing Plans → « RepCore Ultime, premier mois apres pack »
-//     Cycle 1 : 12,45 EUR, TRIAL, 1 mois, 1 fois.
-//     Cycle 2 : 24,90 EUR, REGULAR, mensuel, illimite.
+//   mensuel dont le PREMIER cycle est a TARIFS.ultime_demi.premierMois et les
+//   suivants a TARIFS.ultime.mois (node scripts/paypal_plans.mjs le cree) :
+//     Cycle 1 : TRIAL, 1 mois, 1 fois.
+//     Cycle 2 : REGULAR, mensuel, illimite.
 //   TANT QUE CETTE CASE EST VIDE, L'OFFRE N'EST PAS ANNONCEE DU TOUT : la
 //   sortie de pack propose alors Ultime au prix normal. On ne promet pas un
 //   prix qu'on ne sait pas encaisser.
@@ -1059,8 +1237,10 @@ const PAYPAL_PLAN_ID_ULTIME_DEMI='P-57P40267XP026613FNK2LZXQ';
 // UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
 // tarifs et le bouton de paiement finiraient par ne plus parler du meme.
 function planIdOffre(cle,annuel){
-  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL:PAYPAL_PLAN_ID;
-  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL:PAYPAL_PLAN_ID_ULTIME;
+  // L'annuel d'aujourd'hui est SANS ENGAGEMENT : ses plans a lui (les anciens
+  // ne servent plus qu'aux contrats engages, et a formuleDuPlan).
+  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL_SE:PAYPAL_PLAN_ID;
+  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE:PAYPAL_PLAN_ID_ULTIME;
   if(cle==='ultime_demi') return PAYPAL_PLAN_ID_ULTIME_DEMI;
   return '';
 }
@@ -1074,15 +1254,14 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
 // auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
 // ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
-// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
-// encaissait 9,95.
+// arrive ici : un prix affiche ne valait plus celui que PayPal encaissait.
 //
 // CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
 //   palier   le palier ouvert (voir PALIERS_ORDRE)
@@ -1102,14 +1281,13 @@ const OFFRES=Object.freeze({
   coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:_TC.coaching_transfo.prix,   palier:'suivi',  mois:_TC.coaching_transfo.mois,   type:'coaching'}),
   coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:_TC.coaching_evolution.prix, palier:'suivi',  mois:_TC.coaching_evolution.mois, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
-  // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
-  //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
-  //   une fois au lieu de douze. 9,50 × 12 = 114, 24,90 × 12 = 298,80.
-  //
-  //   Ce qui suit de ce choix, et qui n'est pas ici : les écrans ne promettent
-  //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
-  //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
-  //   sous douze mensualités, sans qu'une ligne bouge.
+  // ⚠ SANS ENGAGEMENT POUR LES NOUVEAUX ABONNÉS, ET UN ANNUEL REMISÉ
+  //   (09/10/2026, demande de Kevin). TARIFS.engagementMois vaut 0 ; `prixAn`
+  //   coûte moins que douze mensualités, et la remise se CALCULE
+  //   (moisOffertsAnnuel, « 2 mois offerts ») — elle n'est écrite nulle part.
+  //   Du 24/09 au 09/10/2026, l'abonnement engageait douze mois et l'annuel
+  //   valait douze mensualités : ces contrats-là restent tels quels
+  //   (TARIFS.contrats_engages, abonnement.engagementJusqu dans le dossier).
   essentielle:        Object.freeze({lib:'Essentielle', prix:TARIFS.essentielle.mois, prixAn:TARIFS.essentielle.an, palier:'essentielle', mois:0, type:'abonnement'}),
   ultime:             Object.freeze({lib:'Ultime',      prix:TARIFS.ultime.mois,      prixAn:TARIFS.ultime.an,      palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
@@ -1127,7 +1305,7 @@ const OFFRES=Object.freeze({
   essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
-// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure entre le nombre et « € » en fin de
 //   ligne est fautive en typographie francaise, et elle arrive sur telephone.
 function _euros(n){
   const v=Number(n)||0;
@@ -1150,6 +1328,74 @@ function prixMoisAnnuel(cle){
   const o=offre(cle);
   if(!o||!o.prixAn) return '';
   return _euros(Math.round(o.prixAn/12*100)/100);
+}
+/**
+ * PURE. Les mois offerts par l'année réglée en une fois : ce que douze
+ * mensualités coûtent de plus que l'annuel, compté en mensualités. Un ENTIER,
+ * ou 0 (pas de remise, ou une remise qui ne tombe pas sur un mois rond : on
+ * ne dit pas « 1,4 mois offert »). Comparé en centimes entiers.
+ * ⚠ MÊME CALCUL que moisOfferts() de scripts/tarifs.mjs (la page de vente).
+ * @param {string} cle une clé d'OFFRES
+ * @returns {number}
+ */
+function moisOffertsAnnuel(cle){
+  const o=offre(cle);
+  return o?moisOffertsDe(o.prix,o.prixAn):0;
+}
+/**
+ * PURE. Le calcul de moisOffertsAnnuel, sur deux montants en euros.
+ * @param {number} prix le mensuel
+ * @param {number} prixAn l'annuel
+ * @returns {number}
+ */
+function moisOffertsDe(prix,prixAn){
+  const m=Math.round((Number(prix)||0)*100), a=Math.round((Number(prixAn)||0)*100);
+  if(!(m>0)||!(a>0)||a>=m*12) return 0;
+  const n=(m*12-a)/m;
+  return Math.abs(n-Math.round(n))*m<1?Math.round(n):0;
+}
+/**
+ * PURE. La remise de l'annuel, à afficher : « 2 mois offerts » quand elle
+ * tombe sur des mois ronds, sinon le pourcentage, sinon rien.
+ * @param {string} cle une clé d'OFFRES
+ * @returns {string}
+ */
+function texteRemiseAnnuelle(cle){
+  const o=offre(cle);
+  return o?texteRemiseDe(o.prix,o.prixAn):'';
+}
+/**
+ * PURE. Le texte de texteRemiseAnnuelle, sur deux montants en euros. Même
+ * pourcentage que _economie (centimes entiers).
+ * @param {number} prix le mensuel
+ * @param {number} prixAn l'annuel
+ * @returns {string}
+ */
+function texteRemiseDe(prix,prixAn){
+  const n=moisOffertsDe(prix,prixAn);
+  if(n) return n+' mois offert'+(n>1?'s':'');
+  const m=Math.round((Number(prix)||0)*100), a=Math.round((Number(prixAn)||0)*100);
+  if(!a||!m||a>=m*12) return '';
+  return '−'+Math.round((1-a/(m*12))*100)+' %';
+}
+/**
+ * PURE. Les deux façons de régler une formule, en une phrase.
+ * ⚠ ELLE A DIT « 24,90 € par mois en annuel, ou 24,90 € au mois » quand
+ *   l'année valait douze mensualités : deux fois le même montant. Elle dit
+ *   donc toujours le mensuel, puis le prix de l'année, et la remise calculée
+ *   quand il y en a une (« 9,50 € par mois, ou 95 € l'année en une fois
+ *   (2 mois offerts) »).
+ * @param {string} cle une clé d'OFFRES
+ * @returns {string} '' pour une offre inconnue
+ */
+function prixDeuxFacons(cle){
+  const o=offre(cle);
+  if(!o) return '';
+  if(!o.prixAn) return prixOffre(cle)+' par mois';
+  // Douze mensualités, pas TARIFS.engagementMois : c'est l'année qu'on compare.
+  const remise=texteRemiseAnnuelle(cle);
+  return prixOffre(cle)+' par mois, ou '+prixOffre(cle,true)+' l’année en une fois'
+    +(remise?' ('+remise+')':'');
 }
 
 // ══ CE QUE CHAQUE PALIER OUVRE ═══════════════════════════════════════════
@@ -1282,8 +1528,7 @@ function rcVerrouBloc(capacite){
   // page des formules, qui est a jour la-bas et nulle part ailleurs.
   let prix='';
   if(v.vers==='ultime'){
-    try{ prix='<div class="vrr-p">Ultime : '+prixMoisAnnuel('ultime')+' par mois en annuel, ou '
-      +prixOffre('ultime')+' au mois.</div>'; }catch(e){ prix=''; }
+    try{ prix='<div class="vrr-p">Ultime : '+prixDeuxFacons('ultime')+'.</div>'; }catch(e){ prix=''; }
   }
   const action=(v.vers==='coaching')
     ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
@@ -1330,20 +1575,20 @@ function _economie(cle){
 // Les deux paliers d'abonnement, dans l'ordre d'affichage.
 // ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
 //   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
+// ⚠ « CHAQUE MOIS » D'ABORD, ET PAR DÉFAUT (09/10/2026), comme sur la page de
+//   vente : c'est le prix que les gens comparent. L'annuel vient ensuite, avec
+//   sa remise CALCULÉE (texteRemiseAnnuelle : « 2 mois offerts »), et rien
+//   quand il n'y a rien à économiser : « Économise 0,00 € » au-dessus du
+//   bouton qui propose de payer d'avance dirait que ça ne sert à rien.
 const SUB_PALIERS=[
-  {cle:'annuel', titre:'Annuel', prix:prixOffre('essentielle',true), periode:'par an',
-   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
-   // ⚠ RIEN QUAND IL N'Y A RIEN À ÉCONOMISER. Depuis que l'année vaut douze
-   //   mensualités, « Économise 0,00 € » et « −0 % » s'affichaient tous les
-   //   deux : deux mentions qui disent que ça ne sert à rien de payer
-   //   d'avance, juste au-dessus du bouton qui le propose. Le calcul reste,
-   //   la mention revient toute seule si le prix annuel redescend.
-   econ:_economie('essentielle').texte,
-   remise:_economie('essentielle').pourcent,
-   planId:()=>PAYPAL_PLAN_ID_ANNUEL},
-  {cle:'mensuel', titre:'Mensuel', prix:prixOffre('essentielle'), periode:'par mois',
+  {cle:'mensuel', titre:'Chaque mois', prix:prixOffre('essentielle'), periode:'par mois',
    detail:_euros(Math.round(OFFRES.essentielle.prix*12*100)/100)+' sur un an', econ:'', remise:'',
-   planId:()=>PAYPAL_PLAN_ID},
+   planId:()=>planIdOffre('essentielle',false)},
+  {cle:'annuel', titre:'En une fois', prix:prixOffre('essentielle',true), periode:'par an',
+   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
+   econ:_economie('essentielle').texte,
+   remise:texteRemiseAnnuelle('essentielle'),
+   planId:()=>planIdOffre('essentielle',true)},
 ];
 // LA TABLE EMPLOYÉE PAR L’ÉCRAN D’ABONNEMENT.
 //
@@ -1383,20 +1628,21 @@ function subPaliersDe(cle){
   if(!o) return [];
   const an=Number(o.prixAn)||0, mois=Number(o.prix)||0;
   const l=[];
-  if(an) l.push({cle:'annuel',titre:'Annuel',prix:prixOffre(cle,true),periode:'par an',
-    detail:'soit '+prixMoisAnnuel(cle)+' / mois',
-    econ:_economie(cle).texte, remise:_economie(cle).pourcent,
-    planId:()=>planIdOffre(cle,true)});
   // LE DEMI-TARIF (sortie de pack, ou code ambassadeur de lancement) : le
   // mensuel d'Ultime passe par le plan « demi » — 1er mois à moitié prix.
   let demi=false;
   try{ demi=cle==='ultime'&&typeof currentUser!=='undefined'&&!!currentUser&&demiPremierMoisDispo(currentUser); }catch(e){ demi=false; }
-  if(mois&&demi) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
+  if(mois&&demi) l.push({cle:'mensuel',titre:'Chaque mois',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
     detail:'puis '+prixOffre(cle)+' par mois',econ:'1er mois à -50 %',remise:'',
     planId:()=>planIdOffre('ultime_demi')});
-  else if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
+  else if(mois) l.push({cle:'mensuel',titre:'Chaque mois',prix:prixOffre(cle),periode:'par mois',
     detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
     planId:()=>planIdOffre(cle)});
+  // L'annuel APRÈS le mensuel, comme dans SUB_PALIERS.
+  if(an) l.push({cle:'annuel',titre:'En une fois',prix:prixOffre(cle,true),periode:'par an',
+    detail:'soit '+prixMoisAnnuel(cle)+' / mois',
+    econ:_economie(cle).texte, remise:texteRemiseAnnuelle(cle),
+    planId:()=>planIdOffre(cle,true)});
   return l;
 }
 function _tablePaliers(){
@@ -1429,6 +1675,47 @@ function _paliersDispo(){return _tablePaliers().filter(p=>!!p.planId());}
 // une série normale. Retro-écrire un défaut coûterait un PUT du document
 // entier par coach pour n'apprendre à personne ce que l'absence dit déjà.
 const COACH_PLANS=Object.freeze(['libre','coach','pro']);
+// ══ LES QUOTAS DES FORMULES COACH, APPLIQUÉS (09/10/2026) ════════════════
+//
+// La copie de tarifs.json → quotas_coach : le nombre d'athlètes actifs qu'une
+// formule permet de rattacher, et la durée maximale d'un code. `athletes:null`
+// dans le JSON veut dire « sans limite » (JSON ne connaît pas Infinity).
+//
+// ⚠ ILS BLOQUENT, désormais, et pas seulement à l'écran (demande de Kevin) :
+//   · au-delà du quota, un NOUVEAU rattachement est refusé, avec un écran qui
+//     propose la formule suivante (ouvrirEcranQuotaCoach) ;
+//   · un code plus long que la formule ne se crée pas — et database.rules.json
+//     le refuse aussi côté serveur (rc_codes/months, lu sur coach_paliers/,
+//     que seul le worker écrit).
+//   CE QUI NE BOUGE PAS : un athlète déjà rattaché garde son accès jusqu'à la
+//   fin de son code, quel que soit le compte du coach. Rien n'est coupé.
+const QUOTAS_COACH=(function(){
+  const q=TARIFS.quotas_coach||{}, o={};
+  for(const k of COACH_PLANS){
+    const x=q[k]||{};
+    o[k]=Object.freeze({athletes:(x.athletes===null)?Infinity:(Number(x.athletes)||1),
+      moisCode:Number(x.moisCode)||1});
+  }
+  return Object.freeze(o);
+})();
+/**
+ * PURE. Une formule permet-elle de rattacher UN athlète de plus ?
+ * @param {string} palier 'libre' | 'coach' | 'pro' (inconnu = libre)
+ * @param {number} nbActifs les athlètes déjà comptés (actifs, et codes en attente)
+ * @returns {boolean}
+ */
+function peutRattacher(palier,nbActifs){
+  const q=(QUOTAS_COACH[palier]||QUOTAS_COACH.libre).athletes;
+  return (Number(nbActifs)||0)<q;
+}
+/**
+ * PURE. La durée maximale d'un code d'accès, en mois, pour une formule.
+ * @param {string} palier 'libre' | 'coach' | 'pro' (inconnu = libre)
+ * @returns {number}
+ */
+function dureeCodeMax(palier){
+  return (QUOTAS_COACH[palier]||QUOTAS_COACH.libre).moisCode;
+}
 // Même forme que SUB_PALIERS, y compris `planId()` : _paliersDispo s'applique
 // tel quel, et une carte dont le plan PayPal n'existe pas encore ne s'affiche
 // pas du tout plutôt que d'échouer au moment de payer.
@@ -1440,13 +1727,13 @@ const COACH_PLANS=Object.freeze(['libre','coach','pro']);
 const PAYPAL_PLAN_ID_COACH='P-9JD300001T4718058NK2RF5Q';   // à créer sur developer.paypal.com — 19 EUR/mois
 const PAYPAL_PLAN_ID_PRO='P-1WS20264K4576284KNK2RF5Y';     // idem — 39 EUR/mois
 const COACH_PALIERS=Object.freeze([
-  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:1,
+  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:QUOTAS_COACH.libre.athletes,
    periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
    planId:()=>''}),
-  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:15,
+  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:QUOTAS_COACH.coach.athletes,
    periode:'par mois', detail:'Jusqu\'à quinze athlètes actifs.',
    planId:()=>PAYPAL_PLAN_ID_COACH}),
-  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:Infinity,
+  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:QUOTAS_COACH.pro.athletes,
    periode:'par mois', detail:'Sans limite de nombre.',
    planId:()=>PAYPAL_PLAN_ID_PRO}),
 ]);
@@ -1571,11 +1858,140 @@ function coachPalierRequis(n){
   const p=COACH_PALIERS.find(x=>n<=x.quota);
   return p?p.cle:'pro';
 }
-// PURE. Le quota est-il dépassé ? Le dépassement ALERTE, il ne bloque
-// jamais un rattachement : refuser un athlète parce qu'un paiement n'a pas
-// suivi punirait l'athlète pour une affaire entre le coach et nous.
+// PURE. Le quota est-il dépassé ? Depuis le 09/10/2026, un NOUVEAU
+// rattachement est refusé au-delà (refusQuotaCoach) ; ceux qui sont déjà
+// rattachés gardent leur accès jusqu'à la fin de leur code : on ne coupe
+// jamais un athlète pour une affaire entre le coach et nous.
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
+}
+/**
+ * PURE. La formule qui compte pour les quotas : celle du dossier tant que
+ * l'abonnement est actif, Libre sinon (une formule payée puis arrêtée ne
+ * garde pas son quota).
+ * @param {any} coach
+ * @returns {string}
+ */
+function palierEffectifCoach(coach){
+  return coachSubActif(coach)?coachPlanDe(coach):'libre';
+}
+/**
+ * PURE (users injectable). Ce que le quota compte avant un rattachement : les
+ * athlètes actifs (le même compte que le bandeau « N / M ») et les codes
+ * encore en attente — un code envoyé est une place promise. Sur un appareil
+ * dont le cache n'est pas fiable, les codes déjà rachetés et en cours tiennent
+ * lieu d'athlètes actifs : on ne laisse pas passer un dépassement faute de
+ * savoir compter.
+ * @param {any} coach
+ * @param {Object<string,any>} [users]
+ * @param {number} [maintenant]
+ * @returns {number}
+ */
+function nbPourQuota(coach,users,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const codes=Array.isArray(coach&&coach.studentCodes)?coach.studentCodes:[];
+  const enCours=c=>c&&c.active!==false&&(c.type||'athlete')==='athlete'&&Number(c.expiry)>t;
+  const rachete=c=>c.redeemed===true||!!c.usedBy||c.etat==='cree';
+  const attente=codes.filter(c=>enCours(c)&&!rachete(c)).length;
+  const rachetes=codes.filter(c=>enCours(c)&&rachete(c)).length;
+  const actifs=countActiveAthletesFiable(coach,users)?countActiveAthletes(coach,users):rachetes;
+  return actifs+attente;
+}
+/**
+ * PURE. La première formule qui permet un code de `mois` mois.
+ * @param {number} mois
+ * @returns {string} '' si aucune
+ */
+function palierPourDureeCode(mois){
+  const p=COACH_PALIERS.find(x=>dureeCodeMax(x.cle)>=Number(mois));
+  return p?p.cle:'';
+}
+/**
+ * PURE (users injectable). Ce nouveau rattachement est-il permis ? null s'il
+ * l'est, sinon la raison, de quoi l'écran a besoin pour la dire. Le créateur
+ * n'a pas de quota.
+ * @param {any} coach
+ * @param {Object<string,any>|undefined} users
+ * @param {number} mois la durée du code demandé
+ * @param {number} [maintenant]
+ * @returns {null|{raison:'athletes'|'duree',palier:string,quota:number,n:number,moisMax:number,mois:number,suivant:string}}
+ */
+function refusQuotaCoach(coach,users,mois,maintenant){
+  if(!coach||coach.email===CREATOR_EMAIL) return null;
+  const palier=palierEffectifCoach(coach);
+  const moisMax=dureeCodeMax(palier), m=Number(mois)||0;
+  const base={palier,quota:getCoachQuota(palier),moisMax,mois:m,n:0,suivant:''};
+  if(m>moisMax) return Object.assign(base,{raison:'duree',suivant:palierPourDureeCode(m)});
+  const n=nbPourQuota(coach,users,maintenant);
+  if(!peutRattacher(palier,n)) return Object.assign(base,{raison:'athletes',n,suivant:(_palierSuivant(palier)||{}).cle||''});
+  return null;
+}
+/**
+ * PURE. Ce que l'écran de refus dit, en une phrase.
+ * @param {ReturnType<typeof refusQuotaCoach>} r
+ * @returns {string}
+ */
+function texteRefusQuota(r){
+  if(!r) return '';
+  const pal=(COACH_PALIERS.find(x=>x.cle===r.palier)||COACH_PALIERS[0]).titre;
+  if(r.raison==='duree')
+    return 'Ta formule '+pal+' permet des codes de '+r.moisMax+' mois au plus'
+      +' (tu en as demandé '+r.mois+').';
+  return 'Ta formule '+pal+' permet de suivre '+_quotaTexte(r.quota)+' athlète'+(r.quota>1?'s':'')
+    +' actif'+(r.quota>1?'s':'')+', et tu en as déjà '+r.n+' (codes en attente compris).';
+}
+function erreurQuotaCoach(r){
+  const e=new Error(texteRefusQuota(r));
+  /** @type {any} */ (e)._quotaCoach=r;
+  return e;
+}
+// L'ÉCRAN DE REFUS : clair, et une seule action — la formule qui convient.
+// Ce n'est pas une alerte qu'on ferme sans comprendre : il dit pourquoi, ce
+// qui ne change pas pour les athlètes déjà suivis, et comment avancer.
+function ouvrirEcranQuotaCoach(r){
+  if(!r) return false;
+  const sv=COACH_PALIERS.find(x=>x.cle===r.suivant)||null;
+  const payable=!!(sv&&sv.planId());
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" id="quota-coach" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px">'
+    +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">'
+    +escapeHtml(sv?('Passe à la formule '+sv.titre):'Limite de ta formule')+'</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:10px">'+escapeHtml(texteRefusQuota(r))+'</p>'
+    +(sv?'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:10px">La formule '+escapeHtml(sv.titre)
+      +' : '+escapeHtml(sv.detail)+' Codes de '+dureeCodeMax(sv.cle)+' mois au plus. '
+      +(sv.prix?escapeHtml(sv.prix+' € par mois, sans engagement.'):'')+'</p>':'')
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">Tes athlètes déjà rattachés '
+    +'gardent leur accès jusqu’à la fin de leur code : rien n’est coupé.</p>'
+    +(sv?(payable
+      ?'<button class="btn btn-red" style="width:100%" onclick="closeModal();souscrireCoach(\''+sv.cle+'\')">Passer à la formule '+escapeHtml(sv.titre)+'</button>'
+      :'<button class="btn btn-red" style="width:100%" onclick="closeModal();ouvrirMonAbonnement()">Voir les formules</button>'):'')
+    +'<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="closeModal()">Plus tard</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// LE SÉLECTEUR DE DURÉE NE PROPOSE QUE CE QUE LA FORMULE PERMET : les durées
+// au-delà restent visibles, grisées, avec la formule qui les ouvre.
+function _poserDureesCode(sel,coach){
+  if(!sel) return false;
+  const c=coach||currentUser;
+  if(!c||c.email===CREATOR_EMAIL) return false;
+  const max=dureeCodeMax(palierEffectifCoach(c));
+  let retenue=null;
+  for(const o of Array.from(sel.options)){
+    const m=Number(o.value)||0;
+    const trop=m>max||m<=0;
+    o.disabled=trop;
+    if(!o.dataset.lib) o.dataset.lib=o.textContent;
+    const pal=COACH_PALIERS.find(x=>x.cle===palierPourDureeCode(m));
+    o.textContent=o.dataset.lib+((trop&&pal&&m>0)?' (formule '+pal.titre+')':'');
+    if(!trop&&(retenue===null||m>Number(retenue.value))) retenue=o;
+  }
+  if(sel.selectedOptions[0]&&sel.selectedOptions[0].disabled&&retenue) sel.value=retenue.value;
+  return true;
 }
 
 // ── Plafond de comptes Libres ────────────────────────────────────────────
@@ -1603,7 +2019,7 @@ const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, 
 // ══════════ L'ESSAI ATHLETE, SYMETRIQUE DE LA PROMESSE COACH ══════════════
 //
 // Le coach a PROMESSE_COACH : gratuit pour son premier client, sans carte.
-// L'athlete sans code, lui, arrivait sur 9,95 EUR/mois, PayPal et une case de
+// L'athlete sans code, lui, arrivait sur l'ecran de paiement, PayPal et une case de
 // renonciation au droit de retractation — avant d'avoir vu une repetition.
 //
 // ── POURQUOI DES SEANCES ET NON DES JOURS ────────────────────────────────
@@ -1835,8 +2251,7 @@ function texteEssaiRestant(u){
   if(j<D-9) return '';
   if(j<D-3) return 'Il te reste '+n+' jour'+(n>1?'s':'')+' d’accès complet.';
   const quoi=essaiBilanPhrase(u);
-  const prix='tu les gardes avec Ultime à '+prixOffre('ultime')
-    +', ou '+prixMoisAnnuel('ultime')+' par mois en annuel.';
+  const prix='tu les gardes avec Ultime à '+prixDeuxFacons('ultime')+'.';
   const tete=n>0?('Plus que '+n+' jour'+(n>1?'s':'')+'.'):'Dernier jour d’accès complet.';
   return tete+(quoi?(' '+quoi.charAt(0).toUpperCase()+quoi.slice(1)+', '+prix)
                    :(' Ton accès complet, '+prix));
@@ -1951,24 +2366,42 @@ function alertePalier(coach,users){
   const n=countActiveAthletes(u,users);
   const quota=getCoachQuota(cle);
   const suivant=_palierSuivant(cle);
-  // ── Falaise : N === M-1, et il existe un palier au-dessus ─────────────
+  // ⚠ DEPUIS LE 09/10/2026, LE QUOTA BLOQUE UN NOUVEAU RATTACHEMENT
+  //   (refusQuotaCoach). Les phrases le disent : ni « au prochain athlète, ta
+  //   formule passe à… » (rien ne bascule tout seul), ni « rien n'est
+  //   bloqué ». Ce qui reste vrai et qui est dit : les athlètes déjà
+  //   rattachés gardent leur accès jusqu'à la fin de leur code.
+  // ── Falaise : N === M-1, une place reste ──────────────────────────────
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
-      titre:'Au prochain athlète, ta formule passe à '+suivant.titre
+      titre:'Encore un athlète, et ta formule sera pleine : ensuite, '+suivant.titre
         +', '+suivant.prix+' €/mois.',
-      texte:'Tu peux ajouter cet athlète sans changer de formule maintenant. '
-        +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
+      texte:'Tu peux ajouter cet athlète sans changer de formule. Pour le suivant, '
+        +'il faudra la formule '+suivant.titre+' ; rien n\'est prélevé tant que tu ne '
+        +'l\'as pas décidé toi-même.'};
   }
-  // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
+  // ── Pleine : N === M ──────────────────────────────────────────────────
+  if(suivant&&n===quota){
+    return {type:'limite',palier:suivant.cle,
+      titre:'Ta formule est pleine : '+_quotaTexte(quota)+' athlète'+(quota>1?'s':'')+' actif'+(quota>1?'s':'')+'.',
+      texte:'Pour en rattacher un autre, passe à la formule '+suivant.titre+', '+suivant.prix
+        +' €/mois. Tes athlètes actuels gardent tout leur accès.'};
+  }
+  // ── Au-dessus : prévenu tout de suite, proposé après deux cycles ───────
   if(suivant&&n>quota){
     const c=paliersDe(u).cyclesAuDessus;
-    if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
+    if(c<PALIERS_CYCLES_AVANT_PROPOSITION)
+      return {type:'depasse',palier:suivant.cle,
+        titre:'Tu suis '+n+' athlètes pour une formule qui en prévoit '+_quotaTexte(quota)+'.',
+        texte:'Ils gardent leur accès jusqu’à la fin de leur code : rien n’est coupé. '
+          +'Pour en rattacher un nouveau, passe à la formule '+suivant.titre+', '+suivant.prix+' €/mois.'};
     return {type:'montee',palier:suivant.cle,
       titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
       texte:'La formule '+suivant.titre+' est à '+suivant.prix+' €/mois. '
         +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
-        +'tout leur accès, et ton prix actuel reste le tien.'};
+        +'tout leur accès jusqu’à la fin de leur code, et ton prix actuel reste le tien. '
+        +'Seul un nouveau rattachement demande la formule '+suivant.titre+'.'};
   }
   // ── Descente : il paie pour plus qu'il n'utilise ──────────────────────
   const inf=COACH_PALIERS.filter(x=>x.quota>=n&&x.prix<(COACH_PALIERS.find(y=>y.cle===cle)||{}).prix);
@@ -2127,11 +2560,13 @@ function _renderAbonnementCoach(users){
     <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
+    ${l('Durée des codes',dureeCodeMax(cle)+' mois au plus')}
     ${suivant?l('Formule suivante',suivant.titre+', '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
-      Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
+      Tes athlètes gardent tout leur accès jusqu'à la fin de leur code : rien n'est coupé.
+      Pour en rattacher un nouveau, il faut une formule plus grande.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>
@@ -2201,6 +2636,57 @@ function aUnAbonnement(user){
   // Un abonnement déjà résilié reste affichable : l'accès court jusqu'au terme.
   return !!resiliationDemandee(u)||!!u.paypalSubscriptionId;
 }
+/**
+ * PURE. Cet abonné est-il ENCORE engagé ? Les contrats souscrits du 24/09 au
+ * 09/10/2026 portent leur terme (abonnement.engagementJusqu, posé à l'achat) :
+ * rien ne change pour eux jusque-là. Passé ce terme, leur contrat se
+ * poursuit sans engagement (CGV §5) — comme celui d'un nouvel abonné.
+ * @param {any} user
+ * @param {number} [maintenant] Date.now() par défaut
+ * @returns {boolean}
+ */
+function abonneEngage(user,maintenant){
+  const u=user||{};
+  if(u.role==='coach') return false;
+  const j=abonnementDe(u).engagementJusqu;
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  return typeof j==='number'&&j>0&&j>t;
+}
+/**
+ * PURE. Le prix d'un abonnement au moment où on le souscrit, en euros.
+ * @param {string} formule 'essentielle' | 'ultime'
+ * @param {string} periode 'mensuel' | 'annuel'
+ * @returns {number} 0 pour une formule inconnue
+ */
+function prixSouscritDe(formule,periode){
+  const o=offre(formule==='ultime'?'ultime':'essentielle');
+  if(!o) return 0;
+  return Number(periode==='annuel'?o.prixAn:o.prix)||0;
+}
+/**
+ * PURE. Ce que « Mon abonnement » dit d'un abonnement EN COURS, ancien ou
+ * nouveau. ⚠ UN CONTRAT ENGAGÉ GARDE SES CONDITIONS : son annuel se lit dans
+ * TARIFS.contrats_engages (le prix qu'il paie vraiment), et non dans le tarif
+ * d'aujourd'hui ; un nouvel abonné lit le prix qu'il a souscrit (prixSouscrit),
+ * à défaut le tarif courant.
+ * @param {any} user
+ * @returns {{titre:string,prix:string,periode:string,engage:boolean,engagement:string}}
+ */
+function conditionsAbonnement(user){
+  const a=abonnementDe(user||{});
+  const annuel=a.palier==='annuel';
+  const formule=a.formule==='ultime'?'ultime':'essentielle';
+  const engage=abonneEngage(user);
+  const ce=TARIFS.contrats_engages||{};
+  // Un contrat engagé (terme posé, passé ou non) paie l'annuel de son époque.
+  const ancien=typeof a.engagementJusqu==='number'&&a.engagementJusqu>0;
+  let prix=Number(a.prixSouscrit)||0;
+  if(!prix&&ancien&&annuel&&ce[formule]) prix=Number(ce[formule].an)||0;
+  if(!prix) prix=prixSouscritDe(formule,annuel?'annuel':'mensuel');
+  return {titre:(formule==='ultime'?'Ultime':'Essentielle')+(annuel?', annuel':', mensuel'),
+    prix:_euros(prix), periode:annuel?'par an':'par mois', engage,
+    engagement:engage?('jusqu’au '+new Date(a.engagementJusqu).toLocaleDateString('fr-FR')):'Sans engagement'};
+}
 // La date de fin d'accès. L'accès reste OUVERT jusqu'au terme de la période
 // réglée : on ne coupe rien à la confirmation.
 function finAccesAbonnement(user){
@@ -2212,7 +2698,10 @@ function finAccesAbonnement(user){
   //   dossier connaisse avec certitude : elle est posee a l'achat et ne bouge
   //   plus. Sans elle, l'ecran de resiliation disait « la fin de la periode
   //   reglee » — vrai, et inutilisable.
-  if(typeof a.engagementJusqu==='number'&&a.engagementJusqu>0) return a.engagementJusqu;
+  //   ⚠ TANT QU'IL COURT (09/10/2026) : un terme echu ne dit plus rien de
+  //   la fin d'acces d'un contrat qui se poursuit sans engagement.
+  if(abonneEngage(u)) return a.engagementJusqu;
+  if(typeof a.finAccesPaypal==='number'&&a.finAccesPaypal>0) return a.finAccesPaypal;
   if(typeof a.prochaineEcheance==='number') return a.prochaineEcheance;
   return null;
 }
@@ -2814,21 +3303,24 @@ function _renderAbonnement(){
   const r=resiliationDemandee(u);
   const fin=finAccesAbonnement(u);
   const finTxt=fin?new Date(fin).toLocaleDateString('fr-FR'):'la fin de la période réglée';
-  const pal=SUB_PALIERS.find(x=>x.cle===(abonnementDe(u).palier))||SUB_PALIERS[1];
+  const c=conditionsAbonnement(u);
   const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">
     <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
-    ${l('Formule',(pal&&pal.titre)||'Mensuel')}
-    ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
+    ${l('Formule',c.titre)}
+    ${l('Prix',c.prix+' '+c.periode)}
+    ${/* ⚠ ANCIEN OU NOUVEL ABONNÉ (09/10/2026) : le contrat engagé garde sa
+          ligne et son terme ; le nouveau lit « Sans engagement ». */''}
+    ${r?'':l('Engagement',c.engagement)}
     ${/* ⚠ CE LIBELLE DISAIT « Prochaine échéance » et affichait le TERME DE
           L'ENGAGEMENT (corrigé le 24/09/2026) : quelqu'un qui paie au mois y
           lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
           changé, le mot si. */''}
-    ${fin?l(r?'Accès jusqu\'au':'Engagement jusqu\'au',finTxt):''}
+    ${(fin&&r)?l('Accès jusqu\'au',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(texteResilMoyens(u))}</div>
         <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 20px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
       :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
@@ -2867,12 +3359,27 @@ function _confirmerResiliation(){
 //   resilie, aurait coute soit de l'argent, soit la confiance. Ce qui reste
 //   vrai, et qui est dit : l'acces court jusqu'au terme, rien ne se reconduit
 //   ensuite, et un prelevement APRES le terme se rembourse.
+// ⚠ CE TEXTE-CI EST CELUI DES CONTRATS ENGAGÉS (TARIFS.contrats_engages). Un
+//   abonné sans engagement lit RESIL_MOYENS_SANS (texteResilMoyens choisit).
 const RESIL_MOYENS='Ta demande est enregistrée. Ton abonnement va jusqu\'au terme '
-  +'des douze mois : les prélèvements continuent jusque-là, et rien ne se '
+  +'des '+((TARIFS.contrats_engages||{}).engagementMois||TARIFS.engagementMois)+' mois : les prélèvements continuent jusque-là, et rien ne se '
   +'reconduit ensuite. Au terme, coupe le paiement automatique chez PayPal : '
   +'RepCore ne peut pas annuler l\'abonnement à ta place, le paiement est géré '
   +'directement entre toi et eux. Un prélèvement postérieur au terme te serait '
   +'remboursé (CGV §5).';
+// SANS ENGAGEMENT (09/10/2026) : la résiliation prend effet à la fin de la
+// période déjà payée — le mois en cours, ou l'année réglée en une fois.
+const RESIL_MOYENS_SANS='Ta demande est enregistrée. Ton accès reste ouvert jusqu\'à la fin '
+  +'de la période déjà payée, et rien ne doit être prélevé ensuite. Coupe le paiement '
+  +'automatique chez PayPal : RepCore ne peut pas annuler l\'abonnement à ta place, le '
+  +'paiement est géré directement entre toi et eux. Un prélèvement postérieur à ta '
+  +'résiliation te serait remboursé (CGV §5).';
+/**
+ * PURE. Ce qu'on dit à quelqu'un qui vient de résilier, selon son contrat.
+ * @param {any} user
+ * @returns {string}
+ */
+function texteResilMoyens(user){ return abonneEngage(user)?RESIL_MOYENS:RESIL_MOYENS_SANS; }
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
 let _subPalier=null;
@@ -4800,6 +5307,9 @@ const CLOUD={
           throw refus;
         }
       }
+      // FORTE AFFLUENCE : on ne frappe pas à une porte fermée. L'envoi part en
+      // file (erreur rejouable) et AFFLUENCE.fin() la videra au retour.
+      if(AFFLUENCE.actif()) throw new Error('Forte affluence : envoi gardé sur cet appareil, il partira dès que la base répond.');
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
       // ══ LE PUT CONDITIONNEL (if-match), ET SA REPRISE SUR 412 ════════════
       // 412 : un autre appareil a ecrit depuis notre lecture. La reponse porte
@@ -4834,6 +5344,7 @@ const CLOUD={
       opts.signal=_arret.signal;
       try{ r=await fetch(url+'?auth='+token,opts); }
       finally{ clearTimeout(_minuteur); }
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
       // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
       // renvoie l'objet écrit — d'où le doublement du coût par envoi.
       try{ _quotaCompter('out',corps.length);
@@ -5323,6 +5834,7 @@ const CLOUD={
       const url=token?base+'?auth='+token:base;
       const r=await fetch(url,avecEtag?{signal:ctrl.signal,headers:{'X-Firebase-ETag':'true'}}:{signal:ctrl.signal});
       this._lectures[email]=r.status;
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
       if(r.ok){
         // .text() puis JSON.parse plutôt que .json() : c'est le seul moyen
         // de connaître la taille reçue quand content-length manque, ce qui
@@ -5335,6 +5847,40 @@ const CLOUD={
       }
     }catch{ this._lectures[email]='réseau'; }
     return avecEtag?{doc:null,etag:null}:null;
+  },
+  // ── LA SONDE DE LA FORTE AFFLUENCE (09/10/2026) ──────────────────────────
+  // La plus petite lecture possible : les clés de premier niveau de son propre
+  // dossier (shallow), quelques dizaines d'octets. Rend le statut HTTP, 0 sans
+  // réseau. AFFLUENCE.reessayer() s'en sert pour savoir si la base répond.
+  async sonder(){
+    if(!currentUser||!currentUser.email) return 0;
+    const key=String(currentUser.email).replace(/\./g,',');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return 0;
+      const r=await fetch(this._fbUrl.replace('users.json','users/'+key+'.json')+'?shallow=true&auth='+token,{signal:ctrl.signal});
+      return r.status;
+    }catch(e){ return 0; }
+  },
+  // ── LA PRÉSENCE (09/10/2026) ─────────────────────────────────────────────
+  // « Cet appareil est ouvert » : /presence/<clé> = {t: heure serveur, f: le
+  // flux temps réel du coach est-il ouvert}. Le serveur léger compte chaque
+  // minute les présences de moins de PRESENCE_FENETRE_MS et alerte Kevin à 70
+  // (cloudflare/src/affluence.js). Envoyée par la synchro périodique (5 min),
+  // jamais app cachée, jamais en forte affluence : une requête REST de 40
+  // octets, qui ne compte pas parmi les connexions simultanées.
+  async presence(){
+    if(!currentUser||!currentUser.email||document.hidden||AFFLUENCE.actif()) return false;
+    const key=String(currentUser.email).replace(/\./g,',');
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._fbUrl.replace('users.json','presence/'+key+'.json')+'?auth='+token,{method:'PUT',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({t:{'.sv':'timestamp'},f:BOITE_COACH.ouvert()?1:0})});
+      try{ AFFLUENCE.observer(r.status); }catch(e){}
+      return r.ok;
+    }catch(e){ return false; }
   },
   // ── Profil coach visible par ses athlètes ────────────────────────────────
   // La règle de /users ne va que dans un sens : un coach lit ses athlètes,
@@ -6622,6 +7168,11 @@ function _validateAthletePkg(o){
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
+    // ?src=play — la version Google Play (LauncherActivity, CANAL=play) l'ajoute
+    // à chaque ouverture. Gardé pour la SESSION seulement : la TWA partage le
+    // stockage de Chrome, et un localStorage aurait suivi l'utilisateur dans
+    // le navigateur, où le paiement web est permis. Voir canalApp().
+    if(params.get('src')==='play'){ try{ sessionStorage.setItem('rc_canal','play'); }catch(e){} }
     const _apkV=String(params.get('apk')||'');
     if(/^\d{1,6}$/.test(_apkV)){ try{ localStorage.setItem('rc_apk',_apkV); }catch(e){} }
     // ?sante=ok|erreur — le retour de ConnecterSanteActivity, après « Autoriser ».
@@ -6713,7 +7264,10 @@ function _validateAthletePkg(o){
     // Écrite ici, en clair (constantes du module pas encore initialisées). La
     // dernière arrivée l'emporte : c'est elle qui a fait venir.
     const _osrc=String(params.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
-    if(_osrc||_amb||params.get('ref')){
+    // ?src=play revient à CHAQUE ouverture de la version Play : il ne remplace
+    // pas une origine déjà notée (le lien d'un ambassadeur, une campagne).
+    let _origineDeja=false; try{ _origineDeja=!!localStorage.getItem('rc_origine'); }catch(e){}
+    if((_osrc||_amb||params.get('ref'))&&!(_osrc==='play'&&!_amb&&!params.get('ref')&&_origineDeja)){
       try{ localStorage.setItem('rc_origine',JSON.stringify({src:_osrc,amb:_amb,
         ref:String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12),le:Date.now()})); }catch(e){}
     }
@@ -7863,6 +8417,11 @@ window.onload=()=>{
         // app hors ligne a la même horloge, et sa date doit suivre minuit.
         try{ _repeindreSiJourChange(); }catch(e){}
         if(!CLOUD.ok()||!currentUser) return;
+        // APP CACHÉE OU FORTE AFFLUENCE (09/10/2026) : pas de descente. Un
+        // onglet oublié n'a rien à relire ; une base saturée, rien à recevoir
+        // de plus. Le retour au premier plan redescend (_descenteAuRetour).
+        if(!syncPeriodiqueUtile(document.hidden,AFFLUENCE.actif())) return;
+        CLOUD.presence().catch(()=>{});
         // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
         // suffit pas, car la synchro elle-meme remplace currentUser sous les
         // doigts de l'utilisateur. Tant qu'un champ a le focus, on ne touche
@@ -8958,7 +9517,7 @@ function _rendreConsoleAcces(){
 // ══ L'ARRIVEE : LES DEUX FORMULES, LES CHIFFRES, LES PORTES (lot 2) ══════
 // Les prix viennent d'OFFRES et de nulle part ailleurs : l'ecran d'arrivee et
 // l'ecran de paiement ne peuvent donc pas annoncer deux chiffres differents.
-let _accueilAnnuel=true;   // l'annuel est montre par defaut
+let _accueilAnnuel=false;  // « Chaque mois » par defaut, comme sur la page de vente (09/10/2026)
 function accueilVersTarifs(){
   const z=document.getElementById('wel-tarifs');
   if(z) z.scrollIntoView({behavior:'smooth',block:'start'});
@@ -8975,10 +9534,11 @@ function accueilPeriode(annuel){
   //   Il porte maintenant la remise CALCULÉE, et ne s'affiche pas quand il
   //   n'y en a pas. Le jour où le prix annuel redescendra, il reviendra tout
   //   seul, avec le bon pourcentage.
+  // La remise se lit sur l'annuel d'Essentielle, celui de la première carte.
   const b=document.getElementById('wel-badge');
   if(b){
-    const e=_economie('essentielle');
-    if(_accueilAnnuel&&e.pourcent){ b.textContent=e.pourcent+' sur l’année'; b.style.display=''; }
+    const t=texteRemiseAnnuelle('essentielle');
+    if(_accueilAnnuel&&t){ b.textContent=t; b.style.display=''; }
     else b.style.display='none';
   }
   accueilRendreTarifs();
@@ -12270,7 +12830,7 @@ async function doRegister(){
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
-      // qui, jusqu'a ce lot, tombait sur 9,95 EUR/mois avant d'avoir vu une
+      // qui, jusqu'a ce lot, tombait sur l'ecran de paiement avant d'avoir vu une
       // repetition. Un athlete qui ARRIVE avec un code n'en a pas besoin :
       // son acces est ouvert par son coach, et lui en ouvrir un en plus
       // laisserait un essai dormant a consommer le jour ou le code expire.
@@ -18907,7 +19467,7 @@ function expliquerUrgence(c){
 
 // PURE. Le prix de l'abonnement autonome, TEL QUE LA TABLE LE PORTE.
 //
-// Trois textes l’annonçaient en dur : changer 9,95 dans SUB_PALIERS ne
+// Trois textes l’annonçaient en dur : changer le prix dans SUB_PALIERS ne
 // changeait rien à l’écran, et le produit aurait annoncé deux prix selon
 // l’endroit — celui de la table sur la carte, l’ancien dans les textes.
 function prixAutonomie(){
@@ -21699,10 +22259,15 @@ function prospectContactNet(p){
   return null;
 }
 // PURE. La durée du code : celle de la formule, bornée.
-function prospectMoisInvitation(p,estCreateur){
+// ⚠ ET PAR LA FORMULE DU COACH (09/10/2026) : une invitation n'est pas une
+//   durée choisie, on la raccourcit à ce que la formule permet plutôt que de
+//   la refuser.
+function prospectMoisInvitation(p,estCreateur,coach){
   const m=Math.round(Number((OFFRES[p&&p.formule]||{}).mois)||0);
   const d=m>=1?m:3;
-  return estCreateur?d:Math.min(CODE_MOIS_MAX_AFFILIE,d);
+  if(estCreateur) return d;
+  const maxPalier=coach?dureeCodeMax(palierEffectifCoach(coach)):CODE_MOIS_MAX_AFFILIE;
+  return Math.min(CODE_MOIS_MAX_AFFILIE,maxPalier,d);
 }
 // PURE. L'entrée studentCodes, et la mise à jour du prospect.
 function prospectEntreeCode(p,gen,maintenant){
@@ -21723,8 +22288,10 @@ async function prospectInviter(id){
   try{
     const prenom=String(p.prenom||'').trim()||'Athlète';
     let gen;
-    try{ gen=await _genAccessCode(prenom,prospectMoisInvitation(p,currentUser.email===CREATOR_EMAIL)); }
-    catch(e){ toast(e.message||'Impossible de créer l’invitation : réessaie.','var(--red)'); return false; }
+    try{ gen=await _genAccessCode(prenom,prospectMoisInvitation(p,currentUser.email===CREATOR_EMAIL,currentUser)); }
+    catch(e){
+      if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return false; }
+      toast(e.message||'Impossible de créer l’invitation : réessaie.','var(--red)'); return false; }
     const {entree,maj}=prospectEntreeCode(Object.assign({id},p),gen,Date.now());
     if(!currentUser.studentCodes) currentUser.studentCodes=[];
     currentUser.studentCodes.push(entree);
@@ -21870,6 +22437,8 @@ function _pcPayerEnAttente(){
 async function pcProposerPaiement(){
   const p=_pcPayerEnAttente();
   if(!p||!currentUser||currentUser.role==='coach') return false;
+  // VERSION GOOGLE PLAY : le lien de paiement du coach ne s'ouvre pas ici.
+  if(canalApp()==='play'){ try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){} toast('Ce paiement se fait sur repcore-sync.web.app, dans ton navigateur.','var(--orange)'); return false; }
   try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
   const o=OFFRES[p.formule]; if(!o) return false;
   if(!await rcConfirm('Payer '+o.lib+' ('+prixOffre(p.formule)+') ?\n\nLe paiement se fait sur PayPal et va directement sur le compte de ton coach. Ton suivi s’ouvre dès que PayPal confirme.',null,'Payer sur PayPal','Plus tard')) return false;
@@ -22310,8 +22879,8 @@ function _viralRendre(){
 //
 // Un code (/ambassadeurs/<CODE>) donné à un créateur de contenu : ceux qui
 // arrivent par lui voient leur mois d'essai présenté comme offert grâce à
-// lui (Kevin, 28/09/2026 : un mois, pas deux — le même que le parrainage,
-// TARIFS.essai_parrainage.moisEnPlus = 0), et il touche une commission sur ce qu'ils
+// lui (Kevin, 09/10/2026 : DEUX mois, l'essai + un mois offert — le même que
+// le parrainage, TARIFS.essai_parrainage.moisEnPlus = 1), et il touche une commission sur ce qu'ils
 // paient — commissionPct (20 %), palierPct (25 %) au-delà de palierSeuil (50)
 // payants — pendant dureeMois (12) à partir de leur premier paiement. Une
 // commission n'est DUE que 30 jours après le paiement (remboursements).
@@ -22381,7 +22950,7 @@ async function ambassadeurApresInscription(u,saisi){
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
     // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
     toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
-      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', '+texteMoisOfferts()+' ⚡'):('Code '+c.code+' appliqué : '+texteMoisOfferts()+' ⚡')),'var(--green)');
     return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
@@ -22667,10 +23236,12 @@ function ambCopier(l,btn){
 }
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
-// LA RÉCOMPENSE : le filleul a son mois d'essai, présenté comme offert par
-// son parrain (un mois, pas deux : OFFRES.essai_parrainage vaut 0) ;
-// le parrain gagne 1 mois offert — ses droits prolongés — au PREMIER paiement
-// du filleul, et rien avant (anti-fraude). Au 10e filleul payant, 1 mois
+// LA RÉCOMPENSE (Kevin, 09/10/2026, DECISIONS §1 et §2) : le filleul a son
+// mois d'essai PLUS un mois offert par son parrain (essai_parrainage.moisEnPlus
+// = 1, soit moisInvite() = 2) ; le parrain gagne 1 mois offert — ses droits
+// prolongés — aux QUATRE PREMIÈRES SÉANCES du filleul ou à son PREMIER
+// PAIEMENT, le premier des deux, une seule fois par filleul (worker :
+// parrainageSeuil, parrainagePaiement). Au 10e filleul payant, 1 mois
 // d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
 //
 // OÙ VIVENT LES DONNÉES (voir database.rules.json et functions/index.js) :
@@ -22726,13 +23297,23 @@ function rcAppareilId(){
   }catch(e){ return 'sansstockage0000'; }
 }
 // ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
+// PURE. Les mois d'accès d'une personne invitée (ami ou ambassadeur
+// « essai+1mois ») : l'essai + le mois offert (tarifs.json ; Kevin, 09/10/2026).
+/** @returns {number} */
+function moisInvite(){ return (Number(TARIFS.essai.mois)||0)+(Number(TARIFS.essai_parrainage.moisEnPlus)||0); }
+// PURE. « tes 2 premiers mois » — ou « ton premier mois » si l'invité n'a que l'essai.
+/** @returns {string} */
+function offreMoisInvite(){ const n=moisInvite(); return n>1?'tes '+n+' premiers mois':'ton premier mois'; }
+// PURE. « tes 2 premiers mois sont offerts ».
+/** @returns {string} */
+function texteMoisOfferts(){ return offreMoisInvite()+(moisInvite()>1?' sont offerts':' est offert'); }
 // PURE. Le message prêt à partager. LE MOIS OFFERT GRÂCE À TOI (Kevin,
-// 28/09/2026) : jamais « au lieu de », jamais « 2 mois ».
+// 28/09/2026) : jamais « au lieu de ».
 // `lien` : ajouté à la fin ; '' (chaîne vide) quand le lien voyage à part
 // (navigator.share le porte dans `url` : l'écrire aussi dans le texte le
 // faisait apparaître deux fois) ; absent : on dit où saisir le code.
 function parrainageMessage(code,lien){
-  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', ton premier mois est offert'
+  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', '+texteMoisOfferts()
     +' : toute l’app ouverte, sans carte bancaire.'
     +(lien?' '+lien:(lien===''?'':' Le code se saisit à l’inscription.'));
 }
@@ -22794,10 +23375,10 @@ function phraseInvitationInscription(prenom,amb,avantage){
   // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
   // mois d'Ultime à moitié prix.
   if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
-  if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
+  if(amb) return 'Grâce à '+amb+', '+texteMoisOfferts();
   // Le mois offert PAR QUELQU'UN (lot C) : c'est ce « par quelqu'un » qui compte.
-  if(prenom) return prenom+' t’offre ton premier mois';
-  return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
+  if(prenom) return prenom+' t’offre '+offreMoisInvite();
+  return 'Le code d’un ami ou d’un ambassadeur t’offre '+offreMoisInvite()+'.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
 // L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
@@ -22906,7 +23487,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
+  toast(pub.prenom?(pub.prenom+' t’offre '+offreMoisInvite()+' ⚡'):'Code appliqué : '+texteMoisOfferts()+' ⚡','var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -46615,7 +47196,10 @@ function _htmlActionProgramme(p){
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
-    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
+    // LIRE, TOUJOURS : le programme est à vie, abonnement ou pas.
+    h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
+      +'onclick="ouvrirLectureProgramme(\''+id+'\')">Lire le programme</button>';
+    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis, à vie.</div>';
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
@@ -46652,7 +47236,10 @@ function ouvrirAchatProgramme(id){
     //   c'est la phrase qui evite la soiree d'allers-retours : elle dit ce que
     //   l'ajustement fait, ET ce qu'il n'est pas.
     +(p.description?'<p class="bq-desc" style="margin-top:8px;line-height:1.6">'
-      +escapeHtml(p.description)+'</p>':'');
+      +escapeHtml(p.description)+'</p>':'')
+    // CE QUE L'ACHAT DONNE, AVANT DE PAYER (09/10/2026) : à vie, et 30 jours d'app.
+    +(p.service?'':'<p class="bq-note" data-achat-donne style="margin-top:8px;line-height:1.6">'
+      +escapeHtml(texteAchatProgramme())+'</p>');
   const b=document.getElementById('ach-paypal');
   if(b) b.innerHTML='<div class="skeleton fx-loop" style="height:55px;border-radius:var(--r-2)"></div>';
   const c=document.getElementById('ach-cgv');
@@ -46674,6 +47261,8 @@ function _majBoutonAchat(){
   if(b) b.style.display=(c&&c.checked)?'':'none';
 }
 function _chargerPaypalAchat(){
+  // VERSION GOOGLE PLAY : pas d'achat de contenu numérique hors de Google Play.
+  if(canalApp()==='play'){ const b=document.getElementById('ach-paypal'); if(b) b.innerHTML=htmlCanalPlay().replace('Ton abonnement se gère','Cet achat se fait'); return; }
   const rendre=()=>_rendreBoutonAchat();
   if(document.getElementById('paypal-sdk-achat')){ rendre(); return; }
   const sc=document.createElement('script');
@@ -46704,7 +47293,7 @@ function _rendreBoutonAchat(){
   const z=document.getElementById('ach-paypal');
   if(!z) return;
   const sdk=window.paypalAchat;
-  if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger.</div>'; return; }
+  if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger : vérifie ta connexion, puis rouvre cette fiche.</div>'; return; }
   // ══ DEUX BOUTONS, DEUX CHEMINS, AUCUNE AMBIGUITE (lot 5) ═══════════════
   // Le bouton carte n'est plus cache derriere « autres moyens de paiement » :
   // il a sa place, sous celui de PayPal, avec son propre intitule.
@@ -46755,17 +47344,129 @@ function _rendreBoutonAchat(){
       }),
       onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
     }));
-    if(carte.isEligible&&carte.isEligible()){
-      const lib=document.getElementById('ach-carte-lib');
-      if(lib) lib.style.display='';
-      carte.render('#ach-carte');
-    }
-  }catch(e){}
+    // Rendu, ou le secours à sa place (09/10/2026).
+    _rendreBoutonCarteOuSecours(carte,'ach-carte','achat','');
+  }catch(e){ _poserSecoursCarte('ach-carte','achat',''); }
 }
 // ⚠ LE MEME HABILLAGE POUR LES DEUX ECRANS. Le bouton carte de PayPal porte
 //   SON libelle, que nous ne choisissons pas : le notre est la ligne au-dessus.
 //   `fundingSource: FUNDING.CARD` est ce qui le fait sortir de « autres moyens
 //   de paiement », ou personne ne va le chercher.
+// ══ QUAND LE BOUTON CARTE NE S'AFFICHE PAS (09/10/2026) ═══════════════════
+//
+// Le bouton « Payer par carte » dépend de PayPal : un réglage du compte
+// (« Compte PayPal facultatif »), le pays, le SDK. S'il manque, l'écran ne
+// doit pas rester VIDE à l'endroit où quelqu'un s'apprêtait à payer : il dit
+// ce qui se passe, et il donne deux chemins qui marchent.
+//   · ABONNEMENT : le bouton PayPal (dont la fenêtre propose aussi la carte),
+//     ou la PAGE DE PAIEMENT HÉBERGÉE par PayPal pour le même plan. Payé là,
+//     l'abonnement n'est relié au compte qu'une fois son numéro (I-…) collé
+//     ici : le worker vérifie chez PayPal que l'adresse de l'abonné est celle
+//     du compte (indexer), puis ouvre l'accès au premier paiement reçu.
+//   · ACHAT D'UN PROGRAMME : le bouton PayPal seulement (une commande se crée
+//     depuis l'app, il n'y a pas de page hébergée sans serveur).
+// scripts/verif/paypal-carte.mjs vérifie chaque semaine que le bouton est là.
+/**
+ * PURE. La page d'abonnement hébergée par PayPal, pour un plan.
+ * @param {string} planId
+ * @returns {string} '' pour un identifiant invalide
+ */
+function lienPaiementHeberge(planId){
+  const id=String(planId||'').trim();
+  return /^P-[A-Z0-9]{10,40}$/.test(id)?'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id='+id:'';
+}
+/**
+ * PURE. Un numéro d'abonnement PayPal collé par quelqu'un, nettoyé.
+ * @param {string} s
+ * @returns {string} 'I-…' ou ''
+ */
+function idAbonnementColle(s){
+  const t=String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+  return /^I-[A-Z0-9]{6,30}$/.test(t)?t:'';
+}
+/**
+ * PURE. Le bloc de secours, à la place du bouton carte absent.
+ * ⚠ SANS LE SDK, LA CASE DES CGV N'EST PAS À L'ÉCRAN (elle vit avec les
+ *   boutons) : le bloc la porte alors lui-même, et le lien vers la page de
+ *   PayPal reste caché tant qu'elle n'est pas cochée. Payer ne contourne
+ *   jamais l'acceptation des conditions.
+ * @param {'abonnement'|'achat'} contexte
+ * @param {string} [planId] le plan choisi (abonnement)
+ * @param {boolean} [sdkAbsent] le SDK n'a pas pu se charger (aucun bouton PayPal à l'écran)
+ * @returns {string} du HTML
+ */
+function htmlSecoursCarte(contexte,planId,sdkAbsent){
+  const lien=contexte==='abonnement'?lienPaiementHeberge(planId):'';
+  let h='<div data-carte-secours class="carte-secours" style="margin-top:10px;background:var(--surface-2);'
+    +'border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;text-align:left;'
+    +'font-size:var(--fs-xs);line-height:1.6;color:var(--text)">'
+    +'<div style="font-weight:800;margin-bottom:6px">Le paiement par carte ne s’affiche pas ici.</div>'
+    +'<div style="color:var(--sub)">'+(sdkAbsent
+      ?'PayPal ne s’est pas chargé. Touche « Réessayer » : les boutons PayPal et carte reviennent avec lui.'
+      :'Tu peux quand même payer par carte, sans compte PayPal : touche le bouton PayPal '
+        +'ci-dessus, puis « Payer par carte » dans la fenêtre qui s’ouvre.')+'</div>';
+  if(lien){
+    const cgv=sdkAbsent
+      ?'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;cursor:pointer;'
+        +'text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs)">'
+        +'<input type="checkbox" id="secours-cgv" style="margin-top:3px;flex:0 0 16px;width:16px;height:16px;'
+        +'accent-color:var(--red)" '
+        +'onchange="var a=document.getElementById(\'secours-lien\');if(a)a.style.display=this.checked?\'block\':\'none\'">'
+        +'<span style="color:var(--sub);flex:1;min-width:0;line-height:1.6">J’ai lu et j’accepte les <a href="../terms.html" target="_blank" rel="noopener">'
+        +'conditions générales de vente</a>. Je demande l’accès immédiat au service et reconnais qu’à ce titre je '
+        +'perds mon droit de rétractation de 14 jours une fois le contenu numérique fourni.</span></label>'
+      :'';
+    h+='<div style="color:var(--sub);margin-top:8px">'+'Ou'+' passe par la page de paiement de PayPal, avec la même adresse '
+      +'e-mail que ton compte RepCore :</div>'+cgv
+      +'<a id="secours-lien" class="btn btn-outline btn-sm" style="display:'+(sdkAbsent?'none':'block')+';width:100%;margin:8px 0;text-align:center;text-decoration:none" '
+      +'href="'+escapeHtml(lien)+'" target="_blank" rel="noopener">Ouvrir la page de paiement PayPal</a>'
+      +'<div style="color:var(--sub)">Après le paiement, colle ici le numéro d’abonnement (il commence par I-) reçu par e-mail :</div>'
+      +'<div style="display:flex;gap:8px;margin-top:6px"><input id="carte-secours-id" placeholder="I-XXXXXXXXXXXX" '
+      +'autocomplete="off" style="flex:1;min-width:0;font-size:var(--fs-md);padding:10px 12px">'
+      +'<button class="btn btn-red btn-sm" style="margin:0;flex-shrink:0" onclick="signalerAbonnementColle()">Valider</button></div>';
+  }
+  return h+'</div>';
+}
+function _poserSecoursCarte(conteneur,contexte,planId){
+  const z=document.getElementById(conteneur);
+  if(!z||z.querySelector('[data-carte-secours]')) return false;
+  const lib=document.getElementById(contexte==='abonnement'?'pp-carte-lib':'ach-carte-lib');
+  if(lib) lib.style.display='none';
+  z.innerHTML=htmlSecoursCarte(contexte,planId);
+  return true;
+}
+// LE BOUTON CARTE, RENDU OU REMPLACÉ. `isEligible` dit non, le rendu échoue,
+// ou rien n'est apparu au bout de 10 s : le secours prend la place.
+function _rendreBoutonCarteOuSecours(carte,conteneur,contexte,planId){
+  const lib=document.getElementById(contexte==='abonnement'?'pp-carte-lib':'ach-carte-lib');
+  try{
+    if(!carte||!(carte.isEligible&&carte.isEligible())){ _poserSecoursCarte(conteneur,contexte,planId); return false; }
+    if(lib) lib.style.display='';
+    const pr=carte.render('#'+conteneur);
+    if(pr&&typeof pr.catch==='function') pr.catch(()=>_poserSecoursCarte(conteneur,contexte,planId));
+    setTimeout(()=>{ const z=document.getElementById(conteneur);
+      if(z&&!z.querySelector('iframe')&&!z.querySelector('[data-carte-secours]')) _poserSecoursCarte(conteneur,contexte,planId); },10000);
+    return true;
+  }catch(e){ _poserSecoursCarte(conteneur,contexte,planId); return false; }
+}
+// LE NUMÉRO D'ABONNEMENT COLLÉ. Il est posé sur le dossier (c'est ce que le
+// worker exige pour ouvrir : l'abonnement « courant ») et signalé au worker,
+// qui le vérifie chez PayPal avant de le relier. Il ne remplace jamais un
+// abonnement déjà relié.
+function signalerAbonnementColle(){
+  const u=currentUser;
+  const id=idAbonnementColle((document.getElementById('carte-secours-id')||{}).value);
+  if(!u){ toast('Crée ton compte avant.','var(--orange)'); return false; }
+  if(!id){ toast('Le numéro commence par I- (dans l’e-mail de PayPal).','var(--orange)'); return false; }
+  if(u.paypalSubscriptionId&&u.paypalSubscriptionId!==id){ toast('Un autre abonnement est déjà relié à ton compte : écris-moi.','var(--orange)'); return false; }
+  u.paypalSubscriptionId=id;
+  u.abonnement=Object.assign({},u.abonnement,{palier:_subPalier||'mensuel',formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie(),
+    source:'page_paypal',signaleLe:Date.now()});
+  try{ saveUser(); }catch(e){}
+  abonnementSignaler(id,true);
+  toast('Reçu : ton accès s’ouvre dès que PayPal confirme le paiement (quelques minutes).','var(--green)');
+  return true;
+}
 function _paiementCarteOptions(sdk){
   return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
     style:{layout:'vertical',color:'black',shape:'rect',height:45}};
@@ -46814,10 +47515,11 @@ function _enregistrerAchat(id,ordre){
   //   le repli tant que les fonctions ne tournent pas, et elle vaut ce que
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  //   ⚠ 30 JOURS, PLUS TROIS MOIS (09/10/2026), et le programme À VIE : voir
+  //   « UN PROGRAMME DE LA BOUTIQUE » près de programmeAcquis. Le worker écrit
+  //   la même fiche de son côté (champ par champ, sans effacer celle-ci).
   paiementRecentNoter(currentUser,'programme');
-  currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
-    ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};
+  currentUser.programmesAchetes[p.id]=ficheAchatProgramme(p,ordre,t,'paypal');
   saveUser();
   // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
   // a la premiere lecture de droits/.
@@ -46851,7 +47553,7 @@ function _enregistrerAchat(id,ordre){
 function ouvrirMerciAchat(id){
   const p=programmeDuCatalogue(id);
   if(!p) return false;
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  const jours=joursAppProgramme();
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
@@ -46859,8 +47561,9 @@ function ouvrirMerciAchat(id){
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:14px">'
-    +'Il est installé dans tes séances. Et pendant '+mois+' mois, tu as aussi le catalogue '
-    +'d’exercices, la charge de ton bloc et ta diète calculée.</p>'
+    +'Il est installé dans tes séances, et il reste à toi : tu pourras toujours le relire. '
+    +'Pendant '+jours+' jours, tu as aussi le catalogue d’exercices, la charge de ton bloc '
+    +'et ta diète calculée.</p>'
     +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65">'
@@ -46886,7 +47589,7 @@ async function offrirProgramme(id){
   if(!p) return false;
   if(!currentUser.programmesAchetes||typeof currentUser.programmesAchetes!=='object')
     currentUser.programmesAchetes={};
-  currentUser.programmesAchetes[p.id]={le:Date.now(),prixCts:0,ordre:'offert'};
+  currentUser.programmesAchetes[p.id]=ficheAchatProgramme(p,'offert',Date.now(),'offert');
   saveUser();
   _rendreBoutique();
   return appliquerProgramme(p.id);
@@ -51156,10 +51859,10 @@ const _LEGENDES=Object.freeze({
     d=>'Séances, records, tonnage : la team avance. Et toi ?'],
   // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
   // cliquer : il recopie). Sans code connu, on dit de le demander.
-  invitation:[d=>'Je t’offre ton premier mois sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+  invitation:[d=>'Je t’offre '+offreMoisInvite()+' sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' premier mois est offert, sans carte.',
-    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+'ton premier mois est offert.',
-    d=>'Toute l’app ouverte, sans carte bancaire, et ton premier mois est offert. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+texteMoisOfferts()+'.',
+    d=>'Toute l’app ouverte, sans carte bancaire, et '+texteMoisOfferts()+'. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
   saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
     d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
     d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],
@@ -82343,8 +83046,7 @@ function rendreEssaiBilan(u){
       :'<p class="eb-sous">Rien n’est effacé.</p>')
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Ultime</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('ultime'))+' par mois en annuel, '
-      +'ou '+escapeHtml(prixOffre('ultime'))+' au mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('ultime'))+'</div>'
       +'<ul class="eb-c-l">'
       +ligne('Le catalogue d’exercices, filmés et illustrés')
       +ligne('La charge de ton bloc, semaine par semaine')
@@ -82355,8 +83057,7 @@ function rendreEssaiBilan(u){
     +'</div>'
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Essentielle</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('essentielle'))+' par mois en annuel, '
-      +'ou '+escapeHtml(prixOffre('essentielle'))+' au mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('essentielle'))+'</div>'
       +'<ul class="eb-c-l">'
       +ligne('Tes séances, ton historique et tes bilans')
       +ligne('Ta nutrition et ton lifestyle')
@@ -82370,6 +83071,11 @@ function rendreEssaiBilan(u){
       +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +'Voir les formules de coaching</a>'
       +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
+      // SES PROGRAMMES ACHETÉS RESTENT LISIBLES (09/10/2026) : ils sont à vie,
+      // et cet écran est celui où tout le reste est fermé.
+      +((()=>{ const n=programmesAcquisDe(x).length;
+        return n?'<button type="button" class="eb-lien" data-eb-programmes onclick="ouvrirMesProgrammesAchetes()">'
+          +(n>1?'Lire mes '+n+' programmes':'Lire mon programme')+'</button>':''; })())
     +'</div>';
   return true;
 }
@@ -123943,6 +124649,148 @@ function _planifierRepeint(email){
     },400);
   }catch(e){}
 }
+// ══ LA FORTE AFFLUENCE (09/10/2026) ═══════════════════════════════════════
+// Plan Spark : 100 connexions temps réel simultanées, et une base qui peut
+// répondre « trop de monde » (429, 503) ou « quota dépassé » (402). Ce jour-là,
+// l'app ne casse pas et ne martèle pas :
+//   · un BANDEAU (pas un écran bloquant) dit ce qui se passe et quand on
+//     réessaie ; la séance en cours continue — elle s'enregistre sur le
+//     téléphone comme hors ligne, et la file d'envoi (CLOUD.viderFile) part au
+//     retour ;
+//   · plus de descente périodique, plus de flux du coach, plus d'envoi : une
+//     seule SONDE (CLOUD.sonder, quelques dizaines d'octets) à délai croissant,
+//     30 s → 5 min, AVEC UN ALÉA de ± 20 % pour que mille téléphones ne
+//     reviennent pas frapper à la même seconde ;
+//   · la première réponse 2xx (sonde, lecture ou envoi) referme le bandeau,
+//     vide la file et rouvre le flux du coach.
+// Voir docs/BASCULE-BLAZE.md : ce que Kevin fait le jour où l'alerte sonne.
+const AFFLUENCE_STATUTS=Object.freeze([402,429,503]);
+const AFFLUENCE_DELAI_MIN=30000, AFFLUENCE_DELAI_MAX=300000;
+/**
+ * PURE. Cette réponse de la base veut-elle dire « trop de monde / limite atteinte » ?
+ * @param {number} statut statut HTTP
+ * @returns {boolean}
+ */
+function estRefusAffluence(statut){ return AFFLUENCE_STATUTS.indexOf(Number(statut))>=0; }
+/**
+ * PURE. Le délai avant le réessai n° n (0, 1, 2…) : 30 s, 60 s, 120 s, 240 s,
+ * puis 5 min, chacun à ± 20 % selon `alea` (0 à 1).
+ * @param {number} n
+ * @param {number} alea
+ * @returns {number} millisecondes
+ */
+function delaiReessaiAffluence(n,alea){
+  const base=Math.min(AFFLUENCE_DELAI_MAX,AFFLUENCE_DELAI_MIN*Math.pow(2,Math.max(0,Math.floor(Number(n)||0))));
+  const a=Math.min(1,Math.max(0,Number(alea)||0));
+  return Math.round(base*(0.8+0.4*a));
+}
+/**
+ * PURE. La synchro périodique a-t-elle une raison de partir ?
+ * @param {boolean} cache l'app est-elle cachée (document.hidden)
+ * @param {boolean} affluence le mode forte affluence est-il actif
+ * @returns {boolean}
+ */
+function syncPeriodiqueUtile(cache,affluence){ return !cache&&!affluence; }
+/**
+ * PURE. Le texte du bandeau.
+ * @param {number} resteMs temps avant le prochain essai
+ * @returns {{titre:string, texte:string}}
+ */
+function texteAffluence(resteMs){
+  const s=Math.max(0,Math.ceil((Number(resteMs)||0)/1000));
+  const quand=s<=0?'Nouvel essai en cours…':(s<60?'Nouvel essai dans '+s+' s.':'Nouvel essai dans '+Math.ceil(s/60)+' min.');
+  return {titre:'Forte affluence',
+    texte:'Beaucoup de monde en même temps sur RepCore. Ta séance continue : tout est gardé sur ce téléphone et partira tout seul. '+quand};
+}
+const AFFLUENCE={
+  _actif:false,_essais:0,_minuteur:null,_prochain:0,_tic:null,_enCours:false,
+  actif(){ return this._actif; },
+  // Toute réponse de la base passe ici : un refus allume, un succès éteint.
+  observer(statut){
+    const st=Number(statut)||0;
+    if(estRefusAffluence(st)) this.signaler();
+    else if(st>=200&&st<300&&this._actif) this.fin();
+  },
+  signaler(){
+    if(this._actif) return false;
+    this._actif=true; this._essais=0;
+    try{ BOITE_COACH._fermerFlux(); }catch(e){}
+    this._planifier();
+    this._peindre();
+    return true;
+  },
+  _planifier(){
+    clearTimeout(this._minuteur);
+    const d=delaiReessaiAffluence(this._essais,Math.random());
+    this._essais++;
+    this._prochain=Date.now()+d;
+    this._minuteur=setTimeout(()=>{ this.reessayer(); },d);
+  },
+  async reessayer(){
+    clearTimeout(this._minuteur); this._minuteur=null;
+    if(!this._actif) return true;
+    if(this._enCours) return false;
+    this._enCours=true; this._prochain=0; this._peindre();
+    let st=0; try{ st=await CLOUD.sonder(); }catch(e){ st=0; }
+    this._enCours=false;
+    if(!this._actif) return true;
+    if(st>=200&&st<300){ this.fin(); return true; }
+    this._planifier(); this._peindre();
+    return false;
+  },
+  fin(){
+    if(!this._actif) return false;
+    this._actif=false; this._essais=0;
+    clearTimeout(this._minuteur); this._minuteur=null;
+    this._peindre();
+    try{ Promise.resolve(CLOUD.viderFile()).catch(()=>{}); }catch(e){}
+    try{ if(BOITE_COACH._voulu) BOITE_COACH.ouvrir(); }catch(e){}
+    try{ toast('La base répond de nouveau : tes données se synchronisent.','var(--green)'); }catch(e){}
+    return true;
+  },
+  _peindre(){
+    try{
+      let b=document.getElementById('affluence-bandeau');
+      clearInterval(this._tic); this._tic=null;
+      if(!this._actif){ if(b) b.remove(); return; }
+      if(!b){
+        b=document.createElement('div');
+        b.id='affluence-bandeau';
+        b.setAttribute('role','status');
+        b.setAttribute('aria-live','polite');
+        b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:99990;'
+          +'background:#1b1407;border:1px solid var(--orange,#f59e0b);border-radius:14px;padding:12px 14px;'
+          +'color:#fff;font-size:14px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.45);text-transform:none;letter-spacing:0';
+        b.innerHTML='<strong data-aff-titre style="display:block;color:var(--orange,#f59e0b);margin-bottom:4px"></strong>'
+          +'<span data-aff-texte></span>'
+          +'<button type="button" data-aff-reessayer style="display:block;margin-top:8px;background:transparent;border:1px solid rgba(255,255,255,.35);'
+          +'color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;text-transform:none;letter-spacing:0">Réessayer maintenant</button>';
+        b.querySelector('[data-aff-reessayer]').addEventListener('click',()=>{ AFFLUENCE.reessayer(); });
+        document.body.appendChild(b);
+      }
+      const maj=()=>{
+        const x=texteAffluence(this._enCours?0:Math.max(0,this._prochain-Date.now()));
+        const t=b.querySelector('[data-aff-titre]'), z=b.querySelector('[data-aff-texte]');
+        if(t) t.textContent=x.titre;
+        if(z) z.textContent=x.texte;
+      };
+      maj();
+      this._tic=setInterval(()=>{ if(!this._actif||!b.isConnected){ clearInterval(this._tic); this._tic=null; return; } if(!document.hidden) maj(); },1000);
+    }catch(e){}
+  },
+};
+// LE FLUX DU COACH S'ENDORT après FLUX_SOMMEIL_MS sans un geste : une tablette
+// posée sur le comptoir de la salle, accueil du coach ouvert toute la journée,
+// tenait une des 100 connexions pour rien. Le premier toucher le réveille ; la
+// relève de 5 minutes reste le filet pendant le sommeil.
+const FLUX_SOMMEIL_MS=10*60000;
+/**
+ * PURE. Le flux doit-il dormir ?
+ * @param {number} derniereActivite horodatage du dernier geste
+ * @param {number} maintenant
+ * @returns {boolean}
+ */
+function fluxDoitDormir(derniereActivite,maintenant){ return (Number(maintenant)||0)-(Number(derniereActivite)||0)>=FLUX_SOMMEIL_MS; }
 // ══ LE FLUX DE LA BOITE DU COACH (30/09/2026) ═════════════════════════════
 // Voir CLOUD._signalerCoach. UN EventSource (streaming REST de Firebase) sur
 // /boite_coach/<maClé>, ouvert a l'arrivee sur s-coach-home et garde tant que
@@ -123959,7 +124807,7 @@ function _planifierRepeint(email){
 // rouvre. Toute autre coupure : reconnexion a delai croissant, plafonne.
 // LA RELEVE DE CINQ MINUTES RESTE LE FILET : si le flux tombe, rien n'est perdu.
 const BOITE_COACH={
-  _es:null,_cle:null,_voulu:false,_gen:0,_essais:0,_minuteur:null,_revoque:0,
+  _es:null,_cle:null,_voulu:false,_gen:0,_essais:0,_minuteur:null,_revoque:0,_geste:Date.now(),_dort:false,
   _enCours:new Set(),
   _DELAI_MIN:1000,_DELAI_MAX:300000,
   _maCle(){
@@ -123975,6 +124823,8 @@ const BOITE_COACH={
     if(!cle){ this.fermer(); return false; }
     this._voulu=true;
     if(typeof EventSource!=='function'||document.hidden) return false;
+    if(AFFLUENCE.actif()) return false;
+    this._geste=Date.now(); this._dort=false;
     // Un autre compte : l'ancien flux lisait la boite de quelqu'un d'autre.
     if(this._cle!==cle){ this._fermerFlux(); this._essais=0; }
     this._cle=cle;
@@ -123991,7 +124841,7 @@ const BOITE_COACH={
     this._es=null;
   },
   _replanifier(){
-    if(!this._voulu||document.hidden) return;
+    if(!this._voulu||document.hidden||AFFLUENCE.actif()||this._dort) return;
     const d=Math.min(this._DELAI_MAX,this._DELAI_MIN*Math.pow(2,this._essais));
     this._essais++;
     clearTimeout(this._minuteur);
@@ -124000,7 +124850,7 @@ const BOITE_COACH={
   async _connecter(rafraichir){
     this._fermerFlux();
     const gen=this._gen, cle=this._cle;
-    if(!this._voulu||!cle||document.hidden) return false;
+    if(!this._voulu||!cle||document.hidden||AFFLUENCE.actif()||this._dort) return false;
     // Jeton expire cote serveur : on force le rafraichissement.
     if(rafraichir){ CLOUD._idToken=null; CLOUD._tokenExpiry=0; }
     let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
@@ -124038,6 +124888,18 @@ const BOITE_COACH={
   },
   // {path, data} de Firebase : « / » porte la boite entiere (put) ou une
   // partie (patch) ; « /<athleteKey> » une seule entree.
+  // Un geste de l'utilisateur : le flux endormi se réveille.
+  geste(t){
+    this._geste=Number(t)||Date.now();
+    if(this._dort&&this._voulu){ this._dort=false; this.ouvrir(); }
+  },
+  // Appelé chaque minute : endort le flux après FLUX_SOMMEIL_MS sans geste.
+  veiller(t){
+    if(this._voulu&&!this._dort&&(this._es||this._minuteur)&&fluxDoitDormir(this._geste,Number(t)||Date.now())){
+      this._dort=true; this._fermerFlux(); return true;
+    }
+    return false;
+  },
   _recevoir(m){
     if(!m||typeof m!=='object') return [];
     const p=String(m.path||'/');
@@ -124069,8 +124931,12 @@ document.addEventListener('visibilitychange',()=>{
     else if(BOITE_COACH._voulu) BOITE_COACH.ouvrir();
   }catch(e){}
 });
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{ try{ BOITE_COACH.geste(Date.now()); }catch(e){} },{capture:true,passive:true}));
+setInterval(()=>{ try{ BOITE_COACH.veiller(Date.now()); }catch(e){} },60000);
 async function _descenteAuRetour(){
   if(!CLOUD.ok()||!currentUser) return false;
+  if(AFFLUENCE.actif()) return false;
+  CLOUD.presence().catch(()=>{});
   // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
   // évènements rapprochés, qui feraient repartir autant de requêtes.
   const _now=Date.now();
@@ -124092,6 +124958,8 @@ function toastSync(localOk,promesse,succes,perdu){
       // la seule information utile. Uniquement si l'écriture locale a réussi,
       // sinon leur texte (« enregistrée sur cet appareil ») serait faux.
       const detail=(localOk&&e&&e._actionnable)?e.message:null;
+      // FORTE AFFLUENCE : le bandeau le dit déjà, et l'envoi partira seul.
+      if(localOk&&!detail&&AFFLUENCE.actif()) return false;
       toast(detail||(localOk
         ?'Enregistré sur cet appareil : synchronisation en échec'
         :'Échec : ni enregistré sur cet appareil, ni synchronisé. Recommence.'),
@@ -125274,6 +126142,8 @@ function openAddAthlete(){
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
+  // Les durées que la formule permet (09/10/2026).
+  try{ _poserDureesCode(document.getElementById('aa-duration')); }catch(e){}
 }
 // Échap ferme la modale, quand le fond la ferme deja au clic. Le balisage
 // porte l'intention : `onclick="closeModal()"` sur l'overlay signifie
@@ -125402,6 +126272,10 @@ async function createAthlete(){
   if(!fn||!ln||!em||!pw){_err('Tous les champs sont obligatoires.');return;}
   if(pw.length<6){_err('Le mot de passe doit faire au moins 6 caractères.');return;}
   const users=DB.get('users')||{};
+  // LE QUOTA AVANT DE CRÉER LE COMPTE : refusé après, il laisserait un compte
+  // d'authentification sans dossier.
+  const _refusQ=estCreateur?null:refusQuotaCoach(currentUser,users,months);
+  if(_refusQ){ ouvrirEcranQuotaCoach(_refusQ); return; }
   // ══ ICI LA GARDE RESTE, MAIS ELLE DOIT DIRE CE QU'ELLE A TROUVÉ ════════
   //
   // ⚠ L'ANCRE D'ÉCRITURE N'EST PAS RECOPIÉE ICI : une sonde voisine repère la
@@ -125490,6 +126364,7 @@ async function createAthlete(){
   try{
     gen=await _genAccessCode(fn+' '+ln,months);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès : réessaie.';
     document.getElementById('aa-err').style.display='block';
     return;
@@ -128334,7 +129209,7 @@ function lienAbonnement(){
   }catch(e){}
   return '/app/';
 }
-// ⚠ IL ANNONCAIT 9,50 PENDANT QUE PAYPAL ENCAISSAIT 9,95 (corrige au lot 1).
+// ⚠ ECRIT EN DUR, IL NE VALAIT PLUS CE QUE PAYPAL ENCAISSAIT (corrige au lot 1).
 //   Un prix ecrit en dur finit toujours par diverger de celui qu'on facture :
 //   celui-ci vient d'OFFRES, comme tous les autres.
 const PRIX_ATHLETE_MOIS=prixOffre('essentielle');
@@ -128371,7 +129246,7 @@ function messageRelanceAcces(c,etat){
     :('Ton accès à RepCore se termine'+(d?(' le '+d):' bientôt')+'.');
   return (p?('Salut '+p+' ! '):'Salut ! ')+quand
     +' Pour continuer, ouvre l\'app et prends l\'abonnement à '+PRIX_ATHLETE_MOIS
-    +' par mois (engagement '+TARIFS.engagementMois+' mois) : '+lienAbonnement()
+    +' par mois ('+(TARIFS.engagementMois?('engagement '+TARIFS.engagementMois+' mois'):'sans engagement')+') : '+lienAbonnement()
     +'. Dis-moi si tu as le moindre souci, je m\'en occupe.';
 }
 // Ouvre WhatsApp avec le message pre-rempli. ⚠ REPCORE N'ENVOIE RIEN : il
@@ -128522,9 +129397,9 @@ function loadMonetisationTab(){
   const cancelled=subs.filter(x=>x.paymentStatus==='cancelled');
   document.getElementById('pp-total-subs').textContent=active.length;
   // ⚠ LE SEUL PRIX ENCORE ECRIT EN DUR DANS TOUT LE FICHIER, trouve le
-  //   24/09/2026 : « active.length * 9.95 ». Il annoncait un revenu mensuel
-  //   calcule sur un tarif qui venait de changer, et sur le seul tarif
-  //   d'Essentielle — un abonne a Ultime comptait pour 9,95 €. Chacun compte
+  //   24/09/2026 : le nombre d'abonnes multiplie par un tarif ecrit en dur.
+  //   Il annoncait un revenu mensuel calcule sur un tarif qui venait de
+  //   changer, et sur le seul tarif d'Essentielle. Chacun compte
   //   maintenant pour ce que SA formule vaut, lue dans la table.
   document.getElementById('pp-mrr').textContent=_euros(Math.round(active.reduce((s,x)=>{
     const f=String(((x.abonnement||{}).formule)||'essentielle');
@@ -128829,6 +129704,10 @@ async function requestAccountDeletion(){
     // 1 ter. Le résumé d'activité (statistiques de rétention) : hors de users/.
     try{
       await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    }catch(e){}
+    // 1 ter. La présence (comptage des connexions, 09/10/2026).
+    try{
+      await fetch(CLOUD._fbUrl.replace('users.json','presence/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
     // 1 ter. La santé synchronisée : voir _supprimerSanteSync.
@@ -129189,6 +130068,7 @@ async function _envoyerInvitation(){
   const dire=(m)=>{ if(err){ err.textContent=m; err.style.display='block'; } };
   if(err) err.style.display='none';
   const r=await inviterAthlete(v('inv-prenom'),v('inv-nom'));
+  if(!r.ok&&r.quota){ ouvrirEcranQuotaCoach(r.quota); return false; }
   if(!r.ok){ dire(r.raison); return false; }
   const p1=document.getElementById('inv-prenom'), p2=document.getElementById('inv-nom');
   if(p1) p1.value=''; if(p2) p2.value='';
@@ -129231,6 +130111,16 @@ function invitationExistante(prenom,nom,user){
   return invitationsEnAttente(user).find(c=>_clePersonne(c.prenom,c.nom)===k
     ||exKey(c.studentName||'')===k)||null;
 }
+/**
+ * PURE. La durée d'une invitation : la valeur par défaut, bornée par la
+ * formule du coach (le créateur n'a pas de plafond).
+ * @param {any} coach
+ * @returns {number}
+ */
+function moisInvitationCoach(coach){
+  if(!coach||coach.email===CREATOR_EMAIL) return INV_MOIS_DEFAUT;
+  return Math.min(INV_MOIS_DEFAUT,dureeCodeMax(palierEffectifCoach(coach)));
+}
 async function inviterAthlete(prenom,nom){
   const u=currentUser;
   if(!u||u.role!=='coach') return {ok:false,raison:'Réservé aux coachs.'};
@@ -129241,8 +130131,9 @@ async function inviterAthlete(prenom,nom){
     +((deja.prenom||deja.studentName||'cette personne'))+'. Relance-la plutôt '
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
-  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT); }
-  catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
+  // La durée de l'invitation : la valeur par défaut, bornée par la formule.
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),moisInvitationCoach(u)); }
+  catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.',quota:(e&&e._quotaCoach)||null}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
     createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,
     prenom:pn,nom:nm};
@@ -129363,6 +130254,14 @@ async function _genAccessCode(studentName,months,type){
   if(!isCreator&&months>CODE_MOIS_MAX_AFFILIE)
     throw new Error('Durée maximale : '+CODE_MOIS_MAX_AFFILIE+' mois par code. '
       +'Tu pourras en générer un nouveau à l\'échéance.');
+  // ⚠ LE QUOTA DE LA FORMULE, EN DERNIER VERROU (09/10/2026) : les quatre
+  //   chemins qui créent un code passent tous par ici. Les écrans le
+  //   vérifient avant (pour ne pas créer un compte pour rien), ceci tient si
+  //   l'un d'eux l'oubliait. Une invitation COACH n'est pas un rattachement.
+  if(!isCreator&&(type||'athlete')==='athlete'){
+    const refus=refusQuotaCoach(currentUser,DB.get('users')||{},months);
+    if(refus) throw erreurQuotaCoach(refus);
+  }
   const payload={
     coachId:currentUser.id,
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
@@ -129599,6 +130498,13 @@ async function _extendAccessCode(codeId,addMonths,token){
   const base=Math.max((data&&data.expiry)||0,Date.now());
   const newExpiry=base+addMonths*_MONTH_MS;
   const newMonths=((data&&data.months)||0)+addMonths;
+  // UNE PROLONGATION NE DÉPASSE PAS LA DURÉE DE LA FORMULE (09/10/2026) : le
+  // serveur la refuserait de toute façon (rc_codes/months).
+  if(currentUser&&currentUser.email!==CREATOR_EMAIL){
+    const pal=palierEffectifCoach(currentUser), max=dureeCodeMax(pal);
+    if(newMonths>max) throw erreurQuotaCoach({raison:'duree',palier:pal,quota:getCoachQuota(pal),
+      moisMax:max,mois:newMonths,n:0,suivant:palierPourDureeCode(newMonths)});
+  }
   await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({expiry:newExpiry,months:newMonths})});
   const payload={...(data||{}),expiry:newExpiry,months:newMonths};
@@ -129664,10 +130570,14 @@ async function generateStudentCode(){
   const name=document.getElementById('sc-name').value.trim();
   const months=parseInt(document.getElementById('sc-duration').value)||3;
   if(!name){toast('Entre le nom de l\'élève');return;}
+  // LE QUOTA AVANT TOUT RÉSEAU : un écran qui dit pourquoi, pas un toast.
+  const _refus=refusQuotaCoach(currentUser,DB.get('users')||{},months);
+  if(_refus){ ouvrirEcranQuotaCoach(_refus); return; }
   let gen;
   try{
     gen=await _genAccessCode(name,months);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     toast(e.message||'Impossible de générer le code : réessaie.','var(--red)');
     return;
   }
@@ -129712,6 +130622,8 @@ function loadStudentCodes(){
   // L'encart reste réservé à l'affilié : il porte le plafond de 12 mois,
   // qui ne s'applique pas au créateur.
   if(nonCreatorMsg) nonCreatorMsg.style.display=isCreator?'none':'';
+  // Les durées que la formule permet (09/10/2026).
+  try{ _poserDureesCode(document.getElementById('sc-duration')); }catch(e){}
   // L'invitation coach suit la même règle : réservée au créateur.
   const inviteCard=document.getElementById('sc-coach-invite-card');
   if(inviteCard) inviteCard.style.display=isCreator?'':'none';
@@ -129882,6 +130794,7 @@ async function extendStudentCode(i){
   try{
     res=await _extendAccessCode(c.codeId,3,c.token);
   }catch(e){
+    if(e&&e._quotaCoach){ ouvrirEcranQuotaCoach(e._quotaCoach); return; }
     toast(e.message||'Impossible de prolonger le code : réessaie.','var(--red)');
     return;
   }
@@ -129975,6 +130888,24 @@ function goRegisterPourSouscrire(){
 // ── Paliers d'abonnement : rendu et sélection ───────────────────────────────
 // Un seul palier disponible : on n'affiche aucun sélecteur, seulement le prix.
 // Proposer un « choix » entre une option et rien serait du décor.
+/**
+ * PURE (sauf la lecture de sessionStorage). Le palier présélectionné : le
+ * MENSUEL (« Chaque mois »), comme sur la page de vente — sauf si la personne
+ * vient de choisir « En une fois » sur l'accueil (accueilChoisir pose
+ * rc_offre_annuel), qu'on ne lui fait pas re-choisir.
+ * @param {Array<{cle:string}>} dispo les paliers payables, dans l'ordre affiché
+ * @param {string} [annuelDemande] '1' si l'annuel a été demandé ; lu dans sessionStorage sinon
+ * @returns {string} '' si rien n'est payable
+ */
+function subPalierParDefaut(dispo,annuelDemande){
+  const l=Array.isArray(dispo)?dispo:[];
+  if(!l.length) return '';
+  let a=annuelDemande;
+  if(a===undefined){ try{ a=sessionStorage.getItem('rc_offre_annuel')||''; }catch(e){ a=''; } }
+  if(a==='1'&&l.some(p=>p.cle==='annuel')) return 'annuel';
+  const m=l.find(p=>p.cle==='mensuel');
+  return (m||l[0]).cle;
+}
 function _renderSubPaliers(){
   const zone=document.getElementById('sub-paliers');
   if(!zone) return;
@@ -129987,7 +130918,7 @@ function _renderSubPaliers(){
   // vient de le choisir sur son écran, le lui redemander serait le perdre.
   const _pc=_palierCoachEnAttente();
   if(_pc&&dispo.some(p=>p.cle===_pc)) _subPalier=_pc;
-  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
+  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=subPalierParDefaut(dispo);
   if(dispo.length===1){
     const p=dispo[0];
     zone.innerHTML='<div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text);line-height:1">'
@@ -130079,8 +131010,8 @@ function formuleDuPlan(planId){
   const id=String(planId||'');
   if(!id) return '';
   if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
-     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
-  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL_SE) return 'ultime';
+  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL||id===PAYPAL_PLAN_ID_ANNUEL_SE) return 'essentielle';
   // ET LES DEUX FORMULES DU COACH (24/09/2026). Elles n'ouvrent aucun palier
   // d'acces — un coach a le sien par son role — mais le dossier doit dire ce
   // qui a ete facture. Sans ces deux lignes, subOffreChoisie prenait le relais
@@ -130189,8 +131120,53 @@ function loadSubscribePage(mode,payload){
   // les distribue. En DERNIER, parce que les deux branches ci-dessus viennent
   // de décider de cette carte et écraseraient la décision prise plus haut.
   if(_palierCoachEnAttente()&&codeOpt) codeOpt.style.display='none';
+  // VERSION GOOGLE PLAY : en tout dernier, pour l'emporter sur ce qui précède.
+  try{ _subCanalPlay(); }catch(e){}
+}
+// ══ LE CANAL GOOGLE PLAY (10/10/2026) ═════════════════════════════════════
+// Google Play interdit, dans une app qu'il distribue, de vendre un contenu
+// numérique (abonnement, programme) par un autre moyen que sa facturation, et
+// d'y renvoyer par un lien ou un bouton. La version Play (AAB, CANAL=play)
+// s'ouvre avec ?src=play ; dans cette session-là :
+//   · l'écran d'abonnement n'affiche ni prix, ni case, ni bouton PayPal, mais
+//     CANAL_PLAY_TEXTE, SANS LIEN (le domaine est écrit, pas cliquable) ;
+//   · l'achat d'un programme et le paiement au coach ne s'ouvrent pas ;
+//   · la résiliation reste là : ce n'est pas un paiement, et la loi l'exige.
+// Option 2 (Google Play Billing, API Digital Goods) : DECISIONS-A-PRENDRE.md.
+const CANAL_PLAY_CLE='rc_canal';
+const CANAL_PLAY_TEXTE='Ton abonnement se gère sur repcore-sync.web.app';
+/**
+ * PURE. Le canal d'après le paramètre d'ouverture et la mémoire de session.
+ * @param {string} src paramètre ?src= de l'ouverture
+ * @param {string} memo valeur gardée en session
+ * @returns {'play'|'web'}
+ */
+function canalDepuis(src,memo){ return (src==='play'||memo==='play')?'play':'web'; }
+/** @returns {'play'|'web'} le canal de cette session */
+function canalApp(){ let m=''; try{ m=sessionStorage.getItem(CANAL_PLAY_CLE)||''; }catch(e){} return canalDepuis('',m); }
+/**
+ * PURE. Le bloc affiché à la place du paiement dans la version Play. Aucun
+ * lien, aucun bouton qui mène à un paiement.
+ * @returns {string}
+ */
+function htmlCanalPlay(){
+  return '<div data-canal-play style="background:#0d0d0d;border:1px solid var(--border,#222);border-radius:var(--r-3,12px);padding:14px;text-align:left;font-size:var(--fs-sm,14px);line-height:1.55;color:var(--text-strong,#eee);text-transform:none;letter-spacing:0">'
+    +'<strong style="display:block;margin-bottom:6px">'+CANAL_PLAY_TEXTE+'.</strong>'
+    +'<span style="color:var(--text-dim,#999)">Ton accès en cours, ton essai et ton code coach restent valables ici, dans l’application.</span></div>';
+}
+// L'écran d'abonnement, version Play : le paiement disparaît, le message prend sa place.
+function _subCanalPlay(){
+  if(canalApp()!=='play') return false;
+  ['sub-paliers','sub-formule','sub-renonc-msg'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  const c=document.getElementById('sub-renonciation'); if(c&&c.closest('label')) c.closest('label').style.display='none';
+  const pp=document.getElementById('paypal-btn-container');
+  // Pleine opacité : le conteneur est grisé tant que la case n'est pas cochée, et la case n'existe plus ici.
+  if(pp){ pp.innerHTML=htmlCanalPlay(); pp.style.opacity='1'; pp.style.pointerEvents='auto'; if(pp.nextElementSibling) pp.nextElementSibling.style.display='none'; }
+  return true;
 }
 function initPaypalSubscription(){
+  // VERSION GOOGLE PLAY : jamais de SDK PayPal (voir canalApp).
+  if(_subCanalPlay()) return;
   // Défense en profondeur : le SDK ne doit jamais être chargé sans compte, même
   // si un appel arrivait par un autre chemin que le bouton de loadSubscribePage.
   if(!currentUser){
@@ -130226,7 +131202,9 @@ function initPaypalSubscription(){
   script.src='https://www.paypal.com/sdk/js?client-id='+clientId
     +'&vault=true&intent=subscription&currency=EUR&enable-funding=card';
   script.onload=()=>renderPaypalButton(planId,coachId);
-  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
+  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>'
+    // LE SECOURS AUSSI (09/10/2026) : la page de paiement de PayPal, si le SDK seul est bloqué.
+    +htmlSecoursCarte('abonnement',planId,true);};
   document.head.appendChild(script);
 }
 function renderPaypalButton(planId,coachId){
@@ -130256,7 +131234,7 @@ function renderPaypalButton(planId,coachId){
   const _cgv=document.getElementById('cgv-ok');
   const _inner=document.getElementById('paypal-buttons-inner');
   _cgv.addEventListener('change',()=>{_inner.style.display=_cgv.checked?'':'none';});
-  if(typeof paypal==='undefined'){toast('PayPal non charge');return;}
+  if(typeof paypal==='undefined'){ _inner.innerHTML=htmlSecoursCarte('abonnement',planId,true); return; }
   // ══ LES OPTIONS SONT NOMMEES : DEUX BOUTONS S'EN SERVENT (lot 5) ══════
   // Celui de PayPal, et celui de la carte bancaire. Le meme abonnement, le
   // meme plan, la meme confirmation : seul le moyen de paiement change.
@@ -130332,7 +131310,21 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
+           //   ⚠ ET SEULEMENT S'IL Y A UN ENGAGEMENT (09/10/2026) : sans
+           //     engagement (TARIFS.engagementMois = 0), aucun terme n'est
+           //     pose. La cle est OMISE, pas mise a undefined : Object.assign
+           //     recopie aussi un undefined, et effacerait le terme d'un
+           //     contrat engage deja present dans le dossier.
+           ...((!_estCoach&&TARIFS.engagementMois>0)?{engagementJusqu:moisApres(Date.now(),TARIFS.engagementMois)}:{}),
+           // LE PRIX SOUSCRIT, tel qu'il est facture : Mon abonnement le relit,
+           // et il ne bouge plus si tarifs.json change ensuite.
+           ...(_estCoach?{}:{prixSouscrit:prixSouscritDe(formuleDuPlan(_planIdChoisi())||subOffreChoisie(),_subPalier||'mensuel')})});
+        // UN TERME DEJA ECHU NE SURVIT PAS A UN NOUVEL ABONNEMENT : il ferait
+        // lire « engage » a quelqu'un qui vient de souscrire sans engagement.
+        if(!_estCoach&&TARIFS.engagementMois===0){
+          const _j=Number(currentUser.abonnement.engagementJusqu)||0;
+          if(_j&&_j<=Date.now()) delete currentUser.abonnement.engagementJusqu;
+        }
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.
@@ -130377,14 +131369,11 @@ function renderPaypalButton(planId,coachId){
   // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
   // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
   // qu'un cadre vide — et le chemin PayPal, lui, reste entier.
-  try{
-    const carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal)));
-    if(carte.isEligible&&carte.isEligible()){
-      const lib=document.getElementById('pp-carte-lib');
-      if(lib) lib.style.display='';
-      carte.render('#pp-carte');
-    }
-  }catch(e){}
+  // ⚠ ET S'IL N'Y EN A PAS, LE SECOURS (09/10/2026) : un message et deux
+  //   chemins, jamais un cadre vide (_rendreBoutonCarteOuSecours).
+  let carte=null;
+  try{ carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal))); }catch(e){ carte=null; }
+  _rendreBoutonCarteOuSecours(carte,'pp-carte','abonnement',planId);
 }
 // ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
 

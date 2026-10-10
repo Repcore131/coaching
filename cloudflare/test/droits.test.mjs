@@ -89,12 +89,13 @@ await test('remboursement : droits/ se ferme à la date du remboursement', async
   assert.equal(w.M.palierDroits(w.F.lire('droits/lea@t,fr'), T0 + 3 * J), 'aucun');
 });
 
-await test('programme acheté : Ultime trois mois par-dessus l’abonnement (ultimeJusqu), refermé s’il est remboursé', async () => {
+await test('programme acheté : Ultime 30 jours par-dessus l’abonnement (ultimeJusqu), refermé s’il est remboursé', async () => {
   const w = monde({ users: LEA({ paypalSubscriptionId: null }), boutique: { p1: { prixCts: 1490 } } },
     { commandes: { ORD00000001: { status: 'COMPLETED', purchase_units: [{ custom_id: 'lea@t,fr|p1', amount: { currency_code: 'EUR', value: '14.90' } }] } } });
   await w.envoyer('PAYMENT.CAPTURE.COMPLETED', { id: 'CAP00000001', amount: { value: '14.90', currency_code: 'EUR' },
     supplementary_data: { related_ids: { order_id: 'ORD00000001' } } });
-  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + 3 * MOIS });
+  // 30 jours à partir de l'achat (tarifs.json, boutique_prog.mois = 1) : plus trois mois (09/10/2026).
+  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + MOIS });
   w.t = T0 + J;
   await w.envoyer('PAYMENT.CAPTURE.REFUNDED', { id: 'RC000000001', amount: { value: '14.90', currency_code: 'EUR' },
     links: [{ rel: 'up', href: 'https://x/v2/payments/captures/CAP00000001' }] });

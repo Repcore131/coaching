@@ -275,6 +275,7 @@ await test('achat d’un programme remboursé : le programme se ferme à la date
     links: [{ rel: 'up', href: 'https://api-m.paypal.com/v2/payments/captures/CAP00000001' }] });
   assert.equal(r.texte, 'remboursement');
   assert.equal(w.F.lire('users/lea@t,fr/programmesAchetes/p1/ouvertJusqu'), T0 + 2 * J);
+  assert.equal(w.F.lire('users/lea@t,fr/programmesAchetes/p1/rembourseLe'), T0 + 2 * J, 'remboursé, il n’est plus acquis');
   assert.equal(w.F.lire('users/lea@t,fr/abonnement'), null, 'l’abonnement n’est pas touché');
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 0);
 });
