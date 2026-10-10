@@ -375,7 +375,7 @@ function allTrophies() {
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const r = rangeOf('week', w);
         const rk = ranking(c.id, r).filter(x => x.score > 0);
-        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
+        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id }));
       }
     }
     // trophees de comportement et trophees personnels
@@ -385,9 +385,9 @@ function allTrophies() {
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const we = addDays(w, 6);
         const sv = team.map(u => ({ u, n: sumRange(c.id, u.id, 'sauvetage', w, we) })).sort((a, b) => b.n - a.n)[0];
-        if (sv && sv.n >= 1) out.push({ userId: sv.u.id, kind: 'week', icon: 'lifebuoy', label: `Sauveur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+        if (sv && sv.n >= 1) out.push({ userId: sv.u.id, kind: 'week', icon: 'lifebuoy', label: `Sauveur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id });
         const rl = team.map(u => ({ u, n: actionEvents(u.id).filter(e => e.good && isoOf(new Date(e.at)) >= w && isoOf(new Date(e.at)) <= we).length })).sort((a, b) => b.n - a.n)[0];
-        if (rl && rl.n >= 3) out.push({ userId: rl.u.id, kind: 'week', icon: 'phone', label: `Relanceur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+        if (rl && rl.n >= 3) out.push({ userId: rl.u.id, kind: 'week', icon: 'phone', label: `Relanceur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id });
       }
       const months = idx().months.filter(m => m < cm).sort();
       const best = {}; let prevScores = null;
@@ -406,7 +406,7 @@ function allTrophies() {
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;
       const w = challengeRanking(ch)[0];
-      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `${TXT.mots.sprint} : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
+      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `${TXT.mots.sprint} : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), at: ch.end, clubId: ch.clubId });
     }
     return out;
   });

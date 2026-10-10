@@ -209,6 +209,7 @@ const NAV = [
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
 function unseenPouls() {
+  if (typeof unseenFeed === 'function') return unseenFeed(); // fil typé, filtré par mes réglages (fil.js)
   const seen = prefsOf().seen.feed;
   const clubs = ME.clubs || [];
   return Object.values(S.entries).filter(e => e.source === 'manual' && e.at > seen && e.userId !== ME.id && clubs.includes(e.clubId)).length;

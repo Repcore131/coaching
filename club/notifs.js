@@ -104,8 +104,8 @@ function notifLive(before, after) {
     if (before.entries[id]) continue; const e = after.entries[id];
     if (e.userId === ME.id || e.by === ME.id) { byMe = true; continue; }
     if (e.source !== 'manual' || Date.now() - e.at > 60000 || !mine(e.clubId)) continue;
-    const u = after.users[e.userId], k = after.kpis[e.kpiId], c = after.clubs[e.clubId];
-    if (u && k) notify('live', `${fullName(u)} : +${fmtV(e.value, k.unit)} ${k.label}${c ? ', ' + c.name : ''}`, '#/pouls', { key: 'e_' + id });
+    const u = after.users[e.userId], k = after.kpis[e.kpiId];
+    const txt = u && k ? liveTexte(e) : null; if (txt) notify('live', txt, '#/pouls', { key: 'e_' + id });
   }
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];

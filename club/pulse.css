@@ -1424,3 +1424,23 @@ body.tri-en-cours { user-select: none; -webkit-user-select: none; cursor: grabbi
 .switch input:checked + i { background: var(--accent); }
 .switch input:checked + i::after { transform: translateX(22px); }
 .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Fil d'équipe typé */
+.fil-puces { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: none; }
+.fil-puce { flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; min-height: 40px; cursor: pointer; }
+.fil-puce.on { background: var(--fil-or, #F2C500); border-color: var(--fil-or, #F2C500); color: #111; }
+.fil-annonce { gap: 8px; margin-bottom: 12px; }
+.fil { display: grid; gap: 10px; }
+.fil-c { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--r-lg, 12px); background: var(--surface); padding: 12px 14px; }
+.fil-c.fil-win { border: 2px solid var(--fil-or, #F2C500); }
+.fil-c.fil-win .fil-t { color: var(--fil-or-texte, #8A6D00); }
+html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
+@media (prefers-color-scheme: dark) { html:not([data-theme=light]) .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); } }
+.fil-h { display: flex; align-items: center; gap: 12px; }
+.fil-ic { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+.fil-win .fil-ic { border-color: var(--fil-or, #F2C500); color: var(--fil-or-texte, #8A6D00); }
+.fil-t { font-size: var(--t-16); display: block; }
+.fil-s { color: var(--muted); }
+.fil-b { flex: none; align-self: flex-start; font-size: var(--t-12); font-weight: 700; letter-spacing: .04em; padding: 3px 8px; border-radius: 6px; background: var(--surface-2, var(--line)); color: var(--muted); }
+.fil-win .fil-b { background: var(--fil-or, #F2C500); color: #111; }
+.fil-c .reacts { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.fil-r { padding: 6px 0; border-bottom: 1px solid var(--line); }

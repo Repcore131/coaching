@@ -49,3 +49,31 @@ test('H2 : ordre des KPI par club dans prefs.kpiOrder', () => {
   const o = J(run, 'S.prefs.u.kpiOrder'); assert.deepEqual(o.k.slice(0, 2), ['avis', 'contrats']); assert.equal(o.k2[0], 'impayes'); assert.equal(o.k.length, club.length);
   assert.deepEqual(J(run, 'kpiOrdreMoi("k")').slice(0, 2), ['avis', 'contrats']);
 });
+const kpis = { contrats: { id: 'contrats', label: 'Contrats signés', unit: 'qty', enabled: true, required: true, points: 1000, order: 1 }, avis: { id: 'avis', label: 'Avis Google', unit: 'qty', enabled: true, required: true, points: 100, order: 2 }, impayes: { id: 'impayes', label: 'Impayés récupérés', unit: 'eur', enabled: true, points: 750, order: 3 } };
+const ent = (id, o) => [id, { id, clubId: 'k', kpiId: 'contrats', value: 1, source: 'manual', ...o }];
+test('H3 : import Resamania = une carte par vendeur avec le total ; palier franchi une seule fois', () => {
+  const run = appli({ kpis, paliers: {} }, 'v');
+  const d = run('today()'), mk = run('curMonth()'), t0 = run('Date.now()') - 3600e3;
+  const E = Object.fromEntries([...Array(4)].map((_, i) => ent('i' + i, { userId: 'v', date: d, source: 'import', importId: 'imp1', at: t0 + i })).concat([ent('j0', { userId: 'u', date: d, source: 'import', importId: 'imp1', value: 2, at: t0 })]).concat([0, 1, 2].map(i => ent('m' + i, { userId: 'u', kpiId: 'avis', date: d, at: t0 + 1000 + i, value: 2 }))));
+  run(`S.entries = ${JSON.stringify(E)}; S.imports = { imp1: { id: 'imp1', active: true, at: ${t0 + 50} } }; S.paliers = { k: { '${mk}': { contrats: [{ target: 5 }, { target: 9 }], avis: [{ target: 4 }] } } }; REV++`);
+  const L = J(run, `feedEvents(['k'])`);
+  const imp = L.filter(e => e.type === 'import'); assert.equal(imp.length, 2);
+  assert.match(imp.find(e => e.userId === 'v').label, /^Léa, 4 contrats importés$/);
+  const pal = L.filter(e => e.type === 'palier'); assert.deepEqual(pal.map(e => e.label).sort(), ['Palier 1 atteint, 4 avis', 'Palier 1 atteint, 5 contrats']);
+  assert.equal(J(run, `palierState('k', curMonth(), 'contrats').reached`), 1);
+  run(`S.entries.m9 = ${JSON.stringify(ent('m9', { userId: 'u', kpiId: 'avis', date: d, at: t0 + 5000, value: 3 })[1])}; REV++`);
+  assert.equal(J(run, `feedEvents(['k']).filter(e => e.type === 'palier' && e.kpiId === 'avis').length`), 1);
+});
+test('H3 : décocher Ventes masque les saisies dans le fil, le bandeau et le compteur ; bandeau sans emoji ni tiret', () => {
+  const run = appli({ kpis, prefs: { v: { v: 2, seen: { feed: 1 } } } }, 'v');
+  const d = run('today()'); const now = run('Date.now()');
+  run(`S.entries = ${JSON.stringify(Object.fromEntries([ent('s1', { userId: 'u', date: d, at: now - 1000 }), ent('r1', { userId: 'u', date: d, at: now - 900, kpiId: 'impayes', value: 80 })]))}; REV++`);
+  assert.equal(run('unseenPouls()'), 2);
+  const t = run(`liveTexte(S.entries.s1)`); assert.equal(t, 'Alex · 1 contrat · Club'); assert.doesNotMatch(t, /[–—]|\p{Extended_Pictographic}/u);
+  assert.equal(run(`liveTexte(S.entries.r1)`), 'Alex · a récupéré un impayé · Club');
+  assert.doesNotMatch(run(`PAGES.pouls.render()`), /80/);
+  run(`ACTIONS.filType({ dataset: { k: 'sale' }, checked: false })`);
+  assert.equal(run('unseenPouls()'), 1); assert.equal(run(`liveTexte(S.entries.s1)`), null);
+  assert.doesNotMatch(run(`PAGES.pouls.render()`), /data-type="sale"/);
+  run(`ACTIONS.filPause()`); assert.equal(run('unseenPouls()'), 0);
+});
