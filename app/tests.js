@@ -58282,6 +58282,72 @@ async function testExercices(){
       if(!(j>i)) return _echec('demandée après la suppression de l’identité (plus de jeton)');
       return src.indexOf("users/'+safeKey+'.json'")>i?true:_echec('demandée après l’effacement du dossier');})());
 
+    // ══ LES PARTENAIRES (11/10/2026) ════════════════════════════════════════
+    const _PTN=(o)=>Object.assign({actif:true,nom:'Nutri+',logo:'https://cdn.exemple.fr/l.png',code:'REPCORE15',
+      lien:'https://exemple.fr/offre?ref=a',mention:'-15 % sur ta première commande',emplacements:['complements','wrapped'],debut:0,fin:0},o||{});
+    ok('PARTENAIRES — inactif : rien ; dates : rien avant le début ni après la fin ; emplacement hors liste : rien',(()=>{
+      const t=Date.parse('2026-10-11T12:00:00Z');
+      if(partenaireVisible(_PTN({actif:false}),'complements',t)) return _echec('inactif affiché');
+      if(partenaireVisible(_PTN({actif:'true'}),'complements',t)) return _echec('« true » en texte vaut actif');
+      if(partenaireVisible(Object.assign(_PTN(),{actif:undefined}),'complements',t)) return _echec('sans « actif »');
+      if(!partenaireVisible(_PTN(),'complements',t)) return _echec('actif non affiché');
+      if(partenaireVisible(_PTN({debut:t+1}),'complements',t)) return _echec('affiché avant le début');
+      if(partenaireVisible(_PTN({fin:t-1}),'complements',t)) return _echec('affiché après la fin');
+      if(!partenaireVisible(_PTN({debut:t-1,fin:t+1}),'complements',t)) return _echec('pas affiché pendant sa période');
+      if(partenaireVisible(_PTN(),'defi',t)) return _echec('affiché à un emplacement non prévu');
+      if(partenaireVisible(_PTN({emplacements:['seance']}),'seance',t)) return _echec('un emplacement de séance existe');
+      if(partenaireVisible(_PTN({lien:'http://exemple.fr'}),'complements',t)) return _echec('lien non https');
+      if(renderCartePartenaire(_PTN({lien:'javascript:alert(1)'}),'complements')!=='') return _echec('lien dangereux rendu');
+      return true;})());
+
+    ok('PARTENAIRES — plusieurs emplacements, plusieurs partenaires : le bon à chaque endroit, utm par emplacement',(()=>{
+      const t=Date.now();
+      const tous={b_nutri:_PTN(),a_off:_PTN({actif:false,emplacements:['defi']}),c_montre:_PTN({nom:'Montre',emplacements:['defi','wrapped'],code:''})};
+      const c=partenairePour(tous,'complements',t), d=partenairePour(tous,'defi',t), w=partenairePour(tous,'wrapped',t);
+      if(!c||c.cle!=='b_nutri') return _echec('compléments : '+(c&&c.cle));
+      if(!d||d.cle!=='c_montre') return _echec('défi : '+(d&&d.cle)+' (un inactif ne prend pas la place)');
+      if(!w||w.cle!=='b_nutri') return _echec('wrapped : le premier par clé');
+      if(partenairePour({},'complements',t)!==null||partenairePour(null,'defi',t)!==null) return _echec('liste vide');
+      const u=new URL(lienPartenaire('https://exemple.fr/offre?ref=a','defi'));
+      if(u.searchParams.get('ref')!=='a'||u.searchParams.get('utm_source')!=='repcore'||u.searchParams.get('utm_medium')!=='app'||u.searchParams.get('utm_campaign')!=='defi')
+        return _echec('utm : '+u.toString());
+      return true;})());
+
+    ok('PARTENAIRES — la carte : logo, phrase, code copiable en un tap, lien utm, mention « Lien partenaire » visible',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=renderCartePartenaire(Object.assign({cle:'b_nutri'},_PTN()),'wrapped');
+      const txt=d.textContent;
+      if(!/Lien partenaire/.test(txt)) return _echec('la mention n’est pas visible');
+      if(!d.querySelector('img.ptn-logo')||txt.indexOf('-15 % sur ta première commande')<0) return _echec('logo ou phrase');
+      const b=d.querySelector('button.ptn-code');
+      if(!b||b.getAttribute('data-code')!=='REPCORE15'||!/partenaireCopier\(this\)/.test(b.getAttribute('onclick'))) return _echec('code copiable');
+      const a=d.querySelector('a.ptn-lien');
+      if(!a||!/utm_campaign=wrapped/.test(a.href)||a.getAttribute('rel').indexOf('sponsored')<0||a.target!=='_blank') return _echec('lien : '+(a&&a.href));
+      d.innerHTML=renderCartePartenaire(Object.assign({cle:'x'},_PTN({code:''})),'defi');
+      if(d.querySelector('button.ptn-code')) return _echec('bouton de code sans code');
+      d.innerHTML=renderCartePartenaire(Object.assign({cle:'x'},_PTN({nom:'<img src=x onerror=1>'})),'defi');
+      if(d.querySelector('img[onerror]')) return _echec('nom non échappé');
+      return true;})());
+
+    ok('PARTENAIRES — emplacements branchés (compléments, défi, fin du Wrapped) et AUCUN dans la séance ; compteurs autorisés',(()=>{
+      if(PARTENAIRE_EMPLACEMENTS.join()!=='complements,defi,wrapped') return _echec('emplacements : '+PARTENAIRE_EMPLACEMENTS.join());
+      if(String(_renderSupplements).indexOf("htmlEmplacementPartenaire('complements')")<0) return _echec('écran compléments');
+      if(String(openSuppEdit).indexOf("htmlEmplacementPartenaire('complements')")<0||!document.getElementById('supp-edit-partenaire')) return _echec('édition d’un complément');
+      if(String(htmlCarteDefi).indexOf("htmlEmplacementPartenaire('defi')")<0) return _echec('carte de défi');
+      if(String(_wrHtmlSlide).indexOf("htmlEmplacementPartenaire('wrapped')")<0) return _echec('fin du Wrapped');
+      for(const f of [startWorkoutSession,openSessionPicker]) if(/Partenaire/.test(String(f))) return _echec(f.name+' porte un partenaire');
+      for(const id of ['s-workout','s-session-picker']){ const z=document.getElementById(id); if(z&&z.querySelector('[data-partenaire-slot],.ptn-carte')) return _echec(id+' porte un partenaire'); }
+      for(const em of PARTENAIRE_EMPLACEMENTS) for(const k of ['vue','clic']){
+        const n='partenaire_'+k+'_'+em;
+        if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors de la liste fermée');
+        if(typeof window._RC_RULES==='string'&&window._RC_RULES&&window._RC_RULES.indexOf(n)<0) return _echec(n+' manque dans les règles');
+      }
+      // Sans liste chargée, l'emplacement est vide (aucun partenaire inventé).
+      const sv=_partenaires; _partenaires={at:Date.now(),data:{}};
+      try{ const h=htmlEmplacementPartenaire('complements'); if(/ptn-carte/.test(h)) return _echec('carte sans partenaire'); }
+      finally{ _partenaires=sv; }
+      return true;})());
+
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est
     // une contrainte explicite du lot, et elle se vérifie plutôt qu'elle ne

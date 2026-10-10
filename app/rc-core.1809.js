@@ -633,6 +633,9 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   'subscribe_viewed','paypal_clicked','subscription_activated',
   // LA FIN D'ESSAI (10/10/2026) : l'écran vu, une offre cliquée.
   'trial_end_viewed','trial_end_offer_clicked',
+  // LES PARTENAIRES (11/10/2026) : vues et clics, par emplacement.
+  'partenaire_vue_complements','partenaire_vue_defi','partenaire_vue_wrapped',
+  'partenaire_clic_complements','partenaire_clic_defi','partenaire_clic_wrapped',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
   // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
   // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
@@ -24462,6 +24465,7 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
   }else if(actif&&inscrit){
     h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
   }
+  h+=htmlEmplacementPartenaire('defi');
   h+='<div style="display:flex;gap:6px;margin-top:12px">'+_canalBoutonsReactions(m,compteurs||{},mienne||'')+'</div>';
   return h+'</div>';
 }
@@ -84911,6 +84915,7 @@ function _wrHtmlSlide(s,k){
         +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
       +'<button type="button" class="vf-legende" onclick="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
       +htmlBoutonInviter()
+      +htmlEmplacementPartenaire('wrapped')
       +'</section>';
   }
   return '<section class="wr-slide" data-k="'+k+'" hidden>'
@@ -110545,6 +110550,145 @@ function _htmlBlocSupplements(list,avant){
       ${avant||''}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>`;
 }
+// ══ LES PARTENAIRES (11/10/2026) ═════════════════════════════════════════
+//
+// /partenaires/<clé> = {actif, nom, logo, code, lien, mention, emplacements,
+// debut, fin}, posé par le créateur (règles : lecture publique, écriture
+// réservée). RIEN NE S'AFFICHE tant que actif !== true, hors des dates, ou
+// hors des emplacements prévus.
+//
+// TROIS EMPLACEMENTS, ET AUCUN AUTRE : les compléments, la carte de défi, la
+// fin du Wrapped. ⚠ JAMAIS PENDANT UNE SÉANCE : on ne pollue pas
+// l'entraînement (un test vérifie qu'aucun écran de séance ne porte d'emplacement).
+//
+// CHAQUE CARTE DIT CE QU'ELLE EST : la mention « Lien partenaire » est visible,
+// toujours. Le lien porte utm_source=repcore&utm_medium=app&utm_campaign=<emplacement>.
+// Les vues (une par emplacement et par session) et les clics (lien ou code
+// copié) sont comptés dans metrics/<jour> (partenaire_vue_*, partenaire_clic_*).
+const PARTENAIRE_EMPLACEMENTS=Object.freeze(['complements','defi','wrapped']);
+const PARTENAIRES_URL='https://repcore-sync-default-rtdb.firebaseio.com/partenaires.json';
+const PARTENAIRES_CACHE='rc_partenaires';
+const PARTENAIRES_CACHE_MS=6*3600e3;      // une lecture toutes les six heures au plus
+const _rcHttps=u=>/^https:\/\/[^\s"'<>]+$/.test(String(u||''));
+/**
+ * PURE. Ce partenaire s'affiche-t-il à cet emplacement, à cet instant ?
+ * @param {any} p
+ * @param {string} emplacement
+ * @param {number} [maintenant]
+ * @returns {boolean}
+ */
+function partenaireVisible(p,emplacement,maintenant){
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  if(!p||typeof p!=='object'||p.actif!==true) return false;
+  if(PARTENAIRE_EMPLACEMENTS.indexOf(emplacement)<0) return false;
+  const em=Array.isArray(p.emplacements)?p.emplacements:Object.values(p.emplacements||{});
+  if(em.indexOf(emplacement)<0) return false;
+  if(Number(p.debut)>0&&t<Number(p.debut)) return false;
+  if(Number(p.fin)>0&&t>Number(p.fin)) return false;
+  return !!(String(p.nom||'').trim()&&_rcHttps(p.lien));
+}
+/** PURE. Le partenaire d'un emplacement (le premier visible, par clé), ou null. */
+function partenairePour(tous,emplacement,maintenant){
+  const l=(tous&&typeof tous==='object')?tous:{};
+  for(const cle of Object.keys(l).sort()){
+    if(partenaireVisible(l[cle],emplacement,maintenant)) return Object.assign({cle},l[cle]);
+  }
+  return null;
+}
+/** PURE. Le lien avec ses paramètres utm (ceux du lien d'origine sont gardés). */
+function lienPartenaire(lien,emplacement){
+  if(!_rcHttps(lien)) return '';
+  try{
+    const u=new URL(String(lien));
+    u.searchParams.set('utm_source','repcore');
+    u.searchParams.set('utm_medium','app');
+    u.searchParams.set('utm_campaign',String(emplacement||''));
+    return u.toString();
+  }catch(e){ return ''; }
+}
+/**
+ * PURE. La carte : logo, une phrase, le code copiable en un tap, le lien
+ * (utm), et la mention « Lien partenaire », visible. '' si rien à montrer.
+ * @param {any} p
+ * @param {string} emplacement
+ * @returns {string}
+ */
+function renderCartePartenaire(p,emplacement){
+  if(!p||PARTENAIRE_EMPLACEMENTS.indexOf(emplacement)<0) return '';
+  const lien=lienPartenaire(p.lien,emplacement);
+  if(!lien||!String(p.nom||'').trim()) return '';
+  const cle=escapeHtml(String(p.cle||''));
+  const code=String(p.code||'').trim().slice(0,40);
+  return '<div class="ptn-carte" data-partenaire="'+cle+'" data-emplacement="'+escapeHtml(emplacement)+'">'
+    +'<div class="ptn-tete">'
+      +(_rcHttps(p.logo)?'<img class="ptn-logo" src="'+escapeHtml(p.logo)+'" alt="'+escapeHtml(p.nom)+'" width="40" height="40" loading="lazy" referrerpolicy="no-referrer">':'')
+      +'<div class="ptn-txt"><b>'+escapeHtml(String(p.nom).slice(0,60))+'</b>'
+      +(p.mention?'<span>'+escapeHtml(String(p.mention).slice(0,140))+'</span>':'')+'</div>'
+      +'<span class="ptn-label">Lien partenaire</span>'
+    +'</div>'
+    +'<div class="ptn-actions">'
+      +(code?'<button type="button" class="ptn-code" onclick="event.stopPropagation();partenaireCopier(this)" data-code="'+escapeHtml(code)+'" aria-label="Copier le code '+escapeHtml(code)+'">'
+        +'<span>'+escapeHtml(code)+'</span><small>Copier</small></button>':'')
+      +'<a class="ptn-lien" href="'+escapeHtml(lien)+'" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();partenaireClic(this)">Voir l’offre</a>'
+    +'</div></div>';
+}
+let _partenaires=null;           // {at, data}
+const _ptnVus={};                // une vue par emplacement et par session
+function _ptnCache(){
+  if(_partenaires) return _partenaires;
+  try{ const x=JSON.parse(localStorage.getItem(PARTENAIRES_CACHE)||'null'); if(x&&typeof x.at==='number') _partenaires=x; }catch(e){}
+  return _partenaires;
+}
+// UNE lecture publique (pas de jeton), gardée six heures sur l'appareil.
+async function partenairesCharger(forcer){
+  const c=_ptnCache();
+  if(!forcer&&c&&Date.now()-c.at<PARTENAIRES_CACHE_MS) return c.data||{};
+  try{
+    const r=await fetch(PARTENAIRES_URL);
+    const d=r.ok?((await r.json())||{}):(c?c.data:{});
+    _partenaires={at:Date.now(),data:d||{}};
+    try{ localStorage.setItem(PARTENAIRES_CACHE,JSON.stringify(_partenaires)); }catch(e){}
+    partenairesRemplir();
+    return _partenaires.data;
+  }catch(e){ return c?c.data||{}:{}; }
+}
+// L'EMPLACEMENT : un conteneur, rempli tout de suite si la liste est connue,
+// sinon dès qu'elle arrive. Vide (et invisible) quand rien ne doit s'afficher.
+function htmlEmplacementPartenaire(emplacement){
+  const c=_ptnCache();
+  const p=c?partenairePour(c.data,emplacement):null;
+  if(!c||Date.now()-c.at>=PARTENAIRES_CACHE_MS) setTimeout(()=>{ partenairesCharger().catch(()=>{}); },0);
+  if(p) setTimeout(()=>_ptnVue(emplacement),0);
+  return '<div data-partenaire-slot="'+escapeHtml(emplacement)+'">'+(p?renderCartePartenaire(p,emplacement):'')+'</div>';
+}
+function partenairesRemplir(){
+  const c=_ptnCache(); if(!c) return;
+  document.querySelectorAll('[data-partenaire-slot]').forEach(z=>{
+    const em=z.getAttribute('data-partenaire-slot');
+    const p=partenairePour(c.data,em);
+    const h=p?renderCartePartenaire(p,em):'';
+    if(z.innerHTML!==h) z.innerHTML=h;
+    if(p) _ptnVue(em);
+  });
+}
+function _ptnVue(em){
+  if(_ptnVus[em]) return;
+  _ptnVus[em]=1;
+  try{ rcm('partenaire_vue_'+em); }catch(e){}
+}
+function partenaireClic(el){
+  const em=el&&el.closest('[data-emplacement]')?el.closest('[data-emplacement]').getAttribute('data-emplacement'):'';
+  if(PARTENAIRE_EMPLACEMENTS.indexOf(em)>=0){ try{ rcm('partenaire_clic_'+em); }catch(e){} }
+  return em;
+}
+async function partenaireCopier(btn){
+  const code=btn&&btn.getAttribute('data-code');
+  if(!code) return false;
+  partenaireClic(btn);
+  try{ await navigator.clipboard.writeText(code); toast('Code '+code+' copié ✓','var(--green)'); return true; }
+  catch(e){ toast('Code : '+code,'var(--sub)'); return false; }
+}
+
 function loadSupplements(){
   go('s-supplements');
   _renderSupplements();
@@ -110556,7 +110700,7 @@ function _renderSupplements(){
   if(!el) return;
   const _vrr=rcVerrou('complements');
   if(_vrr){ el.innerHTML=_vrr; return; }
-  el.innerHTML=_htmlBlocSupplements(list)+'<div style="height:20px"></div>';
+  el.innerHTML=_htmlBlocSupplements(list)+htmlEmplacementPartenaire('complements')+'<div style="height:20px"></div>';
 }
 
 function loadSuppEmbedded(){
@@ -110595,6 +110739,7 @@ function openSuppEdit(id){
   const idx=_suppIndexParId(list,id);
   const s=idx>=0?list[idx]:null;
   document.getElementById('supp-edit-title').textContent=s?'Modifier le complément':'Nouveau complément';
+  try{ const zp=document.getElementById('supp-edit-partenaire'); if(zp) zp.innerHTML=htmlEmplacementPartenaire('complements'); }catch(e){}
   // Le champ caché porte l'IDENTIFIANT, pas le rang : entre l'ouverture et
   // l'enregistrement, une synchro peut avoir réordonné la liste.
   document.getElementById('supp-edit-idx').value=s?s.id:-1;
