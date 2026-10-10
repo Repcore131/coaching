@@ -69,3 +69,14 @@ test('hors de 6 h à 22 h : rien n’est relevé', async () => {
   const S = demo(); const r = await passageImports(fausseBase(S), 'tk', S, { sources: source([]), now: new Date('2026-10-09T23:30:00+02:00').getTime(), log: null });
   assert.match(r, /hors plage/);
 });
+
+test('sans réglage : la boîte de l’accueil déjà reliée est relevée par défaut (tableurs seulement) ; sans boîte reliée, rien', async () => {
+  assert.equal(requetePj({}), 'has:attachment newer_than:14d {filename:csv filename:xlsx filename:zip}');
+  const S = demo(); delete S.clubs.horizon.rsmAuto; const api = fausseBase(S); const buf = await zip(); const vus = [];
+  const sources = async c => [{ fichiers: async src => { vus.push([c, requetePj(src)]); return [{ ref: 'g:d1:a1', name: 'RSM_ventes.zip', at: NOW, lire: async () => buf }]; } }];
+  await passageImports(api, 'tk', S, { sources, now: NOW, log: null });
+  assert.deepEqual(vus, [], 'club sans réglage ni boîte reliée : pas relevé');
+  await passageImports(api, 'tk', S, { sources, now: NOW, log: null, clubsGmail: ['horizon'] });
+  assert.deepEqual(vus, [['horizon', 'has:attachment newer_than:14d {filename:csv filename:xlsx filename:zip}']]);
+  assert.equal(Object.values(S.rsm.autoLog.horizon).length, 1);
+});

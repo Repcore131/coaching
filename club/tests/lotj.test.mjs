@@ -226,3 +226,8 @@ test('Mode gratuit : sans fonctions Cloud, la carte montre la boîte Gmail et le
   assert.doesNotMatch(h, /import\.fitpulse\.app|ingestJeton|aide-transfert|Régénérer/);
   assert.match(h, /Sans frais/); assert.match(h, /RSM_clients\.csv/);
 });
+test('Mode gratuit : boîte de l’accueil reliée sans réglage d’import : relevée par défaut, affichée sur la carte', () => {
+  const run = appli(club(), 'm'); run(`S.clubs.a.mailSources = { inbox: 'accueil@club.example' }; REV++;`);
+  const L = J(run, 'ingestCanaux()'); assert.deepEqual(L.map(c => [c.k, c.status]), [['mail', 'en attente'], ['manual', 'actif']]);
+  assert.match(L[0].detail, /boîte de l’accueil/);
+});

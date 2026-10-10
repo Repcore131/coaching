@@ -32,7 +32,9 @@ function canauxGratuits(clubId) {
   const a = deepGet(S, ['clubs', clubId, 'rsmAuto']) || {}; const meta = deepGet(S, ['rsm', 'autoMeta', clubId]) || {};
   const etat = meta.lastRunAt ? (meta.lastErrorAt && meta.lastErrorAt > meta.lastRunAt ? 'inactif' : 'actif') : 'en attente';
   const L = [];
-  if (a.address || a.label) L.push({ k: 'mail', label: INGEST_GRATUIT.mail[0], detail: a.address ? a.address : `Libellé Gmail « ${a.label} »`, status: etat, cfg: {} });
+  // Sans réglage : la boîte de l'accueil, déjà reliée pour les résiliations, est relevée par défaut.
+  const parDefaut = !a.address && !a.label && (meta.lastRunAt || deepGet(S, ['clubs', clubId, 'mailSources', 'inbox']));
+  if (a.address || a.label || parDefaut) L.push({ k: 'mail', label: INGEST_GRATUIT.mail[0], detail: a.address ? a.address : a.label ? `Libellé Gmail « ${a.label} »` : 'Tableurs reçus dans la boîte de l’accueil (CSV, XLSX, ZIP)', status: etat, cfg: {} });
   if (a.driveFolder) L.push({ k: 'drive', label: INGEST_GRATUIT.drive[0], detail: INGEST_GRATUIT.drive[1], status: etat, cfg: {} });
   return L;
 }

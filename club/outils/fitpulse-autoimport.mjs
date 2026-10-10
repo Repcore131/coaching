@@ -30,8 +30,11 @@ export function dansLaPlage(now = new Date()) { const h = paris(now).h; return h
 // ── Sources : Gmail (pièces jointes) et Drive (dossier) ───────────────────
 export function requetePj(src = {}) {
   const parts = []; if (src.address) parts.push(`to:${src.address}`, `deliveredto:${src.address}`); if (src.label) parts.push(`label:${String(src.label).replace(/\s+/g, '-')}`);
-  return parts.length ? `has:attachment newer_than:14d (${parts.join(' OR ')})` : null;
+  // Sans réglage : les tableurs reçus dans la boîte de l'accueil (déjà relevée pour les résiliations).
+  // Un fichier qui n'est pas un export Resamania reconnu est noté « non utilisé », jamais importé.
+  return parts.length ? `has:attachment newer_than:14d (${parts.join(' OR ')})` : REQUETE_DEFAUT;
 }
+export const REQUETE_DEFAUT = 'has:attachment newer_than:14d {filename:csv filename:xlsx filename:zip}';
 function piecesJointes(part, out = []) {
   if (!part) return out;
   if (part.filename && part.body && part.body.attachmentId && EXT.test(part.filename)) out.push({ name: part.filename, attachmentId: part.body.attachmentId, size: part.body.size || 0 });
@@ -86,15 +89,16 @@ export async function traiter(S, clubId, fichiers, { now = Date.now(), run = cha
 }
 
 // Un passage du serveur. api(tk, chemin, opts) : base ; sources(clubId) → [{ fichiers(src) }].
-export async function passageImports(api, tk, S, { sources, now = Date.now(), force = false, stocker = null, log = console.log } = {}) {
+export async function passageImports(api, tk, S, { sources, now = Date.now(), force = false, stocker = null, log = console.log, clubsGmail = [] } = {}) {
   if (!force && !dansLaPlage(new Date(now))) return 'hors plage (6 h à 22 h)';
-  const clubs = Object.keys(S.clubs || {}).filter(id => S.clubs[id] && S.clubs[id].rsmAuto && !S.clubs[id].archived);
+  // Clubs relevés : réglage explicite, ou boîte Gmail de l'accueil déjà reliée (réglage par défaut).
+  const clubs = Object.keys(S.clubs || {}).filter(id => S.clubs[id] && (S.clubs[id].rsmAuto || clubsGmail.includes(id)) && !S.clubs[id].archived);
   if (!clubs.length) return 'aucun club réglé';
   const out = [];
   for (const clubId of clubs) {
     const meta = ((S.rsm || {}).autoMeta || {})[clubId] || {};
     if (!force && meta.lastRunAt && now - meta.lastRunAt < INTERVALLE_MS) { out.push(`${clubId} : déjà relevé`); continue; }
-    const src = S.clubs[clubId].rsmAuto; const vus = ((S.rsm || {}).autoSeen || {})[clubId] || {};
+    const src = S.clubs[clubId].rsmAuto || {}; const vus = ((S.rsm || {}).autoSeen || {})[clubId] || {};
     try {
       const recus = [];
       for (const s of await sources(clubId)) recus.push(...await s.fichiers(src));
