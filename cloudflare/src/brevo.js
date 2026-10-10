@@ -197,11 +197,11 @@ export function creerBrevo(ctx) {
   // (texte), créés s'ils manquent. Un attribut qui existe déjà répond 400 :
   // ce n'est pas une erreur.
   const ATTRIBUTS = ['SOURCE', 'DATE_INSCRIPTION', 'STATUT', 'ECHEANCE', 'MONTANT'];
-  const PREPARATION = 'v1';
+  const PREPARATION = 'v2';   // v2 : relance une fois, pour effacer le refus noté avant la bonne clé
   async function preparer(api) {
     if ((await lire('worker/email/prepare')) === PREPARATION) return 'deja';
     for (const nom of ATTRIBUTS) exiger(await api('POST', '/contacts/attributes/normal/' + nom, { type: 'text' }), 'attribut', [200, 201, 204, 400]);
-    await db.ref('worker/email/prepare').set(PREPARATION);
+    await db.ref().update({ 'worker/email/prepare': PREPARATION, 'worker/email/dernier': null });   // l'ancien refus ne reste pas affiché
     return 'fait';
   }
   // UNE OPÉRATION. Rend une note ou lève Arret.

@@ -77,7 +77,7 @@ await test('PRÉPARATION : les attributs manquants sont créés une fois, la lis
   for (const n of ['SOURCE', 'DATE_INSCRIPTION', 'STATUT', 'ECHEANCE', 'MONTANT']) assert.ok(w.B.attributs.has(n), n);
   const l = w.B.listes.find((x) => x.name === 'RepCore');
   assert.ok(l && l.folderId === 1 && l.membres.includes('a@t.fr'));
-  assert.equal(w.F.lire('worker/email/prepare'), 'v1');
+  assert.equal(w.F.lire('worker/email/prepare'), 'v2');
   w.B.appels.length = 0;
   await w.E.enfiler({ op: 'contact', email: 'b@t.fr' });
   await w.minute();
@@ -136,7 +136,7 @@ await test('ATTRIBUTS REFUSÉS (400) : le contact passe avec le seul prénom, l�
   assert.match((await w.minute()).etat, /^preparation_403/);
   assert.equal(Object.keys(w.file()).length, 1);
   const v = monde({}, { attributs: ['PRENOM'] });
-  await v.F.ecrire('worker/email/prepare', 'v1');                    // préparation « faite », attributs pourtant absents
+  await v.F.ecrire('worker/email/prepare', 'v2');                    // préparation « faite », attributs pourtant absents
   await v.E.enfiler({ op: 'contact', email: 'a@t.fr', prenom: 'A', source: 'x', statut: 'essai' });
   await v.minute();
   assert.deepEqual(v.B.contacts['a@t.fr'].attributs, { PRENOM: 'A' });
