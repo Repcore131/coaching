@@ -7,7 +7,7 @@ export function fauxBrevo(o) {
   const b = {
     appels: [], corps: [], contacts: {}, listes: (opt.listes || []).map((x) => Object.assign({ membres: [] }, x)),
     dossiers: opt.dossiers || [{ id: 1, name: 'Dossier' }], attributs: new Set(opt.attributs || ['PRENOM', 'NOM']),
-    forcer: opt.forcer || {}, suivant: 100, cles: [],
+    forcer: opt.forcer || {}, suivant: 100, cles: [], envois: [],
   };
   const rep = (statut, corps, entetes) => ({ ok: statut < 400, status: statut, json: async () => corps,
     headers: { get: (k) => (entetes || {})[k] || null } });
@@ -40,6 +40,12 @@ export function fauxBrevo(o) {
       if (!b.contacts[e]) return rep(404, { code: 'document_not_found' });
       delete b.contacts[e]; for (const l of b.listes) l.membres = l.membres.filter((x) => x !== e);
       return rep(204, null);
+    }
+    if (etape === 'POST /smtp/email') { b.envois.push(corps); return rep(201, { messageId: '<m' + b.envois.length + '@brevo>' }); }
+    if (etape === 'PUT /contacts/:email') {
+      const e = decodeURIComponent(nu.split('/')[2]);
+      if (!b.contacts[e]) return rep(404, { code: 'document_not_found' });
+      Object.assign(b.contacts[e], corps); return rep(204, null);
     }
     if (etape === 'GET /contacts/lists') return rep(200, { lists: b.listes.map(({ id, name }) => ({ id, name })), count: b.listes.length });
     if (etape === 'GET /contacts/folders') return rep(200, { folders: b.dossiers, count: b.dossiers.length });

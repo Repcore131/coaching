@@ -30,7 +30,7 @@
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
 import { avisDu, texteAvis } from './renouvellement.js';
-import { inscrireListe } from './brevo.js';
+import { envoyerModele, lienDesinscription } from './brevo.js';
 import * as AL from './alternatives.js';
 import TARIFS from '../../tarifs.json' with { type: 'json' };
 
@@ -741,7 +741,7 @@ export function creerPaypal(ctx) {
       push = Number(p && p.envoye) || 0;
     } catch (e) { push = 0; }
     try {
-      mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', liste: env.BREVO_LISTE_RENOUVELLEMENT, attributs: { ECHEANCE: x.date, MONTANT: x.montant || '' } });
+      mail = await envoyerModele(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', modele: env.BREVO_MODELE_RENOUVELLEMENT, params: { ECHEANCE: x.date, MONTANT: x.montant || '' } });
     } catch (e) { mail = 'erreur : ' + String(e && e.message || e).slice(0, 80); }
     const parti = push > 0 || mail === 'envoye';
     await db.ref('renouvellements/' + cle).update(parti
@@ -885,7 +885,7 @@ export function creerPaypal(ctx) {
     // Une pause en cours ne reprendra pas (reprendre le relit) ; on le note tout de suite.
     return { ok: true, motif: k };
   }
-  // J+30 : un push (et la liste Brevo « reconquête » si la personne a
+  // J+30 : un push (et l'e-mail de reconquête si la personne a
   // accepté les e-mails), avec son vrai historique et l'offre du moment.
   async function reconqueteUn(cle, r, t) {
     const d = AL.reconqueteDue(r && r.le, t);
@@ -903,7 +903,12 @@ export function creerPaypal(ctx) {
     if (p && p.raison === 'plafond') return 'plafond';          // demain, jusqu'à J+37
     let mail = 'sans_accord';
     if (consent === true) {
-      try { mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', liste: env.BREVO_LISTE_RECONQUETE }); }
+      try {
+        const adr = String(email || cle.replace(/,/g, '.'));
+        if (await lire('desinscrits/' + cle)) mail = 'desinscrit';
+        else mail = await envoyerModele(env, ctx.fetchImpl, { email: adr, prenom: fname || '', modele: env.BREVO_MODELE_RECONQUETE,
+          params: { HISTORIQUE: m.historique, OFFRE: m.offre, DESINSCRIPTION: await lienDesinscription(env, adr) } });
+      }
       catch (e) { mail = 'erreur'; }
     }
     await db.ref('reconquete/' + cle).remove();

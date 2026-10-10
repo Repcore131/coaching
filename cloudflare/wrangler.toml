@@ -22,6 +22,12 @@ FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"
 VAPID_PUBLIC_KEY = "BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs329I-4tbix3-8S_3Kl3L3Z0pnf3-4"
 # L'identifiant PUBLIC de l'application PayPal : le même que client-id dans l'app.
 PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1"
+# LES MODÈLES D'E-MAIL BREVO (11/10/2026, créés dans le compte de Kevin) : le
+# serveur les envoie lui-même (brevo.js, envoyerModele). Secret : BREVO_API_KEY.
+BREVO_MODELE_RENOUVELLEMENT = "10"
+BREVO_MODELE_BIENVENUE = "11"
+BREVO_MODELE_FIN_ESSAI = "12"
+BREVO_MODELE_RECONQUETE = "13"
 
 # SECRETS, posés à la main (jamais ici) :
 #   FIREBASE_SERVICE_ACCOUNT  (compte-service.ps1 ; README, « Accès à la base »)

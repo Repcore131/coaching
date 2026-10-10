@@ -15,14 +15,13 @@
 //     (urgente : un avis légal ne dépend pas des préférences de notification)
 //     ET e-mail par Brevo quand il est configuré. UNE fois par échéance.
 //   · L'E-MAIL PASSE PAR LE WORKER, JAMAIS PAR L'APP (règle du projet). Il
-//     n'est pas écrit ici : le worker inscrit le contact dans la liste
-//     BREVO_LISTE_RENOUVELLEMENT (brevo.js, inscrireListe), et c'est
-//     l'automatisation de Brevo (« contact ajouté à la liste → e-mail ») qui
-//     l'envoie, avec la date et le montant dans les attributs ECHEANCE et MONTANT.
+//     n'est pas écrit ici : le worker envoie le modèle Brevo
+//     BREVO_MODELE_RENOUVELLEMENT (brevo.js, envoyerModele) avec la date et le
+//     montant en paramètres.
 //
 // CONFIGURATION (facultative : sans elle, la notification seule part, et
 // l'entrée garde `email: 'non_configure'`) : BREVO_API_KEY (secret),
-// BREVO_LISTE_RENOUVELLEMENT (identifiant numérique de la liste).
+// BREVO_MODELE_RENOUVELLEMENT (identifiant du modèle Brevo, wrangler.toml).
 
 const JOUR_MS = 864e5;
 // Le milieu de la fenêtre légale (90 → 30 jours) : un avis qui échoue un jour

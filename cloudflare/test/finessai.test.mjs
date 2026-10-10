@@ -17,7 +17,7 @@ const finDans = (n) => Date.parse('2026-10-10T22:00:00Z') + (n - 1) * J + 3 * 36
 function monde(initial, o) {
   const opt = o || {};
   const F = fausseBase(initial);
-  const B = fauxBrevo({ listes: [{ id: 9, name: 'Fin d’essai' }] });
+  const B = fauxBrevo({});
   const sio = B.appels;
   const fetchImpl = async (url, init) => {
     const u = String(url);
@@ -29,7 +29,7 @@ function monde(initial, o) {
   const M = { planifies: {}, envoyerPush: async (uid, m, oo) => { pushs.push({ uid, m, oo }); return { envoye: opt.sansTel ? 0 : 1, raison: opt.sansTel ? 'aucun_abonnement' : null }; } };
   const FE = creerFinEssai({ db, M, env: opt.env || {}, fetchImpl, maintenant: () => T0 });
   M.finEssai = FE;
-  return { F, FE, M, pushs, sio };
+  return { F, FE, M, pushs, sio, B };
 }
 const act = (fin, essai, plus) => Object.assign({ v: 1, inscrit: '2026-09-12', sem: '2026-09-07', src: 'direct', jour: '2026-10-10',
   j30: '0'.repeat(30), finEssai: fin, payant: false }, essai ? { essai } : {}, plus || {});
@@ -81,20 +81,22 @@ await test('DÉJÀ PAYANT : ni notification ni e-mail (activite.payant ou statut
   const w = monde({
     activite: { 'pay@t,fr': act(finDans(3), { s: 5, r: 1 }, { payant: true }), 'abo@t,fr': act(finDans(3), { s: 5, r: 1 }) },
     users: { 'pay@t,fr': { role: 'athlete', status: 'FREE' }, 'abo@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', consentements: { email: { accepte: true, le: 1 } } } },
-  }, { env: { BREVO_API_KEY: 'k', BREVO_LISTE_FIN_ESSAI: '9' } });
+  }, { env: { BREVO_API_KEY: 'k', BREVO_MODELE_FIN_ESSAI: '12' } });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['pay@t,fr'], 'payant'); assert.equal(b['abo@t,fr'], 'payant');
   assert.equal(w.pushs.length, 0); assert.equal(w.sio.length, 0);
 });
 
-await test('J-3 avec accord e-mail : liste « fin d’essai » dans Brevo ; sans accord, rien', async () => {
-  const env = { BREVO_API_KEY: 'k', BREVO_LISTE_FIN_ESSAI: '9' };
+await test('J-3 avec accord e-mail : e-mail de fin d’essai (modèle 12, lien de désinscription) ; sans accord ou désinscrit, rien', async () => {
+  const env = { BREVO_API_KEY: 'k', BREVO_MODELE_FIN_ESSAI: '12', ADMIN_SECRET: 'sel' };
   const w = monde({ activite: { 'oui@t,fr': act(finDans(3), { s: 2, r: 0 }), 'non@t,fr': act(finDans(3), { s: 2, r: 0 }) },
     users: { 'oui@t,fr': { role: 'athlete', status: 'FREE', email: 'oui@t.fr', consentements: { email: { accepte: true, le: 1 } } }, 'non@t,fr': { role: 'athlete', status: 'FREE' } } }, { env });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['oui@t,fr'].mail, 'envoye');
   assert.equal(b['non@t,fr'].mail, 'sans_accord');
-  assert.deepEqual(w.sio, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
+  assert.deepEqual(w.sio, ['POST /smtp/email']);
+  assert.equal(w.B.envois[0].templateId, 12);
+  assert.match(w.B.envois[0].params.DESINSCRIPTION, /^https:\/\/repcore-serveur\.repcore\.workers\.dev\/desinscription\?e=oui%40t\.fr&s=[A-Za-z0-9_-]{24}$/);
 });
 
 await test('sans appareil abonné : rien ne part, le palier est quand même noté (pas de doublon le lendemain)', async () => {

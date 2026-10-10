@@ -47,7 +47,7 @@ let n = 0;
 const evt = (type, ress) => ({ id: 'WH-' + (++n), event_type: type, resource: ress, create_time: iso(T0 + n * 1000) });
 const vente = (abo, montant) => ({ id: 'S' + (++n), billing_agreement_id: abo, amount: { total: montant, currency: 'EUR' } });
 const LEA = () => ({ [CLE]: { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', email: 'lea@t.fr' } });
-const SIO = { BREVO_API_KEY: 'k', BREVO_LISTE_RENOUVELLEMENT: '42' };
+const SIO = { BREVO_API_KEY: 'k', BREVO_MODELE_RENOUVELLEMENT: '10' };
 
 await test('PURE avisDu : la fenêtre légale (au plus tôt 3 mois, au plus tard 1 mois), une fois par échéance', async () => {
   assert.ok(AVIS_MIN_JOURS < AVIS_JOURS && AVIS_JOURS < AVIS_MAX_JOURS);
@@ -95,16 +95,16 @@ await test('une résiliation retire l’échéance : plus de reconduction, plus 
   assert.equal(w.F.lire('renouvellements/' + CLE), null);
 });
 
-await test('l’avis part à J-60 : notification urgente et liste Brevo (date et montant en attributs), une seule fois', async () => {
+await test('l’avis part à J-60 : notification urgente et e-mail Brevo (modèle 10, date et montant en paramètres), une seule fois', async () => {
   const ech = T0 + 60 * J;
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: ech, formule: 'essentielle', montant: 9500 } } }, { env: SIO });
   assert.equal(await w.PP.avisRenouvellementUn(CLE, T0), 'avis_envoye');
   assert.equal(w.pushs.length, 1);
   assert.equal(w.pushs[0].oo.urgent, true);
   assert.match(w.pushs[0].message.body, /reconduit pour un an/);
-  assert.deepEqual(w.B.appels, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
-  assert.deepEqual(w.B.contacts['lea@t.fr'].attributs, { PRENOM: 'Léa', ECHEANCE: texteAvis({ echeance: ech }).date, MONTANT: texteAvis({ echeance: ech, montantCentimes: 9500 }).montant });
-  assert.deepEqual(w.B.listes[0].membres, ['lea@t.fr']);
+  assert.deepEqual(w.B.appels, ['POST /smtp/email']);
+  assert.deepEqual(w.B.envois[0], { to: [{ email: 'lea@t.fr', name: 'Léa' }], templateId: 10,
+    params: { PRENOM: 'Léa', ECHEANCE: texteAvis({ echeance: ech }).date, MONTANT: texteAvis({ echeance: ech, montantCentimes: 9500 }).montant } });
   const r = w.F.lire('renouvellements/' + CLE);
   assert.equal(r.avisPour, ech); assert.equal(r.avisLe, T0); assert.equal(r.email, 'envoye'); assert.equal(r.push, 1);
   // Le lendemain : rien de plus.
@@ -113,12 +113,11 @@ await test('l’avis part à J-60 : notification urgente et liste Brevo (date et
   assert.equal(w.pushs.length, 1);
 });
 
-await test('contact Brevo existant : ses attributs sont mis à jour, pas de doublon', async () => {
+await test('l’avis part même sans accord e-mail ni contact Brevo : c’est une information contractuelle', async () => {
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 40 * J, formule: 'ultime' } } }, { env: SIO });
-  w.B.contacts['lea@t.fr'] = { email: 'lea@t.fr', attributs: { PRENOM: 'L', ECHEANCE: 'avant' }, id: 77 };
   await w.PP.avisRenouvellementUn(CLE, T0);
-  assert.equal(Object.keys(w.B.contacts).length, 1);
-  assert.equal(w.B.contacts['lea@t.fr'].attributs.ECHEANCE, texteAvis({ echeance: T0 + 40 * J }).date);
+  assert.equal(w.B.envois.length, 1);
+  assert.equal(w.B.envois[0].templateId, 10);
 });
 
 await test('sans Brevo configuré : la notification seule, noté « non_configure »', async () => {
@@ -130,11 +129,11 @@ await test('sans Brevo configuré : la notification seule, noté « non_configur
 
 await test('aucun canal n’a porté : l’avis n’est pas noté parti, il se retente le lendemain', async () => {
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 45 * J, formule: 'essentielle' } } }, { env: SIO, sansTelephone: true });
-  w.B.forcer['POST /contacts'] = { statut: 500 };
+  w.B.forcer['POST /smtp/email'] = { statut: 500 };
   assert.equal(await w.PP.avisRenouvellementUn(CLE, T0), 'avis_en_echec');
   assert.equal(w.F.lire('renouvellements/' + CLE + '/avisPour'), null);
-  assert.match(w.F.lire('renouvellements/' + CLE + '/dernierEchec/email'), /^erreur : Brevo contact 500/);
-  delete w.B.forcer['POST /contacts']; w.t = T0 + J;
+  assert.match(w.F.lire('renouvellements/' + CLE + '/dernierEchec/email'), /^erreur : Brevo envoi 500/);
+  delete w.B.forcer['POST /smtp/email']; w.t = T0 + J;
   assert.equal(await w.PP.avisRenouvellementUn(CLE, w.t), 'avis_envoye');
   assert.equal(w.F.lire('renouvellements/' + CLE + '/dernierEchec'), null);
 });

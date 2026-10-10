@@ -103,7 +103,9 @@ export function messageReconquete(o) {
   const rem = remiseAnnuelle(o.tarif);
   const offre = o.tarif && Number(o.tarif.an) > 0 ? ' Ultime à l’année : ' + eur(o.tarif.an) + (rem ? ', soit ' + rem : '') + '.' : '';
   return { type: 'reconquete', tag: 'reconquete', url: './?abonnement=1',
-    title: (pr ? pr + ', ta' : 'Ta') + ' place est toujours là', body: hist + offre };
+    title: (pr ? pr + ', ta' : 'Ta') + ' place est toujours là', body: hist + offre,
+    // Pour l'e-mail (modèle Brevo de reconquête) : les deux phrases, séparées.
+    historique: hist, offre: offre.trim() || 'L’offre du moment est affichée dans l’application, sans engagement.' };
 }
 
 /** PURE. La reconquête part-elle aujourd'hui ? J+30 (jours de Paris) à J+37. */

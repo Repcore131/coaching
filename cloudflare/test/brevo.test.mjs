@@ -3,7 +3,7 @@
 //   node cloudflare/test/brevo.test.mjs
 import assert from 'node:assert/strict';
 import { creerBase } from '../src/base.js';
-import { creerBrevo, inscrireListe, delaiEssai, aRetenter, emailValide, statutContact, EMAIL_PAR_MINUTE, EMAIL_ESSAIS_MAX, LEAD_PAR_IP_JOUR } from '../src/brevo.js';
+import { creerBrevo, envoyerModele, lienDesinscription, signatureDesinscription, pageDesinscription, delaiEssai, aRetenter, emailValide, statutContact, EMAIL_PAR_MINUTE, EMAIL_ESSAIS_MAX, LEAD_PAR_IP_JOUR } from '../src/brevo.js';
 import { travaux } from '../src/planif.js';
 import { fausseBase } from './fausse-base.mjs';
 import { fauxBrevo } from './faux-brevo.mjs';
@@ -11,7 +11,7 @@ import { fauxBrevo } from './faux-brevo.mjs';
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
 const T0 = Date.parse('2026-10-11T10:00:00+02:00');
-const ENV = { BREVO_API_KEY: 'k', LEAD_OUVERT: 'oui' };
+const ENV = { BREVO_API_KEY: 'k', LEAD_OUVERT: 'oui', ADMIN_SECRET: 'sel', BREVO_MODELE_BIENVENUE: '11' };
 const TOUS = ['PRENOM', 'NOM', 'SOURCE', 'DATE_INSCRIPTION', 'STATUT', 'ECHEANCE', 'MONTANT'];
 
 function monde(initial, o) {
@@ -190,22 +190,73 @@ await test('SUPPRESSION DU COMPTE : le contact est supprimé chez Brevo (DELETE)
   assert.equal((await v.minute()).faites, 1);                        // pas contact : 404, sans erreur
 });
 
-await test('LISTE D’ÉVÉNEMENT (inscrireListe) : contact mis à jour, retiré puis remis dans la liste ; sans liste configurée, rien', async () => {
-  const B = fauxBrevo({ attributs: TOUS, listes: [{ id: 12, name: 'Renouvellement' }] });
+await test('ENVOI (envoyerModele) : un modèle Brevo et ses paramètres ; sans clé ou sans modèle, rien ; erreur remontée', async () => {
+  const B = fauxBrevo({});
   const env = { BREVO_API_KEY: 'k' };
-  assert.equal(await inscrireListe(env, B.fetch, { email: 'a@t.fr', prenom: 'A', liste: '12', attributs: { ECHEANCE: '5 octobre 2027' } }), 'envoye');
-  assert.deepEqual(B.appels, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
-  assert.deepEqual(B.listes[0].membres, ['a@t.fr']);
-  assert.equal(B.contacts['a@t.fr'].attributs.ECHEANCE, '5 octobre 2027');
-  B.appels.length = 0;
-  assert.equal(await inscrireListe(env, B.fetch, { email: 'a@t.fr', liste: '12' }), 'envoye');   // une seconde fois : retiré puis remis
-  assert.deepEqual(B.listes[0].membres, ['a@t.fr']);
-  assert.equal(await inscrireListe({}, B.fetch, { email: 'a@t.fr', liste: '12' }), 'non_configure');
-  assert.equal(await inscrireListe(env, B.fetch, { email: 'a@t.fr', liste: '' }), 'non_configure');
-  assert.equal(await inscrireListe(env, B.fetch, { email: 'a@t.fr', liste: 'abc' }), 'non_configure');
-  assert.equal(await inscrireListe(env, B.fetch, { email: 'pas-une-adresse', liste: '12' }), 'sans_email');
-  const P = fauxBrevo({ forcer: { 'POST /contacts/lists/:id/contacts/add': { statut: 500 } }, listes: [{ id: 12, name: 'R' }] });
-  await assert.rejects(inscrireListe(env, P.fetch, { email: 'a@t.fr', liste: '12' }), /Brevo liste_ajout 500/);
+  assert.equal(await envoyerModele(env, B.fetch, { email: 'a@t.fr', prenom: 'A', modele: '10', params: { ECHEANCE: '5 octobre 2027' } }), 'envoye');
+  assert.deepEqual(B.envois[0], { to: [{ email: 'a@t.fr', name: 'A' }], templateId: 10, params: { PRENOM: 'A', ECHEANCE: '5 octobre 2027' } });
+  await envoyerModele(env, B.fetch, { email: 'b@t.fr', modele: 10 });
+  assert.deepEqual(B.envois[1].to, [{ email: 'b@t.fr' }]);
+  assert.equal(B.envois[1].params.PRENOM, 'à toi');                  // jamais « Bonjour , »
+  assert.equal(await envoyerModele({}, B.fetch, { email: 'a@t.fr', modele: '10' }), 'non_configure');
+  assert.equal(await envoyerModele(env, B.fetch, { email: 'a@t.fr', modele: '' }), 'non_configure');
+  assert.equal(await envoyerModele(env, B.fetch, { email: 'pas-une-adresse', modele: '10' }), 'sans_email');
+  assert.equal(B.envois.length, 2);
+  const P = fauxBrevo({ forcer: { 'POST /smtp/email': { statut: 500 } } });
+  await assert.rejects(envoyerModele(env, P.fetch, { email: 'a@t.fr', modele: '10' }), /Brevo envoi 500/);
+});
+
+await test('BIENVENUE : un seul e-mail, après la case cochée (modèle 11, lien de désinscription) ; jamais au paiement, jamais à un désinscrit', async () => {
+  const w = monde({ users: { 'lea@t,fr': user(AVEC) }, email_optin: { 'lea@t,fr': { le: T0, accepte: true } } });
+  await w.minute();
+  assert.equal(w.B.envois.length, 1);
+  assert.equal(w.B.envois[0].templateId, 11);
+  assert.equal(w.B.envois[0].params.PRENOM, 'Léa');
+  assert.equal(w.B.envois[0].params.DESINSCRIPTION, await lienDesinscription(ENV, 'lea@t.fr'));
+  assert.ok(w.F.lire('email_envoyes/lea@t,fr/bienvenue'));
+  // Le paiement, puis une nouvelle case : pas de seconde bienvenue.
+  await w.E.contactDuCompte('lea@t,fr', 'payant');
+  await w.F.ecrire('email_optin/lea@t,fr', { le: T0, accepte: true });
+  w.t += 60e3; await w.minute();
+  assert.equal(w.B.envois.length, 1);
+  const d = monde({ users: { 'zoe@t,fr': user(Object.assign({ email: 'zoe@t.fr' }, AVEC)) }, email_optin: { 'zoe@t,fr': { le: T0, accepte: true } }, desinscrits: { 'zoe@t,fr': 1 } });
+  await d.minute();
+  assert.equal(d.B.envois.length, 0);
+  // Sans modèle configuré : le contact est créé, aucun e-mail.
+  const n = monde({ users: { 'lea@t,fr': user(AVEC) }, email_optin: { 'lea@t,fr': { le: T0, accepte: true } } }, { env: { BREVO_API_KEY: 'k' } });
+  await n.minute();
+  assert.ok(n.B.contacts['lea@t.fr']);
+  assert.equal(n.B.envois.length, 0);
+});
+
+await test('DÉSINSCRIPTION : lien signé (impossible de désinscrire l’adresse d’un autre) ; accord retiré, adresse bloquée chez Brevo', async () => {
+  const l = await lienDesinscription(ENV, 'Lea@T.fr');
+  const u = new URL(l);
+  assert.equal(u.origin + u.pathname, 'https://repcore-serveur.repcore.workers.dev/desinscription');
+  assert.equal(u.searchParams.get('e'), 'lea@t.fr');
+  const sig = u.searchParams.get('s');
+  assert.ok(await signatureDesinscription(ENV, 'lea@t.fr', sig));
+  assert.ok(!(await signatureDesinscription(ENV, 'autre@t.fr', sig)));
+  assert.ok(!(await signatureDesinscription({ ADMIN_SECRET: 'autre' }, 'lea@t.fr', sig)));
+  const w = monde({ users: { 'lea@t,fr': user(AVEC) }, leads: { 'lea@t,fr': { le: 1 } } });
+  w.B.contacts['lea@t.fr'] = { email: 'lea@t.fr', attributs: {}, id: 1 };
+  const faux = await w.E.desinscrire('lea@t.fr', 'AAAAAAAAAAAAAAAAAAAAAAAA');
+  assert.equal(faux.statut, 403);
+  assert.equal(w.F.lire('desinscrits'), null);
+  const r = await w.E.desinscrire('lea@t.fr', sig);
+  assert.equal(r.statut, 200);
+  assert.match(r.html, /tu ne recevras plus nos e-mails de conseils/);
+  assert.equal(w.F.lire('desinscrits/lea@t,fr'), T0);
+  assert.deepEqual(w.F.lire('users/lea@t,fr/consentements/email'), { accepte: false, le: T0, texte: 'desinscription-lien' });
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), T0);
+  assert.equal(w.F.lire('leads/lea@t,fr'), null);
+  assert.equal(w.B.contacts['lea@t.fr'].emailBlacklisted, true);
+  assert.match(pageDesinscription(false), /pas valide/);
+  // Un lead (pas de dossier) : désinscrit aussi, sans dossier créé.
+  const g = monde({ leads: { 'zoe@t,fr': { le: 1 } } });
+  await g.E.desinscrire('zoe@t.fr', await signatureDesinscription(ENV, 'zoe@t.fr', '') ? '' : new URL(await lienDesinscription(ENV, 'zoe@t.fr')).searchParams.get('s'));
+  assert.equal(g.F.lire('users'), null);
+  assert.ok(g.F.lire('desinscrits/zoe@t,fr'));
 });
 
 await test('planif : « emails » chaque minute', async () => {

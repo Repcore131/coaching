@@ -193,7 +193,7 @@ await test('MOTIF : compté par mois sous sa clé, une fois par résiliation ; j
 await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de tarifs.json ; liste Brevo seulement avec accord ; revenu → rien', async () => {
   const base = (consent) => lea({ resiliationDemandee: { ts: 7, motif: '' } }, { tonnageTotal: 12500, sessions: [{ date: 1 }, { date: 2 }, { date: 3 }],
     consentements: consent ? { email: { accepte: true, le: 1 } } : undefined });
-  const env = { BREVO_API_KEY: 'k', BREVO_LISTE_RECONQUETE: '31', BREVO_LISTE_RENOUVELLEMENT: '42' };
+  const env = { BREVO_API_KEY: 'k', BREVO_MODELE_RECONQUETE: '13', BREVO_MODELE_RENOUVELLEMENT: '10', ADMIN_SECRET: 'sel' };
   const w = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env });
   w.t = T0 + 20 * J;
   assert.equal((await w.PP.reconqueteQuotidien(w.t))[CLE], 'pas_encore');
@@ -201,17 +201,18 @@ await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de ta
   assert.equal((await w.PP.reconqueteQuotidien(w.t))[CLE], 'envoye');
   assert.equal(w.pushs[0].message.body, '3 séances et 12,5 t soulevées : tout est gardé. Ultime à l’année : 249 €, soit 2 mois offerts.');
   assert.equal(w.pushs[0].message.type, 'reconquete');
-  assert.deepEqual(w.sio, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
-  assert.deepEqual(w.B.listes[0].membres, ['lea@t.fr']);
+  assert.deepEqual(w.sio, ['POST /smtp/email']);
+  assert.equal(w.B.envois[0].templateId, 13);
+  assert.equal(w.B.envois[0].params.HISTORIQUE, '3 séances et 12,5 t soulevées : tout est gardé.');
+  assert.equal(w.B.envois[0].params.OFFRE, 'Ultime à l’année : 249 €, soit 2 mois offerts.');
   assert.equal(w.F.lire('reconquete/' + CLE), null);
-  // Sans accord : pas d'e-mail ; sans liste configurée : JAMAIS celle du renouvellement.
+  // Sans accord : pas d'e-mail ; sans modèle configuré : JAMAIS celui du renouvellement.
   const n = monde({ users: base(false), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env });
   n.t = T0 + 30 * J; await n.PP.reconqueteQuotidien(n.t);
   assert.deepEqual(n.sio, []);
-  const t = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env: { BREVO_API_KEY: 'k', BREVO_LISTE_RENOUVELLEMENT: '42' } });
+  const t = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env: { BREVO_API_KEY: 'k', BREVO_MODELE_RENOUVELLEMENT: '10' } });
   t.t = T0 + 30 * J; await t.PP.reconqueteQuotidien(t.t);
   assert.deepEqual(t.sio, []);
-  assert.deepEqual(t.B.listes[1].membres, []);
   // Revenue entre-temps (plus de résiliation) : rien.
   const r = monde({ users: lea(), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) } });
   r.t = T0 + 30 * J;
