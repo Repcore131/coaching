@@ -140,3 +140,11 @@ test('I4 : défi choisi le lundi visible dans Ma journée jusqu’au dimanche ; 
   assert.ok(J(run, `allTrophies().some(t => t.userId === 'a0' && /^Défi tenu/.test(t.label))`));
   assert.ok(J(run, `feedEvents(['a']).some(e => /a tenu son défi de la semaine/.test(e.label))`));
 });
+test('I5 : les 10 vérifications de la recette sont vraies sur la démo ; la démonstration commerciale est invisible pour un membre', () => {
+  const run = chargerAppli({}); run(`S = normalizeState(seedDemo('demo')); REV++; ME = S.users.u1; CLUB = S.clubs.demo; toast = () => {};`);
+  const avant = run('JSON.stringify(S)');
+  const R = J(run, 'recetteCommerciale()'); assert.equal(Object.keys(R.details).length, 10); assert.deepEqual(Object.entries(R.details).filter(([, v]) => !v).map(([k]) => k), []);
+  assert.equal(run('JSON.stringify(S)'), avant); assert.equal(run('ME.id + CLUB.id'), 'u1demo');
+  assert.equal(run(`PAGES['demo-commerciale'].manager`), true);
+  for (let i = 0; i < 6; i++) { run(`UI.storyI = ${i}`); const h = run(`PAGES['demo-commerciale'].render()`); assert.match(h, new RegExp(`${i + 1} sur 6`)); assert.doesNotMatch(h, /Écran indisponible|FitUp/i); }
+});

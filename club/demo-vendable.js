@@ -101,5 +101,21 @@ function seedDemo(clubId = 'demo') {
       log: { o1: { at: at - 24 * H, by: uid, label: 'Offre proposée : Changement de formule', offer: 'Changement de formule', out: 'offer' }, o2: { at, by: proof === 'resamania' ? 'system' : uid, label: proof === 'resamania' ? 'Sauvetage confirmé par Resamania' : 'Sauvée · Changement de formule' } } });
     st.entries['sv_' + id] = { id: 'sv_' + id, userId: uid, clubId: C, kpiId: 'sauvetage', date: isoOf(new Date(at)), value: 1, source: 'manual', at, proof, offer: 'Changement de formule' };
   });
+  // ── Réseau de démonstration (lot I) : 2 clubs voisins, 3 commerciaux chacun, une ligue de 11,
+  // un duel en cours, une félicitation, un bilan partagé et un commentaire. Graine à part : le reste
+  // de la démo est inchangé.
+  const R2 = rng(DEMO_VENDABLE_GRAINE + 7);
+  [['nord', 'Club Démo Nord', [['n1', 'Lison', 'Marin'], ['n2', 'Tom', 'Berger'], ['n3', 'Inès', 'Carré']]], ['sud', 'Club Démo Sud', [['s1', 'Hugo', 'Lemaire'], ['s2', 'Nina', 'Royer'], ['s3', 'Yanis', 'Perret']]]].forEach(([cid, nom, vend]) => {
+    st.clubs[cid] = { id: cid, name: nom, city: 'Réseau démo', createdAt: ts(addDays(t, -400)), openDays: [1, 2, 3, 4, 5, 6] };
+    vend.forEach(([id, first, last]) => { st.users[id] = { id, first, last, role: 'membre', clubs: [cid], status: 'active', email: `${norm(first)}.${norm(last)}@example.com`, createdAt: ts(addDays(t, -300)) }; });
+    for (let i = 2; i >= 0; i--) { const mk = addMonths(cm, -i); const fin = mk === cm ? addDays(t, -1) : `${mk}-${pad(daysIn(mk))}`; st.targets[mk] = st.targets[mk] || {};
+      vend.forEach(([uid], j) => { st.targets[mk][uid] = { contrats: 16, avis: 12, impayes: 300, sauvetage: 2 };
+        for (let d = mk + '-01'; d <= fin; d = addDays(d, 1)) { if (!estOuvre(d)) continue; [['contrats', 0.75], ['avis', 0.5]].forEach(([k, pp]) => { if (R2() < pp * (0.8 + j * 0.08)) { const id = 'e' + (++ne); st.entries[id] = { id, userId: uid, clubId: cid, kpiId: k, date: d, value: 1, source: 'manual', at: ts(d, 11 + Math.floor(R2() * 7), Math.floor(R2() * 60)) }; } }); } });
+    }
+  });
+  st.duels.dd1 = { id: 'dd1', clubs: [C, 'nord'], kpiId: 'contrats', start: T0 - 3 * 864e5, end: T0 + 4 * 864e5, reward: 'Petit déjeuner offert par le club perdant', createdBy: 'u1', acceptedBy: 'u1', at: T0 - 3 * 864e5 - 36e5, status: 'live' };
+  st.kudos.kd1 = { id: 'kd1', from: 'u1', to: 'v2', clubId: C, at: T0 - 20 * 36e5, reason: 'relance', text: 'Trois promesses de paiement tenues hier.', pinned: false };
+  st.chat.wr1 = { id: 'wr1', channel: C, userId: 'v1', at: T0 - 26 * 36e5, text: '', wrap: { mk: addMonths(cm, -1), score: 104, rang: 1, sur: 6, best: { kpiId: 'avis', label: 'Avis Google', pct: 125 }, trophees: 3, relances: 18, sauves: 2 } };
+  st.comments['c' + graineTexte('wr_wr1').toString(36)] = { cm1: { id: 'cm1', evId: 'wr_wr1', by: 'v3', to: 'v1', text: 'Bravo pour les avis.', at: T0 - 24 * 36e5 } };
   return st;
 }

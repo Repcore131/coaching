@@ -1492,3 +1492,12 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .defi-prop { display: grid; gap: 2px; text-align: left; padding: 10px 12px; min-height: 56px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .defi-prop small { color: var(--muted); }
 .defi-prop:hover, .defi-prop:focus-visible { border-color: var(--fil-or, #F2C500); }
+/* Démonstration commerciale en stories */
+.stories { max-width: 520px; margin: 0 auto; display: grid; gap: 12px; }
+.story-barres { display: grid; grid-auto-flow: column; gap: 4px; }
+.story-barres i { height: 4px; border-radius: 2px; background: var(--line); }
+.story-barres i.vu, .story-barres i.en-cours { background: var(--fil-or, #F2C500); }
+.story-tete { display: flex; align-items: baseline; gap: 8px; }
+.story-corps { min-height: 360px; }
+.story-liste { display: grid; gap: 6px; }
+.story-liste .row { min-height: 48px; border: 1px solid var(--line); border-radius: var(--r-md); padding: 0 10px; gap: 10px; }
