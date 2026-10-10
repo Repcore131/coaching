@@ -245,15 +245,7 @@ ACTIONS.localTransfer = () => {
 };
 ACTIONS.localTransferSkip = () => { safeLS.set('fitpulse.transferred', '1'); render(); };
 ACTIONS.goPaliers = () => { UI.memTab = 'paliers'; location.hash = '#/members'; };
-// Carte « Ma journée » (score, rang, jours restants, objectifs du jour).
-function maJourneeCard(ctx) {
-  const { rk, me, myPct, myHealth, mission } = ctx;
-  return `<div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
-    <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres} j</b><span>${compteRebours().ouvres > 1 ? 'ouvrés restants' : 'ouvré restant'}</span></div>${healthChip(myHealth)}</div>
-    ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
-    ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>`;
-}
-const serieTexteCourt = uid => `Série : ${plur(accomplishments(uid).streak, 'jour', 'jours')}`;
+const serieTexteCourt = uid => serieTexte(serieJours(uid));
 function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;
   const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0); const dunTot = dun.reduce((s, c) => s + Number(c.balance), 0); const dunNobody = dun.filter(c => !dunOf(c).ownerId).length; const dunDueN = dun.filter(dunDue).length;

@@ -355,7 +355,7 @@ function profPerf() {
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">
     <div class="card"><h3>${TXT.profil.etapes}</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px">
-      <div class="trophy"><div class="ic">${trophyArt({ kind: 'kpi', label: 'Régularité' }, 48, !acc.streak)}</div><b>Série : ${plur(acc.streak, 'jour', 'jours')}</b><span class="muted small">${acc.streak >= 3 ? 'Une saisie chaque jour ouvré' : 'Trois jours de suite pour la valider'}</span></div>
+      <div class="trophy"><div class="ic">${trophyArt({ kind: 'kpi', label: 'Régularité' }, 48, !acc.streak)}</div><b data-serie>${esc(serieTexte(serieJours(ME.id)))}</b><span class="muted small">Meilleure série : ${plur(serieRecord(ME.id), 'jour travaillé', 'jours travaillés')}</span></div>
       <div class="trophy"><div class="ic">${trophyArt({ kind: 'month', icon: 'trophy', label: TXT.profil.premier100 }, 48, !acc.first100)}</div><b>${TXT.profil.premier100}</b><span class="muted small">${acc.first100 ? 'Obtenu' : TXT.profil.premier100Detail}</span></div>
       <div class="trophy"><div class="ic">${trophyArt({ kind: 'season', icon: 'crown', label: 'Grand chelem' }, 48, !acc.all100)}</div><b>Grand chelem</b><span class="muted small">${acc.all100 ? 'Obtenu' : 'Tous les KPI à 100 % sur un mois'}</span></div></div></div>
     <div class="card"><h3>Mes trophées (${tr.length})</h3><p class="muted small">Le même décompte que le classement.</p>

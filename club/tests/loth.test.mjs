@@ -77,3 +77,29 @@ test('H3 : décocher Ventes masque les saisies dans le fil, le bandeau et le com
   assert.doesNotMatch(run(`PAGES.pouls.render()`), /data-type="sale"/);
   run(`ACTIONS.filPause()`); assert.equal(run('unseenPouls()'), 0);
 });
+const kpisJ = { ...kpis, nutrition: { id: 'nutrition', label: 'Nutrition', unit: 'eur', enabled: true, required: true, points: 500, order: 4 } };
+test('H5 : toujours 3 objectifs ; vente importée du jour = objectif a fait ; 0,01 € ne valide pas', () => {
+  const run = appli({ kpis: kpisJ }, 'v'); const mk = run('curMonth()'), d = run('today()');
+  run(`S.targets = { '${mk}': { v: { nutrition: 400, contrats: 2, avis: 1 } } }; REV++`);
+  const G = J(run, 'dailyGoals()'); assert.equal(G.length, 3);
+  const a = G.find(g => g.id === 'a'); assert.equal(a.kpiId, 'nutrition'); assert.ok(a.target >= 5);
+  run(`S.entries.n1 = { id: 'n1', userId: 'v', clubId: 'k', kpiId: 'nutrition', date: '${d}', value: 0.01, source: 'manual', at: Date.now() }; REV++`);
+  assert.equal(J(run, `dailyGoals().find(g => g.id === 'a').done`), false);
+  run(`S.targets = { '${mk}': { v: { contrats: 40 } } }; delete S.entries.n1; S.imports = { i1: { id: 'i1', active: true } }; S.entries.c1 = { id: 'c1', userId: 'v', clubId: 'k', kpiId: 'contrats', date: '${d}', value: 9, source: 'import', importId: 'i1', at: Date.now() }; REV++`);
+  const a2 = J(run, `dailyGoals().find(g => g.id === 'a')`); assert.equal(a2.kpiId, 'contrats'); assert.equal(a2.done, true);
+  run(`S.prefs.v = { v: 2, goal: { week: semaineIso(), kpiId: 'avis', target: 5 } }; REV++`);
+  const c = J(run, `dailyGoals().find(g => g.id === 'c')`); assert.match(c.label, /^Défi perso/); assert.equal(J(run, 'dailyGoals()').length, 3);
+});
+test('H5 : du mardi au samedi, un objectif chaque jour : la série continue après le lundi ; joker', () => {
+  const run = appli({ kpis }, 'v'); const d0 = run('today()');
+  // l'équipe saisit tous les jours ouvrés (le lundi compris) ; Léa ne travaille jamais le lundi
+  run(`S.clubs.k.openDays = [1, 2, 3, 4, 5, 6]; for (let i = 1; i <= 70; i++) { const d = addDays('${d0}', -i); const j = dateOf(d).getDay(); if (j === 0) continue;
+    S.entries['u' + i] = { id: 'u' + i, userId: 'u', clubId: 'k', kpiId: 'avis', date: d, value: 1, source: 'manual', at: dateOf(d).getTime() + 36e6 };
+    if (j !== 1) S.entries['v' + i] = { id: 'v' + i, userId: 'v', clubId: 'k', kpiId: 'contrats', date: d, value: 1, source: 'manual', at: dateOf(d).getTime() + 36e6 }; } REV++`);
+  const s = J(run, 'serieJours()'); const attendu = run(`(() => { let n = 0; for (let i = 1; i <= 35; i++) { const j = dateOf(addDays('${d0}', -i)).getDay(); if (j !== 0 && j !== 1) n++; } return n; })()`);
+  assert.ok(s.n >= attendu, `${s.n} jours, au moins ${attendu} attendus (5 semaines, lundis neutres)`); assert.equal(s.jokerDispo, true);
+  assert.match(run('serieTexte(serieJours())'), /^Série : \d+ jours travaillés$/);
+  // un mardi manqué : couvert par le joker, la série continue
+  run(`for (const id of Object.keys(S.entries)) { const e = S.entries[id]; if (e.userId === 'v' && dateOf(e.date).getDay() === 2 && e.date >= addDays('${d0}', -7)) delete S.entries[id]; } REV++`);
+  const s2 = J(run, 'serieJours()'); assert.equal(s2.jokerDispo, false); assert.equal(s2.n, s.n - 1); assert.match(run('jokerTexte(serieJours())'), /^Joker utilisé le \d+ /);
+});

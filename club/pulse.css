@@ -1444,3 +1444,12 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .fil-win .fil-b { background: var(--fil-or, #F2C500); color: #111; }
 .fil-c .reacts { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
 .fil-r { padding: 6px 0; border-bottom: 1px solid var(--line); }
+/* Ma journée : 3 objectifs du jour et série */
+.mj-obj { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mj-obj li { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid var(--line); }
+.mj-obj li:last-child { border-bottom: 0; }
+.mj-obj a { color: var(--text); text-decoration: none; font-weight: 600; }
+.mj-obj li.done a { color: var(--muted); text-decoration: line-through; }
+.mj-case { width: 24px; height: 24px; flex: none; border: 2px solid var(--line); border-radius: 6px; display: grid; place-items: center; }
+.mj-obj li.done .mj-case { background: var(--good, #1F9D55); border-color: var(--good, #1F9D55); color: #fff; }
+.mj-serie { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
