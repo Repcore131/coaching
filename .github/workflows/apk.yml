@@ -99,10 +99,12 @@ jobs:
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
           CERT=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -i 'SHA-256 digest' | head -1 | sed 's/.*: *//' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
-          PUBLIE=$(grep -o '"[0-9A-F:]\{95\}"' well-known/assetlinks.json | tr -d '"' | head -1)
+          # Toutes les empreintes publiées (10/10/2026 : l'ancienne clé de l'APK 4
+          # et la clé de 2026) : la signature doit être L'UNE d'elles.
+          PUBLIE=$(grep -o '"[0-9A-F:]\{95\}"' well-known/assetlinks.json | tr -d '"' | tr '\n' ' ')
           echo "certificat de l'APK : $CERT"
           echo "assetlinks.json     : $PUBLIE"
-          if [ -z "$CERT" ] || [ "$CERT" != "$PUBLIE" ]; then
+          if [ -z "$CERT" ] || ! echo " $PUBLIE " | grep -q " $CERT "; then
             echo "::error::La clé n'est pas celle de l'APK 3 (assetlinks.json). Rien n'est publié."
             exit 1
           fi
@@ -111,7 +113,7 @@ jobs:
           AAB=android/app/build/outputs/bundle/release/app-release.aab
           CERT_AAB=$(keytool -printcert -jarfile "$AAB" | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | tr 'a-f' 'A-F')
           echo "certificat du bundle : $CERT_AAB"
-          if [ -z "$CERT_AAB" ] || [ "$CERT_AAB" != "$PUBLIE" ]; then
+          if [ -z "$CERT_AAB" ] || ! echo " $PUBLIE " | grep -q " $CERT_AAB "; then
             echo "::error::Le bundle Play n'est pas signé par la clé attendue. Rien n'est publié."
             exit 1
           fi
