@@ -13,7 +13,7 @@ const INGEST_CANAUX = [
   ['api', 'API Resamania', 'Lecture seule, côté serveur, chaque nuit et chaque heure.'],
   ['mail', 'Boîte d’import e-mail', 'Les exports transférés à l’adresse du club arrivent seuls.'],
   ['drive', 'Dossier Drive', 'Les fichiers déposés dans le dossier partagé sont relevés toutes les 10 minutes.'],
-  ['manual', 'Dépôt manuel', 'Glisser-déposer dans Imports. Toujours actif, en secours.'],
+  ['manual', 'Dépôt manuel', 'Fichiers déposés dans la page Imports. Toujours actif, en secours.'],
 ];
 const INGEST_ETATS = ['actif', 'en attente', 'inactif'];
 // Rapports d'ingestion lus dans /ingest/{clubId}/reports (managers et créateur ; voir plus bas).
