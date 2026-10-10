@@ -5291,7 +5291,7 @@ const CLOUD={
           prives.migre=Date.now();
           const _cp=JSON.stringify(prives);
           try{ _quotaCompter('out',_cp.length); }catch(e){}
-          await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
+          await fetch(this._urlSantePrivee(safeKey)+'?auth='+token+'&print=silent',
             {method:'PUT',headers:{'Content-Type':'application/json'},
              body:_cp});
         }
@@ -5496,11 +5496,13 @@ const CLOUD={
       const _arret=new AbortController();
       const _minuteur=setTimeout(()=>{ try{ _arret.abort(); }catch(e){} },this._DELAI_ENVOI);
       opts.signal=_arret.signal;
-      try{ r=await fetch(url+'?auth='+token,opts); }
+      // ?print=silent (11/10/2026) : Firebase répond 204 sans renvoyer l'objet
+      // écrit. Sans lui, chaque envoi re-téléchargeait le dossier entier.
+      try{ r=await fetch(url+'?auth='+token+'&print=silent',opts); }
       finally{ clearTimeout(_minuteur); }
       try{ AFFLUENCE.observer(r.status); }catch(e){}
-      // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
-      // renvoie l'objet écrit — d'où le doublement du coût par envoi.
+      // Sortant : le corps envoyé. Entrant : la réponse de Firebase — vide
+      // depuis print=silent (elle renvoyait l'objet écrit, doublant le coût).
       try{ _quotaCompter('out',corps.length);
         const cl=Number(r.headers.get('content-length'));
         if(cl>0) _quotaCompter('in',cl); }catch(e){}
@@ -5510,9 +5512,14 @@ const CLOUD={
         throw new Error('Conflit d’écriture répété ('+_conflits+' fois) : envoi remis à plus tard.');
       }
       let _nd=null, _ne=null;
-      try{ _ne=r.headers.get('ETag'); const _t=await r.text(); _nd=_t?JSON.parse(_t):null; }catch(e){ _ne=null; }
-      // L'en-tete absent (proxy, navigateur) : on relit, avec son etag.
-      if(!_ne){ const _re=await this.pullUser(email,{etag:true}); _nd=_re&&_re.doc||null; _ne=_re&&_re.etag||null; }
+      // ⚠ UN CORPS VIDE N'EST PAS UN DOSSIER VIDE. Avec print=silent, le 412
+      //   peut arriver sans la valeur courante : la prendre pour « rien » ferait
+      //   fusionner sur du vide et écraser le serveur. Un dossier vraiment vide
+      //   s'écrit « null » (quatre caractères). Sans corps : on relit.
+      let _sansCorps=false;
+      try{ _ne=r.headers.get('ETag'); const _t=await r.text(); _sansCorps=!_t; _nd=_t?JSON.parse(_t):null; }catch(e){ _ne=null; }
+      // L'en-tete absent (proxy, navigateur), ou la valeur absente : on relit, avec son etag.
+      if(!_ne||_sansCorps){ const _re=await this.pullUser(email,{etag:true}); _nd=_re&&_re.doc||null; _ne=_re&&_re.etag||null; }
       if(!_ne) throw new Error('Serveur illisible après un conflit : envoi remis à plus tard.');
       _etag=_ne;
       _integrer(_nd);
@@ -6169,7 +6176,7 @@ const CLOUD={
       if(!token) return false;
       const corps=JSON.stringify(obj);
       try{ _quotaCompter('out',corps.length); }catch(e){}
-      const r=await fetch(this._urlBoutique(id)+'?auth='+token,
+      const r=await fetch(this._urlBoutique(id)+'?auth='+token+'&print=silent',
         {method:'PUT',body:corps,signal:ctrl.signal});
       return r.ok;
     }catch(e){ return false; }
@@ -6186,7 +6193,7 @@ const CLOUD={
       if(!token) return false;
       const corps=JSON.stringify({seances:seances,maj:Date.now()});
       try{ _quotaCompter('out',corps.length); }catch(e){}
-      const r=await fetch(this._urlBoutique(id)+'?auth='+token,
+      const r=await fetch(this._urlBoutique(id)+'?auth='+token+'&print=silent',
         {method:'PATCH',body:corps,signal:ctrl.signal});
       return r.ok;
     }catch(e){ return false; }
@@ -6501,7 +6508,7 @@ const CLOUD={
   async alimentsCoachPut(key,liste){
     const token=await this._getToken();
     if(!token) throw new Error('Non connecté : les aliments n\'ont pas pu être publiés.');
-    const r=await fetch(this._urlAlimentsCoach(key)+'?auth='+token,
+    const r=await fetch(this._urlAlimentsCoach(key)+'?auth='+token+'&print=silent',
       {method:'PUT',headers:{'Content-Type':'application/json'},
        body:JSON.stringify(liste&&liste.length?liste:null)});
     if(!r.ok) throw new Error('Publication refusée ('+r.status+').');
