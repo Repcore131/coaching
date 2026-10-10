@@ -22,7 +22,7 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
-import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
+import { passageResiliations, gmailReel, comptesGmail } from './fitpulse-resmail.mjs';
 import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
 import { passageBrief } from './fitpulse-brief.mjs';
 import { REGLE_ORGS } from './fitpulse-regles-orgs.mjs';
@@ -391,7 +391,7 @@ async function passagesEspace(api, tk, S) {
   // Relève horaire des demandes de résiliation dans la boîte de l'accueil (API Gmail).
   try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
   // Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive), chaque heure de 6 h à 22 h.
-  try { const bucket = process.env.FITPULSE_BUCKET; await passageImports(api, tk, S, { sources: sourcesReelles(S), force: process.env.RELEVE_IMPORTS === 'true', stocker: bucket ? (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) : null }); } catch (e) { console.log('Imports automatiques : échec,', e.message); }
+  try { const bucket = process.env.FITPULSE_BUCKET; await passageImports(api, tk, S, { sources: sourcesReelles(S), force: process.env.RELEVE_IMPORTS === 'true', stocker: bucket ? (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) : null, clubsGmail: Object.keys(comptesGmail(S)) }); } catch (e) { console.log('Imports automatiques : échec,', e.message); }
 }
 // Multi-salles : les chemins /pulse… de chaque passage sont ceux de la société.
 export const cheminOrg = (org, c) => c.replace(/^pulse\.json/, `orgs/${org}/data.json`).replace(/^pulse\/clubs\//, `orgs/${org}/clubs/`).replace(/^pulse\//, `orgs/${org}/data/`).replace(/^pulse_push/, `orgs_push/${org}`).replace(/^pulse_inbox/, `orgs_inbox/${org}`);
