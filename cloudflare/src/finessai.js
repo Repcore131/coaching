@@ -54,6 +54,9 @@ export function texteFinEssai(o) {
     const titre = s + ' séance' + (s > 1 ? 's' : '') + (r > 0 ? ', ' + r + ' record' + (r > 1 ? 's' : '') : '') + ' : on continue ?';
     return { title: titre, body: pre + ' essai se termine ' + quand + '. Tout ce que tu as construit reste à toi.' };
   }
+  // RÉSUMÉ PAS ENCORE PUBLIÉ (app pas rouverte depuis la version 1804) : on ne
+  // sait pas s'il y a eu des séances, donc ni chiffre ni « première séance ».
+  if (!o.essai) return { title: 'Ton essai se termine ' + quand, body: pre + ' programme et tout ce que tu as enregistré restent à toi. Rien n’est effacé.' };
   return {
     title: 'Ton essai se termine ' + quand,
     body: o.palier === 'j0'
