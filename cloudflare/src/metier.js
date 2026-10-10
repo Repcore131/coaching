@@ -40,7 +40,7 @@ export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 // 'message' : un athlète a écrit à son coach (messagerie, lot M2). Vers l'athlète,
 // un message du coach part en type 'coach'.
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect', 'message'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect', 'message', 'premiere'];
 const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -1268,7 +1268,9 @@ export function creerMetier(deps) {
   }
   const activiteComptes = () => db.ref('activite').shallow();
   async function retentionFin(acc) {
-    const v = RT.resultat(acc, now());
+    // LA RELANCE DES INSCRITS SANS SÉANCE (premiere.js) : ses compteurs, publiés avec le reste.
+    let prem = null; try { prem = await _val('stats/relance_premiere'); } catch (e) { prem = null; }
+    const v = RT.resultat(acc, now(), prem);
     await db.ref('stats/retention').set(v);
     return v;
   }

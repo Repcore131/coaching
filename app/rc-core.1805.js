@@ -7265,6 +7265,9 @@ function _validateAthletePkg(o){
     if(_bilanDeepLink) window._pendingBilanOpen=true;
     const _woDeepLink=params.get('wo')==='1';
     if(_woDeepLink) window._pendingWoOpen=true;
+    // ?wo=1&i=<0..6> (11/10/2026) : la notification « ta première séance »
+    // ouvre DIRECTEMENT ce créneau de sessions_config, pas le sélecteur.
+    if(_woDeepLink&&/^[0-6]$/.test(String(params.get('i')||''))) window._pendingWoIdx=Number(params.get('i'));
     // ?diete=1 — AJOUTE POUR LE RACCOURCI DU MANIFESTE. « Nouvelle séance »
     // avait déjà son ?wo=1 ; la diète n'avait aucune adresse, et un raccourci
     // qui ouvre l'accueil au lieu de l'écran promis est un lien mort qui ne
@@ -8905,7 +8908,8 @@ function routeUser(){
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
-  if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
+  if(window._pendingWoOpen){window._pendingWoOpen=false;const _wi=window._pendingWoIdx;window._pendingWoIdx=null;
+    setTimeout(()=>{ try{ ouvrirSeanceLien(currentUser,_wi); }catch(e){ openSessionPicker(); } },900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
   if(window._pendingSanteEnvoyer){ window._pendingSanteEnvoyer=false;
@@ -22872,7 +22876,22 @@ function htmlRetention(s){
         +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
     +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
     +escapeHtml(new Date(s.maj).toLocaleString('fr-FR'))+' sur '+(s.comptes||0)+' comptes, sans aucune donnée personnelle.</p>';
+  h+=htmlRelancePremiere(s.premiereSeance,s.seuilGroupe);
   return h;
+}
+// PURE. LA RELANCE DES INSCRITS SANS SÉANCE (11/10/2026, serveur léger,
+// premiere.js) : par push (J1, J3, J6), les envois et les premières séances
+// qui ont suivi (attribuées au dernier push parti, dans les 7 jours).
+const RELANCE_PREMIERE_LIB=Object.freeze({j1:'Push du 1er jour',j3:'Push du 3e jour',j6:'Push du 6e jour'});
+function htmlRelancePremiere(lignes,seuil){
+  const L=Array.isArray(lignes)?lignes:[];
+  if(!L.length) return '';
+  return '<div class="vir-t">Relance des inscrits sans séance</div>'
+    +'<div class="vir-tab"><table><tr><th>Push</th><th>Envoyés</th><th>1re séance</th><th>Taux</th></tr>'
+    +L.map(l=>'<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(RELANCE_PREMIERE_LIB[l.levier]||String(l.levier))
+      +(l.alerte?'<small>⚠ groupe &lt; '+(seuil||30)+' : pas encore significatif</small>':'')+'</td>'
+      +'<td>'+(Number(l.envoyes)||0)+'</td><td>'+(Number(l.seances)||0)+'</td><td>'+_vfPct(l.taux)+'</td></tr>').join('')
+    +'</table></div><p class="sub vir-note">Une première séance compte pour le dernier push parti avant elle, s’il date de moins de 7 jours. Un inscrit entre dans le tableau quand sa première séance arrive, ou 14 jours après l’inscription.</p>';
 }
 let _viral=null;   // {jours, semaines, periode, retention}
 // /stats/retention : lu par le créateur seul (règles).
@@ -48954,6 +48973,22 @@ function openSessionExercises(idx){
 // l'indice du jour : les jours de repos ne produisent pas de ligne, et compter
 // les jours laisserait des trous dans la cadence.
 let _spRang=0;
+// PURE. Le créneau qu'un lien ?wo=1&i=<n> peut ouvrir : actif, avec des
+// exercices ; sinon null (le sélecteur s'ouvre, comme avant).
+function creneauLienSeance(u,i){
+  if(i===null||i===undefined||i==='') return null;
+  const n=Number(i);
+  if(!(n>=0&&n<=6)||Math.floor(n)!==n) return null;
+  const s=((u&&u.sessions_config)||[])[n];
+  return (s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length)?n:null;
+}
+// Le lien d'une notification : la séance demandée, sinon le sélecteur.
+function ouvrirSeanceLien(u,i){
+  const n=creneauLienSeance(u,i);
+  if(n===null){ openSessionPicker(); return 'selecteur'; }
+  startWorkoutSession(n);
+  return 'seance';
+}
 function openSessionPicker(){
   // LOT C1 : ouvrir son programme, c'est l'étape « lis-le » de l'accueil.
   try{ accueilProgrammeLu(); }catch(e){}
@@ -82186,8 +82221,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante','premiere']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), tant que ta première séance n’est pas faite (1, 3 et 6 jours après l’inscription), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance','message']),
     detail:'quand ton coach t’écrit, répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -82353,6 +82388,7 @@ const PUSH_TYPES=Object.freeze([
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
+  {cle:'premiere',titre:'Ta première séance',txt:'1, 3 et 6 jours après ton inscription, tant que tu n’as fait aucune séance. Le message ouvre ta séance du jour.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
   {cle:'relance',titre:'Rappel de ton coach',txt:'Un bilan en retard, un programme en préparation, un accès qui se termine : un message par semaine au plus, seulement si ton coach les a allumés.'},
   {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}

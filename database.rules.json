@@ -2266,6 +2266,7 @@
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
+    "premiere_trace": { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
@@ -2305,6 +2306,8 @@
       "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       // LES CONNEXIONS ESTIMEES (serveur leger, chaque minute) : le createur seul.
       "connexions": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LA RELANCE DES INSCRITS SANS SEANCE (serveur leger) : des compteurs, le createur seul.
+      "relance_premiere": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       "$autre": { ".read": true }
     },
     // LA PRESENCE (09/10/2026) : « cet appareil est ouvert », pour estimer les
@@ -2330,7 +2333,8 @@
     "activite": {
       // La fin d'essai (10/10/2026) : le serveur leger cherche les essais qui
       // finissent dans les jours qui viennent, sans tout lire.
-      ".indexOn": ["finEssai"],
+      // Les inscrits sans premiere seance (11/10/2026) : par jour d inscription.
+      ".indexOn": ["finEssai", "inscrit"],
       "$k": {
         ".read": false,
         ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
