@@ -173,6 +173,9 @@ export default {
       // LE GUIDE OFFERT (page d'accueil) : prénom + e-mail → file Brevo.
       // GET /lead/etat dit à la page si le formulaire est ouvert (clé posée et
       // LEAD_OUVERT=oui) : rien ne promet un guide qui n'arriverait pas.
+      if (url.pathname === '/email/etat' && req.method === 'GET') {
+        return reponse(JSON.stringify(await outils(env).M.emails.etat()), 200);
+      }
       if (url.pathname === '/lead/etat' && req.method === 'GET') {
         return reponse(JSON.stringify({ ouvert: outils(env).M.emails.leadOuvert() }), 200);
       }
