@@ -40,10 +40,10 @@ APKSIGNER=$(ls -d "$SDK"/build-tools/*/ 2>/dev/null | sort -V | tail -1)apksigne
 [ -f "$APKSIGNER.bat" ] && APKSIGNER="$APKSIGNER.bat"
 
 CERT=$("$APKSIGNER" verify --print-certs "$APK" | grep -i 'SHA-256 digest' | head -1 | sed 's/.*: *//' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
-PUBLIE=$(grep -o '"[0-9A-F:]\{95\}"' ../well-known/assetlinks.json | tr -d '"' | head -1)
+PUBLIE=$(grep -o '"[0-9A-F:]\{95\}"' ../well-known/assetlinks.json | tr -d '"' | tr '\n' ' ')
 echo "certificat de l'APK : $CERT"
 echo "assetlinks.json     : $PUBLIE"
-if [ "$CERT" != "$PUBLIE" ]; then
+if ! echo " $PUBLIE " | grep -q " $CERT "; then
   echo "!! LA CLÉ N'EST PAS LA BONNE. On s'arrête ici."
   echo "   Une nouvelle clé = chaque athlète Android désinstalle puis réinstalle,"
   echo "   et assetlinks.json doit être republié. Cherche la clé de l'APK 3."
