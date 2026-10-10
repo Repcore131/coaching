@@ -123,6 +123,8 @@ function manqueActions(clubId, mk, kpiId) {
   if (kpiId !== 'contrats') return '';
   const tp = tauxCohorte(clubId), ti = tauxInvites(clubId);
   if (tp == null) return `<div class="palier-act">Il manque ${plur(Math.ceil(manque), 'contrat', 'contrats')} pour le palier ${s.reached + 1}. Importez l’export Prospects pour savoir combien de prospects rappeler.</div>`;
+  // Taux nul : aucun nombre de prospects à annoncer (la division donnerait l'infini).
+  if (!tp) return `<div class="palier-act">Il manque ${plur(Math.ceil(manque), 'contrat', 'contrats')} pour le palier ${s.reached + 1}. Aucun prospect transformé ces derniers mois : rappelez d’abord les prospects chauds.</div>`;
   const np = Math.ceil(manque / tp), ni = ti ? Math.ceil(manque / ti) : null;
   return `<div class="palier-act">Il manque ${plur(Math.ceil(manque), 'contrat', 'contrats')} pour le palier ${s.reached + 1}. Concrètement : rappeler ${np} prospects chauds (taux ${fmtP(tp)})${ni ? ` ou convertir ${ni} invités (taux ${fmtP(ti)})` : ''}. <a href="#/opportunites" data-act="ui" data-key="oppType" data-val="prospect">Voir les prospects</a></div>`;
 }
