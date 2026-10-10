@@ -14,7 +14,7 @@ function boot() {
     document: { addEventListener: noop, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ style: {} }), body: { appendChild: noop } },
     location: { hostname: 'localhost', search: '', hash: '' }, indexedDB: undefined };
   ctx.window = ctx; vm.createContext(ctx);
-  for (const f of ['config.js', 'core.js', 'parse.js', 'resamania.js', 'calc.js']) vm.runInContext(readFileSync(new URL(f, dir), 'utf8'), ctx, { filename: f });
+  for (const f of ['config.js', 'txt.js', 'core.js', 'parse.js', 'resamania.js', 'calc.js']) vm.runInContext(readFileSync(new URL(f, dir), 'utf8'), ctx, { filename: f });
   vm.runInContext('S = normalizeState(demoState()); REV++;', ctx);
   return (code) => vm.runInContext(code, ctx);
 }
@@ -33,8 +33,28 @@ test('bonus de dépassement : +10 % par tranche de 10 %, plafonné à 150 %', ()
   assert.equal(run("overBonus({ rows: [{ pct: 3, k: { points: 1000 } }] })"), 500);
   assert.equal(run("overBonus({ rows: [{ pct: 0.9, k: { points: 1000 } }] })"), 0);
 });
-test('niveaux recalibrés', () => {
-  assert.deepEqual(JSON.parse(run('JSON.stringify(LEVELS.map(l => l.min))')), [0, 3000, 10000, 25000, 50000]);
+test('niveaux : Recrue, Confirmé, Expert, Référent à 0, 2, 6, 12 mois à 100 %', () => {
+  assert.deepEqual(JSON.parse(run('JSON.stringify(LEVELS.map(z => [z.label, z.min]))')), [['Recrue', 0], ['Confirmé', 2], ['Expert', 6], ['Référent', 12]]);
+  assert.deepEqual(JSON.parse(run('JSON.stringify([0, 1, 2, 5, 6, 11, 12, 30].map(n => zoneDe(n).label))')), ['Recrue', 'Recrue', 'Confirmé', 'Confirmé', 'Expert', 'Expert', 'Référent', 'Référent']);
+});
+test('un commercial avec 3 mois à 100 % ou plus est Confirmé', () => {
+  const r = boot();
+  // Six mois : trois à 100 % ou plus, deux juste en dessous, un sans objectif.
+  r(`(() => { const u = Object.values(S.users).find(x => x.role === 'membre' && !x.virtual); globalThis.UID = u.id; u.clubs = [u.clubs[0]];
+    const mois = [5, 4, 3, 2, 1, 0].map(n => addMonths(curMonth(), -n)); pastMonths = () => mois; const scores = [1, 1.2, 0.99, 0.95, null, 1.01]; globalThis.SC = Object.fromEntries(mois.map((m, i) => [m, scores[i]]));
+    statsFor = (c, uid, rg) => ({ score: SC[rg.from.slice(0, 7)] ?? null, rows: [] }); REV++; })()`);
+  assert.equal(r('moisValides(UID).length'), 3);
+  assert.equal(r('levelOf(UID).label'), 'Confirmé');
+  assert.equal(r('levelOf(UID).next.label'), 'Expert');
+});
+test('compte à rebours : jours ouvrés restants, lundi au samedi, sans férié (2026 et 2027)', () => {
+  // 9 octobre 2026 (vendredi) : 23 jours aujourd'hui compris moins 3 dimanches.
+  assert.equal(run("compteRebours('2026-10-09').texte"), '20 jours ouvrés restants');
+  assert.equal(run("compteRebours('2026-10-31').texte"), '1 jour ouvré restant');
+  // Décembre 2026 : le 25 (vendredi) est férié ; du 24 au 31 : 8 jours, moins le 27 (dimanche) et le 25.
+  assert.equal(run("compteRebours('2026-12-24').texte"), '6 jours ouvrés restants');
+  // Lundi de Pâques 2027 (29 mars) et Ascension 2027 (6 mai) sont fériés.
+  assert.equal(run("estFerie('2027-03-29') && estFerie('2027-05-06') && estFerie('2027-05-17')"), true);
 });
 test('montants français', () => {
   assert.equal(run("parseMontant('1 234,50 €')"), 1234.5);

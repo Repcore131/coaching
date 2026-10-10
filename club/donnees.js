@@ -1,7 +1,7 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — données personnelles, conservation, erreurs, hors ligne ══
-const APP_VERSION = '2026.10';
+const APP_VERSION = APP.version;
 const RETENTION = { clientInactifMois: 36, impayeSoldeMois: 24, resiliationMois: 24, chatMois: 12, importsMois: 13, contactsMois: 36, logsJours: 30 };
 
 // ── Hors ligne : bandeau « N saisies en attente » ────────────────────────
@@ -20,7 +20,7 @@ function logError(kind, e) {
     if (LOG_N >= 20 || typeof S === 'undefined' || !S || !ME || backend.mode !== 'firebase') return; LOG_N++;
     const clean = s => String(s || '').replace(/\d{7,}/g, '#').replace(/[^\s@]+@[^\s@]+/g, '@').slice(0, 2000);
     const id = newId(); const club = (typeof CLUB !== 'undefined' && CLUB && CLUB.id) || 'x';
-    backend.fb.database().ref(`pulse/logs/${club}/${today()}/${id}`).set({ at: Date.now(), uid: ME.id, version: APP_VERSION, page: location.hash.split('/')[1] || 'home', kind, message: clean(e && e.message || e), stack: clean(e && e.stack) }).catch(() => null);
+    backend.fb.database().ref(fbPath(`pulse/logs/${club}/${today()}/${id}`)).set({ at: Date.now(), uid: ME.id, version: APP_VERSION, page: location.hash.split('/')[1] || 'home', kind, message: clean(e && e.message || e), stack: clean(e && e.stack) }).catch(() => null);
   } catch (_) { /* jamais bloquant */ }
 }
 addEventListener('error', e => logError('error', e.error || e.message));
@@ -28,20 +28,7 @@ addEventListener('unhandledrejection', e => logError('promise', e.reason));
 
 // ── Droit d'effacement : une fiche adhérent et tout ce qui s'y rattache ──
 const eraseHash = (club, num) => hkey(`erase|${club}|${num}`);
-ACTIONS.cliErase = async el => {
-  const c = S.clients[el.dataset.id]; if (!c || !isManager()) return;
-  if (!await confirmDlg(`Effacer définitivement ${esc(c.name || 'cet adhérent')} ? La fiche, les relances, les contacts, la résiliation et les régularisations liées sont supprimés. Les saisies de KPI restent, sans lien vers la personne.`, { ok: 'Effacer', danger: true })) return;
-  const ops = [[['clients', c.id], null]]; const t = tokensKey(c.name || ''); const num = c.num ? String(c.num) : null;
-  Object.values(S.loyalty || {}).forEach(a => { if (a.clientId === c.id) ops.push([['loyalty', a.id], null]); });
-  Object.values(S.touches || {}).forEach(a => { if (a.clientId === c.id) ops.push([['touches', a.id], null]); });
-  Object.values(S.resiliations || {}).forEach(r => { if (r.clubId === c.clubId && (r.clientId === c.id || (t && tokensKey(r.client || '') === t))) ops.push([['resiliations', r.id], null]); });
-  Object.values(S.recov || {}).forEach(x => { if (x.clubId === c.clubId && num && String(x.clientNum) === num) ops.push([['recov', x.id], null]); });
-  Object.keys(S.relances || {}).forEach(k => { if (k.includes(c.id)) ops.push([['relances', k], null]); });
-  Object.values(S.entries || {}).forEach(e => { if (e.clientId === c.id || (num && e.clubId === c.clubId && String(e.clientNum || '') === num)) { ops.push([['entries', e.id, 'clientId'], null], [['entries', e.id, 'clientNum'], null]); } });
-  Object.values(S.companies || {}).forEach(co => { if (num && (co.nums || []).includes(num)) ops.push([['companies', co.id, 'nums'], co.nums.filter(n => n !== num)]); });
-  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'erase', club: c.clubId, hash: num ? eraseHash(c.clubId, num) : hkey('erase|' + c.clubId + '|' + t) }]);
-  db.batch(ops); location.hash = '#/relances'; toast('Adhérent effacé');
-};
+// L'effacement lui-même : rgpd.js (effacementOps).
 // Un import qui ramène un numéro effacé est signalé.
 function erasedNums(club) { const H = new Set(Object.values(S.audit || {}).filter(a => a.action === 'erase' && a.club === club).map(a => a.hash)); return num => H.has(eraseHash(club, num)); }
 
@@ -51,7 +38,9 @@ function purgePlan() {
   const add = (k, path) => { ops.push([path, null]); n[k] = (n[k] || 0) + 1; };
   Object.values(S.clients || {}).forEach(c => { const end = c.endDate || c.end; if (/ancien|perdu/.test(norm(c.status || '')) && end && dateOf(end).getTime() < M(RETENTION.clientInactifMois) && !(Number(c.balance) > 0)) add('Anciens adhérents (3 ans)', ['clients', c.id]); });
   Object.values(S.clients || {}).forEach(c => { const d = c.dunning; if (d && ['recupere', 'a_verifier', 'perdu'].includes(d.status) && d.recoveredAt && dateOf(d.recoveredAt).getTime() < M(RETENTION.impayeSoldeMois) && !(Number(c.balance) > 0)) { ops.push([['clients', c.id, 'dunning'], null]); n['Impayés soldés (2 ans)'] = (n['Impayés soldés (2 ans)'] || 0) + 1; } });
-  Object.values(S.resiliations || {}).forEach(r => { if (r.date && dateOf(r.date).getTime() < M(RETENTION.resiliationMois)) add('Résiliations (2 ans)', ['resiliations', r.id]); });
+  // Résiliations : dossiers fermés depuis plus de RETENTION.resiliationMois (date de la demande à défaut), avec leurs données privées.
+  Object.values(S.resiliations || {}).forEach(r => { const ferme = r.closedAt || (r.outcome || ['sauvee', 'resiliee', 'rejetee'].includes(resStatus(r)) ? (r.effective ? dateOf(r.effective).getTime() : r.date ? dateOf(r.date).getTime() : null) : null);
+    if (ferme && ferme < M(RETENTION.resiliationMois)) { add('Résiliations (2 ans après clôture)', ['resiliations', r.id]); ops.push([['private', 'resiliations', r.clubId, r.id], null]); } });
   Object.values(S.chat || {}).forEach(m => { if (m.at && m.at < M(RETENTION.chatMois)) add('Messages du chat (1 an)', ['chat', m.id]); });
   Object.values(S.touches || {}).forEach(x => { if (x.at && x.at < M(RETENTION.contactsMois)) add('Contacts notés (3 ans)', ['touches', x.id]); });
   Object.entries(S.logs || {}).forEach(([club, days]) => Object.keys(days || {}).forEach(d => { if (d < addDays(t, -RETENTION.logsJours)) add('Journal d’erreurs (30 jours)', ['logs', club, d]); }));
@@ -60,7 +49,7 @@ function purgePlan() {
 ACTIONS.purgeOld = async () => {
   const { ops, n } = purgePlan(); if (!ops.length) { toast('Rien à purger : toutes les données sont dans leurs durées de conservation.'); return; }
   if (!await confirmDlg(`Supprimer définitivement : ${Object.entries(n).map(([k, v]) => `${k} : ${v}`).join(', ')} ?`, { ok: 'Purger', danger: true })) return;
-  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'purge', detail: n }]); db.batch(ops); toast('Purge effectuée');
+  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'purge', detail: n }]); db.batch(ops); toast(`Purge effectuée : ${plur(n, 'élément retiré', 'éléments retirés')}`);
 };
 function purgeCard() {
   if (!isCreator()) return ''; const { n } = purgePlan(); const tot = Object.values(n).reduce((s, x) => s + x, 0);
@@ -75,7 +64,7 @@ PAGES.donnees = {
   title: 'Données personnelles',
   render() {
     return `<div class="page-head"><div><h1>Données personnelles</h1><p>Ce que Fit Pulse garde, pourquoi, combien de temps.</p></div></div>
-      <div class="card prose"><h3>Responsable de traitement</h3><p>La société qui exploite le club Fitness Park (contact : le responsable du club).</p>
+      <div class="card prose"><h3>Responsable de traitement</h3><p>La société qui exploite le club (contact : le responsable du club).</p>
       <h3>Finalités</h3><p>Suivi commercial de l’équipe, relances de fidélisation des adhérents, recouvrement amiable des impayés.</p>
       <h3>Base légale</h3><p>Intérêt légitime du club pour le suivi commercial et la fidélisation ; exécution du contrat d’abonnement pour les impayés.</p>
       <h3>Données</h3><p>Équipe : nom, e-mail, saisies. Adhérents : nom, numéro, téléphone, e-mail, offre, dates de contrat, jour et mois d’anniversaire (sans l’année), solde dû, demande de résiliation, contacts notés. Jamais de pièce d’identité ni de RIB : n’en mettez pas dans le chat.</p>

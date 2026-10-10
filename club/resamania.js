@@ -10,6 +10,22 @@
 // Chaque fichier est reconnu par ses colonnes (jamais par son nom seul).
 // Chaque ligne recoit une cle stable : reimporter le meme fichier, ou deux
 // exports qui se recouvrent, ne cree jamais de doublon.
+//
+// Reception sans clic (format attendu, le serveur n'est pas dans ce fichier) :
+//  - une adresse e-mail dediee par club, de la forme imports+<clubId>@<domaine>,
+//    a mettre en destinataire des envois programmes de Resamania ;
+//  - une fonction serveur lit chaque message recu, garde les pieces jointes
+//    .csv, .zip, .xlsx (20 Mo au plus par fichier, comme readAnyFile), et ignore
+//    les autres ; l'expediteur doit appartenir a la liste blanche du club ;
+//  - chaque piece jointe passe par readAnyFile puis par
+//    analyzeTable(table, { clubId, month }) avec le mois precedent, exactement
+//    comme un depot manuel ; le plan obtenu est ecrit par rsmCommitPlan
+//    (pages-resamania.js), qui tient S.rsm.routine et S.rsm.rowsHistory ;
+//  - un fichier non reconnu, tronque (2 000 lignes) ou deux fois plus court que
+//    la semaine precedente n'est pas ecrit : il remonte dans « Controle de la
+//    semaine » avec l'etat Suspect.
+// Cette chaine existe deja pour une boite Gmail ou un dossier Drive par club
+// (outils/fitpulse-autoimport.mjs, rsmauto.js, onglet « Arrivees automatiques »).
 
 // ── Lecture de fichiers : CSV, XLSX, ZIP ──────────────────────────────────
 // Bibliotheques hebergees sur le site (vendor/) : SheetJS 0.20.3 (corrige les
@@ -20,6 +36,8 @@ const LIBS = {
 };
 const libLoaded = {};
 function loadLib(k) {
+  // déjà présente (serveur : bibliothèques chargées d'avance dans le contexte)
+  if ((k === 'jszip' && typeof JSZip !== 'undefined') || (k === 'xlsx' && typeof XLSX !== 'undefined')) return Promise.resolve();
   if (!libLoaded[k]) libLoaded[k] = new Promise((ok, ko) => { const s = document.createElement('script'); s.src = LIBS[k]; s.onload = ok; s.onerror = () => ko(new Error('Bibliothèque indisponible : ' + k)); document.head.appendChild(s); });
   return libLoaded[k];
 }
@@ -124,9 +142,11 @@ const safeKey = k => String(k).replace(/[.#$/\[\]]/g, ',');
 // ── Annuaire des commerciaux ──────────────────────────────────────────────
 // Resamania ecrit le meme vendeur de quatre facons : « NOM Prénom »,
 // « Prénom NOM <email> », « Prénom NOM <email> {id} », ou un code trigramme
-// (KGUE). Les correspondances validees sont gardees dans S.rsm.aliases :
+// (ABCD). Les correspondances validees sont gardees dans S.rsm.aliases :
 // cle -> id de membre, 'system' (vente en ligne / automatique) ou 'ignore'.
-const SYSTEM_SELLERS = ['traitement automatique', 'automatismes', 'automatique', 'site web fitness park public', 'pso site', 'spso', 'en ligne', 'fitness park backoffice mobile', 'espace membre fitnesspark public', 'qualite de la donnee', 'site', 'web', 'borne'];
+const SYSTEM_SELLERS = ['traitement automatique', 'automatismes', 'automatique', 'pso site', 'spso', 'en ligne', 'qualite de la donnee', 'site', 'web', 'borne'];
+// Comptes système propres à chaque enseigne : « Site web <enseigne> Public », « <enseigne> BackOffice Mobile », « Espace membre <enseigne> Public ».
+const SYSTEM_MOTIFS = [/^site web .+ public$/, /backoffice mobile$/, /^espace membre .+ public$/];
 function sellerKeys(raw, code) {
   raw = String(raw || '').trim();
   const email = (raw.match(/<([^>]+)>/) || [])[1];
@@ -143,7 +163,7 @@ function resolveSeller(raw, code) {
   const k = sellerKeys(raw, code);
   if (!k.keys.length) return { status: 'system', label: '(vide)' };
   const nm = norm(k.name);
-  if (SYSTEM_SELLERS.includes(nm) || (code && String(code).toUpperCase() === 'SPSO')) return { status: 'system', label: k.label };
+  if (SYSTEM_SELLERS.includes(nm) || SYSTEM_MOTIFS.some(re => re.test(nm)) || (code && String(code).toUpperCase() === 'SPSO')) return { status: 'system', label: k.label };
   const al = (S.rsm && S.rsm.aliases) || {};
   for (const key of k.keys) {
     const v = al[safeKey(key)];
@@ -159,6 +179,7 @@ function resolveSeller(raw, code) {
 // ── Classement des regularisations d'impayes par canal ────────────────────
 const RECOV_CHANNELS = {
   equipe: { label: 'Équipe du club', hint: 'Encaissé à l’accueil, lien de paiement ou CB à distance par un membre de l’équipe', color: 'var(--d-1)', human: true },
+  equipe_na: { label: 'Équipe, commercial non reconnu', hint: 'Régularisation faite par l’équipe dont l’auteur n’est pas encore rattaché à un membre (Correspondances Resamania)', color: 'var(--d-1)', human: true },
   client: { label: 'Client en ligne', hint: 'Payé par le client lui-même depuis son espace adhérent', color: 'var(--d-2)', human: false },
   auto: { label: 'Prélèvement automatique', hint: '« Traitement automatique » : nouveau prélèvement ou re-présentation', color: 'var(--d-3)', human: false },
   automatismes: { label: 'Automatismes', hint: 'Règle système « Automatismes » (prélèvement CB ou clôture automatique)', color: 'var(--d-4)', human: false },
@@ -180,6 +201,33 @@ function recovChannel(author, clientName) {
 // ── Definitions des exports ───────────────────────────────────────────────
 // sig(has) : reconnaissance par colonnes. parse(c) : lignes -> donnees.
 const PRODUCT_EXCLUDE = ['changement d offre', 'acces employe', 'vip', 'reconduction', 'transfert'];
+// ── Résiliations Resamania : état brut et statut Fit Pulse ─────────────────
+// États documentés : submitted, accepted, rejected, canceled. Libellés français acceptés.
+function resEtat(v) {
+  const e = norm(v);
+  if (/cancel|annul/.test(e)) return 'canceled';
+  if (/reject|rejet|refus/.test(e)) return 'rejected';
+  if (/accept|valid/.test(e)) return 'accepted';
+  return 'submitted'; // submit, attente, soumis, à arbitrer, ou vide
+}
+// Canal de saisie : appli adhérents (member, appli, en ligne, web) ou accueil (club).
+const resCanalAppli = ch => /member|appli|en ligne|web/.test(norm(ch || ''));
+// Statut déduit d'un état Resamania. Acceptée : départ seulement si la date effective est passée,
+// sinon il reste du temps pour sauver (« nouvelle »). Rejetée : ignorée (null).
+function resStatutImport(etat, effective, t = today()) {
+  if (etat === 'canceled') return 'sauvee';
+  if (etat === 'rejected') return null;
+  if (etat === 'accepted') return effective && effective < t ? 'resiliee' : 'nouvelle';
+  return 'nouvelle';
+}
+// Un statut posé dans Fit Pulse n'est jamais rétrogradé par un import.
+const RES_RANG = { nouvelle: 0, traitement: 1, rejetee: 1, sauvee: 2, resiliee: 2 };
+function resStatutFusion(ancien, importe) {
+  if (!ancien) return importe;
+  if (!importe) return ancien;
+  if (RES_RANG[ancien] >= 2) return ancien; // issue tranchée : jamais modifiée par un import
+  return (RES_RANG[importe] || 0) > (RES_RANG[ancien] || 0) ? importe : ancien;
+}
 const TECH_MOTIFS = ['changement de formule', 'resiliation pack option', 'transfert', 'erreur de migration'];
 const isNutrition = (fam, code, label) => norm(fam).includes('nutrition') || /NUTRI/i.test(code || '') || /nutri/i.test(norm(label));
 const isAccessory = code => /(^|_)FPARK$/i.test(String(code || '').trim());
@@ -220,7 +268,7 @@ const RSM_DEFS = [
   },
   {
     id: 'factures', label: 'Factures & avoirs (DetailLignesFacture&AvoirsV2)', family: 'gestion', feeds: 'Nutrition · Accessoires · Contrat B2B (société du client)',
-    path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', filters: 'Dates du mois, Entité = FPN GESTION, Club', file: 'RSM_factures-avoirs_AAAA-MM.zip',
+    path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', get filters() { return `Dates du mois, ${entiteTexte()}, Club`; }, file: 'RSM_factures-avoirs_AAAA-MM.zip',
     sig: has => has('nature') && has('code du produit') && has('famille de produit niveau 1'),
     parse(c) {
       const iDate = c.col('date de creation de la facture'), iNum = c.col('numero de la facture'), iNat = c.col('nature'), iEtat = c.col('etat'), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iFam = c.col('famille de produit niveau 1'), iAut = c.col('auteur'), iSoc = c.col('societe du client'), iCli = c.find(h => /num(ero)? (du )?client/.test(h));
@@ -366,25 +414,26 @@ const RSM_DEFS = [
     id: 'resil', label: 'Résiliations', family: 'liste', feeds: 'Demandes à arbitrer (à traiter) · acceptées/rejetées/annulées (historique) · motifs techniques écartés',
     path: 'Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter', filters: 'Date de création = le mois, TOUS les statuts (À arbitrer, Acceptée, Rejetée, Annulée)', file: 'RSM_resiliations_AAAA-MM.csv',
     sig: has => has('motif') && (has('createur') || has('commercial actuel')) && (has('etat') || has('statut')),
+    note: 'Ajoutez la colonne Canal de saisie si elle est disponible : Fit Pulse distingue alors les demandes faites dans l’appli.',
     parse(c) {
       const iD = c.find(h => h === 'date creation' || h === 'date de creation') >= 0 ? c.find(h => h === 'date creation' || h === 'date de creation') : c.find(h => h === 'date' || h.startsWith('date'));
       const iE = c.find(h => h === 'etat' || h === 'statut'), iCr = c.col('createur'), iT = c.colExact('type'), iM = c.col('motif'), iCt = c.find(h => h === 'contact' || h === 'nom de l abonnement');
-      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom'), iEff = c.find(h => h === 'date resiliation' || h === 'date effective' || h === 'date de resiliation');
+      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom'), iEff = c.find(h => h === 'date resiliation' || h === 'date effective' || h === 'date de resiliation' || h === 'date d effet' || h === 'date deffet');
+      // Colonnes facultatives : canal de saisie (member = appli, club = accueil), numéro client, date de réception.
+      const iCh = c.find(h => ['canal', 'canal de saisie', 'input channel', 'inputchannel', 'origine'].includes(h));
+      const iNum = c.find(h => ['numero client', 'n client', 'no client', 'numero adherent', 'n adherent'].includes(h));
+      const iRec = c.find(h => h === 'date de reception' || h === 'date reception');
       let tech = 0;
       for (const r of c.rows) {
         const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
         const motif = r[iM] || ''; if (TECH_MOTIFS.some(t => norm(motif).includes(t))) { tech++; c.skip('motif technique (changement de formule, pack option, transfert, migration)'); continue; }
-        // Statut d'arbitrage Resamania : seules les demandes « À arbitrer » sont à traiter.
-        // Acceptée = départ validé (préavis en cours) · Rejetée/Annulée = la personne reste · tout le reste = historique.
-        const etat = norm(r[iE]);
-        const arb = /arbitr|soumis|submit|pending|attente|a traiter/.test(etat) ? 'submitted'
-          : /accept|valid/.test(etat) ? 'accepted'
-            : /rejet|reject|refus/.test(etat) ? 'rejected'
-              : /annul|cancel/.test(etat) ? 'canceled' : null;
-        const saved = arb === 'canceled';
+        // État Resamania brut (submitted, accepted, rejected, canceled) : le statut Fit Pulse en est déduit à l'enregistrement.
+        const arb = resEtat(iE >= 0 ? r[iE] : '');
         const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
         const seller = resolveSeller(r[iCr]);
-        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, arb, seller });
+        const channel = iCh >= 0 ? String(r[iCh] || '').trim().slice(0, 40) : '';
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, received: iRec >= 0 ? rsmDate(r[iRec]) || null : null,
+          effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved: arb === 'canceled', arb, seller, channel, appli: resCanalAppli(channel), clientNum: iNum >= 0 ? String(r[iNum] || '').trim().slice(0, 20) || null : null });
       }
       if (tech) c.warn(`${plur(tech, 'résiliation technique écartée', 'résiliations techniques écartées')} : elles gonfleraient le churn.`);
     },
@@ -457,7 +506,7 @@ function rsmImportPrompt() {
   const debut = fr(`${mk}-01`), fin = fr(`${mk}-${String(dImax).padStart(2, '0')}`), ajd = fr(auj);
   const defs = RSM_DEFS.filter(d => d.path && !d.silent);
   const lignes = defs.map((d, i) => `${i + 1}. ${d.label}\n   Chemin : ${d.path}\n   Filtres : ${(d.filters || '').replace(/AAAA-MM-JJ|AAAA-MM/g, '')} → période du ${debut} au ${fin}${/incident|abonnement|sans.?mandat|clients club/i.test(d.label) ? ` (ou situation au ${ajd})` : ''}\n   Puis : ⋮ / Exporter → télécharger le fichier.`);
-  return `Tu es dans l'espace de gestion Resamania de Fitness Park Niort, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
+  return `Tu es dans l'espace de gestion Resamania de ${CLUB ? CLUB.name : 'votre club'}, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
 }
 function linesParse(c, avoir) {
   const iNum = c.find(h => h.startsWith('num facture') || h.startsWith('num avoir')), iDate = c.find(h => h.startsWith('date de')), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iV = c.col('vendeur'), iSt = c.find(h => h.startsWith('statut'));
@@ -513,8 +562,10 @@ function analyzeTable(t, { clubId, month }) {
   if (!def) return res;
   const H = t.headers.map(norm);
   const find = f => H.findIndex(f);
+  // Numéro de ligne du fichier (l'en-tête est la ligne 1), noté sur chaque saisie : « D'où vient ce chiffre ».
+  const rowsLn = new Proxy(t.rows, { get(tgt, p) { if (p === Symbol.iterator) return function* () { for (let i = 0; i < tgt.length; i++) { c._line = i + 2; yield tgt[i]; } c._line = null; }; const v = Reflect.get(tgt, p); return typeof v === 'function' ? v.bind(tgt) : v; } });
   const c = {
-    H, rows: t.rows, fileName: t.name, clubId, month,
+    H, rows: rowsLn, fileName: t.name, clubId, month,
     find,
     col: p => { const n = norm(p); const e = H.indexOf(n); return e >= 0 ? e : H.findIndex(h => h.includes(n)); },
     colExact: p => H.indexOf(norm(p)),
@@ -523,8 +574,8 @@ function analyzeTable(t, { clubId, month }) {
     colAt: (pos, p) => (norm(H[pos] || '') === norm(p) ? pos : H.indexOf(norm(p))),
     skip: why => { res.skipped[why] = (res.skipped[why] || 0) + 1; },
     warn: w => res.warnings.push(w),
-    entry: e => { res.entries.push(e); if (!res.from || e.date < res.from) res.from = e.date; if (!res.to || e.date > res.to) res.to = e.date; },
-    recov: x => { res.recov.push(x); if (x.date && (!res.from || x.date < res.from)) res.from = x.date; if (x.date && (!res.to || x.date > res.to)) res.to = x.date; },
+    entry: e => { if (c._line && e.line == null) e.line = c._line; res.entries.push(e); if (!res.from || e.date < res.from) res.from = e.date; if (!res.to || e.date > res.to) res.to = e.date; },
+    recov: x => { if (c._line && x.line == null) x.line = c._line; res.recov.push(x); if (x.date && (!res.from || x.date < res.from)) res.from = x.date; if (x.date && (!res.to || x.date > res.to)) res.to = x.date; },
     client: (num, o) => { res.clients[num] = { ...(res.clients[num] || {}), ...Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== '')) }; },
     clientByName: (name, o) => res.clientsByName.push({ name, ...o }),
     resil: x => res.resil.push(x),
@@ -537,7 +588,7 @@ function analyzeTable(t, { clubId, month }) {
     count: k => { res.counts[k] = (res.counts[k] || 0) + 1; },
   };
   def.parse(c);
-  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
+  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Fichier probablement tronqué : exactement 2 000 lignes, plafond des listes Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
   if (t.encoding === 'ISO-8859-15' || t.encoding === 'Windows-1252') res.warnings.push(`Encodage ${t.encoding} : accents et « € » corrigés automatiquement.`);
   if (def.monthly) res.month = (t.name.match(/(\d{4})-(\d{2})(?!-\d)/) || [])[0] || month;
   return res;

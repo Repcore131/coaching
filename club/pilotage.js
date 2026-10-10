@@ -54,7 +54,7 @@ ACTIONS.compSave = el => {
   Object.keys(ind).forEach(k => { if (!ind[k].mode) delete ind[k]; });
   const cap = parseMontant($('#cp-cap').value || '');
   db.batch([[['comp', CLUB.id, el.dataset.mk], { individual: ind, cap: Number.isNaN(cap) ? null : cap, prorataPresence: $('#cp-pro').checked }], [['audit', newId()], { at: Date.now(), by: ME.id, action: 'primes_regles', club: CLUB.id, mk: el.dataset.mk }]]);
-  toast('Règles de prime enregistrées');
+  toast('Règles de prime enregistrées pour 1 club');
 };
 
 // ── Comparatif des clubs ──────────────────────────────────────────────────
@@ -77,7 +77,7 @@ function clubCompare() {
     ${tips.length ? `<div class="card" style="margin-top:14px"><h3>À dupliquer</h3>${tips.map(t => `<p class="small" style="margin:6px 0">${esc(t)}</p>`).join('')}<button class="btn sm" data-act="cmpShare">Partager dans le canal commun</button></div>` : ''}`;
 }
 ACTIONS.cmpCsv = () => { const C = UI._cmp; if (!C) return; downloadFile(`fitpulse-comparatif-${UI.cmpMonth || addMonths(curMonth(), -1)}.csv`, toCsv(['Indicateur', ...C.data.map(d => d.c.name)], C.ind.map(([p, l, f]) => [l, ...C.data.map(d => f(C.get(d, p)))])), 'text/csv;charset=utf-8'); };
-ACTIONS.cmpShare = () => { const t = $$('.card h3').find(h => h.textContent === 'À dupliquer'); if (!t) return; const txt = [...t.parentElement.querySelectorAll('p')].map(p => p.textContent).join('\n'); const prev = UI.chatCh; UI.chatCh = 'all'; sendChat({ text: `Bonnes pratiques entre clubs\n${txt}` }); UI.chatCh = prev; toast('Partagé dans le canal commun'); };
+ACTIONS.cmpShare = () => { const t = $$('.card h3').find(h => h.textContent === 'À dupliquer'); if (!t) return; const txt = [...t.parentElement.querySelectorAll('p')].map(p => p.textContent).join('\n'); const prev = UI.chatCh; UI.chatCh = 'all'; sendChat({ text: `Bonnes pratiques entre clubs\n${txt}` }); UI.chatCh = prev; toast('1 message partagé dans le canal commun'); };
 
 // ── Envoi au directeur, exports, bilan individuel imprimable ─────────────
 ACTIONS.recapMail = () => {
@@ -111,7 +111,7 @@ ACTIONS.bilanPdf = el => {
   const avg3 = [1, 2, 3].map(i => statsFor(CLUB.id, uid, rangeOf('month', addMonths(mk, -i)), { requiredOnly: true }).score).filter(x => x != null); const a3 = avg3.length ? avg3.reduce((s, x) => s + x, 0) / avg3.length : null;
   const note = Object.values(deepGet(S, ['coaching', uid, 'notes']) || {}).filter(n => n.shared).sort((a, b) => b.at - a.at)[0];
   const w = document.createElement('div'); w.className = 'bilan-print';
-  w.innerHTML = `<header><b>${esc(CLUB.name)}</b><span>${monthLabel(mk)}</span></header><h1>Bilan de ${esc(fullName(u))}</h1>
+  w.innerHTML = `<header><b>${esc(nomAffiche())}</b><span>${monthLabel(mk)}</span></header><h1>Bilan de ${esc(fullName(u))}</h1>
     <p>Score du mois : <b>${fmtP(sR.score)}</b>${rk ? ` · rang ${rk.rank}` : ''} · mois précédent ${fmtP(prev)} · moyenne des 3 mois ${fmtP(a3)}</p>
     <table><thead><tr><th>KPI</th><th>Réalisé</th><th>Objectif</th><th>%</th><th>Écart</th></tr></thead><tbody>${st.rows.filter(x => x.target > 0 || x.real > 0).map(x => `<tr><td>${esc(x.k.label)}</td><td>${fmtV(x.real, x.k.unit)}</td><td>${fmtV(x.target, x.k.unit)}</td><td>${fmtP(x.pct)}</td><td>${x.target ? fmtV(x.real - x.target, x.k.unit) : ''}</td></tr>`).join('')}</tbody></table>
     <div class="bilan-note"><b>Commentaire du manager</b><p>${note ? esc(note.text) : ''}</p></div>`;
@@ -126,7 +126,7 @@ function recapSynthese(mk) {
   L.push(`${fmtN(F.contrats)} contrats signés, ${v(F.contrats, P.contrats)} par rapport au mois précédent.`);
   const rk = ranking(CLUB.id, r).filter(x => x.score != null); if (rk[0]) L.push(`${fullName(rk[0].u)} termine en tête avec un score de ${fmtP(rk[0].score)}.`);
   const team = clubMembers(CLUB.id); const ups = team.map(u => ({ u, d: (statsFor(CLUB.id, u.id, r, { requiredOnly: true }).score || 0) - (statsFor(CLUB.id, u.id, rangeOf('month', addMonths(mk, -1)), { requiredOnly: true }).score || 0) })).sort((a, b) => b.d - a.d);
-  if (ups[0] && ups[0].d > 0) L.push(`Plus belle progression : ${fullName(ups[0].u)}, +${Math.round(ups[0].d * 100)} points de score.`);
+  if (ups[0] && ups[0].d > 0) L.push(`Plus forte progression : ${fullName(ups[0].u)}, +${Math.round(ups[0].d * 100)} points de score.`);
   L.push(`${plur(F.resiliees, 'résiliation effective', 'résiliations effectives')} et ${plur(F.sauvees, 'client sauvé', 'clients sauvés')} sur ${plur(F.demandes, 'demande', 'demandes')}.`);
   L.push(`Impayés : ${fmtE(F.impayesEquipe)} récupérés par l’équipe${F.du != null ? `, ${fmtE(F.du)} encore dus en fin de mois` : ''}.`);
   return `<div class="card recap-syn"><h3>En bref</h3>${L.slice(0, 5).map(s => `<p>${esc(s)}</p>`).join('')}</div>`;

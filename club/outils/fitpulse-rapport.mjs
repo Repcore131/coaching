@@ -14,26 +14,29 @@ import { webcrypto } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 process.env.TZ = 'Europe/Paris';
-const DIR = new URL('..', import.meta.url);
+const DIR = new URL(process.env.FITPULSE_APP_DIR || '..', import.meta.url); // dossier de l'appli (club/), ou lib/app/ dans club/cloud
 const HEURE = 15; // lundi 15 h
 const ATTENTE_MAX = Number(process.env.RAPPORT_ATTENTE_MIN || 4) * 60000; // avant 15 h, on attend l'heure pile
 
 // ── L'appli, sans navigateur ──────────────────────────────────────────────
-export function chargerAppli(donnees) {
+export function chargerAppli(donnees, { libs = false } = {}) {
   const noop = () => {};
   const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, addEventListener: noop, appendChild: noop, setAttribute: noop, querySelector: () => null, querySelectorAll: () => [], dataset: {} });
   const ctx = {
-    console: { log: noop, warn: noop, error: noop, info: noop }, Date, Math, Intl, JSON, URLSearchParams, URL, setTimeout, clearTimeout, setInterval: noop, queueMicrotask, crypto: webcrypto, TextEncoder, TextDecoder,
+    console: { log: noop, warn: noop, error: noop, info: noop }, Date, Math, Intl, JSON, URLSearchParams, URL, setTimeout, clearTimeout, setInterval: noop, queueMicrotask, crypto: webcrypto, TextEncoder, TextDecoder, performance,
     navigator: { onLine: true, userAgent: 'node' }, addEventListener: noop, removeEventListener: noop, matchMedia: () => ({ matches: false, addEventListener: noop }), requestAnimationFrame: noop,
     document: { addEventListener: noop, querySelector: () => null, querySelectorAll: () => [], createElement: el, getElementById: () => null, body: el(), documentElement: el(), head: el() },
     location: { hostname: 'localhost', search: '', hash: '', href: 'http://localhost/' }, history: { replaceState: noop }, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, indexedDB: undefined,
   };
   ctx.window = ctx; vm.createContext(ctx);
+  // Lecture des ZIP et XLSX (imports automatiques) : mêmes bibliothèques que le site.
+  if (libs) for (const f of ['vendor/jszip.min.js', 'vendor/xlsx.full.min.js']) vm.runInContext(readFileSync(new URL(f, DIR), 'utf8'), ctx, { filename: f });
   const fichiers = readFileSync(new URL('index.html', DIR), 'utf8').match(/src="[a-z0-9-]+\.js"/g).map(s => s.slice(5, -1)).filter(f => f !== 'app.js');
   for (const f of fichiers) vm.runInContext(readFileSync(new URL(f, DIR), 'utf8'), ctx, { filename: f });
   ctx.__DONNEES = donnees;
   vm.runInContext(donnees === 'demo' ? 'S = normalizeState(demoState()); REV++;' : 'S = normalizeState(__DONNEES || {}); REV++;', ctx);
-  return code => vm.runInContext(code, ctx);
+  const run = code => vm.runInContext(code, ctx); run.ctx = ctx;
+  return run;
 }
 
 // Les chiffres du rapport, calculés par le code de l'appli.
@@ -72,7 +75,7 @@ const N = v => (v == null ? 'n.d.' : nf.format(Math.round(v)).replace(/ | /g,
 const EUR = v => (v == null ? 'n.d.' : N(v) + ' €');
 const PCT = v => (v == null ? 'n.d.' : Math.round(v) + ' %');
 const DM = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
-const JAUNE = '#FFD600', NOIR = '#0B0B0C', VERT = '#16A34A', ORANGE = '#D97706', ROUGE = '#DC2626', GRIS = '#6B6B70', FOND = '#F3F3F0', LIGNE = '#E4E4DE';
+const MARQUE = '#12B3A8', NOIR = '#0B0B0C', VERT = '#16A34A', ORANGE = '#D97706', ROUGE = '#DC2626', GRIS = '#6B6B70', FOND = '#F3F3F0', LIGNE = '#E4E4DE';
 const couleur = (pct, rythme = 1) => (pct == null ? GRIS : pct >= rythme * 0.98 ? VERT : pct >= rythme * 0.85 ? ORANGE : ROUGE);
 
 function tuile(label, valeur, sous = '', c = NOIR) {
@@ -93,10 +96,10 @@ function jauge({ label, reel, cible, fmt = N, rythme = null, n1 = null, note = '
 function histo(items, { fmt = N, h = 110, cible = null, c2 = null } = {}) {
   const max = Math.max(1, cible || 0, ...items.flatMap(i => [i.v || 0, i.v2 || 0]));
   const col = (v, c) => { const px = Math.round(((v || 0) / max) * h); return `<td valign="bottom" align="center" style="padding:0 2px"><div style="font-size:10px;color:${NOIR};font-weight:700;white-space:nowrap">${v == null ? '' : fmt(v)}</div><div style="background:${c};height:${Math.max(px, v ? 2 : 0)}px;width:22px;border-radius:3px 3px 0 0;font-size:0;line-height:0">&nbsp;</div></td>`; };
-  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:6px auto 0"><tr>${items.map(i => `<td valign="bottom" style="padding:0 6px"><table cellpadding="0" cellspacing="0" role="presentation"><tr>${col(i.v, i.c || JAUNE)}${c2 ? col(i.v2, c2) : ''}</tr></table></td>`).join('')}</tr>
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:6px auto 0"><tr>${items.map(i => `<td valign="bottom" style="padding:0 6px"><table cellpadding="0" cellspacing="0" role="presentation"><tr>${col(i.v, i.c || MARQUE)}${c2 ? col(i.v2, c2) : ''}</tr></table></td>`).join('')}</tr>
     <tr>${items.map(i => `<td align="center" style="font-size:11px;color:${GRIS};padding-top:4px;border-top:1px solid ${LIGNE}">${E(i.l)}</td>`).join('')}</tr></table>`;
 }
-const bloc = (titre, corps) => `<tr><td style="padding:14px 18px 4px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:.5px;text-transform:uppercase;color:${NOIR};border-left:5px solid ${JAUNE};padding-left:8px">${E(titre)}</div></td></tr><tr><td style="padding:4px 18px 10px">${corps}</td></tr>`;
+const bloc = (titre, corps) => `<tr><td style="padding:14px 18px 4px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:.5px;text-transform:uppercase;color:${NOIR};border-left:5px solid ${MARQUE};padding-left:8px">${E(titre)}</div></td></tr><tr><td style="padding:4px 18px 10px">${corps}</td></tr>`;
 const tableau = (tetes, lignes) => `<table width="100%" cellpadding="6" cellspacing="0" role="presentation" style="border-collapse:collapse;font-size:13px"><tr>${tetes.map((t, i) => `<th align="${i ? 'right' : 'left'}" style="border-bottom:2px solid ${NOIR};font-size:12px">${E(t)}</th>`).join('')}</tr>${lignes.map(l => `<tr>${l.map((v, i) => `<td align="${i ? 'right' : 'left'}" style="border-bottom:1px solid ${LIGNE}">${v}</td>`).join('')}</tr>`).join('')}</table>`;
 
 export function emailRapport(D, { mensuel = false } = {}) {
@@ -108,7 +111,7 @@ export function emailRapport(D, { mensuel = false } = {}) {
 <body style="margin:0;background:${FOND};font-family:Arial,Helvetica,sans-serif;color:${NOIR}">
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${FOND}"><tr><td align="center" style="padding:16px 8px">
 <table width="640" cellpadding="0" cellspacing="0" role="presentation" style="max-width:640px;width:100%;background:#fff;border-radius:14px;overflow:hidden">
-<tr><td style="background:${NOIR};padding:18px 18px 14px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;color:${JAUNE};letter-spacing:1px">FIT PULSE</div>
+<tr><td style="background:${NOIR};padding:18px 18px 14px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;color:${MARQUE};letter-spacing:1px">FIT PULSE</div>
   <div style="color:#fff;font-size:15px;margin-top:2px"><b>${E(D.club)}</b> · rapport hebdomadaire du ${DM(D.today)}</div>
   <div style="color:#BDBDBD;font-size:12px;margin-top:4px">Semaine du ${DM(D.wStart)} au ${DM(D.wEnd)} · Plan ${E(P.label)} : ${Math.round(rythme * 100)} % du trimestre écoulé</div></td></tr>
 ${bloc('La semaine', tuiles([

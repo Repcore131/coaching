@@ -15,7 +15,7 @@ const PLAN_DEFAULT = {
   partenariats: 2, cibles: ['MAIF', 'MACIF', 'MAAF', 'IMA'], blackFriday: '2026-11-15',
   avisDepart: 920, avisDepartDate: '2026-10-06',
   primes: { palier: 150, avis: [[50, 50], [75, 80]], equipeMoisVentes: 60 },
-  directeur: 'kevinguellec.pro@gmail.com', copie: null, rapport: 'lundi 15 h',
+  directeur: '', copie: null, rapport: 'lundi 15 h',
 };
 const planStore = (club = CLUB.id) => deepGet(S, ['plans', club, PLAN_DEFAULT.id]) || {};
 function planOf(club = CLUB.id) {
@@ -71,7 +71,7 @@ function churnStats(club = CLUB.id) {
     const neuf = dettes.filter(c => c.balanceAt && dayDiff(c.balanceAt, today()) >= 0 && dayDiff(c.balanceAt, today()) <= 30);
     const sla = neuf.map(c => { const lim = dateOf(c.balanceAt).getTime() + (P.targets.impayeH + 24) * 3600000; const t = (T.get(c.id) || []).filter(x => x.at <= lim); return { c, ok: t.some(x => x.channel === 'call' || x.checks) && t.some(x => x.channel === 'sms' || (x.checks && x.checks.sms)), retard: Date.now() > lim }; });
     const vieux = dettes.filter(c => (c.oldestIncident || c.balanceAt) && dayDiff(c.oldestIncident || c.balanceAt, today()) >= 180);
-    const weeks = []; for (let w = weekStart(P.from); w <= end; w = addDays(w, 7)) { const we = addDays(w, 6); weeks.push({ w, v: (typeof recovList === 'function' ? recovList(club, w, we) : []).reduce((s, x) => s + x.amount, 0) }); }
+    const weeks = []; for (let w = weekStart(P.from); w <= end; w = addDays(w, 7)) { const we = addDays(w, 6); weeks.push({ w, v: recoveredFor(club, { from: w, to: we }) }); }
     return { in21, in21Contact, resAbo, resOpt, jourJ, jourJsans, sla, slaOk: sla.filter(x => x.ok).length, slaRetard: sla.filter(x => !x.ok && x.retard).length, vieux, vieuxTotal: vieux.reduce((s, c) => s + Number(c.balance), 0), weeks };
   });
 }
@@ -216,7 +216,7 @@ function planPrimes() {
 function planRapport() {
   const P = planOf(); const wEnd = addDays(weekStart(today()), -1), wStart = addDays(wEnd, -6); const st = planStats(); const ch = churnStats(); const tr = transfoStats();
   const vs = sumRange(CLUB.id, null, 'contrats', wStart, wEnd); const res = Object.values(S.resiliations || {}).filter(r => r && r.clubId === CLUB.id && !r.hidden && r.date >= wStart && r.date <= wEnd);
-  const fins = finsCampagne(CLUB.id, curMonth()); const btq = htBoutique(CLUB.id, wStart, wEnd); const rec = (typeof recovList === 'function' ? recovList(CLUB.id, wStart, wEnd) : []).reduce((s, x) => s + x.amount, 0);
+  const fins = finsCampagne(CLUB.id, curMonth()); const btq = htBoutique(CLUB.id, wStart, wEnd); const rec = recoveredFor(CLUB.id, { from: wStart, to: wEnd });
   const sent = deepGet(S, ['serveur', 'rapport']) || {};
   return `<div class="card"><div class="card-head">${ico('mail')}<h3>Rapport du lundi</h3></div>
     <p class="muted small" style="margin-top:-6px">Envoyé automatiquement chaque ${esc(P.rapport)} à ${esc(P.directeur)}${P.copie ? ` (copie ${esc(P.copie)})` : ''}, avec graphiques. Pensez à déposer les exports Resamania le lundi matin.${sent.at ? ` Dernier envoi : ${dmy(isoOf(new Date(sent.at)))} ${new Date(sent.at).toTimeString().slice(0, 5)}.` : ''}</p>
@@ -240,12 +240,12 @@ function planReglages() {
 
 // ── Actions ───────────────────────────────────────────────────────────────
 const planPath = (...k) => ['plans', CLUB.id, PLAN_DEFAULT.id, ...k];
-ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { toast('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('Nombre d’avis noté'); };
+ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { toast('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('1 relevé d’avis noté'); };
 ACTIONS.planSave = () => {
   const f = formData($('#plf')); const num = k => { const v = parseMontant(f[k]); return Number.isNaN(v) ? null : v; }; const mk = curMonth();
   const t = {}; ['ca', 'ventes', 'engagementPct', 'optionsPct', 'boutique', 'avis', 'transfoEquipe', 'transfoMin'].forEach(k => { const v = num(k); if (v != null) t[k] = v; });
   const ops = [[planPath('targets'), t], [planPath('primes', 'palier'), num('palier') || 150], [planPath('primes', 'equipeMoisVentes'), num('equipeMoisVentes') || 60], [planPath('directeur'), (f.directeur || '').trim()], [planPath('copie'), (f.copie || '').trim() || null], [planPath('mois', mk, 'ventes'), num('moisVentes')], [planPath('mois', mk, 'ca'), num('moisCa')], [planPath('caManuel', mk), num('caManuel')]];
-  db.batch(ops); toast('Plan enregistré');
+  db.batch(ops); toast('1 plan enregistré');
 };
 ACTIONS.planMystere = el => db.set(planPath('mystere', curMonth(), el.dataset.u), el.value || null);
 ACTIONS.planVideo = el => db.set(planPath('missions', 'videos'), el.dataset.v);
@@ -283,5 +283,5 @@ function planHomeCard() {
   const st = planStats(); const P = st.P; if (today() < P.from || today() > P.to) return '';
   const pct = (v, t) => (v == null ? 'n.d.' : fmtP(v / t));
   return `<a class="card plan-home" href="#/dashboard" data-act="ui" data-key="dashTab" data-val="plan"><div class="row"><b class="spacer">Plan ${esc(P.label)}</b><span class="muted small">${fmtP(st.elapsed)} écoulé</span></div>
-    <div class="plan-kpis"><div><span>CA HT</span><b>${pct(st.ca, P.targets.ca)}</b></div><div><span>Abonnements</span><b>${st.ventes} / ${P.targets.ventes}</b></div><div><span>Boutique</span><b>${pct(st.boutique, P.targets.boutique)}</b></div><div><span>Avis</span><b>${st.avis.n}</b></div></div></a>`;
+    <div class="plan-kpis"><div><span>CA HT</span><b>${pct(st.ca, P.targets.ca)}</b></div><div><span>Abonnements</span><b>${st.ventes} sur ${plur(P.targets.ventes, 'contrat', 'contrats')}</b></div><div><span>Boutique</span><b>${pct(st.boutique, P.targets.boutique)}</b></div><div><span>Avis</span><b>${plur(st.avis.n, 'avis', 'avis')}</b></div></div></a>`;
 }

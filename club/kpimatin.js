@@ -179,7 +179,7 @@ PAGES.kpimatin = {
           : `<button class="btn primary lg" data-act="kmMake">${ico('send')} Créer mon SMS</button>`}</div>
       ${mgr ? `<details class="card"><summary><b>Modèle du message</b> <span class="muted small">(manager)</span></summary>
         <p class="muted small">Le texte envoyé chaque matin. Les mots entre accolades sont remplacés : ${['mois', 'date', ...KM_FIELDS.map(f => f[0])].map(k => `<code>{${k}}</code>`).join(' ')}</p>
-        <form id="kmf" class="grid"><label class="field"><span>Nom du groupe WhatsApp (rappel affiché au moment d’envoyer)</span><input class="input" name="group" maxlength="80" value="${esc(cfg.group || '')}" placeholder="FITNESS PARK Niort KPI"></label>
+        <form id="kmf" class="grid"><label class="field"><span>Nom du groupe WhatsApp (rappel affiché au moment d’envoyer)</span><input class="input" name="group" maxlength="80" value="${esc(cfg.group || '')}" placeholder="KPI de l’équipe"></label>
           <label class="field"><span>E-mail du récap automatique de 8 h 45 (avec bouton « Envoyer sur WhatsApp »)</span><input class="input" name="email" type="email" maxlength="120" value="${esc(cfg.email || '')}" placeholder="accueil du club (sinon : e-mail de copie du Plan)"></label>
         <label class="field"><span>Modèle</span><textarea class="input km-text" name="template" rows="16">${esc(kmTemplate())}</textarea></label></form>
         <div class="row" style="gap:8px"><button class="btn primary" data-act="kmCfgSave">Enregistrer le modèle</button><button class="btn ghost" data-act="kmCfgReset">Rétablir le modèle d’origine</button></div></details>` : ''}`;
@@ -234,18 +234,18 @@ function kmSyncCard() {
       : frais && sy.step === 'maj' ? '<p class="small">Récupération des exports en cours…</p>'
         : frais && sy.step === 'ok' ? '<p class="small ok">Mise à jour terminée.</p>'
           : frais && sy.step === 'erreur' ? `<p class="small bad">${esc(sy.msg || 'Échec de la mise à jour.')}</p>` : '';
-  const armeeLigne = armee ? `<p class="small" style="color:var(--warn)"><b>Mise à jour armée.</b> Le robot démarre vers <b>${creneau}</b> — restez sur cette page à ce moment et tenez le code Resamania prêt.</p>` : '';
+  const armeeLigne = armee ? `<p class="small" style="color:var(--warn)"><b>Mise à jour armée.</b> Le robot démarre vers <b>${creneau}</b> : restez sur cette page à ce moment et tenez le code Resamania prêt.</p>` : '';
   const attente = frais && sy.step === 'code';
   return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('clock')}<h3>Mise à jour depuis Resamania</h3></div>
     <p class="muted small" style="margin-top:-6px">Appuyez sur « Lancer la mise à jour » pour armer la récupération des exports du jour. Le robot démarre au créneau suivant (toutes les heures à la demi-heure, de 12 h à 23 h) : soyez présent à ce moment pour saisir le code Resamania.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>
     <div class="row wrap" style="gap:8px;margin:4px 0 10px"><button class="btn sm primary" data-act="rsmSync">${ico('upload')} Lancer la mise à jour</button></div>
     ${armeeLigne}${etatLigne}
     <div style="padding:10px 12px;border:1px solid ${attente ? 'var(--warn)' : 'var(--line)'};border-radius:10px;${attente ? 'background:var(--warn-soft)' : ''}">
-      <b>Code Resamania</b> <span class="muted small">— dès que le robot démarre, Resamania vous envoie le code par e-mail : tapez-le ici et validez <b>sous 10 minutes</b>.</span>
+      <b>Code Resamania</b> <span class="muted small">Dès que le robot démarre, Resamania vous envoie le code par e-mail : tapez-le ici et validez <b>sous 10 minutes</b>.</span>
       <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:180px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div></div>`;
 }
 ACTIONS.rsmSync = () => { if (!isManager()) return; const c = kmProchainCreneau().toTimeString().slice(0, 5).replace(':', ' h '); db.set(['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }); toast(`Mise à jour armée : le robot démarre vers ${c}. Restez sur cette page et gardez le code Resamania à portée.`); };
-ACTIONS.rsmCode = () => { if (!isManager()) return; const f = formData($('#rsmf')); const c = (f.code || '').replace(/\s/g, ''); if (c.length < 4) { toast('Code incomplet.'); return; } db.set(['rsm', 'code'], { v: c, at: Date.now(), by: ME.id }); toast('Code transmis au robot.'); };
+ACTIONS.rsmCode = () => { if (!isManager()) return; const f = formData($('#rsmf')); const c = (f.code || '').replace(/\s/g, ''); if (c.length < 4) { toast('Code incomplet.'); return; } db.set(['rsm', 'code'], { v: c, at: Date.now(), by: ME.id }); toast('1 code transmis au robot'); };
 ACTIONS.kmDay = el => { const K = kmState(); K.day = el.value || addDays(today(), -1); K.vals = {}; K.step = 0; render(); };
 ACTIONS.kmSet = el => { const K = kmState(); K.vals[el.dataset.k] = el.value; if (K.step === 2) K.step = 0; const lab = el.closest('.field'); if (lab) { lab.classList.toggle('km-todo', !el.value); const s = $('small', lab); if (s) s.textContent = 'modifié à la main'; } };
 ACTIONS.kmText = el => { kmState().text = el.value; };
@@ -264,6 +264,6 @@ const kmText = () => { const ta = $('#km-text'); return ta ? ta.value : kmState(
 // wa.me ouvre WhatsApp (application ou WhatsApp Web) avec le message : on choisit le groupe et on envoie.
 ACTIONS.kmSend = () => { const t = kmText(); window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank', 'noopener'); };
 ACTIONS.kmShare = async () => { try { await navigator.share({ text: kmText() }); } catch (e) { /* partage annulé */ } };
-ACTIONS.kmCopy = async () => { const t = kmText(); try { await navigator.clipboard.writeText(t); toast('Message copié'); } catch (e) { const ta = $('#km-text'); if (ta) { ta.select(); document.execCommand('copy'); toast('Message copié'); } } };
-ACTIONS.kmCfgSave = () => { if (!isManager()) return; const f = formData($('#kmf')); db.set(['clubs', CLUB.id, 'kpiMatin'], { template: (f.template || '').trim() === KM_DEFAULT ? null : (f.template || '').slice(0, 4000), group: (f.group || '').trim().slice(0, 80) || null, email: (f.email || '').trim().slice(0, 120) || null }); kmState().step = 0; toast('Modèle enregistré pour tout le club'); };
+ACTIONS.kmCopy = async () => { const t = kmText(); try { await navigator.clipboard.writeText(t); toast('1 message copié'); } catch (e) { const ta = $('#km-text'); if (ta) { ta.select(); document.execCommand('copy'); toast('1 message copié'); } } };
+ACTIONS.kmCfgSave = () => { if (!isManager()) return; const f = formData($('#kmf')); db.set(['clubs', CLUB.id, 'kpiMatin'], { template: (f.template || '').trim() === KM_DEFAULT ? null : (f.template || '').slice(0, 4000), group: (f.group || '').trim().slice(0, 80) || null, email: (f.email || '').trim().slice(0, 120) || null }); kmState().step = 0; toast('1 modèle enregistré pour tout le club'); };
 ACTIONS.kmCfgReset = async () => { if (!isManager()) return; if (await confirmDlg('Rétablir le modèle d’origine du message ?', { ok: 'Rétablir' })) { db.set(['clubs', CLUB.id, 'kpiMatin', 'template'], null); kmState().step = 0; render(); } };

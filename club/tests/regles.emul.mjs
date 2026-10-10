@@ -20,8 +20,8 @@ const rules = avecRegle('{\n  "rules": {\n  }\n}');
 let r = await fetch(`http://${HOST}/.settings/rules.json?ns=${NS}`, { method: 'PUT', headers: owner, body: rules });
 assert.equal(r.status, 200, 'règles refusées par le simulateur : ' + await r.text());
 // 2. Données de départ (compte de service).
-const boot = { [key('crea')]: 'crea', [key('mgr')]: 'mgr', [key('mem')]: 'mem', [key('mem2')]: 'mem2' };
-await fetch(url(''), { method: 'PATCH', headers: owner, body: JSON.stringify({ pulse_boot: boot, pulse: { users: { crea: { id: 'crea', role: 'createur', status: 'active', clubs: ['niort'] }, mgr: { id: 'mgr', role: 'manager', status: 'active', clubs: ['niort'] }, mem: { id: 'mem', role: 'membre', status: 'active', clubs: ['niort'] }, mem2: { id: 'mem2', role: 'membre', status: 'active', clubs: ['niort'] } }, clubs: { niort: { id: 'niort', name: 'Niort' } }, audit: { a1: { at: 1, by: 'mgr', action: 'test' } } }, pulse_inbox: { mem: { n1: { title: 't', at: 1 } } }, fitpulse_secret: { vapid: { privateJwk: { d: 'x' } } } }) });
+const boot = { [key('crea')]: 'crea', [key('mgr')]: 'mgr', [key('mem')]: 'mem', [key('mem2')]: 'mem2', [key('mem3')]: 'mem3' };
+await fetch(url(''), { method: 'PATCH', headers: owner, body: JSON.stringify({ pulse_boot: boot, pulse: { users: { crea: { id: 'crea', role: 'createur', status: 'active', clubs: ['niort'] }, mgr: { id: 'mgr', role: 'manager', status: 'active', clubs: ['niort'] }, mem: { id: 'mem', role: 'membre', status: 'active', clubs: ['niort'] }, mem2: { id: 'mem2', role: 'membre', status: 'active', clubs: ['niort'] }, mem3: { id: 'mem3', role: 'membre', status: 'active', clubs: ['niort'] } }, clubs: { niort: { id: 'niort', name: 'Niort' } }, audit: { a1: { at: 1, by: 'mgr', action: 'test' } } }, pulse_inbox: { mem: { n1: { title: 't', at: 1 } } }, fitpulse_secret: { vapid: { privateJwk: { d: 'x' } } } }) });
 
 const E = (uid, extra = {}) => ({ id: 'e', userId: uid, clubId: 'niort', kpiId: 'contrats', date: '2026-10-05', value: 1, source: 'manual', at: 1, ...extra });
 await check('anonyme ne lit pas /pulse', await req('GET', 'pulse'), false);
@@ -56,5 +56,52 @@ await check('clé secrète illisible (créateur)', await req('GET', 'fitpulse_se
 await check('membre ne dépose pas d’invitation', await req('PUT', 'fitpulse_mail/x1', { email: 'a@b.fr', first: 'A', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mem')), false);
 await check('manager dépose une invitation', await req('PUT', 'fitpulse_mail/x2', { email: 'a@b.fr', first: 'A', last: 'MARTIN', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mgr')), true);
 await check('le créateur peut tout écrire sous /pulse', await req('PUT', 'pulse/meta/x', 1, who('crea')), true);
+await check('créateur écrit le suivi produit', await req('PUT', 'pulse_product/p01', { id: 'p01', label: 'Imports', status: 'devant' }, who('crea')), true);
+await check('créateur lit le suivi produit', await req('GET', 'pulse_product', undefined, who('crea')), true);
+await check('manager ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mgr')), false);
+await check('membre ne lit pas le suivi produit', await req('GET', 'pulse_product', undefined, who('mem')), false);
+await check('manager n’écrit pas le suivi produit', await req('PUT', 'pulse_product/p01/status', 'derriere', who('mgr')), false);
+await check('membre change le statut d’une demande reçue', await req('PUT', 'pulse/resRequests/niort/t1/status', 'contacte', who('mem')), true);
+await check('anonyme ne lit pas les demandes reçues', await req('GET', 'pulse/resRequests', undefined), false);
+await check('manager enregistre une fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-09', { date: '2026-10-09', by: 'mgr', forces: ['a', 'b'], axes: ['c', 'd'], engagement: { texte: 'x', date: '2026-10-16' } }, who('mgr')), true);
+await check('membre n’écrit pas sa fiche de point', await req('PUT', 'pulse/coaching/mem/2026-10-10', { date: '2026-10-10' }, who('mem')), false);
+await check('membre coche ses actions de coaching', await req('PUT', 'pulse/coaching/mem/actions/a1/done', true, who('mem')), true);
+const BENCH = { v: 1, at: 1, realisation: { contrats: 0.93, avis: 1.1 }, delaiImpaye: 5, sauvetage: 0.2 };
+await check('manager envoie les agrégats anonymes', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', BENCH, who('mgr')), true);
+await check('membre n’envoie pas d’agrégats', await req('PUT', 'benchmark/2026-09/fedcba9876543210fedcba9876543210', BENCH, who('mem')), false);
+await check('aucun nom dans /benchmark (champ texte refusé)', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', { ...BENCH, club: 'Niort' }, who('mgr')), false);
+await check('aucun nom dans /benchmark (valeur texte refusée)', await req('PUT', 'benchmark/2026-09/0123456789abcdef0123456789abcdef', { ...BENCH, realisation: { contrats: 'Kévin' } }, who('mgr')), false);
+await check('empreinte du club obligatoire (pas un nom en clé)', await req('PUT', 'benchmark/2026-09/Niort', BENCH, who('mgr')), false);
+await check('membre lit les agrégats', await req('GET', 'benchmark/2026-09', undefined, who('mem')), true);
+await check('anonyme ne lit pas les agrégats', await req('GET', 'benchmark', undefined), false);
+// Mentions légales publiques (lisibles sans connexion, écrites par un manager)
+await check('manager publie les mentions légales', await req('PUT', 'pulse_public/legal', { societe: 'SAS Exemple', email: 'contact@exemple.fr' }, who('mgr')), true);
+await check('anonyme lit les mentions légales', await req('GET', 'pulse_public/legal', undefined), true);
+await check('membre ne modifie pas les mentions légales', await req('PUT', 'pulse_public/legal/societe', 'X', who('mem')), false);
+await check('rien d’autre sous pulse_public', await req('PUT', 'pulse_public/autre', 'X', who('mgr')), false);
+await check('membre écrit son usage', await req('PUT', 'pulse/usage/mem/2026-10-09', { opens: 1 }, who('mem')), true);
+await check('membre n’écrit pas l’usage d’un autre', await req('PUT', 'pulse/usage/mgr/2026-10-09', { opens: 1 }, who('mem')), false);
+// Relève de la boîte accueil : dossiers « ml… » et battement écrits par le seul compte de service.
+await fetch(url('pulse/resiliations/ml0123456789abcdef'), { method: 'PUT', headers: owner, body: JSON.stringify({ id: 'ml0123456789abcdef', clubId: 'niort', client: 'A', status: 'nouvelle', receivedAt: 1000, mail: { threadId: 't1', lastInAt: 1000, awaitingReply: true } }) });
+await fetch(url('pulse/clubs/niort'), { method: 'PATCH', headers: owner, body: JSON.stringify({ name: 'Club', mailSync: { at: 5000, ok: true } }) });
+await check('membre ne crée pas un dossier relevé (ml)', await req('PUT', 'pulse/resiliations/mlfffffffffffffff0', { id: 'x', clubId: 'niort', status: 'nouvelle' }, who('mem')), false);
+await check('membre crée un dossier ordinaire', await req('PUT', 'pulse/resiliations/r9', { id: 'r9', clubId: 'niort', status: 'nouvelle' }, who('mem')), true);
+await check('membre prend en charge un dossier relevé', await req('PATCH', 'pulse/resiliations/ml0123456789abcdef', { status: 'traitement', ownerId: 'mem' }, who('mem')), true);
+await check('membre ne modifie pas le fil e-mail d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/mail/awaitingReply', false, who('mem')), false);
+await check('membre ne modifie pas la date de réception d’un dossier relevé', await req('PUT', 'pulse/resiliations/ml0123456789abcdef/receivedAt', 2000, who('mem')), false);
+await check('membre ne supprime pas un dossier relevé', await req('DELETE', 'pulse/resiliations/ml0123456789abcdef', undefined, who('mem')), false);
+// Données privées des dossiers : manager du club et responsable du dossier seulement.
+await fetch(url('pulse/resiliations/rp1'), { method: 'PUT', headers: owner, body: JSON.stringify({ id: 'rp1', clubId: 'niort', client: 'B', status: 'traitement', ownerId: 'mem' }) });
+await fetch(url('private/resiliations/niort/rp1'), { method: 'PUT', headers: owner, body: JSON.stringify({ email: 'b@exemple.fr', phone: '06 00 00 00 01' }) });
+await check('responsable lit l’e-mail et le téléphone de son dossier', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mem')), true);
+await check('vendeur non responsable ne lit pas l’e-mail ni le téléphone', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mem3')), false);
+await check('vendeur non responsable ne lit pas le téléphone seul', await req('GET', 'private/resiliations/niort/rp1/phone', undefined, who('mem3')), false);
+await check('manager lit les données privées', await req('GET', 'private/resiliations/niort/rp1', undefined, who('mgr')), true);
+await check('personne ne liste toutes les données privées', await req('GET', 'private', undefined, who('mem')), false);
+await check('vendeur non responsable n’écrit pas le téléphone', await req('PUT', 'private/resiliations/niort/rp1/phone', '06 00 00 00 09', who('mem3')), false);
+await check('responsable ajoute un numéro', await req('PUT', 'private/resiliations/niort/rp1/phone', '06 00 00 00 02', who('mem')), true);
+await check('champ inconnu refusé', await req('PUT', 'private/resiliations/niort/rp1/note', 'x', who('mgr')), false);
+await check('manager ne falsifie pas la dernière relève', await req('PUT', 'pulse/clubs/niort/mailSync', { at: 9999, ok: true }, who('mgr')), false);
+await check('manager règle son club sans toucher à la relève', await req('PUT', 'pulse/clubs/niort/name', 'Club Centre', who('mgr')), true);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

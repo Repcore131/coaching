@@ -13,17 +13,38 @@ function duAt(clubId, mk) {
   const snaps = Object.entries(duSnapshot(clubId)).filter(([d]) => d.slice(0, 7) === mk).sort(([a], [b]) => a.localeCompare(b));
   return snaps.length ? Number(snaps.at(-1)[1]) : null;
 }
+// ── Revenus du mois (prix mensuels des fiches clients) ────────────────────
+// Revenu récurrent : abonnés actifs x leur prix (mois en cours) ; mois passés :
+// valeur gardée dans S.monthly (prise au récap, ou saisie dans Imports > Saisie manuelle).
+const prixFiche = c => Number(c.price) > 0 ? Number(c.price) : 0;
+function revenusMois(clubId, mk) {
+  const actifs = activeClients(clubId); const sansPrix = actifs.filter(c => !prixFiche(c)).length;
+  const pm = prixMoyen(clubId); const live = mk >= curMonth();
+  const mrrLive = Math.round(actifs.reduce((s, c) => s + (prixFiche(c) || pm), 0) * 100) / 100;
+  const snap = deepGet(S, ['monthly', clubId, mk]) || {};
+  const perduL = resList(clubId).filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date || '').slice(0, 7) === mk).map(r => { const c = resClient(r); return c && prixFiche(c) ? prixFiche(c) : pm; });
+  const entres = clubClients(clubId).filter(c => (c.start || '').slice(0, 7) === mk);
+  const gagne = entres.length ? entres.reduce((s, c) => s + (prixFiche(c) || pm), 0) : (sumRange(clubId, null, 'contrats', mk + '-01', `${mk}-${pad(daysIn(mk))}`) * pm);
+  const val = (k, calc) => snap[k] != null && !live ? Number(snap[k]) : calc;
+  return {
+    mrr: live ? mrrLive : (snap.mrr != null ? Number(snap.mrr) : null),
+    perdu: val('revenuPerdu', Math.round(perduL.reduce((s, x) => s + x, 0) * 100) / 100),
+    gagne: val('revenuGagne', Math.round(gagne * 100) / 100),
+    estimation: actifs.length > 0 && sansPrix / actifs.length > 0.2,
+  };
+}
 function monthFigures(clubId, mk) {
   const from = mk + '-01', to = `${mk}-${daysIn(mk)}`;
   const sum = (k, u = null) => sumRange(clubId, u, k, from, to);
   const res = resList(clubId);
   const demandes = res.filter(r => r.date.slice(0, 7) === mk).length;
   const resiliees = res.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).length;
-  const sauvees = res.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).length;
+  const sauveesL = res.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk); const sauvees = sauveesL.length;
+  const sauveEuros = sauveesL.reduce((s, r) => s + resValeur(r), 0);
+  const RK = typeof resIndicateurs === 'function' ? resIndicateurs(clubId, mk, res) : {};
   const base = deepGet(S, ['base', clubId, mk]) || {};
   const evo = deepGet(S, ['rsm', 'controls', clubId, 'evo', mk]) || {};
-  const rec = typeof recovList === 'function' ? recovList(clubId, from, to) : [];
-  const recBy = {}; rec.forEach(x => { recBy[x.canal] = (recBy[x.canal] || 0) + x.amount; });
+  const recBy = recoveredParts(clubId, { from, to });
   const actifs = Number(base.actifs) || null;
   return {
     mk,
@@ -31,13 +52,15 @@ function monthFigures(clubId, mk) {
     entrants: evo.gained != null ? Number(evo.gained) : sum('contrats'),
     entrantsSrc: evo.gained != null ? 'Resamania (Évolution clients)' : 'contrats signés',
     sorties: evo.lost != null ? Number(evo.lost) : null,
-    resiliees, demandes, sauvees,
+    resiliees, demandes, sauvees, sauveEuros,
+    // Délai de première réponse (heures, médiane), part répondue sous 24 h, demandes encore sans réponse, euros sauvés.
+    delaiMedianH: RK.delaiMedianMs == null ? null : Math.round(RK.delaiMedianMs / 360000) / 10, repondues24: RK.repondues24 ?? null, sansReponse: RK.sansReponse ?? 0, eurosSauves: RK.eurosSauves ?? Math.round(sauveEuros),
     tauxResil: actifs ? resiliees / actifs : null,
     tauxSauvetage: resiliees + sauvees ? sauvees / (resiliees + sauvees) : null,
     actifs,
     du: duAt(clubId, mk),
-    recupere: rec.reduce((s, x) => s + x.amount, 0),
-    recEquipe: recBy.equipe || 0, recBy,
+    recupere: recoveredFor(clubId, { from, to }),
+    recEquipe: recoveredFor(clubId, { from, to }, 'equipe'), recBy,
     // Impayes recuperes PAR L'EQUIPE : la meme valeur que le KPI du tableau de bord
     // et du classement (saisies + import canal equipe, sans double compte).
     impayesEquipe: sum('impayes'),
@@ -75,7 +98,10 @@ function monthBars(months, series, { fmt = fmtN, height = 190, width = 560 } = {
 PAGES.recap = {
   title: 'Récapitulatif du mois',
   manager: true,
+  mount() { recapInstantane(CLUB.id); },
   render() {
+    // Onglet Rapport ROI (managers) : une page A4 à remettre au directeur.
+    if (UI.recapTab === 'roi' && isManager()) return `<div class="recap"><div class="no-print">${tabs('recapTab', [['recap', 'Récapitulatif'], ['roi', 'Rapport ROI']], 'roi')}</div>${roiOnglet()}</div>`;
     const mk = UI.recapMonth || addMonths(curMonth(), -1);
     const pm = addMonths(mk, -1);
     const F = monthFigures(CLUB.id, mk), P = monthFigures(CLUB.id, pm);
@@ -92,20 +118,27 @@ PAGES.recap = {
       .filter(r => cols.some(([k]) => r.cur[k] || r.prev[k])).sort((a, b) => b.cur.contrats - a.cur.contrats || b.cur.boutique - a.cur.boutique);
     const maxOf = k => Math.max(1, ...rows.map(r => r.cur[k]));
     const salesMax = Math.max(1, ...rows.map(r => Math.max(r.cur.contrats, r.prev.contrats)));
-    return `<div class="recap">
-      <div class="recap-head"><div><div class="eyebrow">${esc(CLUB.name)}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
-        <div class="row wrap no-print">${monthNav('recapMonth', mk)}<button class="btn" data-act="recapCsv">${ico('download')} CSV</button><button class="btn" data-act="recapMail">${ico('mail')} Envoyer au directeur</button><button class="btn primary" data-act="recapPrint">${ico('download')} Imprimer / PDF</button></div></div>
+    return `<div class="recap">${isManager() ? `<div class="no-print">${tabs('recapTab', [['recap', 'Récapitulatif'], ['roi', 'Rapport ROI']], 'recap')}</div>` : ''}
+      <div class="recap-head"><div><div class="eyebrow">${esc(nomAffiche())}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
+        <div class="row wrap no-print">${monthNav('recapMonth', mk)}<button class="btn" data-act="recapCsv">${ico('download')} CSV</button><button class="btn" data-act="recapGerant">${ico('mail')} Envoyer au gérant</button><button class="btn primary" data-act="recapPrint">${ico('download')} Imprimer / PDF</button></div></div>
 
+      <div class="print-only rc-print-head">${clubLogo() ? `<img src="${esc(clubLogo())}" alt="">` : ''}<div><b>${esc(nomAffiche())}</b><div>Récapitulatif · ${esc(monthLabel(mk))}</div></div></div>
+      ${(() => { const note = deepGet(S, ['recapNotes', CLUB.id, mk]) || ''; return `<div class="card rc-note"><label class="field"><span>Commentaire du directeur</span><textarea class="input no-print" rows="3" maxlength="600" data-change="recapNote" data-mk="${mk}" placeholder="Trois lignes pour le gérant : ce qui a marché, ce qui bloque, la priorité du mois prochain.">${esc(note)}</textarea></label>${note ? `<p class="print-only rc-note-p">${esc(note)}</p>` : ''}</div>`; })()}
+      ${rapporteCompteur(CLUB.id)}
+      ${(() => { const R = revenusMois(CLUB.id, mk), Rp = revenusMois(CLUB.id, pm), Rn = revenusMois(CLUB.id, addMonths(mk, -12));
+        const cmp = (a, b, up = true) => b == null || a == null ? '<span class="muted">n.d.</span>' : delta(a, b, { up, unit: 'eur' });
+        const t3 = (cle, label, v, vp, vn, up, sub) => `<div class="rc-tile" data-rev="${cle}" data-v="${v ?? ''}"><span>${label}</span><b>${v == null ? 'n.d.' : fmtE(v)}</b><small>vs ${esc(monthLabel(pm).toLowerCase())} ${cmp(v, vp, up)}</small><small>vs ${esc(monthLabel(addMonths(mk, -12)).toLowerCase())} ${cmp(v, vn, up)}</small>${sub ? `<small>${sub}</small>` : ''}</div>`;
+        return `<div class="rc-grid rc-rev">${t3('mrr', 'Revenu mensuel récurrent', R.mrr, Rp.mrr, Rn.mrr, true, mk < curMonth() && R.mrr == null ? 'non relevé ce mois-là' : 'abonnés actifs x prix mensuel')}${t3('perdu', 'Revenu perdu en sorties', R.perdu, Rp.perdu, Rn.perdu, false, 'prix des clients résiliés du mois')}${t3('gagne', 'Revenu gagné en entrées', R.gagne, Rp.gagne, Rn.gagne, true, 'prix des contrats du mois')}</div>${R.estimation ? '<p class="muted small" data-estimation="1">Estimation : prix moyen utilisé (plus de 20 % des clients sans prix).</p>' : ''}`; })()}
       ${recapSynthese(mk)}
       <div class="rc-grid">
         ${tile('Ventes réelles (contrats)', fmtN(F.contrats), delta(F.contrats, P.contrats))}
         ${tile('Nouveaux entrants', fmtN(F.entrants), delta(F.entrants, P.entrants), F.entrantsSrc)}
-        ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${plur(F.demandes, 'demande', 'demandes')} · ${plur(F.sauvees, 'sauvée', 'sauvées')}`)}
+        ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${plur(F.demandes, 'demande', 'demandes')} · ${plur(F.sauvees, 'sauvée', 'sauvées')}<br><b data-sauve="${F.sauveEuros}">Sauvé : ${fmtE(F.sauveEuros)}</b>`)}
         ${tile('Taux de résiliation', F.tauxResil == null ? 'n.d.' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %', delta(F.tauxResil, P.tauxResil, { up: false, pct: true }), F.actifs ? `sur ${fmtN(F.actifs)} adhérents actifs` : 'base adhérents à renseigner')}
         ${tile('Impayés en cours', F.du == null ? 'n.d.' : fmtE(F.du), delta(F.du, P.du, { up: false, unit: 'eur' }), 'total dû en fin de mois')}
-        ${tile('Impayés récupérés par l’équipe', fmtE(F.impayesEquipe), delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
+        ${tile('Impayés récupérés par l’équipe', `<span class="trace-n"${traceAttr({ t: 'recov', canal: 'equipe', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: F.impayesEquipe })}>${fmtE(F.impayesEquipe)}</span>`, delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
         ${tile('Avis Google', fmtN(F.avis), delta(F.avis, P.avis))}
-        ${tile('Ventes boutique', fmtE(F.boutique), delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
+        ${tile('Ventes boutique', `<span class="trace-n"${traceAttr({ t: 'ca', club: CLUB.id, from: mk + '-01', to: `${mk}-${daysIn(mk)}`, v: F.boutique })}>${fmtE(F.boutique)}</span>`, delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
       </div>
       <div class="rc-grid rc-value">
         ${(() => { const enc = encaisseMois(CLUB.id, mk), encP = encaisseMois(CLUB.id, pm), ch = churnEuros(CLUB.id, mk), chP = churnEuros(CLUB.id, pm); return `
@@ -114,6 +147,15 @@ PAGES.recap = {
         ${tile('Churn en euros', ch == null ? 'n.d.' : fmtE(ch), ch == null ? '' : delta(ch, chP, { up: false, unit: 'eur' }), 'mensualités perdues par les résiliations du mois')}
         ${tile('Valeur d’un adhérent', fmtE(Math.round(prixMoyen(CLUB.id) * dureeVieMois(CLUB.id))), '', `${plur(dureeVieMois(CLUB.id), 'mois', 'mois')} de durée de vie moyenne`)}`; })()}
       </div>
+      ${(() => { const RR = resRecap(CLUB.id, mk); return `<div class="card rc-res" style="margin-bottom:18px"><div class="race-h"><div><div class="eyebrow">${esc(monthLabel(mk))}</div><h3>Résiliations</h3></div><span class="spacer"></span>${isManager() ? `<label class="small row" style="gap:6px">Préavis minimum <input class="input sm" style="width:64px" type="number" min="0" max="120" value="${RR.seuil}" data-change="preavisSet"> jours</label>` : `<span class="muted small">préavis minimum ${RR.seuil} jours</span>`}</div>
+        <div class="rc-grid">
+          ${tile('Préavis non respecté', `${RR.nonRespecte.length}<small> / ${RR.avecDate.length}</small>`, '', `demandes du mois avec moins de ${RR.seuil} jours entre réception et date d’effet`)}
+          ${tile('Sans date de réception', String(RR.sansDate.length), '', 'comptées à part, exclues du calcul du préavis')}
+          ${tile('Durée de vie médiane', RR.dureeMediane == null ? 'n.d.' : plur(RR.dureeMediane, 'mois', 'mois'), '', `de l’inscription à la résiliation (${plur(RR.durees.length, 'adhérent', 'adhérents')} parti${RR.durees.length > 1 ? 's' : ''} ce mois)`)}
+          ${tile('Taux de sauvetage', fmtP(F.tauxSauvetage), '', `${plur(F.sauvees, 'sauvée', 'sauvées')} sur ${F.sauvees + F.resiliees} issues`)}
+          ${tile('Délai de réponse aux résiliations', F.delaiMedianH == null ? 'n.d.' : String(F.delaiMedianH).replace('.', ',') + ' h', '', `médiane de la 1re réponse · ${fmtP(F.repondues24)} sous 24 h`).replace('class="', 'data-tuile="delai-reponse" class="')}
+          ${tile('Euros sauvés', fmtE(F.eurosSauves), '', `${plur(F.sauvees, 'dossier sauvé', 'dossiers sauvés')}, valeur en jeu`).replace('class="', 'data-tuile="euros-sauves" class="')}
+        </div>${RR.nonRespecte.length ? `<details style="margin-top:8px"><summary class="small">Voir les ${RR.nonRespecte.length} dossiers</summary><div class="small">${RR.nonRespecte.map(r => `${esc(r.client || 'Adhérent')} : reçue le ${esc(dmy(r.date))}, effet le ${esc(dmy(r.effective))} (${r.preavis} j)`).join('<br>')}</div></details>` : ''}</div>`; })()}
 
       <div class="g12">
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Entrées et sorties</h3></div><span class="spacer"></span><span class="muted small">solde</span> ${(() => { const out = x => x.sorties ?? x.resiliees; return delta(F.entrants - out(F), P.entrants - out(P)); })()}</div>
@@ -134,8 +176,51 @@ PAGES.recap = {
           <div class="table-wrap"><table class="t rc-table"><thead><tr><th>Commercial</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>
           ${rows.map(r => `<tr><td><b>${esc(fullName(r.u))}</b>${r.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</td>${cols.map(([k, , unit]) => `<td><div class="rc-cell"><b>${fmtV(r.cur[k], unit)}</b><i style="width:${r.cur[k] / maxOf(k) * 100}%"></i></div>${delta(r.cur[k], r.prev[k], { unit })}</td>`).join('')}</tr>`).join('')}
           <tr class="total"><td>Équipe</td>${cols.map(([k, , unit]) => { const c = rows.reduce((s, r) => s + r.cur[k], 0), p = rows.reduce((s, r) => s + r.prev[k], 0); return `<td><b>${fmtV(c, unit)}</b><br>${delta(c, p, { unit })}</td>`; }).join('')}</tr></tbody></table></div>` : '<p class="muted">Aucune saisie ce mois-ci.</p>'}</div>
-      <p class="muted small">Sources : saisies et imports Resamania de Fit Pulse. Impayés récupérés = liste Incidents (tous canaux) ; total dû = dernier import « Clients en incident » du mois ; taux de résiliation = résiliations effectives du mois / adhérents actifs (Mes clubs > Adhérents).</p>
+      <p class="muted small">Sources : saisies et imports Resamania de Fit Pulse. Impayés récupérés = liste Incidents (tous canaux) ; total dû = dernier import « Clients en incident » du mois ; taux de résiliation = résiliations effectives du mois / adhérents actifs (${TXT.mots.clubReglages} > Adhérents).</p>
     </div>`;
   },
 };
+ACTIONS.recapNote = el => { db.set(['recapNotes', CLUB.id, el.dataset.mk], (el.value || '').trim().slice(0, 600) || null); toast('1 commentaire enregistré'); };
+// Instantané du mois en cours dans S.monthly (une fois par jour), pour les comparaisons futures.
+function recapInstantane(clubId) {
+  const mk = curMonth(); const R = revenusMois(clubId, mk); const cur = deepGet(S, ['monthly', clubId, mk]) || {};
+  if (!isManager() || (cur.revuLe === today() && cur.mrr === R.mrr)) return;
+  db.batch([[['monthly', clubId, mk, 'mrr'], R.mrr], [['monthly', clubId, mk, 'revenuPerdu'], R.perdu], [['monthly', clubId, mk, 'revenuGagne'], R.gagne], [['monthly', clubId, mk, 'revuLe'], today()]]);
+}
+// « Envoyer au gérant » : mailto prêt, 10 lignes de chiffres clés ; le PDF se joint à la main.
+function recapGerantTexte(clubId, mk) {
+  const F = monthFigures(clubId, mk), R = revenusMois(clubId, mk), C = rapporteCompteurData(clubId, mk); const note = deepGet(S, ['recapNotes', clubId, mk]);
+  const L = [
+    `Récap ${S.clubs[clubId].name}, ${monthLabel(mk).toLowerCase()}`,
+    `Contrats signés : ${fmtN(F.contrats)}`,
+    `Revenu mensuel récurrent : ${R.mrr == null ? 'n.d.' : fmtE(R.mrr)}`,
+    `Revenu gagné en entrées : ${fmtE(R.gagne)}, perdu en sorties : ${fmtE(R.perdu)}`,
+    `Résiliations : ${fmtN(F.resiliees)}, sauvées : ${fmtN(F.sauvees)} (${fmtE(F.sauveEuros)})`,
+    `Impayés récupérés par l’équipe : ${fmtE(F.impayesEquipe)}`,
+    `Ventes boutique : ${fmtE(F.boutique)}`,
+    `Avis Google : ${fmtN(F.avis)}`,
+    `Rapporté par Fit Pulse : ${fmtE(C.total)}`,
+    note ? `Commentaire : ${String(note).replace(/\s+/g, ' ').slice(0, 400)}` : 'PDF du récapitulatif joint.',
+  ];
+  return L.slice(0, 10).join('\n').slice(0, 1800);
+}
+ACTIONS.recapGerant = () => {
+  const c = S.clubs[CLUB.id]; const mk = UI.recapMonth || addMonths(curMonth(), -1);
+  location.href = `mailto:${encodeURIComponent(c.gerantEmail || '')}?subject=${encodeURIComponent(`Récap ${c.name} ${monthLabel(mk).toLowerCase()}`)}&body=${encodeURIComponent(recapGerantTexte(CLUB.id, mk))}`;
+};
 ACTIONS.recapPrint = () => { document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 50); };
+
+// Bloc Résiliations du récap : préavis (seuil réglable), dossiers sans date de réception
+// comptés à part, durée de vie médiane d'un abonné parti, taux de sauvetage (monthFigures).
+function resRecap(clubId, mk) {
+  const seuil = Number(deepGet(S, ['clubs', clubId, 'preavisJours'])) || 30;
+  const L = resList(clubId).filter(r => r.date ? r.date.slice(0, 7) === mk : (r.effective || '').slice(0, 7) === mk);
+  const sansDate = L.filter(r => !r.date);
+  const avecDate = L.filter(r => r.date && r.effective).map(r => ({ ...r, preavis: Math.round((dateOf(r.effective) - dateOf(r.date)) / 864e5) }));
+  const nonRespecte = avecDate.filter(r => r.preavis < seuil);
+  const byName = {}; clubClients(clubId).forEach(c => { byName[tokensKey(c.name || '')] = c; });
+  const durees = resList(clubId).filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date || '').slice(0, 7) === mk).map(r => { const c = (r.clientId && S.clients[r.clientId]) || byName[tokensKey(r.client || '')]; const fin = r.effective || r.date; if (!c || !c.start || !fin || fin < c.start) return null; return Math.round((dateOf(fin) - dateOf(c.start)) / (30.44 * 864e5) * 10) / 10; }).filter(x => x != null);
+  const t = durees.slice().sort((a, b) => a - b); const m = Math.floor(t.length / 2); const dureeMediane = t.length ? Math.round(t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2) : null;
+  return { seuil, demandes: L, sansDate, avecDate, nonRespecte, durees, dureeMediane };
+}
+ACTIONS.preavisSet = el => { const v = Math.max(0, Math.min(120, Math.round(Number(el.value) || 0))); db.set(['clubs', CLUB.id, 'preavisJours'], v || null); };

@@ -1,13 +1,13 @@
 {
   "name": "Fit Pulse",
   "short_name": "Fit Pulse",
-  "description": "Pilotage commercial de nos clubs Fitness Park",
+  "description": "Le suivi commercial des clubs",
   "lang": "fr",
   "start_url": "./#/home",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#F6F6F4",
+  "theme_color": "#F6F6F4",
   "icons": [
     {
       "src": "icon-192.png",

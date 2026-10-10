@@ -16,10 +16,13 @@ const HEALTH = {
 function healthOf(ratio) { if (ratio == null || !isFinite(ratio)) return HEALTH.none; return ratio >= 0.95 ? HEALTH.good : ratio >= 0.75 ? HEALTH.watch : HEALTH.alert; }
 const healthChip = h => `<span class="hchip ${h.cls}"><i></i>${h.label}</span>`;
 
+const PROJ_JOUR_MIN = 5;
 // Course au palier : cumul jour par jour, rythme à tenir, projection fin de mois.
 function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
   const s = palierState(clubId, mk, kpiId); if (!s) return '';
   const n = daysIn(mk); const isCur = mk === curMonth(); const dayNow = isCur ? Number(today().slice(8)) : n;
+  // Projection : pas avant le 5 du mois (trop peu de jours pour extrapoler honnêtement).
+  const projOk = !isCur || dayNow >= PROJ_JOUR_MIN;
   const cum = []; let acc = 0;
   for (let d = 1; d <= n; d++) { if (d > dayNow) break; acc += sumRange(clubId, null, kpiId, `${mk}-${pad(d)}`, `${mk}-${pad(d)}`); cum.push(acc); }
   const fc = isCur && typeof forecast === 'function' ? forecast(clubId, kpiId, mk) : null;
@@ -29,13 +32,15 @@ function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
   const X = d => L + (W - L - R) * (d - 1) / Math.max(1, n - 1), Y = v => T + (H - T - B) * (1 - v / top);
   const goalTier = s.tiers.at(-1); const target = Number(goalTier.target);
   const projTier = s.tiers.filter(t => proj >= t.target).length;
-  const h = projTier === s.tiers.length ? HEALTH.good : projTier > 0 ? HEALTH.watch : HEALTH.alert;
+  const h = !projOk ? HEALTH.none : projTier === s.tiers.length ? HEALTH.good : projTier > 0 ? HEALTH.watch : HEALTH.alert;
   let g = '';
   // grille légère
+  const k = S.kpis[kpiId]; const uAxe = k.unit === 'eur' ? '€' : uniteKpi(k, 2);
   for (let i = 0; i <= 4; i++) { const v = top * i / 4; g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="c-grid"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" class="c-tick">${fmtN(v)}</text>`; }
+  g += `<text x="${L - 8}" y="${T - 4}" text-anchor="end" class="c-tick c-unit">${esc(uAxe)}</text>`;
   [1, 8, 15, 22, n].forEach(d => { g += `<text x="${X(d)}" y="${H - 8}" text-anchor="middle" class="c-tick">${d}</text>`; });
   // paliers : lignes horizontales nommées
-  s.tiers.forEach((t, i) => { const got = s.real >= t.target; g += `<line x1="${L}" x2="${W - R}" y1="${Y(t.target)}" y2="${Y(t.target)}" class="c-tier ${got ? 'got' : ''}"/><text x="${W - R + 8}" y="${Y(t.target) + 4}" class="c-tier-l ${got ? 'got' : ''}">P${i + 1} · ${fmtN(t.target)}${got ? ' (atteint)' : ''}</text>`; });
+  s.tiers.forEach((t, i) => { const got = s.real >= t.target; g += `<line x1="${L}" x2="${W - R}" y1="${Y(t.target)}" y2="${Y(t.target)}" class="c-tier ${got ? 'got' : ''}"/><text x="${W - R + 8}" y="${Y(t.target) + 4}" class="c-tier-l ${got ? 'got' : ''}">P${i + 1} : ${esc(fmtU(t.target, k))}${got ? ' (atteint)' : ''}</text>`; });
   // rythme à tenir pour le dernier palier
   g += `<line x1="${X(1)}" y1="${Y(target / n)}" x2="${X(n)}" y2="${Y(target)}" class="c-pace"/>`;
   // réalisé
@@ -44,14 +49,13 @@ function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
     g += `<path d="M${X(1)},${Y(0)} L${pts.join(' L')} L${X(cum.length)},${Y(0)}Z" class="c-area"/>`;
     g += `<polyline points="${pts.join(' ')}" class="c-line"/>`;
     // projection
-    if (isCur && dayNow < n) g += `<line x1="${X(dayNow)}" y1="${Y(acc)}" x2="${X(n)}" y2="${Y(proj)}" class="c-proj" style="stroke:${h.color}"/><circle cx="${X(n)}" cy="${Y(proj)}" r="5" style="fill:${h.color}"/>`;
-    g += `<circle cx="${X(cum.length)}" cy="${Y(acc)}" r="6" class="c-dot"/><text x="${X(cum.length)}" y="${Y(acc) - 12}" text-anchor="middle" class="c-now">${fmtN(acc)}</text>`;
+    if (isCur && dayNow < n && projOk) g += `<line x1="${X(dayNow)}" y1="${Y(acc)}" x2="${X(n)}" y2="${Y(proj)}" class="c-proj" style="stroke:${h.color}"/><circle cx="${X(n)}" cy="${Y(proj)}" r="5" style="fill:${h.color}"/>`;
+    g += `<circle cx="${X(cum.length)}" cy="${Y(acc)}" r="6" class="c-dot"/><text x="${X(cum.length)}" y="${Y(acc) - 12}" text-anchor="middle" class="c-now">${esc(fmtU(acc, k))}</text>`;
   }
-  const k = S.kpis[kpiId];
   return `<div class="race">
-    <div class="race-h"><div><div class="eyebrow">Course au palier</div><h3>${esc(k.label)} · équipe</h3></div><span class="spacer"></span>${healthChip(h)}</div>
-    <div class="chart race-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(k.label)} : ${fmtN(acc)} réalisés, projection ${fmtN(proj)}">${g}</svg></div>
-    <div class="race-f"><span><i class="lg-line"></i>Réalisé</span><span><i class="lg-pace"></i>Rythme pour le P${s.tiers.length}</span>${isCur ? `<span><i class="lg-proj" style="border-color:${h.color}"></i>Projection fin de mois : <b style="color:${h.color}">${fmtN(proj)}</b>${fc && fc.high > fc.low ? ` <span class="muted">(${fmtN(fc.low)} à ${fmtN(fc.high)})</span>` : ''} ${projTier ? `→ Palier ${projTier}` : '→ aucun palier'}</span>` : ''}</div></div>`;
+    <div class="race-h"><div><div class="eyebrow">Paliers d’équipe</div><h3>${esc(k.label)} · équipe</h3></div><span class="spacer"></span>${healthChip(h)}</div>
+    <div class="chart race-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(k.label)} : ${esc(fmtU(acc, k))} réalisés${projOk ? `, projection ${esc(fmtU(proj, k))}` : ''}">${g}</svg></div>
+    <div class="race-f"><span><i class="lg-line"></i>Réalisé</span><span><i class="lg-pace"></i>Rythme pour le P${s.tiers.length}</span>${isCur && !projOk ? `<span class="muted">Projection disponible le ${PROJ_JOUR_MIN}</span>` : isCur ? `<span><i class="lg-proj" style="border-color:${h.color}"></i>Projection fin de mois : <b style="color:${h.color}">${esc(fmtU(proj, k))}</b>${fc && fc.high > fc.low ? ` <span class="muted">(${esc(fmtU(fc.low, k))} à ${esc(fmtU(fc.high, k))})</span>` : ''}, ${projTier ? `palier ${projTier}` : 'aucun palier'}</span>` : ''}</div></div>`;
 }
 
 // Anneau de progression (objectifs perso, palier…)
@@ -76,6 +80,6 @@ function resFunnel(clubId, mk) {
   const max = Math.max(1, L.length);
   const rate = L.length ? taken / L.length : null;
   const h = rate == null ? HEALTH.none : rate >= 0.9 ? HEALTH.good : rate >= 0.6 ? HEALTH.watch : HEALTH.alert;
-  return `<div class="funnel">${steps.map(([l, v, c], i) => `<div class="fn-r"><span class="fn-l">${l}</span><div class="fn-b"><i style="width:${Math.max(v / max * 100, v ? 6 : 0)}%;background:${c}"></i></div><b>${v}</b>${i ? `<small>${L.length ? fmtP(v / L.length) : 'n.d.'}</small>` : '<small></small>'}</div>`).join('')}</div>
+  return `<div class="funnel">${steps.map(([l, v, c], i) => `<div class="fn-r"><span class="fn-l">${l}</span><div class="fn-b">${v ? `<i style="width:${v / max * 100}%;background:${c}"></i>` : ''}</div><b class="num">${plur(v, 'dossier', 'dossiers')}</b>${i ? `<small>${L.length ? fmtP(v / L.length) : '0 %'}</small>` : '<small></small>'}</div>`).join('')}</div>
     <div class="row" style="margin-top:8px">${healthChip(h)}<span class="muted small">${L.length ? `${plur(L.length - taken, 'demande jamais prise', 'demandes jamais prises')} en charge` : 'Aucune demande ce mois-ci'}</span></div>`;
 }

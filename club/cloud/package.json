@@ -1,0 +1,28 @@
+{
+  "name": "fitpulse-cloud",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "copier": "mkdir -p lib && mkdir -p lib/app && cp ../outils/fitpulse-*.mjs lib/ && cp ../*.js ../index.html lib/app/ && cp -r ../vendor lib/app/",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run -c vitest.unit.config.mjs",
+    "test:emul": "cd ../tests/emul && npx --yes firebase-tools@13 emulators:exec --only database --project fitpulse-test \"cd ../../cloud && npx vitest run\"",
+    "predeploy": "npm run copier && npm run build",
+    "test:moteur": "vitest run -c vitest.unit.config.mjs"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.1.0",
+    "google-auth-library": "^9.15.0",
+    "firebase-admin": "^12.7.0",
+    "@google-cloud/secret-manager": "^5.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
+    "@types/node": "^22.10.0"
+  }
+}

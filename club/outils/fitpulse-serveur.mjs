@@ -4,7 +4,7 @@
 // Lance par .github/workflows/fitpulse-mail.yml (toutes les 5 minutes).
 //  1. S'assure que les regles Fit Pulse sont dans la base (elles peuvent
 //     disparaitre quand RepCore redeploie ses regles depuis main : on les remet)
-//     et que les cles de connexion des comptes de config.js existent.
+//     et que les cles de connexion des comptes de tools/bootstrap.js existent.
 //  2. Lit /fitpulse_mail (ecrit par l'app quand un code est cree), envoie un
 //     e-mail d'invitation par demande, puis efface la demande (et donc le code).
 // Aucune dependance : JWT, HTTPS et SMTP sur TLS ecrits a la main, comme
@@ -14,6 +14,7 @@
 // Variables : FIREBASE_SERVICE_ACCOUNT, MAIL_UTILISATEUR, MAIL_MOT_DE_PASSE,
 //             FITPULSE_URL (https://fitpulse-niort.web.app), DRY_RUN=1 pour tester.
 
+import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import tls from 'node:tls';
 import { pathToFileURL } from 'node:url';
@@ -21,6 +22,10 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
 import { passageMatin } from './fitpulse-matin.mjs';
+import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
+import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
+import { passageBrief } from './fitpulse-brief.mjs';
+import { REGLE_ORGS } from './fitpulse-regles-orgs.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -76,6 +81,7 @@ export const REGLE = `${DEBUT}
         }
       },
       "prefs": { "$uid": { ".write": ${j(SOIMEME)} } },
+      "usage": { "$uid": { ".write": ${j(SOIMEME)} } },
       "tasks": {
         "library": { ".write": ${j(MGR)} },
         "plan": { ".write": ${j(MGR)} },
@@ -90,10 +96,21 @@ export const REGLE = `${DEBUT}
       },
       "clients": { ".write": ${j(MEMBRE)} },
       "loyalty": { ".write": ${j(MEMBRE)} },
-      "resiliations": { ".write": ${j(MEMBRE)} },
+      "transferts": { ".write": ${j(MEMBRE)} },
+      // Dossiers relevés dans la boîte accueil (« ml… ») : créés et tenus à jour par le seul compte de service
+      // (fonction ingestResiliations) ; l'équipe les traite (statut, responsable, journal) sans toucher au fil e-mail.
+      "resiliations": { "$id": {
+        ".write": ${j(`${MEMBRE} && (!$id.beginsWith('ml') || (data.exists() && (newData.exists() || ${MGR})))`)},
+        "mail": { ".validate": ${j(`!$id.beginsWith('ml') || (newData.child('threadId').val() === data.child('threadId').val() && newData.child('lastInAt').val() === data.child('lastInAt').val() && newData.child('awaitingReply').val() === data.child('awaitingReply').val())`)} },
+        "receivedAt": { ".validate": ${j(`!$id.beginsWith('ml') || newData.val() === data.val()`)} }
+      } },
+      // Battement de la relève : écrit par le seul compte de service.
+      "clubs": { ".write": ${j(MGR)}, "$c": { "mailSync": { ".validate": ${j(`!newData.exists() || newData.child('at').val() === data.child('at').val()`)} } } },
       "recov": { ".write": ${j(MEMBRE)} },
       "reactions": { ".write": ${j(MEMBRE)} },
+      "celebrated": { ".write": ${j(MEMBRE)} },
       "relances": { ".write": ${j(MEMBRE)} },
+      "resRequests": { ".write": ${j(MEMBRE)} },
       "touches": { ".write": ${j(MEMBRE)} },
       "guests": { ".write": ${j(MEMBRE)} },
       "companies": { ".write": ${j(MEMBRE)} },
@@ -102,8 +119,44 @@ export const REGLE = `${DEBUT}
       "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
       "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },
       "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } } } },
-      "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
+      "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} }, "$k": { ".write": ${j(MGR)} } } },
       "$autre": { ".write": ${j(MGR)} }
+    },
+    "benchmark": {
+      ".read": ${j(MEMBRE)},
+      "$mois": {
+        "$h": {
+          ".write": ${j(MGR)},
+          ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && $h.matches(/^[0-9a-f]{32}$/) && newData.hasChildren(['v', 'at', 'realisation'])",
+          "v": { ".validate": "newData.isNumber()" }, "at": { ".validate": "newData.isNumber()" },
+          "realisation": { "$k": { ".validate": "$k.matches(/^[a-z0-9_]{1,20}$/) && newData.isNumber()" } },
+          "delaiImpaye": { ".validate": "newData.isNumber()" }, "sauvetage": { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
+    "private": {
+      "resiliations": {
+        "$club": {
+          "$id": {
+            ".read": ${j(`${MGR} || (${MEMBRE} && root.child('pulse/resiliations/' + $id + '/clubId').val() === $club && root.child('pulse/resiliations/' + $id + '/ownerId').val() === ${SOI})`)},
+            ".write": ${j(`${MGR} || (${MEMBRE} && root.child('pulse/resiliations/' + $id + '/clubId').val() === $club && (root.child('pulse/resiliations/' + $id + '/ownerId').val() === ${SOI} || !root.child('pulse/resiliations/' + $id + '/ownerId').exists()) && newData.exists())`)},
+            "email": { ".validate": "newData.isString() && newData.val().length <= 254" },
+            "phone": { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "excerpt": { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "$autre": { ".validate": false }
+          }
+        }
+      }
+    },
+    "pulse_product": {
+      ".read": ${j(CREATEUR)},
+      ".write": ${j(CREATEUR)}
+    },
+    "pulse_public": {
+      ".read": true,
+      "legal": { ".write": ${j(MGR)}, "$c": { ".validate": "newData.isString() && newData.val().length <= 300" } },
+      "$autre": { ".validate": false }
     },
     "pulse_boot": {
       ".read": ${j(MANAGER)},
@@ -142,6 +195,7 @@ export const REGLE = `${DEBUT}
         "$autre": { ".validate": false }
       }
     },
+    ${REGLE_ORGS},
     ${FIN}`;
 
 // ── Jeton Google à partir du compte de service ────────────────────────────
@@ -151,7 +205,7 @@ async function jeton() {
   const b64u = b => Buffer.from(b).toString('base64url');
   const iat = Math.floor(Date.now() / 1000);
   const tete = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const corps = b64u(JSON.stringify({ iss: c.client_email, scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 }));
+  const corps = b64u(JSON.stringify({ iss: c.client_email, scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/devstorage.read_write', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 }));
   const sig = crypto.createSign('RSA-SHA256').update(`${tete}.${corps}`).sign(c.private_key, 'base64url');
   const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${tete}.${corps}.${sig}` });
   const j = await r.json(); if (!j.access_token) throw new Error('jeton refusé : ' + JSON.stringify(j));
@@ -180,12 +234,20 @@ async function assurerRegle(tk) {
   await api(tk, '.settings/rules.json', { method: 'PUT', body: neuf });
   return 'mise à jour';
 }
-// Comptes declares dans club/config.js (createur, manager) : leur cle de
-// connexion est posee si elle manque.
+// Comptes de départ du déploiement (club/tools/bootstrap.js, jamais livré au
+// navigateur) : leur clé de connexion est posée si elle manque, ainsi que
+// l'identité du client (/pulse/tenant) et ses mentions légales publiques
+// (/pulse_public/legal) quand elles n'existent pas encore.
 async function assurerComptes(tk) {
-  const src = readFileSync(new URL('../config.js', import.meta.url), 'utf8');
-  const comptes = [...src.matchAll(/id: '([^']+)'[^\n]*?bootKey: '([0-9a-f]{40})'(?:, codeKey: '([0-9a-f]{40})')?/g)].map(m => ({ id: m[1], cle: m[2], ck: m[3] }));
+  let B = { accounts: [] }; try { B = createRequire(import.meta.url)('../tools/bootstrap.js').BOOTSTRAP; } catch (e) { return 'pas de tools/bootstrap.js : aucun compte de départ'; }
+  const comptes = (B.accounts || []).filter(a => a.bootKey).map(a => ({ id: a.id, cle: a.bootKey, ck: a.codeKey }));
   const faits = [];
+  if (B.tenant) {
+    const { legal, ...tenant } = B.tenant;
+    if (!(await (await api(tk, 'pulse/tenant.json')).json())) { if (!DRY) await api(tk, 'pulse/tenant.json', { method: 'PUT', body: JSON.stringify(tenant) }); faits.push('identité du client'); }
+    if (B.plan && B.plan.directeur) { const p = `pulse/plans/${B.plan.club}/${B.plan.id}/directeur.json`; if (!(await (await api(tk, p)).json())) { if (!DRY) await api(tk, p, { method: 'PUT', body: JSON.stringify(B.plan.directeur) }); faits.push('destinataire du rapport'); } }
+    if (legal && !(await (await api(tk, 'pulse_public/legal.json')).json())) { if (!DRY) await api(tk, 'pulse_public/legal.json', { method: 'PUT', body: JSON.stringify(legal) }); faits.push('mentions légales publiques'); }
+  }
   for (const c of comptes) {
     const v = await (await api(tk, `pulse_boot/${c.cle}.json`)).json();
     if (v !== c.id) { if (!DRY) await api(tk, `pulse_boot/${c.cle}.json`, { method: 'PUT', body: JSON.stringify(c.id) }); faits.push(c.id); }
@@ -198,6 +260,19 @@ async function assurerComptes(tk) {
 // ── L'e-mail ──────────────────────────────────────────────────────────────
 const ROLES = { membre: 'Membre', manager: 'Manager', createur: 'Créateur' };
 const echap = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Multi-salles : invitation par lien (usage unique, 7 jours) ; le code est créé à l'ouverture du lien.
+export function emailInvitationLien(d) {
+  const role = ROLES[d.role] || 'Membre'; const fin = new Date(Number(d.expiresAt) || Date.now() + 7 * 864e5).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const objet = `${d.first}, rejoignez ${d.club} sur Fit Pulse`;
+  const texte = [`Bonjour ${d.first},`, '', `Vous êtes invité à rejoindre ${d.club} sur Fit Pulse (accès ${role}).`, `Ouvrez ce lien pour activer votre accès : ${d.lien}`, '', `Le lien sert une seule fois et reste valable jusqu'au ${fin}.`, 'Votre code personnel s’affichera à l’ouverture : notez-le.'].join('\n');
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body style="margin:0;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif;color:#111">
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center" style="padding:16px 8px"><table width="560" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;width:100%;background:#fff;border-radius:10px">
+<tr><td style="padding:20px"><div style="font-size:13px;color:#666">Fit Pulse</div><div style="font-size:20px;font-weight:bold;margin:4px 0 10px">Bonjour ${echap(d.first)},</div>
+<p style="font-size:15px;line-height:1.5">Vous êtes invité à rejoindre <b>${echap(d.club)}</b> sur Fit Pulse (accès ${echap(role)}).</p>
+<p><a href="${echap(d.lien)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Activer mon accès</a></p>
+<p style="font-size:13px;color:#555">Le lien sert une seule fois et reste valable jusqu’au ${echap(fin)}. Votre code personnel s’affichera à l’ouverture : notez-le.</p></td></tr></table></td></tr></table></body></html>`;
+  return { objet, texte, html };
+}
 export function emailInvitation(d) {
   const lien = `${SITE}/?email=${encodeURIComponent(d.email)}`;
   const role = ROLES[d.role] || 'Membre';
@@ -211,14 +286,14 @@ export function emailInvitation(d) {
     `3. Installez l'appli : iPhone → Safari > Partager > « Sur l'écran d'accueil » ; Android → Chrome > ⋮ > « Installer l'application »`, '',
     `Votre code est personnel : ne le partagez avec personne.`, '', `À très vite sur le plateau !`, `L'équipe ${d.club}`,
   ].join('\n');
-  const Y = '#FFD600';
+  const Y = '#12B3A8'; // couleur Fit Pulse (--brand)
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>${echap(objet)}</title></head>
 <body style="margin:0;padding:0;background:#0a0a0a;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Votre code personnel et l'application à installer en une minute.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;"><tr><td align="center" style="padding:28px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#111111;border-radius:20px;overflow:hidden;font-family:Montserrat,'Segoe UI',Helvetica,Arial,sans-serif;color:#f5f5f3;">
   <tr><td style="background:#000000;padding:30px 28px 22px;border-bottom:4px solid ${Y};" align="center">
-    <img src="${SITE}/assets/fitpulse-logo.png" width="200" alt="FIT PULSE" style="display:block;width:200px;max-width:70%;height:auto;border:0;color:#ffffff;font-size:28px;font-weight:900;font-style:italic;">
+    <img src="${SITE}/assets/brand/logo-full.png" width="200" alt="Fit Pulse" style="display:block;width:200px;max-width:70%;height:auto;border:0;color:#ffffff;font-size:28px;font-weight:900;font-style:italic;">
     <div style="margin-top:10px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#9b9b9b;">${echap(d.club)}</div>
   </td></tr>
   <tr><td style="padding:30px 28px 6px;">
@@ -276,6 +351,8 @@ function smtp(lignesMessage, dest) {
     s.on('error', ko);
   });
 }
+// Envoi d'un e-mail (utilisé aussi par les fonctions planifiées de club/cloud).
+export const envoyerMail = (dest, m) => smtp(message(dest, m), dest);
 function message(dest, { objet, texte, html }) {
   const b64 = s => Buffer.from(s, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
   const fr = 'fp' + crypto.randomBytes(8).toString('hex');
@@ -289,22 +366,54 @@ function message(dest, { objet, texte, html }) {
 }
 
 // ── Passage ───────────────────────────────────────────────────────────────
+// Tous les passages d'un espace (la base historique ou une société) : api y voit /pulse.
+async function passagesEspace(api, tk, S) {
+  // État du serveur publié pour l'appli : l'envoi automatique des invitations n'est proposé que si la messagerie est réglée.
+  await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
+  await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
+  // Notifications push (téléphone fermé).
+  try { const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
+  // Rapport du lundi 15 h au directeur (et « Envoyer maintenant » depuis l'appli).
+  if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
+  // KPI du matin, 8 h 45 : e-mail à l'accueil avec le bouton « Envoyer sur WhatsApp ».
+  if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
+  // Brief du matin, 7 h 30 du lundi au samedi : e-mail aux managers (et notification sans nom d'adhérent).
+  if (MDP || DRY) { try { await passageBrief(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) brief → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); }, { force: process.env.APERCU_BRIEF === 'true' }); } catch (e) { console.log('Brief du matin : échec,', e.message); } }
+  // Relève horaire des demandes de résiliation dans la boîte de l'accueil (API Gmail).
+  try { await passageResiliations(api, tk, S, { gmailPour: gmailReel, force: process.env.RELEVE_RESILIATIONS === 'true' }); } catch (e) { console.log('Demandes de résiliation : échec,', e.message); }
+  // Exports Resamania arrivés seuls (boîte dédiée ou dossier Drive), chaque heure de 6 h à 22 h.
+  try { const bucket = process.env.FITPULSE_BUCKET; await passageImports(api, tk, S, { sources: sourcesReelles(S), force: process.env.RELEVE_IMPORTS === 'true', stocker: bucket ? (club, date, name, buf) => stockerGcs(tk, bucket, club, date, name, buf) : null }); } catch (e) { console.log('Imports automatiques : échec,', e.message); }
+}
+// Multi-salles : les chemins /pulse… de chaque passage sont ceux de la société.
+export const cheminOrg = (org, c) => c.replace(/^pulse\.json/, `orgs/${org}/data.json`).replace(/^pulse\/clubs\//, `orgs/${org}/clubs/`).replace(/^pulse\//, `orgs/${org}/data/`).replace(/^pulse_push/, `orgs_push/${org}`).replace(/^pulse_inbox/, `orgs_inbox/${org}`);
+export const apiOrg = (api, org) => (tk, chemin, opts) => api(tk, cheminOrg(org, chemin), opts);
+// Invitations par lien (multi-salles) : /orgs_mail/{org}, envoyées puis effacées.
+async function invitationsOrg(api, tk, org) {
+  const boite = (await (await api(tk, `orgs_mail/${org}.json`)).json()) || {};
+  for (const [id, d] of Object.entries(boite).slice(0, MAX_PAR_PASSAGE)) {
+    try { if (MDP && !DRY) await smtp(message(d.email, d.lien ? emailInvitationLien(d) : emailInvitation(d)), d.email); console.log(`✓ invitation ${org} → ${String(d.email).replace(/(.).+(@.+)/, '$1…$2')}`); }
+    catch (e) { console.log(`✗ invitation ${org} : ${e.message}`); if (Date.now() - (Number(d.at) || 0) < 864e5) continue; }
+    if (!DRY && (MDP || Date.now() - (Number(d.at) || 0) > 864e5)) await api(tk, `orgs_mail/${org}/${id}.json`, { method: 'DELETE' });
+  }
+}
+
 async function main() {
   if (process.argv[2] === 'apercu') { writeFileSync(process.argv[3] || 'apercu-invitation.html', emailInvitation({ email: 'alex.martin@exemple.fr', first: 'Alex', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Fitness Park Niort' }).html); console.log('aperçu écrit'); return; }
   const tk = await jeton();
   console.log('Règles Fit Pulse :', await assurerRegle(tk));
   console.log('Comptes de départ :', await assurerComptes(tk));
   if (process.argv[2] === 'regles') return;
-  // État du serveur publié pour l'appli : l'envoi automatique des invitations n'est proposé que si la messagerie est réglée.
-  await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
-  await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
-  // Notifications push (téléphone fermé).
+  // Base historique (/pulse), puis chaque société en multi-salles (FITPULSE_MULTI=1).
   let S = {}; try { S = (await (await api(tk, 'pulse.json')).json()) || {}; } catch (e) { console.log('Lecture : échec,', e.message); }
-  try { const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
-  // Rapport du lundi 15 h au directeur (et « Envoyer maintenant » depuis l'appli).
-  if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
-  // KPI du matin, 8 h 45 : e-mail à l'accueil avec le bouton « Envoyer sur WhatsApp ».
-  if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
+  if (Object.keys(S).length) await passagesEspace(api, tk, S);
+  if (process.env.FITPULSE_MULTI === '1') {
+    const orgs = (await (await api(tk, 'orgs.json?shallow=true')).json()) || {};
+    for (const org of Object.keys(orgs)) {
+      const ao = apiOrg(api, org); console.log(`── espace ${org}`);
+      try { const So = (await (await ao(tk, 'pulse.json')).json()) || {}; So.clubs = (await (await api(tk, `orgs/${org}/clubs.json`)).json()) || {}; await passagesEspace(ao, tk, So); await invitationsOrg(api, tk, org); }
+      catch (e) { console.log(`espace ${org} : échec,`, e.message); }
+    }
+  }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');

@@ -30,11 +30,11 @@ const PR_COMPORTEMENTS = [
 ];
 const PR_CHECKS = [['appel1', 'Appel 1'], ['appel2', 'Appel 2'], ['vocal', 'Message vocal'], ['sms', 'SMS']];
 const PR_SMS = [
-  ['premier', 'Premier contact', 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ?'],
-  ['manque', 'Après un appel manqué', 'Bonjour {prenom}, {commercial} du Fitness Park {club}. J’ai essayé de vous joindre au sujet de votre demande. Quand puis-je vous rappeler ? Vous pouvez aussi répondre à ce message.'],
-  ['seance', 'Relance séance découverte', 'Bonjour {prenom}, votre séance découverte au Fitness Park {club} vous attend toujours. Dites-moi le jour qui vous arrange et je vous la réserve. {commercial}'],
-  ['offre', 'Offre du moment', 'Bonjour {prenom}, {commercial} du Fitness Park {club}. Nous avons une offre d’inscription en ce moment : je vous en dis plus en deux minutes au téléphone ou au club ?'],
-  ['dernier', 'Dernière relance', 'Bonjour {prenom}, je ne veux pas vous déranger : je clôture votre demande au Fitness Park {club}. Si vous souhaitez toujours essayer le club, répondez simplement à ce message. {commercial}'],
+  ['premier', 'Premier contact', 'Bonjour {prenom}, c’est {commercial} de {club}. Merci pour votre intérêt. Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ?'],
+  ['manque', 'Après un appel manqué', 'Bonjour {prenom}, {commercial} de {club}. J’ai essayé de vous joindre au sujet de votre demande. Quand puis-je vous rappeler ? Vous pouvez aussi répondre à ce message.'],
+  ['seance', 'Relance séance découverte', 'Bonjour {prenom}, votre séance découverte chez {club} vous attend toujours. Dites-moi le jour qui vous arrange et je vous la réserve. {commercial}'],
+  ['offre', 'Offre du moment', 'Bonjour {prenom}, {commercial} de {club}. Nous avons une offre d’inscription en ce moment : je vous en dis plus en deux minutes au téléphone ou au club ?'],
+  ['dernier', 'Dernière relance', 'Bonjour {prenom}, je ne veux pas vous déranger : je clôture votre demande chez {club}. Si vous souhaitez toujours essayer le club, répondez simplement à ce message. {commercial}'],
 ];
 const PR_STOP = ' Répondez STOP pour ne plus recevoir ces messages.';
 
@@ -86,7 +86,7 @@ function prospRender() {
     <div class="row wrap" style="gap:8px;margin:12px 0">${seg('prVue', [['a_faire', `À relancer · ${n('a_faire')}`], ['planifie', `Planifiées · ${n('planifie')}`], ['all', 'Tous'], ['ko', `KO · ${n('ko')}`]], vue)}
       <input class="input sm" style="max-width:220px" placeholder="Rechercher un prospect" value="${esc(UI.prQ || '')}" data-input="prSearchQ" aria-label="Rechercher un prospect"></div>
     ${list.length ? `<div class="pr-list">${list.slice(0, 150).map(prospRow).join('')}</div>${list.length > 150 ? `<p class="muted small">${list.length - 150} de plus : affinez avec la recherche.</p>` : ''}`
-      : emptyBox({ art: 'done', title: vue === 'a_faire' ? 'Aucun prospect à relancer' : 'Aucun prospect ici', text: prospectsOf(CLUB.id).length ? 'Changez de filtre, ou placez des relances sur vos derniers prospects.' : 'Déposez l’export Prospects de Resamania (Imports) ou ajoutez un prospect.' })}`;
+      : emptyBox({ art: 'board', title: vue === 'a_faire' ? 'Aucun prospect à relancer' : 'Aucun prospect ici', text: prospectsOf(CLUB.id).length ? 'Changez de filtre, ou placez des relances sur vos derniers prospects.' : 'Déposez l’export Prospects de Resamania (Imports) ou ajoutez un prospect.', cta: '<a class="btn sm" href="#/imports">Importer des prospects</a>' })}`;
 }
 function prospRow({ p, rl, temp, state }) {
   const T = PR_TEMPS[temp]; const ph = prospPhone(p); const last = rl.touches[0]; const owner = rl.ownerId && S.users[rl.ownerId];
@@ -130,7 +130,7 @@ function prospSmsList() {
 }
 function prospSmsText(p, tplKey) {
   const t = prospSmsList(p).find(x => x[0] === tplKey) || PR_SMS[0];
-  const f = fillTemplate(t[2] + (/STOP/.test(t[2]) ? '' : PR_STOP), { prenom: p.prenom || (pName(p).split(' ')[0]) || '', nom: pName(p), club: (CLUB.name || '').replace(/^Fitness Park\s*/i, ''), commercial: ME.first || '' });
+  const f = fillTemplate(t[2] + (/STOP/.test(t[2]) ? '' : PR_STOP), { prenom: p.prenom || (pName(p).split(' ')[0]) || '', nom: pName(p), club: CLUB.name || '', commercial: ME.first || '' });
   return { text: f.text.replace(/\[[a-z_]+ manquant\]\s?/g, ''), label: t[1] };
 }
 // SMS depuis la fiche : journalisé, puis l'appli SMS du téléphone s'ouvre avec le texte.
@@ -142,7 +142,7 @@ ACTIONS.prSms = el => {
 };
 ACTIONS.prCallLink = el => { if (!matchMedia('(pointer: coarse)').matches) { const p = S.prospects[el.dataset.id]; toast(`Composez le ${phoneFmt(prospPhone(p))}`); } };
 ACTIONS.prTemp = el => { db.set(['prospects', el.dataset.id, 'temp'], el.dataset.t); closeModal(); prospCard(el.dataset.id); };
-ACTIONS.prTake = el => { const p = S.prospects[el.dataset.id]; db.batch(relPatch(prospRel(p), { ownerId: ME.id })); closeModal(); prospCard(p.id); toast('Prospect à votre nom'); };
+ACTIONS.prTake = el => { const p = S.prospects[el.dataset.id]; db.batch(relPatch(prospRel(p), { ownerId: ME.id })); closeModal(); prospCard(p.id); toast('1 prospect à votre nom'); };
 ACTIONS.prReopen = el => { const p = S.prospects[el.dataset.id]; db.batch(relPatch(prospRel(p), { status: 'todo', nextAt: null, closedAt: null, lostReason: null, result: null })); closeModal(); prospCard(p.id); };
 
 // ── Effectuer ma relance ──────────────────────────────────────────────────

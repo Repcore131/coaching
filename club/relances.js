@@ -166,26 +166,26 @@ function relQueue(clubId, scope = 'mine') {
 
 // ── Modèles de messages et scripts d'appel ────────────────────────────────
 const TPL_DEFAULT = {
-  inactif: { sms: 'Bonjour {prenom}, on ne vous a pas vu au Fitness Park {club} depuis quelques semaines. Pour reprendre en douceur, je vous offre une séance de reprise avec un coach : quel jour vous arrange ? {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. On ne vous a pas vu depuis quelques semaines, je voulais prendre de vos nouvelles.', 'Qu’est-ce qui vous a éloigné du club : le temps, la motivation, une blessure ?', 'Je vous propose une séance de reprise offerte avec un coach, pour repartir sur un programme adapté. Quel jour vous arrange ?'] },
-  prospect: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
-  invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir le Fitness Park {club} ! Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous êtes venu découvrir le club récemment : comment s’est passée la séance ?', 'Qu’avez-vous préféré : les machines, les cours, l’ambiance ?', 'Je vous propose de passer pour voir l’offre qui vous correspond, ou je vous l’envoie par SMS. Qu’est-ce qui vous arrange ?'] },
-  suivi15: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. J’ai essayé de vous joindre pour savoir comment se passent vos débuts. Une question, un besoin ? Répondez ici, je vous rappelle.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Je vous appelle pour savoir comment se passent vos deux premières semaines. Vous avez deux minutes ?', 'Vous venez combien de fois par semaine ? Vous avez trouvé vos repères sur les machines ? Vous avez déjà fait votre séance avec un coach ?', 'Je vous propose un créneau avec un coach pour caler un programme. Plutôt en semaine ou le week-end ?'] },
-  suivi30: { sms: 'Bonjour {prenom}, déjà un mois au Fitness Park {club}. Envie d’un point avec un coach pour garder le rythme ? Répondez OUI et je vous propose un créneau. {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Ça fait un mois que vous êtes avec nous, je voulais faire le point.', 'Vous atteignez ce que vous visiez en vous inscrivant ? Qu’est-ce qui vous aiderait à venir plus souvent ? Vous connaissez quelqu’un qui aimerait essayer ?', 'Je peux lui offrir une séance découverte. Vous me donnez son prénom et son numéro ?'] },
-  anniversaire: { sms: 'Joyeux anniversaire {prenom} ! Toute l’équipe du Fitness Park {club} vous souhaite une belle journée. Une petite attention vous attend à l’accueil cette semaine.',
-    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. On voulait simplement vous souhaiter un bon anniversaire de la part de toute l’équipe.', '', 'Passez nous voir à l’accueil cette semaine, on a une petite attention pour vous.'] },
-  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Avant cette date, je peux vous proposer une offre de maintien de 8 semaines pour continuer dans les meilleures conditions. On en parle ? {commercial}, Fitness Park {club}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Votre engagement {offre} arrive à échéance le {date_fin}, je voulais anticiper avec vous.', 'Comment s’est passée cette année ? Vous comptez continuer ? Votre formule correspond toujours à votre pratique ?', 'Si vous renouvelez avant le {date_fin}, je vous garde les conditions actuelles. On le fait ensemble à l’accueil ou par téléphone ?'] },
-  impaye: { sms: 'Bonjour {prenom}, un prélèvement de {montant} n’a pas pu être effectué sur votre abonnement Fitness Park {club}. Vous pouvez régulariser à l’accueil. Merci, {commercial}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Je vous appelle au sujet d’un prélèvement qui n’est pas passé, pour un montant de {montant}. Ça arrive souvent, je voulais simplement régler ça avec vous.', 'Vous étiez au courant ? Votre carte ou votre compte a changé récemment ?', 'Vous pouvez régler à l’accueil lors de votre prochaine séance. À quelle date je peux noter le règlement ?'] },
-  mandat: { sms: 'Bonjour {prenom}, il manque le mandat de prélèvement sur votre abonnement Fitness Park {club}. Passez à l’accueil avec votre RIB, cela prend deux minutes.',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Il manque le mandat de prélèvement sur votre abonnement, ce qui peut bloquer votre accès.', '', 'Ça prend deux minutes à l’accueil avec votre RIB. Vous passez quand cette semaine ?'] },
-  resiliation: { sms: 'Bonjour {prenom}, j’ai bien reçu votre demande. Avant de la traiter, j’aimerais en parler deux minutes avec vous. Quand puis-je vous appeler ? {commercial}, Fitness Park {club}',
-    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. J’ai bien reçu votre demande de résiliation. Avant de la traiter, je voulais comprendre ce qui vous amène à arrêter.', 'Qu’est-ce qui a changé pour vous ? Si on trouvait une solution à ce point, vous resteriez ?', 'Prix : une formule plus adaptée. Manque de temps ou santé : une suspension plutôt qu’un arrêt. Insatisfaction : une séance avec un coach. Toujours finir par : je note votre décision et je vous confirme par SMS.'] },
+  inactif: { sms: 'Bonjour {prenom}, on ne vous a pas vu chez {club} depuis quelques semaines. Pour reprendre en douceur, je vous offre une séance de reprise avec un coach : quel jour vous arrange ? {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. On ne vous a pas vu depuis quelques semaines, je voulais prendre de vos nouvelles.', 'Qu’est-ce qui vous a éloigné du club : le temps, la motivation, une blessure ?', 'Je vous propose une séance de reprise offerte avec un coach, pour repartir sur un programme adapté. Quel jour vous arrange ?'] },
+  prospect: { sms: 'Bonjour {prenom}, c’est {commercial} de {club}. Merci pour votre intérêt. Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
+  invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir {club}. Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Vous êtes venu découvrir le club récemment : comment s’est passée la séance ?', 'Qu’avez-vous préféré : les machines, les cours, l’ambiance ?', 'Je vous propose de passer pour voir l’offre qui vous correspond, ou je vous l’envoie par SMS. Qu’est-ce qui vous arrange ?'] },
+  suivi15: { sms: 'Bonjour {prenom}, c’est {commercial} de {club}. J’ai essayé de vous joindre pour savoir comment se passent vos débuts. Une question, un besoin ? Répondez ici, je vous rappelle.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. Je vous appelle pour savoir comment se passent vos deux premières semaines. Vous avez deux minutes ?', 'Vous venez combien de fois par semaine ? Vous avez trouvé vos repères sur les machines ? Vous avez déjà fait votre séance avec un coach ?', 'Je vous propose un créneau avec un coach pour caler un programme. Plutôt en semaine ou le week-end ?'] },
+  suivi30: { sms: 'Bonjour {prenom}, déjà un mois chez {club}. Envie d’un point avec un coach pour garder le rythme ? Répondez OUI et je vous propose un créneau. {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Ça fait un mois que vous êtes avec nous, je voulais faire le point.', 'Vous atteignez ce que vous visiez en vous inscrivant ? Qu’est-ce qui vous aiderait à venir plus souvent ? Vous connaissez quelqu’un qui aimerait essayer ?', 'Je peux lui offrir une séance découverte. Vous me donnez son prénom et son numéro ?'] },
+  anniversaire: { sms: 'Joyeux anniversaire {prenom}. Toute l’équipe de {club} vous souhaite une belle journée. Une petite attention vous attend à l’accueil cette semaine.',
+    script: ['Bonjour {prenom}, c’est {commercial} de {club}. On voulait simplement vous souhaiter un bon anniversaire de la part de toute l’équipe.', '', 'Passez nous voir à l’accueil cette semaine, on a une petite attention pour vous.'] },
+  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Avant cette date, je peux vous proposer une offre de maintien de 8 semaines pour continuer dans les meilleures conditions. On en parle ? {commercial}, {club}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Votre engagement {offre} arrive à échéance le {date_fin}, je voulais anticiper avec vous.', 'Comment s’est passée cette année ? Vous comptez continuer ? Votre formule correspond toujours à votre pratique ?', 'Si vous renouvelez avant le {date_fin}, je vous garde les conditions actuelles. On le fait ensemble à l’accueil ou par téléphone ?'] },
+  impaye: { sms: 'Bonjour {prenom}, un prélèvement de {montant} n’a pas pu être effectué sur votre abonnement chez {club}. Vous pouvez régulariser à l’accueil. Merci, {commercial}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Je vous appelle au sujet d’un prélèvement qui n’est pas passé, pour un montant de {montant}. Ça arrive souvent, je voulais simplement régler ça avec vous.', 'Vous étiez au courant ? Votre carte ou votre compte a changé récemment ?', 'Vous pouvez régler à l’accueil lors de votre prochaine séance. À quelle date je peux noter le règlement ?'] },
+  mandat: { sms: 'Bonjour {prenom}, il manque le mandat de prélèvement sur votre abonnement chez {club}. Passez à l’accueil avec votre RIB, cela prend deux minutes.',
+    script: ['Bonjour {prenom}, {commercial} de {club}. Il manque le mandat de prélèvement sur votre abonnement, ce qui peut bloquer votre accès.', '', 'Ça prend deux minutes à l’accueil avec votre RIB. Vous passez quand cette semaine ?'] },
+  resiliation: { sms: 'Bonjour {prenom}, j’ai bien reçu votre demande. Avant de la traiter, j’aimerais en parler deux minutes avec vous. Quand puis-je vous appeler ? {commercial}, {club}',
+    script: ['Bonjour {prenom}, {commercial} de {club}. J’ai bien reçu votre demande de résiliation. Avant de la traiter, je voulais comprendre ce qui vous amène à arrêter.', 'Qu’est-ce qui a changé pour vous ? Si on trouvait une solution à ce point, vous resteriez ?', 'Prix : une formule plus adaptée. Manque de temps ou santé : une suspension plutôt qu’un arrêt. Insatisfaction : une séance avec un coach. Toujours finir par : je note votre décision et je vous confirme par SMS.'] },
 };
 const MARKETING = ['anniversaire', 'suivi30'];
 function tplFor(kind, ch) {
@@ -199,10 +199,12 @@ function tplFor(kind, ch) {
 }
 function tplCtx(rl) {
   const c = rl.client || {};
-  return { prenom: (c.name || rl.name || '').split(' ')[0] || '', nom: c.name || rl.name || '', club: (CLUB.name || '').replace(/^Fitness Park\s*/i, ''), commercial: ME.first || '', montant: rl.amount ? fmtE(rl.amount) : '', date_fin: c.end ? dmy(c.end) : '', offre: c.offer || '' };
+  return { prenom: (c.name || rl.name || '').split(' ')[0] || '', nom: c.name || rl.name || '', club: CLUB.name || '', commercial: ME.first || '', montant: rl.amount ? fmtE(rl.amount) : '', date_fin: c.end ? dmy(c.end) : '', offre: c.offer || '' };
 }
 function fillTemplate(body, ctx) {
   const missing = [];
+  // Ancien modèle personnalisé « <enseigne> {club} » : {club} porte déjà le nom complet.
+  const marque = deepGet(S || {}, ['tenant', 'brand']); if (marque) body = String(body).replace(new RegExp(marque.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+\\{club\\}', 'gi'), '{club}');
   const out = String(body).replace(/\{([a-z_]+)\}/g, (m, k) => { const v = ctx[k]; if (v == null || v === '') { missing.push(k); return `[${k} manquant]`; } return v; });
   return { text: out, missing };
 }
@@ -212,7 +214,7 @@ function contactLinks(rl, text = '') {
     tel: p ? `tel:${p}` : null,
     sms: p ? `sms:${p}?&body=${encodeURIComponent(text)}` : null,
     wa: p ? `https://wa.me/${p.replace('+', '')}?text=${encodeURIComponent(text)}` : null,
-    mail: e && /^[^\s@<>"']+@[^\s@<>"']+$/.test(e) ? `mailto:${encodeURIComponent(e).replace('%40', '@')}?subject=${encodeURIComponent('Fitness Park ' + (CLUB.name || ''))}&body=${encodeURIComponent(text)}` : null,
+    mail: e && /^[^\s@<>"']+@[^\s@<>"']+$/.test(e) ? `mailto:${encodeURIComponent(e).replace('%40', '@')}?subject=${encodeURIComponent(CLUB.name || 'Votre club')}&body=${encodeURIComponent(text)}` : null,
   };
 }
 
@@ -246,7 +248,7 @@ PAGES.relances = {
     if (seg0 === 'resiliations') return head + PAGES.resiliations.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'impayes') return head + PAGES.impayes.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'perf') return head + relPerf();
-    if (seg0 === 'prospects') return head + prospRender();
+    if (seg0 === 'prospects') return head + `<div class="row" style="margin-top:10px">${seg('prMode', [['liste', 'Liste à relancer'], ['colonnes', 'Colonnes par étape']], UI.prMode || 'liste')}</div>` + (UI.prMode === 'colonnes' ? prospColonnes() : prospRender());
     if (seg0 === 'retention') return head + PAGES.loyalty.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     const Q = relQueue(CLUB.id, scope);
     const kf = UI.relKind || 'all';
@@ -255,12 +257,14 @@ PAGES.relances = {
     return head + `<div class="rel-tiles"><div><b>${Q.now.length}</b><span>à appeler maintenant</span></div><div><b>${Q.later.length}</b><span>rappels plus tard aujourd’hui</span></div><div><b>${Q.nophone.length}</b><span>sans téléphone</span></div></div>
       <div class="row wrap" style="gap:8px;margin:12px 0">${seg('relScope', [['mine', 'Mes relances'], ['nobody', 'Non attribuées'], ['all', 'Tout le club']], scope)}${isManager() && scope === 'nobody' && Q.now.length ? '<button class="btn sm" data-act="relSpread">Répartir équitablement</button>' : ''}
         <div class="chips">${[['all', 'Tout'], ...Object.entries(REL_KINDS).filter(([k]) => counts[k]).map(([k, v]) => [k, `${v.label} ${counts[k]}`])].map(([k, l]) => `<button class="chip-radio ${kf === k ? 'on' : ''}" data-act="ui" data-key="relKind" data-val="${k}"><span>${l}</span></button>`).join('')}</div></div>
-      ${f(Q.now).length ? `<div class="rel-list">${f(Q.now).map(relRow).join('')}</div>` : emptyBox({ art: 'done', title: scope === 'mine' ? 'Aucune relance à votre nom' : 'Tout est à jour', text: scope === 'mine' ? 'Prenez une relance non attribuée.' : 'Revenez après le prochain import Resamania.', cta: scope === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="relScope" data-val="nobody">Voir les non attribuées</button>' : '' })}
+      ${f(Q.now).length ? `<div class="rel-list">${f(Q.now).map(relRow).join('')}</div>` : emptyBox({ art: 'done', title: scope === 'mine' ? 'Aucune relance à votre nom' : 'Tout est à jour', text: scope === 'mine' ? 'Prenez une relance non attribuée.' : 'Revenez après le prochain import Resamania.', cta: scope === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="relScope" data-val="nobody">Voir les non attribuées</button>' : '<a class="btn sm" href="#/imports">Ouvrir les imports</a>' })}
       ${Q.later.length ? `<h3 class="rel-h">Rappels plus tard aujourd’hui</h3><div class="rel-list">${Q.later.map(relRow).join('')}</div>` : ''}
       ${Q.nophone.length ? `<details class="card rel-nophone"><summary><b>Sans téléphone · ${Q.nophone.length}</b> <span class="muted small">ajoutez le numéro pour pouvoir appeler</span></summary><div class="rel-list">${Q.nophone.map(relRow).join('')}</div></details>` : ''}`;
   },
 };
 function relRow(r) {
+  // Impayé et rétention : la même carte que l'accueil (Appeler, SMS, feuille de résultat en 3 taps).
+  if (r.top && !r.list.some(x => x.claimedBy && x.claimedBy !== ME.id && (x.claimedUntil || 0) > Date.now()) && typeof carteAppel === 'function') { const c = carteAppel(r.top); if (c) return c; }
   const rl = r.top; const kinds = [...new Set(r.list.map(x => x.kind))];
   const lock = r.list.find(x => x.claimedBy && x.claimedBy !== ME.id && (x.claimedUntil || 0) > Date.now());
   const owner = rl.ownerId && S.users[rl.ownerId] ? S.users[rl.ownerId].first : null;
@@ -279,13 +283,13 @@ function relRow(r) {
     </div></div>`;
 }
 const relByKey = key => relancesFor(CLUB.id).find(rl => rl.key === key) || null;
-ACTIONS.relTake = el => { const rl = relByKey(el.dataset.key); if (!rl) return; const ops = relPatch(rl, { ownerId: ME.id }); if (rl.kind === 'impaye' && rl.client) ops.push(dunPatch(rl.client, { ownerId: ME.id }, 'Prise en charge')); if (rl.kind === 'resiliation') ops.push([['resiliations', rl.refId, 'ownerId'], ME.id]); db.batch(ops); toast('Relance ajoutée à votre liste'); };
+ACTIONS.relTake = el => { const rl = relByKey(el.dataset.key); if (!rl) return; const ops = relPatch(rl, { ownerId: ME.id }); if (rl.kind === 'impaye' && rl.client) ops.push(dunPatch(rl.client, { ownerId: ME.id }, 'Prise en charge')); if (rl.kind === 'resiliation') ops.push([['resiliations', rl.refId, 'ownerId'], ME.id]); db.batch(ops); toast('1 relance ajoutée à votre liste'); };
 ACTIONS.relPhone = el => {
   const c = S.clients[el.dataset.id];
   openModal({ title: `Téléphone · ${c.name}`, body: `<label class="field"><span>Numéro</span><input class="input" id="rp" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${esc(c.phone || '')}"></label>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="relPhoneSave" data-id="${c.id}">Enregistrer</button>` });
 };
-ACTIONS.relPhoneSave = el => { const p = phoneE164($('#rp').value); if (!p) { toast('Numéro invalide.'); return; } db.batch([[['clients', el.dataset.id, 'phone'], p], [['clients', el.dataset.id, 'phoneSrc'], 'manual'], [['clients', el.dataset.id, 'phoneBad'], null]]); closeModal(); toast('Numéro enregistré'); };
+ACTIONS.relPhoneSave = el => { const p = phoneE164($('#rp').value); if (!p) { toast('Numéro invalide.'); return; } db.batch([[['clients', el.dataset.id, 'phone'], p], [['clients', el.dataset.id, 'phoneSrc'], 'manual'], [['clients', el.dataset.id, 'phoneBad'], null]]); closeModal(); toast('1 numéro enregistré'); };
 
 // Appel : verrou, garde-fou « déjà contacté », puis feuille de résultat au retour dans l'appli.
 ACTIONS.relCall = async (el, ev) => {
@@ -332,6 +336,8 @@ function relSheet(key, channel = 'call') {
   const rl = relByKey(key); if (!rl) return;
   // prospect : la feuille dédiée (cases appel 1, appel 2, vocal, SMS, comportement, suite)
   if (rl.kind === 'prospect' && typeof prospSheet === 'function' && S.prospects[rl.refId]) return prospSheet(rl.refId);
+  // impayé : la feuille du dossier (dunning.history), la même que sur Impayés et Rétention
+  if (rl.kind === 'impaye' && rl.clientId && typeof dunSheet === 'function') return dunSheet(rl.clientId);
   const outs = ['joint', 'messagerie', 'pasreponse', 'mauvaisnumero', 'rappeler', ...(KIND_OUTCOMES[rl.kind] || []), 'refus', 'stop'];
   const motifs = (REFUS_MOTIFS[rl.kind] || (() => ['Pas intéressé', 'Autre']))();
   openModal({ title: `Résultat · ${rl.name}`, drawer: true, body: `<form id="rsf" class="grid">
@@ -365,7 +371,7 @@ ACTIONS.relSave = el => {
   if (o === 'rappeler') { next = new Date(f.callbackAt).getTime(); status = 'attente'; t.callbackAt = next; }
   else if (o === 'promesse') { const a = parseMontant(f.promiseAmount); t.promiseAmount = a; t.promiseDate = f.promiseDate; next = dateOf(addDays(f.promiseDate, 1)).getTime() + 10 * 3600000; status = 'attente'; if (rl.client) ops.push(dunPatch(rl.client, { status: 'promesse', promiseBase: Number(rl.client.balance) || 0, promiseAmount: a, promiseDate: f.promiseDate, next: addDays(f.promiseDate, 1) }, `Promesse : ${fmtE(a)} le ${dm(f.promiseDate)}`)); }
   else if (o === 'rdv') { t.rdvAt = new Date(f.rdvAt).getTime(); t.rdvObj = f.rdvObj; status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'rdv' }; }
-  else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaidOps(rl.client, a, 'equipe', rl.ownerId || ME.id, 'relances')); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
+  else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaid(rl.client, a, { canal: 'equipe', author: ME.id, from: 'relances' })); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
   else if (o === 'sauve') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'sauve' }; }
   else if (o === 'ok') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'ok' }; }
   else if (o === 'maintien8' || o === 'reprise') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: o }; if (o === 'maintien8' && rl.clientId) ops.push([['clients', rl.clientId, 'maintienAt'], today()]); }
@@ -388,12 +394,12 @@ ACTIONS.relSave = el => {
   } else if (rl.kind === 'impaye' && rl.client && o !== 'paye' && o !== 'promesse') ops.push(dunPatch(rl.client, { status: 'relance', ownerId: dunOf(rl.client).ownerId || ME.id, next: next ? isoOf(new Date(next)) : null }, `${T.label}${t.note ? ' : ' + t.note : ''}`));
   else if (rl.clientId && ['suivi15', 'suivi30', 'fincontrat', 'anniversaire', 'mandat'].includes(rl.kind)) {
     const legacy = { joint: 'ok', ok: 'ok', rdv: 'rdv', messagerie: 'message', pasreponse: 'noanswer', refus: 'lost', stop: 'lost' }[o];
-    const type = { suivi15: 'suivi', suivi30: 'suivi', fincontrat: 'renouvellement' }[rl.kind] || rl.kind;
-    if (legacy) { const id = newId(); ops.push([['loyalty', id], { id, clubId: CLUB.id, clientId: rl.clientId, type, outcome: legacy, userId: ME.id, at: Date.now(), note: t.note || '' }]); }
+    const type = { fincontrat: 'renouvellement' }[rl.kind] || rl.kind;
+    if (legacy) { const id = newId(); ops.push([['loyalty', id], { id, clubId: CLUB.id, clientId: rl.clientId, type, ...(rl.kind === 'suivi15' ? { step: 15 } : rl.kind === 'suivi30' ? { step: 30 } : {}), outcome: legacy, userId: ME.id, at: Date.now(), note: t.note || '' }]); }
   }
   db.batch(ops); closeModal();
-  if (o === 'sauve') celebrate('Client sauvé', `${rl.name} reste au club`, { kind: 'win' });
-  else if (o === 'paye') celebrate('Impayé récupéré', rl.name, { kind: 'win' });
+  if (o === 'sauve') toast(`Client sauvé : ${rl.name} reste au club`);
+  else if (o === 'paye') toast(`Impayé récupéré : ${rl.name}`);
   else toast(next ? `Noté. Prochaine relance ${dayLabel(isoOf(new Date(next))).toLowerCase()} ${new Date(next).toTimeString().slice(0, 5).replace(':', ' h ')}` : 'Noté');
   if (UI.session) setTimeout(() => sessionNext(), 250);
 };
@@ -424,11 +430,11 @@ PAGES.equipe = {
   render() {
     const t = 'fil';
     const strip = h => h.replace(/^<div class="page-head">[\s\S]*?<\/div>\s*(<span class="spacer"><\/span>[\s\S]*?)?<\/div>/, '');
-    const body = PAGES.feed.render();
+    const body = PAGES.pouls.render();
     return `<div class="page-head"><div><h1>Équipe</h1><p>Le fil des ventes du club.</p></div></div>
-      ${tabs('eqTab', [['fil', `Fil d’équipe${unseenFeed() ? ' · ' + unseenFeed() : ''}`]], t)}${strip(body)}`;
+      ${tabs('eqTab', [['fil', `${TXT.mots.pouls}${unseenPouls() ? ' · ' + unseenPouls() : ''}`]], t)}${strip(body)}`;
   },
-  mount() { if (PAGES.feed.mount) PAGES.feed.mount(); },
+  mount() { if (PAGES.pouls.mount) PAGES.pouls.mount(); },
 };
 
 // ── Répartir les relances non attribuées entre les membres actifs ─────────
@@ -439,7 +445,7 @@ ACTIONS.relSpread = async () => {
   if (!await confirmDlg(`Répartir ${plur(free.length, 'client', 'clients')} entre ${plur(pool.length, 'membre', 'membres')}, en tenant compte de ce que chacun a déjà en cours ?`, { ok: 'Répartir' })) return;
   const ops = [];
   free.forEach(r => { const u = pool.slice().sort((a, b) => load[a.id] - load[b.id] || a.first.localeCompare(b.first))[0]; load[u.id]++; r.list.forEach(rl => ops.push(...relPatch(rl, { ownerId: u.id }))); });
-  db.batch(ops); toast('Relances réparties');
+  db.batch(ops); toast(`Relances réparties : ${plur(ops.length, 'attribution', 'attributions')}`);
 };
 
 // ── Performance des relances (mois, club et par commercial) ───────────────

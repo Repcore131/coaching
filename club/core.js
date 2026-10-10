@@ -8,7 +8,16 @@
 // Rien ne sort de nos clubs : il n'existe ni reseau, ni classement inter-
 // enseignes, ni fil partage avec l'exterieur.
 
-const APP = { name: 'Fit Pulse', tagline: 'Pilotage commercial de nos clubs Fitness Park' };
+// Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
+const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
+CFG.assets = CFG.assets || {};
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.9' };
+// ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
+// Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
+// Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.
+const tenant = () => (S && S.tenant) || {};
+const entiteTexte = () => tenant().entity ? `Entité = ${tenant().entity}` : 'Entité = votre société d’exploitation';
+
 
 // ── Outils ─────────────────────────────────────────────────────────────────
 const $ = (s, r = document) => r.querySelector(s);
@@ -19,7 +28,13 @@ const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN = n => nf0.format(Math.round(n || 0));
 const fmtE = n => (Number.isInteger(Math.round((n || 0) * 100) / 100) ? nf0.format(n || 0) : nf2.format(n || 0)) + ' €';
+// Montant au centime (historique des acomptes : « 50,00 € »).
+const fmtEc = n => nf2.format(Math.round((n || 0) * 100) / 100) + ' €';
 const fmtV = (v, unit) => unit === 'eur' ? fmtE(v) : fmtN(v);
+// Valeur et unité d'un KPI : « 30 contrats », « 1 avis », « 1 240 € ». Unité des KPI créés à la main : k.nom = [singulier, pluriel].
+const KPI_NOMS = { avis: ['avis', 'avis'], contrats: ['contrat', 'contrats'], b2b: ['contrat B2B', 'contrats B2B'], invites: ['invité', 'invités'], sauvetage: ['sauvetage', 'sauvetages'], prospects: ['prospect', 'prospects'] };
+function uniteKpi(k, v) { const n = (k && (k.nom || KPI_NOMS[k.id])) || ['unité', 'unités']; return Math.abs(Math.round(v || 0)) >= 2 ? n[1] : n[0]; }
+const fmtU = (v, k) => { const kk = typeof k === 'string' ? S && S.kpis && S.kpis[k] : k; return kk && kk.unit === 'eur' ? fmtE(v) : `${fmtN(v)} ${uniteKpi(kk, v)}`; };
 const fmtP = p => p == null ? 'n.d.' : Math.round(p * 100) + ' %';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -51,6 +66,13 @@ const ago = ts => {
   return dmy(isoOf(new Date(ts)));
 };
 const timeOf = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+// Minuit à Paris d'une date AAAA-MM-JJ, en millisecondes (heure d'été comprise), quel que soit le fuseau de l'appareil.
+function minuitParis(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(iso || '')) return null;
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number); const u = Date.UTC(y, m - 1, d, 12);
+  let off = 1; try { const t = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', timeZoneName: 'shortOffset' }).formatToParts(new Date(u)).find(p => p.type === 'timeZoneName').value; const k = /GMT([+-]\d+)/.exec(t); if (k) off = Number(k[1]); } catch (e) { /* repli : heure d'hiver */ }
+  return Date.UTC(y, m - 1, d) - off * 3600000;
+}
 const deepGet = (o, path) => path.reduce((a, k) => a == null ? a : a[k], o);
 
 // Generateur pseudo-aleatoire a graine : la demo est la meme a chaque fois.
@@ -58,18 +80,29 @@ function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 10139
 
 // ── Icones (trait, 24x24) ─────────────────────────────────────────────────
 const ICONS = {
+  // Navigation (planche de référence assets/brand/icons-sheet.png) : trait 2, extrémités arrondies.
+  home: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
+  target: '<circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="M11 13l8.5-8.5M16 4.5V8h3.5"/>',
+  ranking: '<rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8" width="5" height="13" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/>',
+  callback: '<path d="M5.5 3.5h2.8l1.4 3.8-2 1.4a10.5 10.5 0 0 0 4.6 4.6l1.4-2 3.8 1.4v2.8a2 2 0 0 1-2 2A14.5 14.5 0 0 1 3.5 5.5a2 2 0 0 1 2-2z"/><path d="M14.5 3a6.5 6.5 0 0 1 6.2 5"/><path d="M18.4 7.4l2.3.9.8-2.3"/>',
+  door: '<path d="M4 3.5l8.5 1.5v15.5L4 19z"/><path d="M12.5 5h5v14.5h-5"/><path d="M7.5 12h2"/>',
+  coinsback: '<path d="M19.5 10A8.5 8.5 0 1 0 11 20.5"/><path d="M14 8.6a3.5 3.5 0 1 0 0 5.8"/><path d="M7.5 10.6h5M7.5 12.6h5"/><path d="M21 21a3 3 0 0 0-3-3h-3.5"/><path d="M16.5 16l-2 2 2 2"/>',
+  magnet: '<path d="M5 4h4.5v7.5a2.5 2.5 0 0 0 5 0V4H19v7.5a7 7 0 0 1-14 0z"/><path d="M5 8h4.5M14.5 8H19"/>',
+  import: '<path d="M12 3v10M8 9.5l4 4 4-4"/><path d="M3.5 14.5l1.8-3.5M20.5 14.5l-1.8-3.5"/><path d="M3.5 14.5h17V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19z"/>',
+  team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20.5a6.5 6.5 0 0 1 13 0z"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.5 20.5h6a4.5 4.5 0 0 0-5.6-4.4"/>',
+  chat: '<path d="M5.5 4h13A2.5 2.5 0 0 1 21 6.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-5 4v-4h-.5A2.5 2.5 0 0 1 3 14.5v-8A2.5 2.5 0 0 1 5.5 4z"/>',
+  flag: '<path d="M5 21V3.5"/><path d="M5 4.5c3-2 6 2 9 0s4.5-1 5.5-.5v9c-1-.5-2.5-1.5-5.5.5s-6-2-9 0"/>',
+  report: '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M8.5 16.5l3-3 2 1.5 3-3.5"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
-  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
-  feed: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>',
+  pouls: '<path d="M2 12h4l2-5 4 10 3-7 2 2h5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
   mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
-  door: '<path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M10 17l-5-5 5-5M5 12h12"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -79,6 +112,8 @@ const ICONS = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevL: '<path d="m15 18-6-6 6-6"/>',
   chevR: '<path d="m9 18 6-6-6-6"/>',
+  chevU: '<path d="m18 15-6-6-6 6"/>',
+  chevD: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
@@ -96,7 +131,6 @@ const ICONS = {
   clip: '<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/>',
-  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   map: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
@@ -111,7 +145,6 @@ const ICONS = {
   briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
   ticket: '<path d="M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a2 2 0 0 0 0 4v0a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4V12a2 2 0 0 0 0-4z"/><path d="M14 5v14" stroke-dasharray="2 2"/>',
   lifebuoy: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/>',
-  magnet: '<path d="M5 3v8a7 7 0 0 0 14 0V3h-4v8a3 3 0 0 1-6 0V3z"/><path d="M5 7h4M15 7h4"/>',
   crown: '<path d="m3 8 4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
   medal: '<path d="M8 3h8l-2 6h-4z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 1 2h2l-1.6 1.3.6 2.2-2-1.3-2 1.3.6-2.2L9 14h2z"/>',
   cake: '<path d="M4 21V12h16v9M2 21h20M4 16c2 1.5 4 1.5 6 0s4-1.5 6 0 3 1 4 0M12 12V8M12 5.5v.5"/>',
@@ -121,7 +154,6 @@ const ICONS = {
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
-  flag: '<path d="M5 21V4M5 4h12l-2 4 2 4H5"/>',
   calcheck: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/>',
 };
 // Icone d'un KPI : par son id (KPI par defaut), sinon le nom d'icone choisi,
@@ -131,8 +163,16 @@ const kpiIconName = k => (k && ICONS[k.icon]) ? k.icon : (k && KPI_ICON[k.id]) |
 const kpiIcon = (k, cls = 'ico') => ico(kpiIconName(k), cls);
 // Reactions : les cles historiques restent (pas de perte), l'affichage passe
 // en icones. Toute autre cle est ignoree (jamais injectee dans la page).
-const REACT_ICON = { '🔥': ['flame', 'Bravo'], '💪': ['medal', 'Costaud'], '👏': ['sparkle', 'Bien joué'], '👍': ['check', 'OK'] };
-const reactIco = em => REACT_ICON[em] ? ico(REACT_ICON[em][0], 'ico') : '';
+// Réactions du fil et du chat : Vu, Bravo, Question. Les anciennes clés (pictogrammes) sont
+// relues sous la nouvelle (feu, biceps, applaudissements : Bravo ; pouce : Vu) : aucun compteur perdu.
+const REACTIONS = { vu: ['check', 'Vu'], bravo: ['sparkle', 'Bravo'], question: ['info', 'Question'] };
+const REACT_MIGR = { '\u{1F525}': 'bravo', '\u{1F4AA}': 'bravo', '\u{1F44F}': 'bravo', '\u{1F44D}': 'vu' };
+// rx : { cle: { uid: true } } (nouvelles et anciennes clés mêlées) -> { vu: [uid…], bravo: [uid…], question: [uid…] }
+function reactionsDe(rx) { const o = { vu: new Set(), bravo: new Set(), question: new Set() }; for (const [k, w] of Object.entries(rx || {})) { const n = REACTIONS[k] ? k : REACT_MIGR[k]; if (n) Object.keys(w || {}).filter(id => w[id]).forEach(id => o[n].add(id)); } return { vu: [...o.vu], bravo: [...o.bravo], question: [...o.question] }; }
+// Bascule de ma réaction : écrit la nouvelle clé et efface les anciennes clés équivalentes.
+// La valeur d'une réaction est son heure (fil d'équipe, dernière visite) ; les anciennes valent true.
+function reactOps(base, rx, cle) { const mine = reactionsDe(rx)[cle].includes(ME.id); const ops = [[[...base, cle, ME.id], mine ? null : Date.now()]]; for (const [old, n] of Object.entries(REACT_MIGR)) if (n === cle && deepGet(rx || {}, [old, ME.id])) ops.push([[...base, old, ME.id], null]); return ops; }
+const reactBtns = (act, id, rx, cls = '') => { const R = reactionsDe(rx); return Object.entries(REACTIONS).map(([k, [ic, l]]) => `<button class="${cls} ${R[k].includes(ME.id) ? 'on' : ''}" data-act="${act}" data-id="${id}" data-em="${k}" aria-pressed="${R[k].includes(ME.id)}" title="${esc([l, ...R[k].map(u => fullName(S.users[u] || { first: '?' }))].join(', '))}">${ico(ic, 'ico ico-xs')} ${l}${R[k].length ? ` <span class="num">${R[k].length}</span>` : ''}</button>`).join(''); };
 // Image du chat : uniquement une image encodee (data:), jamais un texte qui pourrait sortir de l'attribut.
 const safeImg = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -147,42 +187,41 @@ const DEFAULT_KPIS = {
   accessoires: { id: 'accessoires', label: 'Accessoires',            unit: 'eur', points: 500,  required: true,  enabled: true, order: 4, icon: 'cap' },
   impayes:     { id: 'impayes',     label: 'Impayés récupérés',      unit: 'eur', points: 750,  required: true,  enabled: true, order: 5, icon: 'coins' },
   b2b:         { id: 'b2b',         label: 'Contrat B2B',            unit: 'qty', points: 100,  required: false, enabled: true, order: 6, icon: 'briefcase' },
-  invites:     { id: 'invites',     label: 'Invités > Contrats',     unit: 'qty', points: 300,  required: false, enabled: true, order: 7, icon: 'ticket' },
+  invites:     { id: 'invites',     label: TXT.kpi.invites,        unit: 'qty', points: 300,  required: false, enabled: true, order: 7, icon: 'ticket' },
   sauvetage:   { id: 'sauvetage',   label: 'Sauvetage résiliations', unit: 'qty', points: 300,  required: false, enabled: true, order: 8, icon: 'lifebuoy' },
   prospects:   { id: 'prospects',   label: 'Prospects',              unit: 'qty', points: 0,    required: false, enabled: true, order: 9, icon: 'magnet' },
   upsell:      { id: 'upsell',      label: 'Montée en gamme',        unit: 'eur', points: 300,  required: false, enabled: true, order: 10, icon: 'sparkle' },
 };
 
 const DEFAULT_TASKS = [
-  ['Ouverture', ['Check passage du matin', 'Ouverture caisse', 'Tour du plateau', 'Vérification propreté vestiaires']],
+  ['Ouverture', [TXT.taches.passage, 'Ouverture caisse', 'Tour du plateau', 'Vérification propreté vestiaires']],
   ['Ventes', ['Appels prospects de la veille', 'Relance prospects J+3', 'Rappel des invités du week-end', 'Visites programmées', 'Relance devis B2B', 'Prospection entreprises du secteur']],
   ['Rétention', ['Appels J+15 nouveaux adhérents', 'Appels J+30 nouveaux adhérents', 'Relance adhérents sans mandat', 'Relance impayés du jour', 'Appels anniversaires', 'Appels renouvellements du mois', 'Suivi résiliations et sauvetages']],
-  ['Réputation', ['Réponse aux avis Google', 'Réponse aux avis Wizville', 'Demande d’avis aux adhérents satisfaits']],
+  ['Réputation', ['Réponse aux avis Google', TXT.taches.avis, 'Demande d’avis aux adhérents satisfaits']],
   ['Boutique', ['Mise en avant boutique nutrition', 'Inventaire accessoires', 'Réassort frigo']],
   ['Communication', ['Story Instagram', 'Post Facebook du club', 'Affichage planning cours']],
   ['Clôture', ['Validation de caisse', 'Saisie des KPI du jour dans Fit Pulse', 'Point équipe de fin de journée', 'Fermeture et alarme']],
 ];
 
-const LEVELS = [
-  { id: 'rookie', label: 'Rookie', min: 0 },
-  // Recalibre sur un mois parfait (environ 3 500 pts) : Performer des le premier
-  // mois complet a 100 %, Legende en un peu plus d'un an d'excellence.
-  { id: 'performer', label: 'Performer', min: 3000 },
-  { id: 'warrior', label: 'Warrior', min: 10000 },
-  { id: 'elite', label: 'Élite', min: 25000 },
-  { id: 'legende', label: 'Légende', min: 50000 },
-];
+// Niveaux individuels gagnés par mois à 100 % (voir zoneOf dans calc.js).
+const ZONES = TXT.zones.liste;
+const LEVELS = ZONES;
 
-function emptyState() {
-  return {
+// État initial de la base. emptyState() sans argument y renvoie ; art.js redéfinit emptyState
+// pour les états vides de l'interface (avec un argument).
+function emptyState() { return etatInitial(); }
+function etatInitial() {
+  const st = {
     meta: { version: 1, createdAt: Date.now() },
     clubs: {}, users: {}, kpis: JSON.parse(JSON.stringify(DEFAULT_KPIS)),
     targets: {}, entries: {}, imports: {}, monthly: {}, base: {},
-    clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
+    clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {}, celebrated: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, touches: {}, relances: {}, prospects: {}, guests: {}, companies: {}, opps: {}, templates: {}, relanceCfg: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {}, product: {}, resRequests: {}, resRequestsMeta: {}, private: {}, tarifs: {}, transferts: {}, roiCfg: {}, scriptsReseau: {}, billing: {}, benchmark: {}, settings: {}, recapNotes: {}, usage: {}, tenant: {},
   };
+  if (typeof productFill === 'function') productFill(st); // suivi produit : les 32 lignes de depart
+  return st;
 }
 function defaultLibrary() {
   const lib = {}; let n = 0;
@@ -195,14 +234,23 @@ function defaultLibrary() {
 // de suite, l'ecran se redessine, la persistance suit.
 let S = null;
 let REV = 0;
-const LOCAL_KEY = 'parkpulse.v1';
-const SESSION_KEY = 'parkpulse.session';
+const LOCAL_KEY = 'fitpulse.v1';
+const SESSION_KEY = 'fitpulse.session';
 const listeners = new Set();
 const safeLS = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { /* rien */ } },
 };
+// Repli : les clés locales d'une installation existante (préfixe historique « parkpulse. »)
+// sont lues une fois et recopiées sous « fitpulse. » : club choisi, thème, session et préférences restent.
+(function migrerClesLocales() {
+  try {
+    if (CFG.demo || localStorage.getItem('fitpulse.migre')) return; // la démonstration ne touche pas aux clés réelles
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('parkpulse.')) { const n = 'fitpulse.' + k.slice(10); if (localStorage.getItem(n) == null) localStorage.setItem(n, localStorage.getItem(k)); } }
+    localStorage.setItem('fitpulse.migre', '1');
+  } catch (e) { /* stockage indisponible */ }
+})();
 
 function setPath(obj, path, value) {
   let o = obj;
@@ -215,7 +263,7 @@ const localBackend = {
   mode: 'local',
   async start() { const raw = safeLS.get(LOCAL_KEY); S = raw ? normalizeState(JSON.parse(raw)) : null; },
   write(path, value) { this.flush(); },
-  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { const js = JSON.stringify(S); if (js.length > 4e6) toast('Données locales volumineuses (plus de 4 Mo) : passez en mode partagé ou exportez une sauvegarde.'); if (!safeLS.set(LOCAL_KEY, js)) toast('Stockage du navigateur plein : exportez une sauvegarde (Mes clubs > Réglages).'); }, 150); }; })(),
+  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { const js = JSON.stringify(S); if (js.length > 4e6) toast('Données locales volumineuses (plus de 4 Mo) : passez en mode partagé ou exportez une sauvegarde.'); if (!safeLS.set(LOCAL_KEY, js)) toast(TXT.clubs.stockage); }, 150); }; })(),
   replaceAll() { safeLS.set(LOCAL_KEY, JSON.stringify(S)); },
   wipe() { safeLS.del(LOCAL_KEY); },
 };
@@ -245,6 +293,22 @@ async function codeKeyOf(code) {
 // Adresse saisie : sans espaces, en minuscules, et les fautes de clavier courantes corrigées.
 const cleanEmail = e => String(e || '').replace(/\s+/g, '').toLowerCase().replace(/[,;]/g, '.').replace(/\.+$/, '').replace(/@gmail\.(fr|con|cm|om)$/, '@gmail.com');
 class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
+// ── Mode multi-salles (FITPULSE_CONFIG.firebase.multi) ─────────────────────────
+// Chaque société cliente a son espace : /orgs/{org}/info (abonnement, statut,
+// sécurité), /orgs/{org}/clubs/{club}, et toutes les collections sous
+// /orgs/{org}/data/… ; les clés de connexion sont dans /orgs_boot/{clé} =
+// { org, uid }. Sans ce réglage, l'appli reste sur /pulse (base historique).
+const MULTI = !!(CFG.firebase && CFG.firebase.multi);
+let ORG = null;
+const ROOT = () => MULTI ? `orgs/${ORG}/data` : 'pulse';
+const BOOT = MULTI ? 'orgs_boot' : 'pulse_boot';
+// Lecture REST d'un chemin public (clé de connexion, invitation), simulateur compris.
+function restUrl(chemin) {
+  const F = CFG.firebase || {}; const e = F.emulateurs;
+  return e ? `http://${e.db[0]}:${e.db[1]}/${chemin}.json?ns=${F.databaseURL.replace(/^https:\/\//, '').split('.')[0]}` : `${F.databaseURL}/${chemin}.json`;
+}
+// Chemins annexes (push, boîte de réception, journal) : sous l'espace de la société en multi-salles.
+const fbPath = p => !MULTI ? p : p.replace(/^pulse_push\//, `orgs_push/${ORG}/`).replace(/^pulse_inbox\//, `orgs_inbox/${ORG}/`).replace(/^pulse\//, ROOT() + '/');
 const firebaseBackend = {
   mode: 'firebase', fb: null, root: null, user: null, userId: null, denied: false,
   async loadSdk() {
@@ -252,7 +316,8 @@ const firebaseBackend = {
     for (const f of ['firebase-app-compat', 'firebase-auth-compat', 'firebase-database-compat']) {
       await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `vendor/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }
-    this.fb = window.firebase; this.fb.initializeApp(window.PARKPULSE_FIREBASE);
+    this.fb = window.firebase; this.fb.initializeApp(CFG.firebase);
+    const emu = CFG.firebase.emulateurs; if (emu) { this.fb.database().useEmulator(...emu.db); this.fb.auth().useEmulator(emu.auth, { disableWarnings: true }); }
   },
   keyOfUser(u) { const m = /^fp-([0-9a-f]{40})@/.exec((u && u.email) || ''); return m ? m[1] : null; },
   async start() {
@@ -271,10 +336,12 @@ const firebaseBackend = {
   // existe avant de creer quoi que ce soit.
   async readBoot(key) {
     let r;
-    try { r = await fetch(`${window.PARKPULSE_FIREBASE.databaseURL}/pulse_boot/${key}.json`, { cache: 'no-store' }); }
+    try { r = await fetch(restUrl(`${BOOT}/${key}`), { cache: 'no-store' }); }
     catch (e) { throw new LoginError('offline', 'Pas de connexion internet.'); }
     if (!r.ok) throw new LoginError('server', 'Serveur indisponible (' + r.status + ').');
     const v = await r.json();
+    // Multi-salles : { org, uid } ; la société de la personne est fixée ici.
+    if (MULTI && v && typeof v === 'object' && v.org && v.uid) { ORG = v.org; this.privilegie = !!v.privilegie; return v.uid; }
     return typeof v === 'string' ? v : null;
   },
   async codeLogin(email, code) {
@@ -306,7 +373,13 @@ const firebaseBackend = {
   async attach() {
     if (this.root) this.root.off();
     this.denied = false;
-    this.root = this.fb.database().ref('pulse');
+    if (MULTI) {
+      if (!ORG) throw new LoginError('bad', 'Espace introuvable.');
+      // Double authentification impossible (serveur injoignable, code refusé…) : on ne reste jamais connecté sans données.
+      try { await this.mfaGate(); } catch (e) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('server', 'Double authentification : ' + (e.message || e)); }
+      await this.listenSide(false);
+    }
+    this.root = this.fb.database().ref(ROOT());
     let slow = null;
     // Démarrage hors ligne : la dernière copie connue de la base s'affiche, l'écoute reprend au retour du réseau.
     const cached = !navigator.onLine ? await idbGet('pulse').catch(() => null) : null;
@@ -316,35 +389,68 @@ const firebaseBackend = {
       // reseau tres lent ou bloque : on ne laisse pas tourner le bouton sans fin
       slow = setTimeout(() => { if (first) { first = false; this.root.off(); ko(new LoginError('offline', 'La base ne répond pas : vérifiez votre connexion internet puis réessayez.')); } }, 25000);
       this.root.on('value', snap => {
+        SYNC.ok = Date.now();
         const before = S;
         S = snap.val() ? normalizeState(snap.val()) : null;
+        sideApply(S);
         REV++;
         snapSave(snap.val());
         if (first) { first = false; ok(); setTimeout(outboxReplay, 1000); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
       }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
     }).finally(() => clearTimeout(slow));
+    if (this.denied && MULTI && !this.privilegie) { this.privilegie = true; return this.attach(); } // promu manager depuis : double authentification
     if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
+    await this.listenSide(true);
   },
+  // Collections rangées hors de la racine (voir sidePaths) : écoutées à part. Les
+  // collections sans rôle requis (clubs en multi-salles) sont chargées AVANT les
+  // données, pour que le premier écran ait déjà ses clubs.
+  async listenSide(avecRole) {
+    if (!avecRole) { this.sideRefs.forEach(r => r.off()); this.sideRefs = []; }
+    const me = avecRole ? S && S.users[this.userId] : null; if (avecRole && !me) return;
+    const waits = [];
+    for (const [k, root] of Object.entries(sidePaths())) {
+      if (SIDE_SANS_ECOUTE.has(k) || !!SIDE_ROLE[k] !== avecRole) continue;
+      if (SIDE_ROLE[k] && me.role !== SIDE_ROLE[k]) continue;
+      const ref = this.fb.database().ref(root); this.sideRefs.push(ref);
+      waits.push(new Promise(ok => { let first = true; ref.on('value', snap => { SIDE_CACHE[k] = snap.val() || {}; if (S) { sideApply(S); REV++; if (!first) listeners.forEach(f => f()); } if (first) { first = false; ok(); } }, () => { if (first) { first = false; ok(); } }); }));
+    }
+    await Promise.all(waits);
+  },
+  // Double authentification (multi-salles) : managers et créateurs passent le code TOTP
+  // avant d'ouvrir les données ; la vérification est faite côté serveur (club/cloud),
+  // les règles de la base refusent tout accès sinon.
+  async mfaGate() { if (typeof totpGate === 'function') await totpGate(this); },
+  sideRefs: [],
   // Reserve le compte technique des la creation du code (mot de passe = code) :
   // connaitre la cle ne suffit donc jamais, il faut le code. Passe par l'API
   // REST : la session du manager n'est pas touchee.
   async precreate(key, code) {
     try {
-      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${window.PARKPULSE_FIREBASE.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'fp-' + key + AUTH_DOMAIN_FP, password: normCode(code), returnSecureToken: false }) });
+      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${CFG.firebase.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'fp-' + key + AUTH_DOMAIN_FP, password: normCode(code), returnSecureToken: false }) });
     } catch (e) { /* hors ligne : le compte sera cree a la premiere connexion */ }
   },
   // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
-  setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
-  queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
-  async signOut() { if (this.root) this.root.off(); this.root = null; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
-  write(path, value) { const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
-  replaceAll() { this.fb.database().ref('pulse').set(S); },
-  wipe() { this.fb.database().ref('pulse').set(null); },
+  setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up[BOOT + '/' + k] = MULTI && typeof v === 'string' && !/^[0-9a-f]{40}$/.test(v) ? { org: ORG, uid: v, ...(S && S.users[v] && S.users[v].role !== 'membre' ? { privilegie: true } : {}) } : v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
+  queueMail(d) { return this.fb.database().ref(MULTI ? `orgs_mail/${ORG}` : 'fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
+  async signOut() { if (this.root) this.root.off(); this.root = null; this.sideRefs.forEach(r => r.off()); this.sideRefs = []; for (const k of Object.keys(SIDE_CACHE)) delete SIDE_CACHE[k]; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
+  write(path, value) { if (sidePaths()[path[0]]) { this.sideWrite([[path, value]]); return; } const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref(ROOT()).update(up).then(() => outboxDone(up), e => writeFail(e)); },
+  sideWrite(ops) { const by = {}; ops.forEach(([p, v]) => { (by[p[0]] = by[p[0]] || []).push([p.slice(1), v]); }); for (const [k, list] of Object.entries(by)) { const whole = list.find(([p]) => !p.length); const ref = this.fb.database().ref(sidePaths()[k]); (whole ? ref.set(fbVal(whole[1])) : ref.update(fbClean(list))).catch(e => writeFail(e)); } },
+  replaceAll() { const st = { ...S }; Object.keys(sidePaths()).forEach(k => { delete st[k]; }); this.fb.database().ref(ROOT()).set(st); if (MULTI && S && S.clubs) this.fb.database().ref(sidePaths().clubs).update(fbVal(S.clubs) || {}); },
+  wipe() { this.fb.database().ref(ROOT()).set(null); },
 };
 localBackend.setBoot = () => {};
 localBackend.precreate = async () => {};
 
-const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
+const backend = CFG.firebase ? firebaseBackend : localBackend;
+// En ligne, ces collections vivent hors de /pulse (que tout membre peut lire) :
+// leur nœud a ses propres règles. En local, elles restent dans S comme le reste.
+const sidePaths = () => MULTI ? { clubs: `orgs/${ORG}/clubs`, info: `orgs/${ORG}/info`, product: `orgs_product/${ORG}`, benchmark: 'benchmark', private: `orgs_private/${ORG}` } : { product: 'pulse_product', benchmark: 'benchmark', private: 'private' };
+// Données privées (e-mail, téléphone des dossiers de résiliation) : jamais écoutées en bloc, lues dossier par dossier.
+const SIDE_SANS_ECOUTE = new Set(['private']);
+const SIDE_ROLE = { product: 'createur' }; // lecture réservée à ce rôle (sinon : tout membre)
+const SIDE_CACHE = {};
+function sideApply(st) { if (!st) return; for (const k of Object.keys(sidePaths())) { if (SIDE_CACHE[k] === undefined) continue; st[k] = JSON.parse(JSON.stringify(SIDE_CACHE[k])); if (k === 'product' && typeof productFill === 'function') productFill(st); } }
 // File d'écritures gardée sur l'appareil tant que la base n'a pas confirmé : une saisie faite
 // hors ligne survit à un rechargement et repart au retour du réseau.
 // Copie locale de la base (IndexedDB) pour démarrer sans réseau.
@@ -356,8 +462,10 @@ const OUTBOX_KEY = 'fitpulse.outbox';
 const outboxRead = () => { try { return JSON.parse(safeLS.get(OUTBOX_KEY) || '[]'); } catch (_) { return []; } };
 const outboxSig = up => Object.keys(up).sort().join('|') + '#' + JSON.stringify(Object.keys(up).sort().map(k => up[k])).length;
 function outboxPush(up) { if (navigator.onLine) return; const L = outboxRead(); L.push({ sig: outboxSig(up), up, at: Date.now() }); safeLS.set(OUTBOX_KEY, JSON.stringify(L.slice(-500))); if (typeof renderOffline === 'function') renderOffline(); }
-function outboxDone(up) { const L = outboxRead(); if (!L.length) return; const sig = outboxSig(up); const i = L.findIndex(x => x.sig === sig); if (i >= 0) { L.splice(i, 1); safeLS.set(OUTBOX_KEY, JSON.stringify(L)); if (typeof renderOffline === 'function') renderOffline(); } }
-function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref('pulse').update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
+// Dernière synchronisation réussie avec la base partagée (lecture reçue ou écriture confirmée).
+const SYNC = { ok: null };
+function outboxDone(up) { SYNC.ok = Date.now(); const L = outboxRead(); if (!L.length) return; const sig = outboxSig(up); const i = L.findIndex(x => x.sig === sig); if (i >= 0) { L.splice(i, 1); safeLS.set(OUTBOX_KEY, JSON.stringify(L)); if (typeof renderOffline === 'function') renderOffline(); } }
+function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref(ROOT()).update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
 function writeFail(e, path) {
   WRITE_FAILS.n++; WRITE_FAILS.last = { msg: (e && e.message) || 'erreur inconnue', path: path || '', at: Date.now() };
   clearTimeout(writeFail.t); writeFail.t = setTimeout(() => { toast(`Écriture refusée${WRITE_FAILS.n > 1 ? ' (' + WRITE_FAILS.n + ' valeurs)' : ''} : ${WRITE_FAILS.last.msg}`); if (typeof render === 'function') render(); }, 300);
@@ -406,13 +514,14 @@ const db = {
     REV++;
     if (backend.mode === 'local') backend.write();
     else {
+      const SP = sidePaths(); const side = ops.filter(([p]) => SP[p[0]]); if (side.length) { backend.sideWrite(side); ops = ops.filter(([p]) => !SP[p[0]]); }
       // Lots de 500 chemins au plus, envoyés l'un après l'autre (un import de 50 000 lignes passe).
       const all = fbClean(ops); const keys = Object.keys(all);
       const chunks = []; for (let i = 0; i < keys.length; i += 500) { const up = {}; keys.slice(i, i + 500).forEach(k => { up[k] = all[k]; }); chunks.push(up); }
       chunks.forEach(outboxPush);
       // Un lot refusé n'arrête plus les suivants ; il est rejoué par petits morceaux pour isoler la valeur fautive.
-      const send = up => backend.fb.database().ref('pulse').update(up).then(() => outboxDone(up));
-      const retry = (up, e) => { outboxDone(up); const ks = Object.keys(up); if (ks.length <= 1) { writeFail(e, ks[0]); return null; } const h = Math.ceil(ks.length / 2); return Promise.all([ks.slice(0, h), ks.slice(h)].map(part => { const u = {}; part.forEach(k => { u[k] = up[k]; }); return Promise.resolve().then(() => backend.fb.database().ref('pulse').update(u)).catch(e2 => retry(u, e2)); })); };
+      const send = up => backend.fb.database().ref(ROOT()).update(up).then(() => outboxDone(up));
+      const retry = (up, e) => { outboxDone(up); const ks = Object.keys(up); if (ks.length <= 1) { writeFail(e, ks[0]); return null; } const h = Math.ceil(ks.length / 2); return Promise.all([ks.slice(0, h), ks.slice(h)].map(part => { const u = {}; part.forEach(k => { u[k] = up[k]; }); return Promise.resolve().then(() => backend.fb.database().ref(ROOT()).update(u)).catch(e2 => retry(u, e2)); })); };
       chunks.reduce((pr, up) => pr.then(() => Promise.resolve().then(() => send(up)).catch(e => retry(up, e))), Promise.resolve());
     }
     listeners.forEach(f => f());
@@ -430,10 +539,17 @@ function normalizeState(st) {
   if (st.kpis) for (const k of Object.values(st.kpis)) if (k && k.emoji !== undefined) { if (!k.icon) k.icon = KPI_ICON[k.id] || 'target'; delete k.emoji; }
   const base = emptyState();
   for (const k of Object.keys(base)) if (st[k] == null) st[k] = base[k];
+  if (typeof productFill === 'function') productFill(st);
   if (!st.tasks.library) st.tasks.library = defaultLibrary();
   if (!st.tasks.plan) st.tasks.plan = {};
   if (!st.tasks.done) st.tasks.done = {};
   for (const k of Object.keys(DEFAULT_KPIS)) if (!st.kpis[k]) st.kpis[k] = { ...DEFAULT_KPIS[k], enabled: false };
+  // Libellés par défaut renommés (nouvelle identité) : repris par identifiant, un libellé personnalisé est gardé.
+  if (st.kpis.invites && / > /.test(st.kpis.invites.label || '')) st.kpis.invites.label = TXT.kpi.invites;
+  const lib = st.tasks.library || {}; if (lib.t1 && /^Check /.test(lib.t1.label || '')) lib.t1.label = TXT.taches.passage;
+  Object.values(lib).forEach(t => { if (t && /avis Wiz/i.test(t.label || '')) t.label = TXT.taches.avis; });
+  // Marque blanche : le club historique (niort) sans thème garde son nom, son jaune et son logo d'avant.
+  const ni = st.clubs && st.clubs.niort; if (ni && !ni.theme) ni.theme = { displayName: ni.name || null, accent: '#FFD600', logo: ni.logo || (CFG.assets || {}).logo || null };
   // PSO : « membre » virtuel qui porte les ventes et prospects venus du web ou
   // de l'application, non attribués à un commercial. Jamais enregistré en base,
   // jamais invité ni doté d'un code. Recalculé à chaque chargement.
@@ -442,162 +558,170 @@ function normalizeState(st) {
   return st;
 }
 
-// Bandeau en direct : une saisie d'un collegue arrive pendant qu'on travaille.
+// Bandeau des saisies en cours : une saisie d'un collegue arrive pendant qu'on travaille.
 function detectLive(before, after) {
   if (!before || !after || !ME) return;
-  // saisies des collègues, résiliations, défis, paliers : voir notifs.js
+  // saisies des collègues, résiliations, sprints, paliers : voir notifs.js
   if (typeof notifLive === 'function') try { notifLive(before, after); } catch (e) { console.warn(e); }
 }
 
 // ── Donnees de demonstration ───────────────────────────────────────────────
 // Noms fictifs. Trois mois d'historique, objectifs, clients, imports, chat.
+// ── Démo vendeur : « Club Horizon », Valmont (club fictif, aucune enseigne) ──
+// Générateur à graine fixe : deux chargements le même jour donnent exactement
+// les mêmes chiffres (aucun Date.now(), aucun Math.random()). Dates calculées
+// depuis aujourd'hui pour que la démo reste vivante. Moins de 3 Mo sérialisée.
+//  - Directeur Démo (manager), 1 manager, 6 commerciaux (rythmes 1,15 à 0,55 ;
+//    le dernier est arrivé il y a 20 jours) ;
+//  - 2 000 clients (1 600 actifs, 400 anciens), offres à 24,90, 32,90, 39,90 € ;
+//  - 13 mois de saisies (janvier et septembre +35 %, août -25 %) ;
+//  - 8 dossiers de résiliation (scénario de la relève des e-mails), 78 impayés (4 tranches d'ancienneté, 6 promesses).
+const DEMO_GRAINE = 20261101;
+const DEMO_CLUB = { id: 'horizon', name: 'Club Horizon', address: '12 avenue des Tilleuls', city: 'Valmont' };
+const DEMO_OFFRES = [['Essentiel', 24.9, 0.30], ['Confort', 32.9, 0.45], ['Intégral', 39.9, 0.25]];
 function demoState() {
-  const st = emptyState();
-  const R = rng(20261005);
-  const pick = a => a[Math.floor(R() * a.length)];
-  st.clubs = {
-    niort: { id: 'niort', name: 'Fitness Park Niort', address: '600 Av. de Paris', city: '79000 Niort', createdAt: Date.now() },
-    rochelle: { id: 'rochelle', name: 'Fitness Park La Rochelle', address: '12 rue du Port', city: '17000 La Rochelle', createdAt: Date.now() },
-  };
-  const people = [
-    ['u1', 'Camille', 'Roux', 'manager', ['niort', 'rochelle'], 'f1'],
-    ['u2', 'Hugo', 'Lefèvre', 'manager', ['niort'], 'h1'],
-    ['u3', 'Inès', 'Moreau', 'membre', ['niort'], 'f2'],
-    ['u4', 'Lucas', 'Petit', 'membre', ['niort'], 'h2'],
-    ['u5', 'Sarah', 'Garnier', 'membre', ['niort'], 'f1'],
-    ['u6', 'Nathan', 'Faure', 'membre', ['rochelle'], 'h1'],
-    ['u7', 'Léa', 'Bonnet', 'membre', ['rochelle'], 'f2'],
+  const st = emptyState(); const R = rng(DEMO_GRAINE);
+  const pick = a => a[Math.floor(R() * a.length)]; const t = today(); const cm = curMonth(); const C = DEMO_CLUB.id;
+  const ts = (iso, h = 10, m = 0) => dateOf(iso).getTime() + h * 3600000 + m * 60000; // horodatage déterministe
+  const T0 = ts(t, 9);
+  st.meta.demo = true; st.meta.demoSeed = DEMO_GRAINE; st.meta.createdAt = ts(addDays(t, -3 * 365));
+  st.clubs[C] = { ...DEMO_CLUB, createdAt: ts(addDays(t, -3 * 365)), openDays: [1, 2, 3, 4, 5, 6] };
+  st.tenant = { name: DEMO_CLUB.name, brand: null, logo: null, colors: null, entity: 'SAS Horizon Sport', panierMoyen: null, legal: { societe: 'SAS Horizon Sport', club: DEMO_CLUB.name, etablissement: `${DEMO_CLUB.address}, ${DEMO_CLUB.city}`, email: 'contact@example.com' } };
+  st.settings = { panierMoyen: 32 };
+  // ── Équipe ──
+  const EQUIPE = [
+    ['u1', 'Directeur', 'Démo', 'manager', 'h1', null, 900], ['u2', 'Julie', 'Bernard', 'manager', 'f1', null, 700],
+    ['u3', 'Thomas', 'Petit', 'membre', 'h2', 1.15, 820], ['u4', 'Sarah', 'Leroy', 'membre', 'f2', 1.0, 640], ['u5', 'Nicolas', 'Morel', 'membre', 'h1', 0.95, 520],
+    ['u6', 'Laura', 'Girard', 'membre', 'f1', 0.85, 410], ['u7', 'Maxime', 'Faure', 'membre', 'h2', 0.7, 300], ['u8', 'Camille', 'Roussel', 'membre', 'f2', 0.55, 20],
   ];
-  people.forEach(([id, first, last, role, clubs, avatar], i) => {
-    st.users[id] = { id, first, last, role, clubs, avatar, status: 'active', email: `${norm(first)}.${norm(last)}@exemple.fr`.replace(/ /g, ''), createdAt: Date.now() - (200 - i) * 86400000 };
+  const rythme = {}; const arrivee = {};
+  EQUIPE.forEach(([id, first, last, role, avatar, sk, depuis]) => {
+    st.users[id] = { id, first, last, role, clubs: [C], avatar, status: 'active', email: `${norm(first)}.${norm(last)}@example.com`, createdAt: ts(addDays(t, -depuis)) };
+    if (sk) { rythme[id] = sk; arrivee[id] = addDays(t, -depuis); }
   });
-  st.users.u8 = { id: 'u8', first: 'Tom', last: 'Girard', role: 'membre', clubs: ['niort'], avatar: 'h2', status: 'archived', archivedAt: addDays(today(), -60), email: 'tom.girard@exemple.fr', createdAt: Date.now() - 300 * 86400000 };
-
-  const cm = curMonth();
-  const months = [addMonths(cm, -3), addMonths(cm, -2), addMonths(cm, -1), cm];
-  const baseT = { avis: 20, nutrition: 300, contrats: 20, accessoires: 150, impayes: 250, b2b: 2, invites: 3, sauvetage: 2, prospects: 40 };
-  const skill = { u1: .95, u2: 1.12, u3: .82, u4: .7, u5: .58, u6: .9, u7: .76 };
-  let eid = 0;
-  const addE = (o) => { const id = 'e' + (++eid); st.entries[id] = { id, at: dateOf(o.date).getTime() + 9 * 3600000 + Math.floor(R() * 9 * 3600000), source: 'manual', ...o }; };
-  months.forEach(mk => {
-    st.targets[mk] = {};
-    Object.keys(skill).forEach(uid => {
-      const t = {}; Object.entries(baseT).forEach(([k, v]) => { t[k] = uid === 'u5' && k === 'b2b' ? 0 : v; });
-      st.targets[mk][uid] = t;
-      const days = mk === cm ? Math.max(0, Number(today().slice(8)) - 1) : daysIn(mk);
-      for (let d = 1; d <= days; d++) {
-        const date = `${mk}-${pad(d)}`;
-        if (dateOf(date).getDay() === 0) continue;
-        const k = skill[uid] * (0.75 + R() * 0.5);
-        const per = 1 / daysIn(mk) * 1.15;
-        Object.entries(baseT).forEach(([kpi, tv]) => {
-          let v = tv * per * k * (0.4 + R() * 1.2);
-          if (st.kpis[kpi].unit === 'qty') { v = R() < (v % 1) ? Math.ceil(v) : Math.floor(v); if (!v) return; }
-          else { if (R() < .45) return; v = Math.round(v * 1.8 * 100) / 100; }
-          addE({ userId: uid, clubId: st.users[uid].clubs[0], kpiId: kpi, date, value: v });
+  const vendeurs = Object.keys(rythme);
+  // ── Objectifs et saisies : 13 mois, saisonnalité ──
+  const SAISON = m => m === 1 || m === 9 ? 1.35 : m === 8 ? 0.75 : 1;
+  const CIBLES = { contrats: 20, avis: 18, nutrition: 300, accessoires: 150, impayes: 220, prospects: 40, sauvetage: 2, invites: 3, b2b: 1 };
+  let ne = 0;
+  for (let i = 12; i >= 0; i--) {
+    const mk = addMonths(cm, -i); const f = SAISON(Number(mk.slice(5))); const fin = mk === cm ? addDays(t, -1) : `${mk}-${pad(daysIn(mk))}`;
+    const ouvres = joursOuvres(mk + '-01', `${mk}-${pad(daysIn(mk))}`); st.targets[mk] = {};
+    vendeurs.forEach(uid => {
+      const debut = arrivee[uid] > mk + '-01' ? arrivee[uid] : mk + '-01'; if (debut > `${mk}-${pad(daysIn(mk))}`) return;
+      const prorata = joursOuvres(debut, `${mk}-${pad(daysIn(mk))}`) / ouvres;
+      st.targets[mk][uid] = Object.fromEntries(Object.entries(CIBLES).map(([k, v]) => [k, S_arrondi(v * prorata, st.kpis[k].unit)]));
+      for (let d = debut; d <= fin; d = addDays(d, 1)) {
+        if (!estOuvre(d)) continue;
+        Object.entries(CIBLES).forEach(([k, v]) => {
+          const moyen = v / ouvres * rythme[uid] * f * (0.55 + R() * 0.9); let val;
+          if (st.kpis[k].unit === 'qty') { val = Math.floor(moyen) + (R() < moyen % 1 ? 1 : 0); if (!val) return; } else { if (R() < 0.4) return; val = Math.round(moyen / 0.6 * 100) / 100; }
+          const id = 'e' + (++ne); st.entries[id] = { id, userId: uid, clubId: C, kpiId: k, date: d, value: val, source: 'manual', at: ts(d, 10 + (ne % 8), ne % 60) };
         });
       }
     });
-  });
-  // Un import Resamania deja passe (actif), pour montrer l'historique.
-  st.imports.imp1 = { id: 'imp1', name: 'export-ventes-abonnements.csv', type: 'kpi', clubId: 'niort', at: Date.now() - 6 * 86400000, rows: 3, from: `${addMonths(cm, -1)}-01`, to: `${addMonths(cm, -1)}-${daysIn(addMonths(cm, -1))}`, active: true, by: 'u1' };
-  [['u2', 2], ['u3', 1], ['u4', 1]].forEach(([u, v], i) => addE({ userId: u, clubId: 'niort', kpiId: 'b2b', date: `${addMonths(cm, -1)}-${pad(10 + i)}`, value: v, source: 'import', importId: 'imp1' }));
-
-  // Historique mensuel du club (annee N-1 et N) pour la comparaison annuelle.
-  const y = Number(cm.slice(0, 4));
-  ['niort', 'rochelle'].forEach((c, ci) => {
-    st.monthly[c] = {};
-    for (let yy = y - 1; yy <= y; yy++) for (let m = 1; m <= 12; m++) {
-      const mk = `${yy}-${pad(m)}`; if (mk >= cm) continue;
-      const f = (yy === y ? 1.15 : 1) * (ci ? .8 : 1) * (0.8 + R() * 0.4);
-      st.monthly[c][mk] = { contrats: Math.round(110 * f), visiteurs: Math.round(180 * f), complements: Math.round(1500 * f * 100) / 100, goodies: Math.round(420 * f * 100) / 100, impayes: Math.round(900 * f), caPack: Math.round(7600 * f) };
+  }
+  // ── 2 000 clients : 1 600 actifs, 400 anciens ──
+  const P = ['Emma', 'Louis', 'Chloé', 'Jules', 'Manon', 'Arthur', 'Zoé', 'Gabriel', 'Lina', 'Raphaël', 'Jade', 'Adam', 'Alice', 'Léo', 'Rose', 'Noah', 'Anna', 'Paul', 'Mila', 'Ethan', 'Nina', 'Hugo', 'Inès', 'Lucas', 'Léna', 'Nathan', 'Eva', 'Tom', 'Clara', 'Théo'];
+  const N = ['Martin', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Durand', 'Lefebvre', 'Simon', 'Laurent', 'Michel', 'Garcia', 'David', 'Bertrand', 'Fontaine', 'Fournier', 'Mercier', 'Blanc', 'Guérin', 'Muller', 'Lemoine', 'Chevalier', 'Lambert', 'Bonnet', 'François', 'Dupont', 'Rousseau', 'Vincent', 'Muller', 'Lefèvre', 'Andre'];
+  const offre = () => { const x = R(); let a = 0; for (const o of DEMO_OFFRES) { a += o[2]; if (x < a) return o; } return DEMO_OFFRES[1]; };
+  const clients = [];
+  for (let i = 0; i < 2000; i++) {
+    const id = 'c' + (i + 1); const pr = pick(P), nm = pick(N); const [of, prix] = offre(); const actif = i < 1600;
+    const start = addDays(t, -(actif ? 1 + Math.floor(R() * 3 * 365) : 400 + Math.floor(R() * 700)));
+    const engage = R() < 0.8; let end = null;
+    if (actif && engage) { end = start; while (end <= t) end = addMonths(end.slice(0, 7), 12) + end.slice(7); if (end.slice(8) > pad(daysIn(end.slice(0, 7)))) end = end.slice(0, 8) + pad(daysIn(end.slice(0, 7))); }
+    const c = { id, clubId: C, num: String(310000 + i), name: `${pr} ${nm}`, phone: `06 39 98 ${pad(Math.floor(i / 100))} ${pad(i % 100)}`, email: `${norm(pr)}.${norm(nm)}@example.com`.replace(/ /g, ''),
+      offer: of, price: prix, status: actif ? 'Client' : 'Ancien client', start, sellerId: vendeurs[i % vendeurs.length], birth: `${pad(1 + Math.floor(R() * 12))}-${pad(1 + Math.floor(R() * 28))}` };
+    if (end) c.end = end;
+    if (!actif) { c.endDate = addDays(t, -(30 + Math.floor(R() * 900))); c.end = c.endDate; }
+    st.clients[id] = c; clients.push(c);
+  }
+  const actifs = clients.slice(0, 1600);
+  // ── Résiliations : scénario de la relève des e-mails, 8 dossiers fictifs (noms « Exemple », téléphones 06 00 00 00 0X) ──
+  // 3 en attente de réponse (2 h, 9 h, 27 h : en retard), 1 à vérifier, 2 en cours, 1 sauvée (preuve Resamania),
+  // 1 résiliée avec confirmation envoyée. Horodatages calés sur 9 h ; recalés sur l'heure réelle au chargement (demoRecaler).
+  const Hm = 3600000; const lien = '#demo';
+  const mailDe = (at, o = {}) => ({ threadId: 'demo-' + at, link: lien, subject: 'Résiliation de mon abonnement', firstInAt: at, lastInAt: at, inCount: 1, outCount: 0, firstReplyAt: null, lastOutAt: null, awaitingReply: true, kind: 'adherent', score: 7, ...o });
+  const dossier = (id, o) => { const at = o.receivedAt; st.resiliations[id] = { id, clubId: C, date: isoOf(new Date(at)), status: 'nouvelle', saved: false, ownerId: null, userId: null, type: 'resiliation', at, dueAt: at + 24 * Hm, actions: [{ at, by: 'system', label: o.mail ? 'Demande reçue par e-mail' : 'Demande enregistrée' }], ...o }; };
+  const prive = (id, phone, email) => { st.private.resiliations = st.private.resiliations || {}; (st.private.resiliations[C] = st.private.resiliations[C] || {})[id] = { ...(phone ? { phone } : {}), ...(email ? { email } : {}) }; };
+  dossier('r1', { client: 'Camille Exemple', reason: 'Déménagement', source: 'mail', receivedAt: T0 - 2 * Hm, effective: addDays(t, 40), mail: mailDe(T0 - 2 * Hm, { subject: 'Résiliation suite à mon déménagement' }) }); prive('r1', '06 00 00 00 01', 'camille.exemple@example.com');
+  dossier('r2', { client: 'Hugo Exemple', reason: 'Prix', source: 'mail', receivedAt: T0 - 9 * Hm, mail: mailDe(T0 - 9 * Hm, { subject: 'Demande de résiliation' }), ownerId: 'u3', userId: 'u3' }); prive('r2', '06 00 00 00 02', 'hugo.exemple@example.com');
+  dossier('r3', { client: 'Léa Exemple', reason: 'Manque de temps', source: 'mail', receivedAt: T0 - 27 * Hm, effective: addDays(t, 20), mail: mailDe(T0 - 27 * Hm, { subject: 'Arrêter mon abonnement' }) }); prive('r3', null, 'lea.exemple@example.com');
+  dossier('r4', { client: 'Nadia Exemple', reason: 'Autre', source: 'mail', status: 'averifier', receivedAt: T0 - 5 * Hm, mail: mailDe(T0 - 5 * Hm, { subject: 'Question sur mon contrat', score: 2 }), actions: [{ at: T0 - 5 * Hm, by: 'system', label: 'Message à vérifier reçu par e-mail' }] });
+  dossier('r5', { client: 'Paul Exemple', reason: 'Santé', source: 'appli', channel: 'Appli adhérents', receivedAt: T0 - 50 * Hm, effective: addDays(t, 12), rsm: { state: 'accepted', at: T0 - 26 * Hm }, ownerId: 'u4', userId: 'u4', status: 'traitement',
+    log: { o1: { at: T0 - 20 * Hm, by: 'u4', label: 'Offre proposée : Suspension', offer: 'Suspension', out: 'offer' } } }); prive('r5', '06 00 00 00 05');
+  dossier('r6', { client: 'Inès Exemple', reason: 'Concurrence', source: 'resamania', receivedAt: T0 - 72 * Hm, effective: addDays(t, 25), rsm: { state: 'submitted', at: T0 - 70 * Hm }, ownerId: 'u5', userId: 'u5', status: 'traitement',
+    log: { o1: { at: T0 - 24 * Hm, by: 'u5', label: 'Réponse envoyée par e-mail' } } }); prive('r6', '06 00 00 00 06');
+  dossier('r7', { client: 'Marc Exemple', reason: 'Prix', source: 'mail', receivedAt: T0 - 96 * Hm, mail: mailDe(T0 - 96 * Hm, { awaitingReply: false, firstReplyAt: T0 - 93 * Hm, lastOutAt: T0 - 93 * Hm, outCount: 1 }), rsm: { state: 'canceled', at: T0 - 20 * Hm }, ownerId: 'u3', userId: 'u3',
+    status: 'sauvee', saved: true, outcome: 'sauvee', closedAt: T0 - 20 * Hm, closedBy: 'resamania', closedReason: 'resamania', valeur: 395,
+    log: { o1: { at: T0 - 70 * Hm, by: 'u3', label: 'Offre proposée : Changement de formule', offer: 'Changement de formule', out: 'offer' }, o2: { at: T0 - 20 * Hm, by: 'system', label: 'Sauvetage confirmé par Resamania' } } });
+  st.entries.sv_r7 = { id: 'sv_r7', userId: 'u3', clubId: C, kpiId: 'sauvetage', date: isoOf(new Date(T0 - 20 * Hm)), value: 1, source: 'manual', at: T0 - 20 * Hm, proof: 'resamania', offer: 'Changement de formule' };
+  dossier('r8', { client: 'Sophie Exemple', reason: 'Déménagement', source: 'mail', receivedAt: T0 - 120 * Hm, effective: addDays(t, -1), mail: mailDe(T0 - 120 * Hm, { awaitingReply: false, firstReplyAt: T0 - 117 * Hm, lastOutAt: T0 - 70 * Hm, outCount: 2 }), ownerId: 'u4', userId: 'u4',
+    status: 'resiliee', outcome: 'resiliee', validatedAt: T0 - 96 * Hm, closedAt: T0 - 96 * Hm, closedBy: 'u4', closedReason: 'fitpulse', dateFin: addDays(t, -1),
+    log: { o1: { at: T0 - 96 * Hm, by: 'u4', label: 'Résiliation validée, confirmation à envoyer' } } });
+  st.meta.demoT0 = T0;
+  st.clubs[C].mailSync = { at: T0 - 12 * 60000, ok: true, scanned: 12, found: 4, error: null };
+  // historique : 12 mois de demandes sauvées et résiliées
+  for (let i = 1; i <= 12; i++) {
+    const mk = addMonths(cm, -i);
+    for (let j = 0; j < 6; j++) {
+      const c = actifs[300 + i * 13 + j]; const date = `${mk}-${pad(2 + j * 4)}`; const status = j % 3 === 0 ? 'sauvee' : 'resiliee'; const owner = vendeurs[(i + j) % vendeurs.length];
+      const id = `rh${i}_${j}`; st.resiliations[id] = { id, clubId: C, client: c.name, clientId: c.id, num: c.num, date, effective: addDays(date, 30), reason: pick(['Prix', 'Déménagement', 'Santé', 'Manque de temps', 'Concurrence']), status, saved: status === 'sauvee', ownerId: owner, userId: owner, at: ts(date), valeur: Math.round(c.price * (6 + j)) };
+      if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: C, kpiId: 'sauvetage', date: addDays(date, 2), value: 1, source: 'manual', at: ts(addDays(date, 2)) };
     }
-    st.base[c] = {};
-    for (let i = -6; i <= 0; i++) { const mk = addMonths(cm, i); const actifs = Math.round((ci ? 1350 : 1680) + i * 6 + R() * 20); st.base[c][mk] = { actifs, sortants: Math.round(70 + R() * 30), objectif: actifs + 50 }; }
-  });
-
-  // Clients (fichier « Résumé clients » + « Solde clients »).
-  const P = ['Emma', 'Louis', 'Chloé', 'Jules', 'Manon', 'Arthur', 'Zoé', 'Gabriel', 'Lina', 'Raphaël', 'Jade', 'Adam', 'Alice', 'Léo', 'Rose', 'Noah', 'Anna', 'Paul', 'Mila', 'Ethan', 'Nina', 'Sacha', 'Lou', 'Tim'];
-  const N = ['Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Durand', 'Leroy', 'Simon', 'Laurent', 'Michel', 'Garcia', 'David', 'Bertrand', 'Morel', 'Fournier', 'Mercier', 'Blanc', 'Guerin', 'Muller'];
-  for (let i = 1; i <= 46; i++) {
-    const club = i % 4 === 0 ? 'rochelle' : 'niort';
-    const birth = `${1975 + Math.floor(R() * 30)}-${cm.slice(5, 7)}-${pad(1 + Math.floor(R() * 28))}`;
-    const start = addDays(today(), -Math.floor(R() * 400));
-    const end = addDays(today(), Math.floor(R() * 120) - 20);
-    const bal = R() < .22 ? Math.round((20 + R() * 180) * 100) / 100 : 0;
-    st.clients['c' + i] = { id: 'c' + i, clubId: club, name: `${pick(P)} ${pick(N)}`, phone: `06 ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))}`, birth: i % 3 ? birth.slice(5) : null, start, end, balance: bal, offer: pick(['Ultimate', 'Premium', 'Basic', 'Ultimate']) };
   }
-  // Quelques relances deja faites
-  ['c1', 'c2', 'c5'].forEach((c, i) => { st.loyalty['l' + i] = { id: 'l' + i, clientId: c, type: 'suivi', userId: ['u3', 'u4', 'u2'][i], outcome: i === 1 ? 'noanswer' : 'ok', note: '', at: Date.now() - (i + 1) * 86400000 }; });
-
-  // Résiliations : un circuit en cours (nouvelles, en traitement, sauvée, résiliée)
-  [['r1', 'Marc Henry', -4, 9, 'Déménagement', 'nouvelle', null],
-   ['r2', 'Julie Perrin', -2, 26, 'Prix', 'traitement', 'u3'],
-   ['r3', 'Paul Noël', -9, 4, 'Manque de temps', 'traitement', 'u2'],
-   ['r4', 'Sophie Lambert', -1, 30, 'Santé', 'nouvelle', null],
-   ['r5', 'Karim Benali', -12, 18, 'Prix', 'sauvee', 'u4'],
-   ['r6', 'Claire Fontaine', -15, -2, 'Concurrence', 'resiliee', 'u5']].forEach(([id, client, ago, eff, reason, status, owner]) => {
-    const at = Date.now() + ago * 86400000;
-    st.resiliations[id] = { id, clubId: 'niort', client, date: addDays(today(), ago), effective: addDays(today(), eff), reason, status, saved: status === 'sauvee', ownerId: owner, userId: owner, at,
-      actions: [{ at, by: 'u2', label: 'Demande enregistrée' }, ...(owner ? [{ at: at + 86400000, by: owner, label: status === 'sauvee' ? 'Offre proposée · Suspension' : 'Message laissé', note: status === 'traitement' ? 'Rappeler en fin de semaine' : '' }] : []), ...(status === 'sauvee' ? [{ at: at + 2 * 86400000, by: owner, label: 'Client sauvé' }] : [])] };
-    if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: 'niort', kpiId: 'sauvetage', date: addDays(today(), ago + 2), value: 1, source: 'manual', at: at + 2 * 86400000 };
-  });
-
-  st.chat.m1 = { id: 'm1', channel: 'niort', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier. On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
-  st.chat.m2 = { id: 'm2', channel: 'niort', userId: 'u3', text: 'Je m’occupe des relances anniversaires cette semaine.', at: Date.now() - 86400000, parentId: 'm1' };
-  st.chat.m3 = { id: 'm3', channel: 'all', userId: 'u1', text: 'Point mensuel des deux clubs vendredi 10h. Venez avec vos chiffres.', at: Date.now() - 5 * 3600000 };
-
-  const libIds = Object.keys(st.tasks.library);
-  st.tasks.plan.niort = {};
-  [[7, 0], [8, 1], [10, 6], [11, 9], [14, 10], [15, 14], [17, 21], [20, 31]].forEach(([h, t], i) => { const id = 'p' + i; st.tasks.plan.niort[id] = { id, taskId: libIds[t], hour: h }; });
-
-  st.challenges.ch1 = { id: 'ch1', clubId: 'niort', title: 'Sprint nutrition', desc: 'Le plus de ventes nutrition en 48 h (rapporté à l’objectif).', kpiId: 'nutrition', start: Date.now() - 20 * 86400000, end: Date.now() - 18 * 86400000, by: 'u2' };
-  // Regularisations d'impayes par canal (comme la liste Incidents de Resamania)
-  let rv = 0;
-  Object.values(st.entries).filter(e => e.kpiId === 'impayes' && e.clubId === 'niort').forEach(e => { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: e.date, amount: e.value, canal: 'equipe', userId: e.userId, type: 'Prélèvements rejetés', at: e.at }; });
-  months.forEach(mk => {
-    const days = mk === cm ? Math.max(1, Number(today().slice(8)) - 1) : daysIn(mk);
-    [['auto', 34, 42], ['client', 10, 38], ['automatismes', 7, 30], ['tiers', 1, 60]].forEach(([canal, n, avg]) => {
-      for (let i = 0; i < Math.round(n * days / daysIn(mk)); i++) { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: `${mk}-${pad(1 + Math.floor(R() * days))}`, amount: Math.round(avg * (0.5 + R()) * 100) / 100, canal, userId: null, type: 'Prélèvements rejetés', at: Date.now() }; }
+  // ── 78 impayés (environ 3 400 €), 4 tranches d'ancienneté, 6 promesses ──
+  const TRANCHES = [[30, 2, 15], [20, 16, 30], [16, 31, 60], [12, 61, 140]]; let ni = 0;
+  TRANCHES.forEach(([n, de, a]) => { for (let k = 0; k < n; k++) {
+    const c = actifs[700 + ni * 7]; const age = de + Math.floor(R() * (a - de + 1)); const at = addDays(t, -age);
+    c.balance = Math.round(c.price * (1 + (ni % 3 === 0 ? 1 : 0)) * 100) / 100 + (ni % 5 === 0 ? 4.5 : 0); c.balanceAt = at; c.oldestIncident = at; c.incidents = 1 + (ni % 3);
+    if (ni < 6) c.dunning = { status: 'promesse', ownerId: vendeurs[ni % vendeurs.length], promiseDate: addDays(t, ni % 2 ? 2 : -1), next: addDays(t, ni % 2 ? 2 : -1), note: 'Règlement promis', history: [{ at: ts(addDays(t, -2)), by: vendeurs[ni % vendeurs.length], label: 'Prise en charge' }] };
+    else if (ni % 4 === 1) c.dunning = { status: 'relance', ownerId: vendeurs[ni % vendeurs.length], next: addDays(t, ni % 3), note: '' };
+    ni++;
+  } });
+  // ── Impayés régularisés (liste Incidents) : 13 mois, par canal ──
+  let nv = 0;
+  for (let i = 12; i >= 0; i--) {
+    const mk = addMonths(cm, -i); const jours = mk === cm ? Math.max(1, Number(t.slice(8)) - 1) : daysIn(mk);
+    [['equipe', 14, 45], ['auto', 30, 40], ['client', 9, 36], ['automatismes', 6, 30]].forEach(([canal, n, moy]) => {
+      for (let k = 0; k < Math.round(n * jours / daysIn(mk)); k++) {
+        const id = 'v' + (++nv); const date = `${mk}-${pad(1 + Math.floor(R() * jours))}`; const c = actifs[1200 + (nv % 380)];
+        st.recov[id] = { id, clubId: C, date, incidentDate: addDays(date, -(3 + nv % 25)), amount: Math.round(moy * (0.6 + R() * 0.8) * 100) / 100, canal, userId: canal === 'equipe' ? vendeurs[nv % vendeurs.length] : null, clientNum: c.num, type: 'Prélèvements rejetés', at: ts(date) };
+      }
     });
-  });
-  // Impayés : quelques dossiers déjà pris en charge
-  Object.values(st.clients).filter(c => c.balance > 0).forEach((c, i) => { c.num = String(10000 + i); c.balanceAt = addDays(today(), -3 - i * 4); c.incidents = 1 + (i % 2); if (i % 3 === 1) c.dunning = { status: 'relance', ownerId: ['u3', 'u4', 'u5'].at(i % 3), next: addDays(today(), i % 2 ? 0 : 3), note: i % 2 ? 'CB expirée, rappel prévu' : '' }; if (i % 3 === 2) c.dunning = { status: 'promesse', ownerId: 'u2', next: addDays(today(), 5), note: 'Paiera le 15' }; });
-  st.clients.c41 = { ...(st.clients.c41 || { id: 'c41', clubId: 'niort', name: 'Hugo Martin' }), clubId: 'niort', balance: 0, dunning: { status: 'recupere', recoveredAt: addDays(today(), -2), amount: 59.9, canal: 'equipe', by: 'u3' } };
-  // Paliers collectifs du mois (prime d'équipe)
-  st.paliers = { niort: { [cm]: { contrats: [{ target: 90, reward: 'Prime 50 € chacun' }, { target: 100, reward: 'Prime 100 € chacun' }, { target: 115, reward: 'Prime 150 € + resto d’équipe' }], avis: [{ target: 80, reward: 'Petit-déj d’équipe' }, { target: 100, reward: 'Prime 30 € chacun' }] } } };
-  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); st.rsm.controls.niort = st.rsm.controls.niort || {}; (st.rsm.controls.niort.du = st.rsm.controls.niort.du || {})[`${m}-28`] = Math.round((1900 - i * 140 + R() * 300) * 100) / 100; (st.rsm.controls.niort.evo = st.rsm.controls.niort.evo || {})[m] = { gained: Math.round(95 + R() * 40), lost: Math.round(60 + R() * 30) }; }
-  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); for (let j = 0; j < 3 + Math.floor(R() * 6); j++) { const id = `rh${i}_${j}`; const status = R() < .35 ? 'sauvee' : 'resiliee'; const date = `${m}-${pad(1 + Math.floor(R() * 26))}`; st.resiliations[id] = { id, clubId: 'niort', client: `${pick(P)} ${pick(N)}`, date, effective: addDays(date, 30), reason: pick(['Prix', 'Déménagement', 'Santé', 'Manque de temps']), status, saved: status === 'sauvee', ownerId: pick(['u2', 'u3', 'u4']), at: dateOf(date).getTime() }; } }
-  st.rsm.aliases = { 'c:HLEF': 'u2', 'c:IMOR': 'u3', 'c:LPET': 'u4', 'c:SGAR': 'u5', 'c:CROU': 'u1' };
-  st.meta.demo = true;
-  // Revenus : prix, numéros, prospects, invités, anciens membres, entreprises.
-  const PRIX = { Basic: 24.99, Premium: 29.99, Ultimate: 39.99 };
-  [['rc1', 'Marc Henry', 'Basic', 40], ['rc2', 'Julie Perrin', 'Ultimate', 240], ['rc3', 'Paul Noël', 'Premium', 90]].forEach(([id, name, offer, d], i) => { st.clients[id] = { id, clubId: 'niort', num: String(700100 + i), name, offer, price: PRIX[offer], status: 'Client', start: addDays(today(), -300), end: addDays(today(), d), phone: '+3361' + String(4000000 + i * 919).slice(0, 7) }; });
-  Object.values(st.recov).forEach((x, i) => { x.incidentDate = addDays(x.date, -[3, 6, 9, 14, 21, 35, 50][i % 7]); });
-  const sellers = ['u2', 'u3', 'u4', 'u5', 'u6'];
-  Object.values(st.clients).forEach((c, i) => { c.num = String(100200 + i); c.price = PRIX[c.offer] || 29.99; c.status = 'Client'; c.sellerId = sellers[i % sellers.length]; if (c.balance > 0) { c.balanceAt = addDays(today(), -[3, 12, 40, 75][i % 4]); c.oldestIncident = c.balanceAt; } });
-  const cl = Object.values(st.clients).filter(c => c.clubId === 'niort');
-  for (let i = 0; i < 60; i++) {
-    const d = i >= 40 ? addDays(today(), -(2 + (i * 7) % 20)) : addDays(today(), -Math.floor(R() * 95)); const conv = i < 14 ? cl[i] : null; const u = i % 7 === 0 ? 'u1' : sellers[i % sellers.length];
-    const [prenom, nom] = conv ? conv.name.split(' ') : [pick(P), pick(N)];
-    if (conv) { const s0 = addDays(d, 2 + Math.floor(R() * 25)); conv.start = s0 > today() ? today() : s0; }
-    const statut = conv ? 'Visite effectuée' : pick(['Nouveau', 'Contacté', 'Contacté', 'RDV pris', 'Essai', 'Injoignable']);
-    st.prospects['p' + i] = { id: 'p' + i, clubId: 'niort', nom, prenom, creeLe: d, commercialId: u, statut, provenance: pick(['Site web', 'Passage', 'Parrainage', 'Réseaux sociaux']), valeur: Math.round(R() * 5), phone: '+3366' + String(1000000 + i * 7919).slice(0, 7), at: Date.now() };
   }
-  for (let i = 0; i < 6; i++) { const id = 'g' + i; st.guests[id] = { id, clubId: 'niort', nom: `${pick(P)} ${pick(N)}`, phone: '+3367' + String(2000000 + i * 3571).slice(0, 7), date: addDays(today(), -i * 2), parrainId: i % 2 ? cl[20 + i].id : null, by: sellers[i % 5], at: Date.now() - i * 2 * 864e5 }; }
-  for (let i = 0; i < 12; i++) { const id = 'a' + i; st.clients[id] = { id, clubId: 'niort', num: String(900100 + i), name: `${pick(P)} ${pick(N)}`, phone: '+3368' + String(3000000 + i * 4111).slice(0, 7), status: 'Ancien client', endDate: addDays(today(), -(95 + i * 50)), offer: pick(['Basic', 'Premium', 'Ultimate']), price: 0, start: addDays(today(), -(500 + i * 50)) }; st.clients[id].price = PRIX[st.clients[id].offer]; }
-  [['co1', 'Mutuelle Atlantique', 'signe', 120, 6], ['co2', 'Hôpital de Niort', 'proposition', 450, 0], ['co3', 'Transports Bréan', 'rdv', 60, 0], ['co4', 'Groupe Sèvre Bâtiment', 'a_contacter', 0, 0]].forEach(([id, nom, statut, effectif, n]) => {
-    st.companies[id] = { id, clubId: 'niort', nom, statut, effectif: effectif || null, ownerId: 'u3', adherents: n, nums: cl.slice(30, 30 + n).map(c => c.num), signeLe: statut === 'signe' ? addDays(today(), -40) : null, at: Date.now() };
-    cl.slice(30, 30 + n).forEach(c => { c.company = nom; });
-  });
-  cl.slice(0, 10).forEach((c, i) => { if (i % 2 === 0 && c.start <= today()) { const id = 'shop' + i; st.entries[id] = { id, userId: c.sellerId, clubId: 'niort', kpiId: 'nutrition', date: addDays(c.start, i % 4 ? 0 : 9), value: 35, source: 'manual', at: Date.now(), clientNum: c.num }; } });
+  // ── Relances notées récentes ──
+  for (let i = 0; i < 40; i++) { const c = actifs[900 + i * 3]; const d = addDays(t, -(i % 12)); st.loyalty['l' + i] = { id: 'l' + i, clientId: c.id, type: i % 3 ? 'suivi' : 'renouvellement', step: i % 2 ? 15 : 30, userId: vendeurs[i % vendeurs.length], outcome: ['ok', 'noanswer', 'rdv', 'message'][i % 4], note: '', at: ts(d, 11, i) }; }
+  // ── Base, chiffres mensuels, imports et contrôles ──
+  st.base[C] = {}; st.monthly[C] = {};
+  for (let i = 12; i >= 0; i--) { const mk = addMonths(cm, -i); st.base[C][mk] = { actifs: 1560 + (12 - i) * 4, sortants: 52 + (i % 4) * 3, objectif: 1620 }; }
+  const semaine = ts(weekStart(t), 9);
+  ['ventes', 'clients', 'clients-incident', 'incidents', 'paiements', 'abonnements', 'sans-mandat'].forEach((d, i) => { st.rsm.routine[C] = st.rsm.routine[C] || {}; st.rsm.routine[C][d] = semaine + i * 600000; });
+  st.rsm.rowsHistory = st.rsm.rowsHistory || {}; st.rsm.rowsHistory[C] = { clients: [{ at: semaine - 7 * 864e5, rows: 1596 }, { at: semaine, rows: 1600 }], ventes: [{ at: semaine - 7 * 864e5, rows: 92 }, { at: semaine, rows: 96 }] };
+  st.rsm.nonRattaches = { [C]: { at: semaine, n: 0 } };
+  st.imports.imp1 = { id: 'imp1', name: 'RSM_ventes-abonnements_semaine.csv', type: 'kpi', defId: 'ventes', clubId: C, at: semaine, rows: 96, active: true, by: 'u1', source: 'resamania' };
+  st.imports.imp2 = { id: 'imp2', name: 'RSM_clients.csv', type: 'clients', defId: 'clients', clubId: C, at: semaine + 600000, rows: 1600, active: true, by: 'u1', source: 'resamania' };
+  st.rsm.aliases = { 'c:TPET': 'u3', 'c:SLER': 'u4', 'c:NMOR': 'u5', 'c:LGIR': 'u6', 'c:MFAU': 'u7', 'c:CROU': 'u8' };
+  // ── Vie d'équipe : paliers, sprints, chat, prospects, entreprises, plan de tâches ──
+  st.paliers = { [C]: { [cm]: { contrats: [{ target: 100, reward: 'Prime 50 € chacun' }, { target: 125, reward: 'Prime 100 € chacun' }], avis: [{ target: 90, reward: 'Petit-déjeuner d’équipe' }] } } };
+  st.challenges.ch1 = { id: 'ch1', clubId: C, title: 'Sprint contrats', desc: 'Le plus de contrats signés en 48 h, rapporté à l’objectif de chacun.', kpiId: 'contrats', start: T0 - 20 * 3600000, end: T0 + 28 * 3600000, by: 'u1' };
+  st.challenges.ch2 = { id: 'ch2', clubId: C, title: 'Semaine nutrition', desc: 'Ventes nutrition sur 72 h, rapportées à l’objectif.', kpiId: 'nutrition', start: T0 - 24 * 864e5, end: T0 - 21 * 864e5, by: 'u2' };
+  st.chat.m1 = { id: 'm1', channel: C, userId: 'u1', text: 'Septembre clos à 104 % sur les contrats. Cette semaine : priorité aux résiliations à J-7.', at: T0 - 2 * 864e5 };
+  st.chat.m2 = { id: 'm2', channel: C, userId: 'u4', text: 'Je prends les relances J+15 aujourd’hui.', at: T0 - 864e5, parentId: 'm1' };
+  st.chat.m3 = { id: 'm3', channel: C, userId: 'u8', text: 'Première semaine : merci pour l’accueil.', at: T0 - 3 * 3600000 };
+  for (let i = 0; i < 40; i++) { const d = addDays(t, -(1 + Math.floor(R() * 60))); st.prospects['p' + i] = { id: 'p' + i, clubId: C, nom: pick(N), prenom: pick(P), creeLe: d, commercialId: vendeurs[i % vendeurs.length], statut: pick(['Nouveau', 'Contacté', 'RDV pris', 'Essai', 'Visite effectuée', 'Injoignable']), provenance: pick(['Site web', 'Passage', 'Parrainage', 'Réseaux sociaux']), phone: `06 39 98 ${pad(20 + Math.floor(i / 10))} ${pad(i)}`, at: ts(d) }; }
+  [['co1', 'Société Alpha Services', 'signe', 80, 4], ['co2', 'Cabinet Bêta Conseil', 'proposition', 35, 0], ['co3', 'Atelier Gamma', 'rdv', 20, 0]].forEach(([id, nom, statut, effectif, n]) => { st.companies[id] = { id, clubId: C, nom, statut, effectif, ownerId: 'u4', adherents: n, nums: actifs.slice(50, 50 + n).map(c => c.num), signeLe: statut === 'signe' ? addDays(t, -40) : null, at: T0 }; });
+  const lib = Object.keys(st.tasks.library); st.tasks.plan[C] = {};
+  [[7, 0], [9, 6], [11, 9], [14, 10], [17, 14], [20, 31]].forEach(([h, k], i) => { st.tasks.plan[C]['p' + i] = { id: 'p' + i, taskId: lib[k], hour: h }; });
   return st;
 }
+const S_arrondi = (v, unit) => unit === 'eur' ? Math.round(v) : Math.max(v > 0 ? 1 : 0, Math.round(v));
 
 // ── Roles et codes d'acces ────────────────────────────────────────────────
 // createur : tout (clubs, KPI et points, roles, sauvegarde, remise a zero).
 // manager  : les clubs ou il est rattache (equipe, objectifs, imports, taches, defis).
-// membre   : ses saisies, son tableau de bord, classement, retention, chat, feed.
+// membre   : ses saisies, son tableau de bord, classement, retention, chat, pouls du club.
 const ROLES = {
   createur: { label: 'Créateur', rank: 3 },
   manager: { label: 'Manager', rank: 2 },
@@ -620,9 +744,9 @@ async function newCodeRecord() {
 }
 // Comptes declares dans config.js : crees s'ils manquent, rattaches a tous les clubs.
 function bootstrapOps() {
-  const ops = []; const accounts = window.PARKPULSE_ACCOUNTS || [];
+  const ops = []; const accounts = CFG.accounts || [];
   if (!accounts.length) return ops;
-  const club = window.PARKPULSE_CLUB;
+  const club = CFG.club;
   if (club && !S.clubs[club.id]) ops.push([['clubs', club.id], { ...club, createdAt: Date.now() }]);
   const allClubs = [...new Set([...Object.keys(S.clubs), ...(club ? [club.id] : [])])];
   for (const a of accounts) {

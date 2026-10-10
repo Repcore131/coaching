@@ -1,6 +1,6 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
-// ══ FIT PULSE — classement bienveillant, bravo, défis, bilan du mois ══════
+// ══ FIT PULSE — classement bienveillant, bravo, sprints, carnet du mois ══════
 const lbPeriodLabel = p => (p === 'week' ? 'cette semaine' : p === 'quarter' ? 'ce trimestre' : 'ce mois-ci');
 // Écart au rang du dessus, dans l'unité la plus parlante (KPI où il manque le moins).
 function lbGap(me, above, k) {
@@ -20,7 +20,7 @@ function lbBanner(meRow, rk, r, period, k) {
 }
 function lbRow(x, val, mine) {
   const me = x.u.id === ME.id; const showDot = isManager() || me;
-  return `<div class="rank-row ${me ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b> ${levelBadge(levelOf(allTime(x.u.id)), 18)}<div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts">${showDot ? `<i class="hdot ${healthOf(x.score != null && x.st.expected ? x.score / Math.max(x.st.expected, 0.01) : null).cls}"></i> ` : ''}${val(x)}</b></div>`;
+  return `<div class="rank-row ${me ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b> ${zoneBadge(zoneOf(x.u.id), 24)}<div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts">${showDot ? `<i class="hdot ${healthOf(x.score != null && x.st.expected ? x.score / Math.max(x.st.expected, 0.01) : null).cls}"></i> ` : ''}${val(x)}</b></div>`;
 }
 // Membre : podium, sa ligne et ses voisins, le reste replié. Manager : liste complète.
 function lbList(rk, r, k, val) {
@@ -44,20 +44,20 @@ function kudosRow(top) {
 }
 ACTIONS.kudo = el => {
   const u = S.users[el.dataset.u]; if (!u || deepGet(S, ['kudos', today(), ME.id, u.id])) return;
-  db.batch([[['kudos', today(), ME.id, u.id], Date.now()]]); sendChat({ text: `Bravo ${u.first} pour ton classement !`, kind: 'kudos', to: u.id });
+  db.batch([[['kudos', today(), ME.id, u.id], Date.now()]]); sendChat({ text: `Bravo ${u.first} pour ton classement.`, kind: 'kudos', to: u.id });
   toast(`Bravo envoyé à ${u.first}`);
 };
 ACTIONS.lbHelp = () => openModal({ title: 'Comment gagner des points', body: `<div class="small" style="display:grid;gap:8px">
   <p style="margin:0"><b>Score du classement.</b> Moyenne de vos % d’objectif sur les KPI obligatoires, pondérée par leurs points, plafonnée à 150 %. Les sauvetages comptent quand ils ont un objectif (réglable par le manager).</p>
   <p style="margin:0"><b>Points d’étape.</b> 25, 50, 75 puis 100 % des points d’un KPI, ou en continu pour les petits objectifs. Au-delà de 100 %, +10 % par tranche de 10 %, jusqu’à 150 % (niveaux uniquement).</p>
   <p style="margin:0"><b>Points d’action.</b> Joint ou RDV pris : 10 pts. Réglé : 20 pts. Appel noté sur une résiliation : 10 pts. Pas de réponse ou message laissé : 2 pts. Une fiche rapporte une fois par jour, 300 pts par semaine au plus. Ils comptent pour les niveaux, pas pour le classement.</p>
-  <p style="margin:0"><b>Trophées.</b> N°1 du mois, de la semaine, par KPI, Sauveur et Relanceur de la semaine, record personnel, plus belle progression, régularité (5 jours de saisie de suite).</p></div>`, foot: '<button class="btn primary" data-close>Compris</button>' });
+  <p style="margin:0"><b>Trophées.</b> N°1 du mois, de la semaine, par KPI, Sauveur et Relanceur de la semaine, record personnel, plus forte progression, régularité (5 jours de saisie de suite).</p></div>`, foot: '<button class="btn primary" data-close>Compris</button>' });
 
-// Bilan du mois : bandeau d'accueil du 1er au 5, pour chacun.
+// Rapport mensuel : bandeau d'accueil du 1er au 5, pour chacun.
 function wrapBanner() {
   if (Number(today().slice(8)) > 5) return ''; const pm = addMonths(curMonth(), -1);
   const st = statsFor(CLUB.id, ME.id, rangeOf('month', pm)); if (!st.rows.some(x => x.target > 0)) return '';
-  return `<a class="recap-ready" href="#/wrap/${pm}/${ME.id}">${ico('sparkle')}<div><b>Votre bilan de ${MOIS[Number(pm.slice(5)) - 1].toLowerCase()} est prêt</b><span>Vos chiffres, vos progrès et vos trophées du mois, en une minute.</span></div>${ico('chevR')}</a>`;
+  return `<a class="recap-ready" href="#/wrap/${pm}/${ME.id}">${ico('report')}<div><b>Votre rapport mensuel de ${MOIS[Number(pm.slice(5)) - 1].toLowerCase()} est prêt</b><span>Une page : indicateurs, actions et piste pour le mois suivant.</span></div>${ico('chevR')}</a>`;
 }
 
 // ── Première connexion d'un membre : visite en 3 écrans, une seule fois ───

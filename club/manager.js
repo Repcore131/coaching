@@ -51,7 +51,7 @@ function alertsFor(clubId) {
     return out.map(a => ({ ...a, key: safeKey(`${a.rule}_${a.uid}_${wk}_${a.text}`) })).filter(a => !acks[a.key]);
   });
 }
-ACTIONS.alertAck = el => { db.set(['alertAcks', CLUB.id, el.dataset.key], { by: ME.id, at: Date.now() }); toast('Pris en compte'); };
+ACTIONS.alertAck = el => { db.set(['alertAcks', CLUB.id, el.dataset.key], { by: ME.id, at: Date.now() }); toast('1 action prise en compte'); };
 
 // ── Pilotage équipe : une matrice membres x KPI ───────────────────────────
 PAGES.team = {
@@ -68,7 +68,7 @@ PAGES.team = {
     rows.sort(sort === 'name' ? (a, b) => fullName(a.u).localeCompare(fullName(b.u)) : sort === 'score' ? (a, b) => (b.score ?? -1) - (a.score ?? -1) : (a, b) => (a.ratio ?? 9) - (b.ratio ?? 9));
     const left = Math.max(1, workdaysLeft(null, CLUB.id, mk));
     const al = alertsFor(CLUB.id).filter(a => a.level !== 'info');
-    return `<div class="page-head"><div><h1>Pilotage équipe</h1><p>${esc(CLUB.name)} · rythme attendu ${fmtP(exp)} · ${plur(left, 'jour ouvré restant', 'jours ouvrés restants')}</p></div><span class="spacer"></span>${monthNav('teamMonth', mk)}<button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
+    return `<div class="page-head"><div><h1>Pilotage équipe</h1><p>${esc(nomAffiche())} · rythme attendu ${fmtP(exp)} · ${plur(left, 'jour ouvré restant', 'jours ouvrés restants')}</p></div><span class="spacer"></span>${monthNav('teamMonth', mk)}<button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button>${MULTI ? `<button class="btn" data-act="inviteMail">${ico('mail')} Inviter par e-mail</button>` : ''}</div>
       <div class="rc-grid">${club.rows.filter(x => x.k.required && x.target > 0).map(x => { const proj = exp >= 0.1 ? x.real / exp : null; return `<div class="rc-tile"><span>${esc(x.k.label)}</span><b>${fmtV(x.real, x.k.unit)}</b><small>sur ${fmtV(x.target, x.k.unit)} · ${fmtP(x.pct)} · projection ${proj == null ? 'n.d.' : fmtV(x.k.unit === 'qty' ? Math.round(proj) : proj, x.k.unit)}</small></div>`; }).join('')}</div>
       ${al.length ? `<a class="recap-ready" href="javascript:void 0" data-act="ui" data-key="teamView" data-val="signaux">${ico('alert')}<div><b>${plur(al.length, 'signal faible', 'signaux faibles')}</b><span>${al.slice(0, 3).map(a => esc(S.users[a.uid].first) + ' : ' + esc(a.text.toLowerCase())).join(' · ')}</span></div>${ico('chevR')}</a>` : ''}
       ${tabs('teamView', [['matrice', 'Objectifs'], ['activite', 'Activité'], ['signaux', `Signaux faibles${al.length ? ' · ' + al.length : ''}`]], UI.teamView || 'matrice')}
@@ -96,7 +96,7 @@ function teamActivity(members, r) {
 }
 function teamSignals() {
   const al = alertsFor(CLUB.id); const by = {}; al.forEach(a => { (by[a.uid] = by[a.uid] || []).push(a); });
-  if (!al.length) return `<div class="card">${emptyBox({ art: 'done', title: 'Aucun signal faible', text: 'Toute l’équipe est dans le rythme cette semaine.' })}</div>`;
+  if (!al.length) return `<div class="card">${emptyBox({ art: 'done', title: 'Aucun signal faible', text: 'Toute l’équipe est dans le rythme cette semaine.', cta: '<a class="btn sm" href="#/equipe">Ouvrir la matrice équipe</a>' })}</div>`;
   return Object.entries(by).map(([uid, L]) => `<div class="card"><div class="card-head"><b>${esc(fullName(S.users[uid]))}</b><span class="spacer"></span><a class="btn sm" href="#/coach/${uid}">Fiche</a></div>${L.map(a => `<div class="q-alert"><span class="tag ${a.level === 'alerte' ? 'is-bad' : a.level === 'vigilance' ? 'is-warn' : ''}">${a.level === 'alerte' ? 'Alerte' : a.level === 'vigilance' ? 'Vigilance' : 'Info'}</span><span class="spacer"><b>${esc(a.text)}</b><br><span class="muted small">${esc(a.detail)}</span></span>${a.level !== 'info' ? `<button class="btn sm ghost" data-act="alertAck" data-key="${a.key}">Pris en compte</button>` : ''}</div>`).join('')}</div>`).join('');
 }
 ACTIONS.teamCsv = () => {
@@ -180,7 +180,7 @@ ACTIONS.goalSave = el => {
   if (f.due > addDays(today(), 90)) { toast('Échéance à 90 jours au plus.'); return; }
   if (!f.ok) { toast('Validez l’objectif avec le commercial (case Réaliste).'); return; }
   const id = newId(); db.set(['coaching', el.dataset.u, 'goals', id], { id, createdAt: Date.now(), by: ME.id, label: f.label.trim().slice(0, 120), kpiId: f.kpiId || null, metric: f.kpiId ? f.metric : 'activite', target: t, from: today(), due: f.due, status: 'en_cours' });
-  closeModal(); toast('Objectif enregistré');
+  closeModal(); toast('1 objectif enregistré');
 };
 ACTIONS.actNew = el => {
   openModal({ title: 'Nouvelle action', body: `<form id="af" class="grid"><label class="field"><span>Action</span><input class="input" name="label" required></label><div class="form-grid"><label class="field"><span>Échéance</span><input class="input" type="date" name="due" value="${addDays(today(), 7)}"></label><label class="field"><span>Qui</span><select class="input" name="owner"><option value="membre">Le commercial</option><option value="manager">Le manager</option></select></label></div></form>`,
@@ -199,7 +199,7 @@ ACTIONS.coachPrep = el => {
   const goals = Object.values(C.goals || {}).filter(g => g.status === 'en_cours'); const late = Object.values(C.actions || {}).filter(a => !a.done && a.due < today());
   $('#cnn textarea').value = [`Forces : ${f.forces.map(x => x.k.label).join(', ') || 'profil homogène'}.`, `Axes : ${f.axes.map(x => x.k.label).join(', ') || 'profil homogène'}.`, `Objectifs en cours : ${goals.map(g => `${g.label} (${fmtP(goalProgress(uid, g))})`).join(', ') || 'aucun'}.`, `Actions en retard : ${late.map(a => a.label).join(', ') || 'aucune'}.`, '', 'Ce qui est décidé :'].join('\n');
 };
-ACTIONS.noteSave = el => { const f = formData($('#cnn')); if (!f.text.trim()) return; const id = newId(); db.set(['coaching', el.dataset.u, 'notes', id], { id, at: Date.now(), by: ME.id, type: f.type, text: f.text.trim().slice(0, 4000), shared: !!f.shared, mood: f.mood ? Number(f.mood) : null }); toast('Note enregistrée'); };
+ACTIONS.noteSave = el => { const f = formData($('#cnn')); if (!f.text.trim()) return; const id = newId(); db.set(['coaching', el.dataset.u, 'notes', id], { id, at: Date.now(), by: ME.id, type: f.type, text: f.text.trim().slice(0, 4000), shared: !!f.shared, mood: f.mood ? Number(f.mood) : null }); toast('1 note enregistrée'); };
 ACTIONS.coachPrint = () => { document.body.classList.add('printing'); setTimeout(() => { window.print(); document.body.classList.remove('printing'); }, 100); };
 
 // ── Rituels : brief du matin, point hebdo ─────────────────────────────────
@@ -224,8 +224,8 @@ ACTIONS.ritual = () => {
   const txt = briefText();
   openModal({ title: 'Brief du matin', drawer: true, body: `<pre class="brief">${esc(txt)}</pre>`, foot: `<button class="btn" data-act="briefCopy">Copier le texte</button><button class="btn primary" data-act="briefChat">Publier dans le chat</button>`, onMount: m => { m.dataset.txt = txt; } });
 };
-ACTIONS.briefCopy = () => { const t = $('.modal').dataset.txt; navigator.clipboard.writeText(t).then(() => toast('Brief copié'), () => toast('Copie impossible')); };
-ACTIONS.briefChat = () => { sendChat({ text: $('.modal').dataset.txt }); closeModal(); toast('Brief publié dans le chat'); };
+ACTIONS.briefCopy = () => { const t = $('.modal').dataset.txt; navigator.clipboard.writeText(t).then(() => toast('1 brief copié'), () => toast('Copie impossible')); };
+ACTIONS.briefChat = () => { sendChat({ text: $('.modal').dataset.txt }); closeModal(); toast('1 brief publié dans le chat'); };
 // Lundi : bilan de la semaine (préférence digest), une fois.
 function weekDigestCard() {
   if (new Date().getDay() !== 1 || !pref('digest', true) || pref('digestSeen', '') === today()) return '';
@@ -246,5 +246,6 @@ function myPlanCard() {
     ${acts.map(a => `<label class="row act-row ${a.due < today() ? 'late' : ''}"><input type="checkbox" data-change="actDone" data-u="${ME.id}" data-id="${a.id}" ${a.owner === 'membre' ? '' : 'disabled'}><span class="spacer">${esc(a.label)}</span><span class="small muted">${dm(a.due)}</span></label>`).join('')}</div>`;
 }
 // Dernière connexion (signal « absent de l'appli »), au plus une écriture par heure.
-function touchSeen() { try { if (typeof ME !== 'undefined' && ME && ME.id && S.prefs && Date.now() - Number(pref('lastSeen', 0)) > 3600e3) setPref('lastSeen', Date.now()); } catch (_) { /* hors connexion */ } }
+// Jours de connexion (activité 7 jours de la page Équipe) : une clé par jour, gardée 60 jours.
+function touchSeen() { try { if (typeof ME !== 'undefined' && ME && ME.id && S.prefs) { if (Date.now() - Number(pref('lastSeen', 0)) > 3600e3) setPref('lastSeen', Date.now()); if (!(pref('seenDays', {}) || {})[today()]) { const old = Object.keys(pref('seenDays', {}) || {}).filter(d => d < addDays(today(), -60)); db.batch([[['prefs', ME.id, 'seenDays', today()], true], ...old.map(d => [['prefs', ME.id, 'seenDays', d], null])]); } } } catch (_) { /* hors connexion */ } }
 addEventListener('hashchange', touchSeen); addEventListener('focus', touchSeen); setTimeout(touchSeen, 4000);

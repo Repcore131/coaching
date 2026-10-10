@@ -69,7 +69,101 @@ un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurit
 ## Deux modes
 
 - **Local** (par défaut) : les données restent dans le navigateur. Idéal pour essayer (bouton « données de démonstration »).
+- **Démonstration** (`?demo=1` ou bouton « Voir la démo » de la connexion) : à montrer à un prospect. Jeu fictif
+  généré par `seedDemo()` (`demo.js`) : « Club Démo Centre », 6 commerciaux, 3 mois d'historique, 40 relances,
+  12 impayés, 8 résiliations en cours, 2 défis. Ouvert sans connexion, aucun appel Firebase, tout le stockage du
+  navigateur passe par la seule clé `fp_demo`, ni logo ni nom de l'enseigne, bandeau « Données fictives de
+  démonstration » avec « Quitter la démo ». Recharger la page reste en démonstration.
 - **Partagé** (site en ligne) : base Firebase repcore-sync, nœud `/pulse`. Connexion e-mail + code depuis n'importe quel appareil : la clé SHA-256(e-mail|code) ouvre `/pulse_boot`, règles posées par `outils/fitpulse-serveur.mjs` (lancé à chaque mise en ligne et par `fitpulse-mail.yml`).
+
+## Demandes de résiliation reçues par e-mail
+
+Chaque heure, le serveur (`outils/fitpulse-resmail.mjs`, lancé par `fitpulse-mail.yml`, ou la fonction
+`club/cloud` au forfait Blaze) lit la boîte Gmail de l'accueil par l'API Gmail. Les messages des 30 derniers jours
+qui parlent de résiliation, ou qui viennent de l'appli adhérents, deviennent `/pulse/resRequests/{club}/{fil}`
+(clé = fil Gmail : jamais de doublon). Page Résiliations, bloc « Demandes reçues » : Ouvrir le mail, Je m'en occupe,
+Contacté, Sauvé, Résilier (crée le dossier), Hors sujet. Pastille rouge sans réponse de l'accueil depuis 48 h.
+
+Réglages : Résiliations > Demandes reçues > Réglages (boîte relevée, expéditeurs de l'appli). Secrets côté serveur
+uniquement : `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_TOKENS` (`{"niort":"<refresh token>"}`), jeton OAuth
+du compte accueil avec la portée `gmail.readonly`. Extrait de 200 caractères, purgé 90 jours après traitement.
+
+## Imports Resamania automatiques
+
+Chaque heure de 6 h à 22 h, `outils/fitpulse-autoimport.mjs` relève les pièces jointes CSV, XLSX ou ZIP de la boîte
+dédiée (`imports+{club}@domaine` ou libellé Gmail « Resamania ») et les fichiers d'un dossier Drive partagé
+(Imports > Arrivées automatiques > Réglages). Chaque fichier est déposé dans Cloud Storage `/imports/{club}/{date}/`
+(si `FITPULSE_BUCKET`), puis lu par le vrai code de l'appli (`readAnyFile`, `analyzeTable`, `rsmCommitPlan`) : même
+détection, même clé stable, aucun doublon (un contenu déjà reçu n'est jamais relu). Journal dans
+`/pulse/rsm/autoLog/{club}`, alerte si un export du lundi manque depuis plus de 8 jours, « Fichier probablement
+tronqué » pour une liste de 2 000 lignes exactes.
+
+## Opportunités et brief du matin
+
+Page Opportunités : une liste unique des actions du jour (résiliations à sauver, demandes reçues par e-mail,
+impayés, rétention J+15 / J+30, prospects chauds, invités, fins de contrat…), chacune avec ses euros attendus
+= valeur x probabilité. Probabilités par défaut (`OPP_PROBA`, `revenus.js`), réglables par club par un manager :
+résiliation au taux de sauvetage des 3 derniers mois (25 % sans historique, x 1,5 à J-7), impayé selon l'âge
+(70, 50, 30, 10 %), prospect au taux de transformation du commercial (30 % par défaut, divisé par 2 après
+10 jours), invité 35 %, fin d'engagement 15 %, rétention 10 %, montée en gamme 5 %, boutique 20 %, ancien membre
+4 %, sans mandat 50 %, parrainage 3 %. Accueil : « Vos 5 actions les plus rentables aujourd'hui ».
+
+Brief du matin (`outils/fitpulse-brief.mjs`) : 7 h 30 heure de Paris, du lundi au samedi. Par club, KPI de la
+veille, rythme du mois en jours ouvrés (lundi au samedi hors fériés), les 5 actions les plus rentables
+(`briefData`, même calcul que la page). E-mail aux managers, notification sans nom d'adhérent, rien pour qui a
+désactivé « Bilan de la semaine et brief du matin ».
+
+## Multi-salles
+
+Pour vendre Fit Pulse à plusieurs salles : chaque société a son espace `/orgs/{org}` (données, clubs,
+abonnement), isolé par les règles de la base ; inscription autonome (`#/inscription`), invitations par lien à
+usage unique (7 jours), double authentification TOTP obligatoire pour managers et créateurs (vérifiée par le
+serveur, imposée par les règles), base en `europe-west1`. Migration de `/pulse` avec contrôle des totaux.
+Détail et bascule : `docs/multi-salles.md`.
+
+## Identité et textes
+
+- Tous les noms de l'interface (menus, titres des pages, Zones, phrases de rythme, compte à rebours, notifications, vocabulaire propre) sont dans `txt.js` (`const TXT`), chargé avant les autres scripts. Le reste des textes de détail est encore écrit dans les pages ; il migre vers `TXT` au fil des modifications.
+- Couleurs : `--brand` (Fit Pulse, #12B3A8) et `--club`. Un manager change la couleur de son club dans Club et réglages > Nos clubs > modifier (ou `orgs/{org}/info/couleur` pour tout l'espace) ; l'encre des boutons passe en noir ou blanc selon la couleur. Aucun logo d'enseigne par défaut : le logo du club se règle au même endroit (fichier `assets/...`).
+- Zones : Zone 1 à 5 pour 0, 2, 5, 9, 14 mois validés ; un mois est validé quand le score des KPI obligatoires atteint 80 % de l'objectif.
+- Compte à rebours : `J-{jours calendaires} · {jours ouvrés} jours ouvrés`, sans dimanche ni jour férié.
+- Contrôle : `node club/outils/build-single.mjs /tmp/fitpulse.html && node club/scripts/audit-libelles.js /tmp/fitpulse.html` doit relever 0 terme interdit.
+
+## Antériorité et propriété
+
+- `LICENSE` : licence propriétaire, tous droits réservés (titulaire à compléter ; les en-têtes citent Kévin GUELLEC et FPN Gestion). Mention aussi dans la page Confidentialité.
+- `docs/concepts-propres.md` : les concepts originaux, avec date et commit de première implémentation.
+- `docs/sources-et-licences.md` : bibliothèques (JSZip, SheetJS, Firebase), polices, images (Canva : droits à vérifier).
+- `bash club/scripts/paquet-esoleau.sh [sortie]` : archive datée pour e-Soleau (HTML unique, docs et captures, code des outils, historique git, `SHA256SUMS.txt`), refusée au-delà de 10 Mo.
+- `bash club/scripts/creer-depot-fit-pulse.sh ../fit-pulse [url-privée]` : crée le dépôt « fit-pulse » (fitpulse.html, assets/, scripts/, docs/), premier commit daté, étiquette `v0.1-2026-10` ; avec une URL de dépôt privé existant, le pousse.
+
+## Pilotage du directeur (lot B)
+
+- `#/journee` (managers) : Brief 8 h, Impayés 11 h, Résiliations 14 h, Bilan 18 h, Routine du lundi, Clôture du mois (du 1er au 5). Le bloc de l'heure est mis en avant ; « Fait » quand l'action a été ouverte (S.prefs[uid].journee).
+- Accueil manager : Brief du jour (veille ouvrée, objectif du jour, fraîcheur des imports, trois actions, texte WhatsApp), badge « Chiffres vérifiés » quand tous les KPI contrôlés sont égaux à Resamania.
+- Clôture du jour : point par commercial, absents (S.absences), projection de fin de mois en jours ouvrés, message d'équipe.
+- Impayés : ancienneté de la dette (0-15, 16-30, 31-60, plus de 60 jours), colonne Âge, Appeler, Copier le message (S.settings.dunSms).
+- Résiliations : fiche client rattachée, valeur en jeu = prix (ou panier moyen, 32 € par défaut) x mois restants, 12 mois sans engagement.
+- Imports : contrôle de la semaine (Reçu, Manquant, Suspect), dépôt d'un dossier entier ou d'un ZIP.
+- Récap : revenu récurrent, perdu, gagné (M-1 et N-1), commentaire du directeur (S.recapNotes), envoi au gérant ; compteur « Ce que Fit Pulse a rapporté ce mois » (le temps gagné n'est jamais additionné aux euros).
+- `#/confiance` : chaque KPI par source, contrôle Resamania, écart, doublons probables.
+- Club et réglages > Données et RGPD : registre (CSV), effacement d'un adhérent, purge à 24 mois après la fin du contrat (réglable).
+- Équipe > Adoption : S.usage (une écriture par minute au plus), 4 semaines, parcours de démarrage, taux d'adoption.
+
+## Application neutre et données de départ
+
+- Le fichier livré (`node club/outils/build-single.mjs`) ne contient ni enseigne, ni ville, ni personne : `grep -c "Fitness Park\|Niort\|FPN GESTION\|KGUE\|GUELLEC"` ne trouve que les en-têtes de licence.
+- Le client est décrit par `S.tenant` (nom, enseigne, logo, couleurs, société, panier moyen, mentions légales), saisi à la création du club et modifiable dans Club et réglages > Réglages > Identité du client. La couleur primaire recolore l'appli sans rechargement ; le texte posé dessus respecte le contraste AA.
+- Les comptes, le club et l'identité du déploiement historique sont dans `club/tools/bootstrap.js`, jamais chargé par le navigateur. Le passage serveur (`fitpulse-serveur.mjs`) pose les clés de connexion, `/pulse/tenant`, `/pulse_public/legal` et le destinataire du rapport du lundi s'ils manquent ; `node club/tools/bootstrap.js --ecrire` fait de même à la main.
+- Mentions légales : celles du client (S.tenant.legal) ; un visiteur non connecté lit celles publiées dans `/pulse_public/legal` (bouton « Publier les mentions légales »).
+
+## Réglages, réversibilité, mise en route, démo (lot C)
+
+- Club et réglages > Réglages : Mon club (nom, logo envoyé puis réduit à 256 px et 100 Ko, couleur, société), Repères métier (panier moyen, jours ouvrés du club, heures du brief et du bilan), KPI suivis (créateur seulement), Messages types ({prénom}, {montant}, {club}). Les anciens réglages (offres, parrainage, alertes, conservation, sauvegarde) sont sous « Autres réglages ».
+- Les jours ouvrés du club servent au rythme, aux projections, au compte à rebours et au brief.
+- Club et réglages > Réversibilité : « Tout exporter en tableur » (ZIP : saisies, objectifs, clients, relances, impayés, résiliations, imports, équipe, LISEZMOI.txt ; UTF-8 avec BOM, « ; », JJ/MM/AAAA, virgule décimale, formules neutralisées par une apostrophe), version (APP.version), journal des versions (CHANGELOG.md, à publier avec l'appli), état du service.
+- Accueil manager : carte « Mise en route » (7 étapes cochées d'après les données, bouton Faire, durées), masquable, définitivement retirée une fois terminée.
+- Démo vendeur : `demoState()` génère « Club Horizon » (Valmont) à graine fixe : 8 personnes dont Directeur Démo, 2 000 clients, 13 mois de saisies, 9 résiliations, 78 impayés ; 1,6 Mo. `?demo=1&guide=1` (bouton « Démo guidée, 7 minutes ») lance le parcours en 8 étapes ; « Réinitialiser la démo » dans le bandeau ; « Créer mon club » efface la démo.
 
 ## Mettre en ligne (vraie adresse)
 

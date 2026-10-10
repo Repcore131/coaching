@@ -1,0 +1,101 @@
+chaîne;ligne;fonction;terme interdit trouvé
+Fit Pulse : le pilotage commercial de nos clubs Fitness Park. Objectifs, classement, rétention, imports Resamania. Rien n'est partagé hors de nos clubs.;19;HTML;Pilotage commercial
+".feed { max-width: 720px; }";366;HTML;Feed
+Pilotage commercial de nos clubs Fitness Park;1518;APP;Pilotage commercial
+feed;1572;hors interface;Feed
+Invités > Contrats;1657;DEFAULT_KPIS;Invités > Contrats
+Check passage du matin;1664;DEFAULT_TASKS;Check passage du matin
+Réponse aux avis Wizville;1667;DEFAULT_TASKS;Wizville
+rookie;1674;LEVELS (code);Rookie
+Rookie;1674;LEVELS;Rookie
+// Recalibre sur un mois parfait (environ 3 500 pts) : Performer des le premier;1675;hors interface;Performer
+// mois complet a 100 %, Legende en un peu plus d'un an d'excellence.;1676;hors interface;Légende
+performer;1677;LEVELS (code);Performer
+Performer;1677;LEVELS;Performer
+warrior;1678;LEVELS (code);Warrior
+Warrior;1678;LEVELS;Warrior
+elite;1679;LEVELS (code);ELITE
+Élite;1679;LEVELS;ELITE
+legende;1680;LEVELS (code);Légende
+Légende;1680;LEVELS;Légende
+Stockage du navigateur plein : exportez une sauvegarde (Mes clubs > Réglages).;1727;localBackend;Mes clubs
+// Bandeau en direct : une saisie d'un collegue arrive pendant qu'on travaille.;2011;hors interface;Bandeau en direct
+// membre : ses saisies, son tableau de bord, classement, retention, chat, feed.;2166;hors interface;Feed
+// >= 75 % leger retard, sinon tres en retard.;2522;hors interface;Très en retard
+Dans le rythme. Plus que … avant l’étape des … %;2759;paceMessage;avant l'étape des
+// defis flash termines;2894;hors interface;Défis flash
+// ── Defis flash ────────────────────────────────────────────────────────────;2920;hors interface;Défis flash
+feed;3169;NAV (code);Feed
+unseenFeed;3176;hors interface;Feed
+feed;3191;shell (code);Feed
+unseenFeed;3191;hors interface;Feed
+// ── Badges de niveau : Rookie, Performer, Warrior, Elite, Legende ──────────;3437;hors interface;Rookie
+// ── Badges de niveau : Rookie, Performer, Warrior, Elite, Legende ──────────;3437;hors interface;Performer
+// ── Badges de niveau : Rookie, Performer, Warrior, Elite, Legende ──────────;3437;hors interface;Warrior
+// ── Badges de niveau : Rookie, Performer, Warrior, Elite, Legende ──────────;3437;hors interface;Légende
+// ── Badges de niveau : Rookie, Performer, Warrior, Elite, Legende ──────────;3437;hors interface;ELITE
+feed;3492;hors interface;Feed
+// ══ FIT PULSE — accueil, tableau de bord, classement, feed, chat, defis ══;3507;hors interface;Feed
+"<div class=""auth""><div class=""auth-card""> … <h1 class=""t-24"">Bienvenue</h1> <p class=""muted"">L’outil de pilotage commercial de <b style=""color:#fff"">nos</b> clubs Fitness Park : objectifs, classement, rétention, imports Resamania. Aucun autre club, aucun réseau : vos chiffres restent chez vous.</p> ";3513;PAGES.render;Pilotage commercial
+"<div class=""dash-top""> <div class=""card hero""> <div class=""hero-ring"">…</div> <div> <div class=""row""><span class=""muted small"">…</span><span class=""spacer""></span><span class=""badge …"">…</span></div> <div class=""big"">…</div> <div><b>…</b> / … pts …</div> <div class=""tiers"">…</div>… <div class=""row"" ";3702;lagOf;Bilan du jour
+"<div class=""alert info"" style=""margin-bottom:14px"">…<div class=""spacer"">Astuce : réorganisez les cartes par glisser-déposer (poignée en haut à droite).</div><button class=""btn ghost sm"" data-act=""closeTip"">…</button></div>";3719;lagOf;glisser-déposer
+"<div class=""grid""> <div class=""card""> <div class=""card-head""><h3>Comparaison … vs …</h3><span class=""spacer""></span> <select class=""input sm"" style=""width:auto"" data-change=""anaKpi"">…</select> …</div> <div class=""row wrap"" style=""gap:22px;margin-bottom:8px""> <div><div class=""muted small"">…, au …</di";3790;caLabels;En léger retard
+"<div class=""grid""> <div class=""card""> <div class=""card-head""><h3>Comparaison … vs …</h3><span class=""spacer""></span> <select class=""input sm"" style=""width:auto"" data-change=""anaKpi"">…</select> …</div> <div class=""row wrap"" style=""gap:22px;margin-bottom:8px""> <div><div class=""muted small"">…, au …</di";3790;caLabels;Très en retard
+// Bilan du jour : la vraie liste des saisies du jour, et un titre qui suit.;3822;hors interface;Bilan du jour
+Mission accomplie;3830;byK;Mission accomplie
+"<div class=""card""><p class=""muted small"" style=""margin-top:0"">Nos clubs uniquement. Score d’un club = moyenne des scores de ses membres actifs sur les KPI obligatoires : un grand club n’est pas avantagé.</p> …</div>";3922;PAGES.render;un grand club n'est pas avantagé
+// ── Feed : uniquement nos clubs ───────────────────────────────────────────;3952;hors interface;Feed
+feed;3953;hors interface;Feed
+Feed;3954;PAGES.feed;Feed
+feedScope;3957;hors interface;Feed
+unseenFeed;3960;hors interface;Feed
+"<div class=""page-head""><div><h1>Feed</h1><p>Les saisies de l’équipe, en direct. Visible uniquement par les membres de nos clubs.</p></div></div> … <div class=""feed"">…</div>";3975;PAGES.render;Feed
+feed;3977;PAGES.render (code);Feed
+Organigramme;4059;T;Organigramme
+Historique des saisies;4059;T;Historique des saisies
+recaps;4059;T (code);Récaps
+Récaps;4059;T;Récaps
+recaps;4062;hors interface;Récaps
+memRecaps;4062;hors interface;Récaps
+Saisir ses KPI, voir son tableau de bord, le classement, le feed, le chat;4087;memOrg;Feed
+Traiter les relances (Action Rétention) et les résiliations;4087;memOrg;Action Rétention
+"<div class=""row wrap"" style=""margin-bottom:12px"">……<span class=""spacer""></span><input class=""input sm"" style=""width:200px"" placeholder=""Rechercher un membre"" data-input=""histQ"" data-focus=""histQ"" value=""…""></div> <div class=""row"" style=""margin:-4px 0 8px""><span class=""spacer""></span><button class=""b";4232;tot;Action Rétention
+Ajoutez votre équipe dans l’organigramme.;4241;tot;Organigramme
+"<label class=""chk-v"" title=""Saisi depuis Action Rétention : à valider""><i class=""hdot h-watch""></i><input type=""checkbox"" data-change=""entryValid"" data-ids=""…""> Validé</label>";4250;tot;Action Rétention
+// gardent leur heure, utile aux defis flash). Une seule saisie d'ajustement par;4263;hors interface;Défis flash
+"<div class=""row wrap"" style=""margin-bottom:12px"">…<span class=""spacer""></span> <button class=""btn sm"" data-act=""yearPlan"">… Proposer les objectifs de l’année</button><button class=""btn sm"" data-act=""copyTargets"" data-mk=""…"">… Reprendre les objectifs de …</button></div> … <div class=""table-wrap""><tab";4287;memTargets;Mes clubs
+// Recaps : le bilan mensuel de chaque membre.;4307;hors interface;Récaps
+// Mois en or, argent, bronze : distinct des niveaux (Rookie a Legende).;4308;hors interface;Rookie
+// Mois en or, argent, bronze : distinct des niveaux (Rookie a Legende).;4308;hors interface;Légende
+memRecaps;4310;hors interface;Récaps
+Check passage du matin;4374;model;Check passage du matin
+"<div class=""grid""> <div class=""card""><h3>Accomplissements</h3><div class=""grid"" style=""grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px""> <div class=""trophy""><div class=""ic"">…</div><b>Régularité : … de suite</b><span class=""muted small"">…</span></div> <div class=""";4402;groups;Accomplissements
+"<div class=""grid""> <div class=""card""><h3>Accomplissements</h3><div class=""grid"" style=""grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px""> <div class=""trophy""><div class=""ic"">…</div><b>Régularité : … de suite</b><span class=""muted small"">…</span></div> <div class=""";4402;groups;Premier 100
+Premier 100 %;4405;groups;Premier 100
+Matching;4709;steps;Matching
+"<div class=""card"">…<div class=""drop"" id=""drop"">…<div class=""title t-18"" style=""margin-top:8px"">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class=""muted small"">.csv, .tsv, .xlsx, .xls (séparateur ; , ou tabulation), tel qu’exporté de Resamania ou enregistré par Excel</div></div><inp";4711;steps;Déposer un fichier CSV
+"<div class=""row wrap"" style=""margin-bottom:12px""><div class=""row"" style=""gap:4px""><button class=""btn icon sm"" data-act=""ui"" data-key=""manYear"" data-val=""…"">…</button><b style=""min-width:60px;text-align:center"">…</b><button class=""btn icon sm"" data-act=""ui"" data-key=""manYear"" data-val=""…"">…</button><";4891;warn;Enregistrement automatique
+// ── Action Retention ──────────────────────────────────────────────────────;4905;hors interface;Action Rétention
+Action Rétention;4907;PAGES.loyalty;Action Rétention
+"<div class=""page-head""><div><h1>Action Rétention</h1><p>… · fins d’engagement à relancer · … en base</p></div><span class=""spacer""></span><button class=""btn primary"" data-act=""loySession"">… Démarrer mes appels</button><button class=""btn"" data-act=""loyHistory"">… Historique</button>…</div> <div class=";4921;alerts;Action Rétention
+// ── Mes clubs ─────────────────────────────────────────────────────────────;5007;hors interface;Mes clubs
+Mes clubs;5009;PAGES.clubs;Mes clubs
+"<div class=""page-head""><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class=""spacer""></span>…</div> ……";5013;PAGES.render;Mes clubs
+"<div class=""row wrap"" style=""margin-bottom:12px""><div class=""row"" style=""gap:4px""><button class=""btn icon sm"" data-act=""ui"" data-key=""baseYear"" data-val=""…"">…</button><b style=""min-width:60px;text-align:center"">…</b><button class=""btn icon sm"" data-act=""ui"" data-key=""baseYear"" data-val=""…"">…</button";5043;clubBase;base nette
+"<div class=""row wrap"" style=""margin-bottom:12px""><div class=""row"" style=""gap:4px""><button class=""btn icon sm"" data-act=""ui"" data-key=""baseYear"" data-val=""…"">…</button><b style=""min-width:60px;text-align:center"">…</b><button class=""btn icon sm"" data-act=""ui"" data-key=""baseYear"" data-val=""…"">…</button";5043;clubBase;clients actifs nets
+Invités > Contrats;5761;cnt;Invités > Contrats
+"<div class=""row wrap"" style=""margin-bottom:14px""><p class=""muted spacer"" style=""margin:0"">Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). …</p>…</div> … <div class=""grid"" style=""grid-template-columns:1.2fr 1fr;margin-bottom:14px""> <div class=""card hero"" style=";6062;months;Action Rétention
+"<div class=""page-head""><div><h1>Mes relances</h1><p>Les dossiers dont vous êtes responsable, et les appels du jour.</p></div></div> <div class=""card"" style=""padding:6px 14px;margin-bottom:14px"">…</div> <div class=""row wrap""><a class=""btn"" href=""#/resiliations"">… Toutes les résiliations</a><a class=""";6731;PAGES.render;Action Rétention
+feed;7210;hors interface;Feed
+feed;7214;hors interface;Feed
+Bilan du jour, à 19 h 30;7614;NOTIF_RULES;Bilan du jour
+Bilan du jour;7669;NOTIF_TITLE;Bilan du jour
+#/feed;7701;mine;Feed
+"<div class=""recap""> <div class=""recap-head""><div><div class=""eyebrow"">…</div><h1>Récapitulatif · …</h1><p class=""muted"">Comparé à ……</p></div><span class=""spacer""></span> <div class=""row wrap no-print"">…<button class=""btn"" data-act=""recapCsv"">… CSV</button><button class=""btn"" data-act=""recapMail"">… ";7881;maxOf;Mes clubs
+// ── Montée en gamme et anciens membres (onglets d'Action Rétention) ───────;8339;hors interface;Action Rétention
+Il faut des offres classées par gamme (Mes clubs > Réglages > Offres et prix) et l’export Vente d’abonnements.;8352;loyUpsell;Mes clubs
+"<h2>Mentions légales</h2> <p class=""muted small"">Loi n° 2004-575 du 21 juin 2004 pour la confiance dans l’économie numérique (LCEN), article 6-III.</p> <h3>Éditeur</h3> <p><b>…</b> (FPNG), exploitant du club …<br>… au capital de …<br>… · TVA intracommunautaire …<br>Siège social : …<br>Club : … · SIR";9858;S_;Pilotage commercial
+"<h2>Conditions d’utilisation et charte des utilisateurs</h2> <p class=""muted small"">Version … du …. Acceptées par chaque utilisateur à sa première connexion.</p> <h3>1. Objet et accès</h3> <p>Fit Pulse sert au pilotage commercial du club : saisies de ventes, objectifs, classement, relances des adhér";9885;S_;Pilotage commercial
+// + contrôle qualité + mes clubs (ces deux onglets pour les managers).;10006;hors interface;Mes clubs
+Mes clubs;10018;L;Mes clubs
+Bilan du jour;10041;PRODUCT_FUNCS;Bilan du jour

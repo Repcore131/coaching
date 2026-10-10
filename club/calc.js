@@ -9,7 +9,7 @@
 //    plafonne a 150 % (un KPI explose ne masque pas trois KPI a zero).
 //  - Rythme attendu = jours ecoules / jours de la periode. Le statut compare
 //    le % au rythme : >= 105 % du rythme en avance, >= 95 % a l'heure,
-//    >= 75 % leger retard, sinon tres en retard.
+//    >= 75 % a surveiller, sinon en retard.
 //  - Egalites au classement : score, puis points, puis ordre alphabetique.
 //  - Objectif du club = somme des objectifs des membres ACTIFS : une
 //    invitation en attente ou un membre archive ne pese pas dans le total.
@@ -70,6 +70,41 @@ function idx() {
 }
 function memo(key, fn) { const I = idx(); if (I.memo.has(key)) return I.memo.get(key); const v = fn(); I.memo.set(key, v); return v; }
 
+// ── Jours ouvrés : jours d'ouverture du club (lundi à samedi par défaut), hors jours fériés ──
+function paquesDe(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return `${y}-${pad(mo)}-${pad(da)}`; }
+// Jours fériés de métropole : 2026 et 2027 en constante, les autres années calculées (Pâques).
+const FERIES_FR = {
+  2026: ['2026-01-01', '2026-04-06', '2026-05-01', '2026-05-08', '2026-05-14', '2026-05-25', '2026-07-14', '2026-08-15', '2026-11-01', '2026-11-11', '2026-12-25'],
+  2027: ['2027-01-01', '2027-03-29', '2027-05-01', '2027-05-08', '2027-05-06', '2027-05-17', '2027-07-14', '2027-08-15', '2027-11-01', '2027-11-11', '2027-12-25'],
+};
+const FERIES = new Map(Object.entries(FERIES_FR).map(([y, l]) => [Number(y), new Set(l)]));
+const feriesDe = y => { if (!FERIES.has(y)) { const p = paquesDe(y); FERIES.set(y, new Set([`${y}-01-01`, addDays(p, 1), `${y}-05-01`, `${y}-05-08`, addDays(p, 39), addDays(p, 50), `${y}-07-14`, `${y}-08-15`, `${y}-11-01`, `${y}-11-11`, `${y}-12-25`])); } return FERIES.get(y); };
+const estFerie = iso => feriesDe(Number(iso.slice(0, 4))).has(iso);
+const joursClub = () => (typeof CLUB !== 'undefined' && CLUB && S && S.clubs && S.clubs[CLUB.id] && Array.isArray(S.clubs[CLUB.id].openDays) && S.clubs[CLUB.id].openDays.length) ? S.clubs[CLUB.id].openDays : [1, 2, 3, 4, 5, 6];
+const estOuvre = iso => joursClub().includes(dateOf(iso).getDay()) && !estFerie(iso);
+function joursOuvres(from, to) { let n = 0; for (let d = from; d <= to; d = addDays(d, 1)) if (estOuvre(d)) n++; return n; }
+// Dernier jour ouvré avant une date (la « veille » d'un lundi est le samedi).
+function veilleOuvree(iso = today()) { let d = addDays(iso, -1); while (!estOuvre(d)) d = addDays(d, -1); return d; }
+
+// ── Impayés récupérés : UN seul calcul ────────────────────────────────────
+// Utilisé par l'accueil, le tableau de bord, le classement, le récap et la page Impayés.
+//  equipe : saisies du KPI « Impayés récupérés » (Réglé à la main + régularisations
+//           importées au canal équipe) : la valeur des primes et du classement ;
+//  autres canaux (client en ligne, prélèvement, automatismes, tiers) : régularisations
+//           importées ; equipe_na : régularisation de l'équipe sans commercial reconnu ;
+//  all    : la somme de tout cela, sans double compte.
+function recoveredParts(clubId, range) {
+  const { from, to } = range; const parts = { equipe: sumRange(clubId, null, 'impayes', from, to) };
+  const rec = typeof recovList === 'function' ? recovList(clubId, from, to) : [];
+  for (const x of rec) { const k = x.canal === 'equipe' ? (x.userId ? null : 'equipe_na') : x.canal || 'autre'; if (k) parts[k] = (parts[k] || 0) + Number(x.amount || 0); }
+  for (const k of Object.keys(parts)) parts[k] = Math.round(parts[k] * 100) / 100;
+  return parts;
+}
+function recoveredFor(clubId, range, canal = 'all', userId = null) {
+  if (userId || canal === 'equipe') return Math.round(sumRange(clubId, userId, 'impayes', range.from, range.to) * 100) / 100;
+  const p = recoveredParts(clubId, range);
+  return canal === 'all' ? Math.round(Object.values(p).reduce((s, v) => s + v, 0) * 100) / 100 : p[canal] || 0;
+}
 function sumRange(clubId, userId, kpiId, from, to) {
   const m = idx().day.get(`${clubId}|${userId || '*'}|${kpiId}`);
   if (!m) return 0;
@@ -202,22 +237,21 @@ function statusOf(pct, exp) {
   if (isReached(pct)) return { key: 'done', label: 'Objectif atteint', cls: 'status-ok' };
   if (exp <= 0) return { key: 'wait', label: 'Pas commencé', cls: '' };
   const ratio = pct / exp;
-  if (ratio >= 1.05) return { key: 'ahead', label: 'Dans le rythme', cls: 'status-ok' };
-  if (ratio >= 0.95) return { key: 'ontime', label: 'Dans le rythme', cls: 'status-ok' };
-  if (ratio >= 0.75) return { key: 'late', label: 'À surveiller', cls: 'status-warn' };
-  return { key: 'verylate', label: 'En retard', cls: 'status-bad' };
+  if (ratio >= 1.05) return { key: 'ahead', label: TXT.rythme.dans, cls: 'status-ok' };
+  if (ratio >= 0.95) return { key: 'ontime', label: TXT.rythme.dans, cls: 'status-ok' };
+  if (ratio >= 0.75) return { key: 'late', label: TXT.rythme.surveiller, cls: 'status-warn' };
+  return { key: 'verylate', label: TXT.rythme.retard, cls: 'status-bad' };
 }
 
-// Phrase de rythme sous chaque carte KPI.
-function paceMessage(row, exp) {
+// Phrase de rythme d'un KPI : écart entre le réalisé et le rythme attendu au jour dit.
+function paceMessage(row, exp, jour = today()) {
   const { k, real, target, pct } = row;
-  if (!target) return 'Pas d’objectif ce mois-ci';
-  if (isReached(pct)) return real - target > 0.004 ? `Objectif atteint, ${fmtV(real - target, k.unit)} au-delà` : 'Objectif atteint';
-  const due = target * exp - real;
-  if (due > 0.0001) return `Plus que ${fmtV(k.unit === 'qty' ? Math.ceil(due) : due, k.unit)} pour être dans le temps`;
-  const next = TIERS.find(t => pct < t);
-  const need = next * target - real;
-  return `Dans le rythme. Plus que ${fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit)} avant l’étape des ${next * 100} %`;
+  if (!target) return TXT.rythme.sansObjectif;
+  if (isReached(pct)) return real - target > 0.004 ? TXT.rythme.auDela(fmtU(real - target, k)) : TXT.rythme.atteint;
+  const ecart = real - target * exp; const arr = v => k.unit === 'qty' ? Math.ceil(v - 1e-9) : Math.round(v);
+  if (ecart < -0.0001) return TXT.rythme.manque(fmtU(arr(-ecart), k), dmy(jour).slice(0, 5));
+  const av = k.unit === 'qty' ? Math.floor(ecart + 1e-9) : Math.round(ecart); if (av >= 1) return TXT.rythme.avance(fmtU(av, k));
+  return TXT.rythme.dans;
 }
 
 // ── Classements ────────────────────────────────────────────────────────────
@@ -293,7 +327,23 @@ function actionPoints(userId, from, to) {
 function pointsSince(userId, sinceMk) {
   return memo(`ps|${userId}|${sinceMk}`, () => { const u = S.users[userId]; if (!u) return 0; let pts = 0; for (const mk of pastMonths().filter(m => m >= sinceMk)) for (const c of u.clubs || []) { const st = statsFor(c, userId, rangeOf('month', mk)); pts += st.earned + overBonus(st); } pts += trophies(userId).filter(t => t.kind === 'flash' && (t.mk || '') >= sinceMk).length * 200; pts += actionPoints(userId, sinceMk + '-01', today()); return Math.round(pts); });
 }
-function levelOf(pts) { let l = LEVELS[0]; for (const x of LEVELS) if (pts >= x.min) l = x; const next = LEVELS[LEVELS.indexOf(l) + 1]; return { ...l, next }; }
+// ── Niveaux : un mois compte quand le score des KPI obligatoires atteint 100 % ──
+// de l'objectif (dans l'un des clubs du membre). Mois clos, et mois en cours dès
+// qu'il passe le seuil. Recrue, Confirmé, Expert, Référent : 0, 2, 6 et 12 mois.
+function moisValides(userId) {
+  return memo(`mv|${userId}`, () => { const u = S.users[userId]; if (!u) return []; return pastMonths().filter(mk => (u.clubs || []).some(c => { const st = statsFor(c, userId, rangeOf('month', mk), { requiredOnly: true }); return st.score != null && st.score >= TXT.zones.seuil - 1e-9; })); });
+}
+function zoneDe(n) { let z = ZONES[0]; for (const x of ZONES) if (n >= x.min) z = x; const i = ZONES.indexOf(z); return { ...z, rang: i + 1, mois: n, next: ZONES[i + 1] || null }; }
+const zoneOf = userId => zoneDe(moisValides(userId).length);
+const levelOf = zoneOf;
+
+// ── Compte à rebours de fin de mois : jours calendaires après aujourd'hui, ──
+// jours ouvrés restants aujourd'hui compris (sans dimanche ni jour férié).
+function compteRebours(iso = today()) {
+  const fin = iso.slice(0, 8) + pad(daysIn(iso.slice(0, 7)));
+  const jours = Math.round((dateOf(fin) - dateOf(iso)) / 864e5); const ouvres = joursOuvres(iso, fin);
+  return { jours, ouvres, texte: TXT.compteur.court(jours, ouvres), titre: TXT.compteur.titre(jours, ouvres, MOIS[dateOf(iso).getMonth()].toLowerCase()) };
+}
 
 function allTrophies() {
   return memo('trophies', () => {
@@ -306,10 +356,13 @@ function allTrophies() {
         const r = rangeOf('month', mk);
         const rk = ranking(c.id, r);
         if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: 'trophy', label: `N°1 du mois ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
+        // Trophées KPI : 2 au plus par vendeur et par mois ; au-delà, le trophée va au suivant s'il dépasse 50 % de son objectif.
+        const parVendeur = {};
         for (const k of kpiList()) {
           if (!k.points) continue;
-          const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0);
-          if (kr[0] && kr[0].score >= 0.5) out.push({ userId: kr[0].u.id, kind: 'month', icon: kpiIconName(k), label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
+          const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0 && x.score >= 0.5);
+          const w = kr.find(x => (parVendeur[x.u.id] || 0) < 2) || kr[0];
+          if (w) { parVendeur[w.u.id] = (parVendeur[w.u.id] || 0) + 1; out.push({ userId: w.u.id, kind: 'month', kpiTrophy: k.id, icon: kpiIconName(k), label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
         }
       }
       // trimestres termines
@@ -325,7 +378,7 @@ function allTrophies() {
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const r = rangeOf('week', w);
         const rk = ranking(c.id, r).filter(x => x.score > 0);
-        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
+        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id }));
       }
     }
     // trophees de comportement et trophees personnels
@@ -335,16 +388,16 @@ function allTrophies() {
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const we = addDays(w, 6);
         const sv = team.map(u => ({ u, n: sumRange(c.id, u.id, 'sauvetage', w, we) })).sort((a, b) => b.n - a.n)[0];
-        if (sv && sv.n >= 1) out.push({ userId: sv.u.id, kind: 'week', icon: 'lifebuoy', label: `Sauveur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+        if (sv && sv.n >= 1) out.push({ userId: sv.u.id, kind: 'week', icon: 'lifebuoy', label: `Sauveur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id });
         const rl = team.map(u => ({ u, n: actionEvents(u.id).filter(e => e.good && isoOf(new Date(e.at)) >= w && isoOf(new Date(e.at)) <= we).length })).sort((a, b) => b.n - a.n)[0];
-        if (rl && rl.n >= 3) out.push({ userId: rl.u.id, kind: 'week', icon: 'phone', label: `Relanceur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+        if (rl && rl.n >= 3) out.push({ userId: rl.u.id, kind: 'week', icon: 'phone', label: `Relanceur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), week: w, clubId: c.id });
       }
       const months = idx().months.filter(m => m < cm).sort();
       const best = {}; let prevScores = null;
       for (const mk of months) {
         const sc = {}; team.forEach(u => { if ((u.clubs || []).includes(c.id)) sc[u.id] = statsFor(c.id, u.id, rangeOf('month', mk), { requiredOnly: true }).score; });
         Object.entries(sc).forEach(([uid, s]) => { if (s == null) return; if (best[uid] != null && s > best[uid] + 1e-9) out.push({ userId: uid, kind: 'perso', icon: 'flag', label: `Record personnel ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); best[uid] = Math.max(best[uid] ?? -1, s); });
-        if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus belle progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
+        if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus forte progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
         prevScores = sc;
         const r0 = dateOf(mk + '-01').getTime(), r1 = dateOf(addMonths(mk, 1) + '-01').getTime();
         const pil = team.map(u => ({ u, n: Object.values(S.loyalty || {}).filter(a => a.userId === u.id && a.at >= r0 && a.at < r1 && (OUTCOMES[a.outcome] || {}).done && !(OUTCOMES[a.outcome] || {}).lost).length })).sort((a, b) => b.n - a.n)[0];
@@ -352,11 +405,13 @@ function allTrophies() {
         team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = manualDays(u.id); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }
-    // defis flash termines
+    // trophées personnels de la semaine, non compétitifs (objectifs.js)
+    if (typeof tropheesPersoSemaine === 'function') for (const c of Object.values(S.clubs)) out.push(...tropheesPersoSemaine(c.id));
+    // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;
       const w = challengeRanking(ch)[0];
-      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `Défi flash : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
+      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `${TXT.mots.sprint} : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), at: ch.end, clubId: ch.clubId });
     }
     return out;
   });
@@ -378,7 +433,7 @@ function accomplishments(userId) {
   return { streak, first100, all100 };
 }
 
-// ── Defis flash ────────────────────────────────────────────────────────────
+// ── Sprints ────────────────────────────────────────────────────────────
 // Classement normalise par l'objectif mensuel : 3 contrats pour un objectif de
 // 10 valent mieux que 4 pour un objectif de 20.
 function challengeRanking(ch) {
@@ -409,7 +464,9 @@ function challengeRanking(ch) {
 // Icone d'un trophee (nom d'icone controle, teinte or/argent/bronze pour le podium).
 const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}" title="${esc(t.label || '')}">${typeof trophyArt === 'function' ? trophyArt(t, /ico-xs/.test(cls) ? 18 : /ico-xl/.test(cls) ? 56 : 32) : ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
 const LOYALTY_TYPES = {
-  suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
+  suivi15: { label: 'Suivi J+15', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15' },
+  suivi30: { label: 'Suivi J+30', icon: 'phone', hint: 'Nouvel adhérent : appel à J+30, même si le J+15 a réussi' },
+  suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Ancien type (J+15 ou J+30 selon l’étape)' },
   renouvellement: { label: 'Fin d’engagement', icon: 'clock', hint: 'Arrive en fin d’engagement : relancer pour le renouvellement' },
   anniversaire: { label: 'Anniversaire', icon: 'cake', hint: 'Anniversaire dans les 7 jours' },
   impaye: { label: 'Impayé', icon: 'coins', hint: 'Solde débiteur' },
@@ -423,8 +480,28 @@ const OUTCOMES = {
   noanswer: { label: 'Pas de réponse', cls: 'warn', done: false },
   message: { label: 'Message laissé', cls: 'warn', done: false },
   lost: { label: 'Ne renouvelle pas', cls: 'bad', done: true, lost: true },
+  smsprog: { label: 'SMS programmé', cls: 'info', done: false, programme: true },
+  rappel: { label: 'À rappeler', cls: 'info', done: false, programme: true },
+  insatisfait: { label: 'Insatisfait, transféré au manager', cls: 'warn', done: true },
+  envoye: { label: 'Message envoyé', cls: 'ok', done: true },
 };
 const MAX_ATTEMPTS = 3;
+const SUIVI_COUPURE = 22; // jours après l'inscription : avant = appel J+15, après = appel J+30
+
+// Valeur en jeu d'une tâche de rétention : montant dû pour un impayé, sinon
+// prix mensuel x mois d'engagement restants (3 mois si la fin est inconnue).
+function moisRestants(end, from = today()) {
+  if (!end || end <= from) return null;
+  const [y1, m1, d1] = from.split('-').map(Number), [y2, m2, d2] = end.split('-').map(Number);
+  return Math.max(1, (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0));
+}
+function valueAtStake(task) {
+  if (!task || !task.client) return 0;
+  if (task.type === 'impaye') return Math.round((Number(task.amount != null ? task.amount : task.client.balance) || 0) * 100) / 100;
+  const prix = typeof mensualite === 'function' ? mensualite(task.client) : Number(task.client.price) || 0;
+  const mois = moisRestants(task.client.end) || 3;
+  return Math.round(prix * mois * 100) / 100;
+}
 
 function loyaltyTasks(clubId) {
   return memo(`loy|${clubId}`, () => {
@@ -436,7 +513,9 @@ function loyaltyTasks(clubId) {
       // anciens clients, perdus, prospects : pas de relance de fidelisation
       if (c.status && /ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status))) continue;
       const cand = [];
-      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
+      // Suivi J+15 puis J+30 : deux appels distincts. Un J+15 réussi ne ferme plus le J+30 (audit 3.6) :
+      // chaque action porte son étape (step) ; les anciennes, sans étape, sont classées par leur date.
+      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age < 28) cand.push({ type: 'suivi15', step: 15, due: addDays(c.start, 15), since: c.start }); else if (age >= 28 && age <= 45) cand.push({ type: 'suivi30', step: 30, due: addDays(c.start, 30), since: c.start }); }
       if (c.end && c.end >= t && c.end <= addDays(t, 45)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -45), amount: typeof mensualite === 'function' ? Math.round(mensualite(c) * dureeVieMois(clubId)) : 0 });
       if (c.birth) {
         const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(-5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(-5)}`;
@@ -445,16 +524,33 @@ function loyaltyTasks(clubId) {
       if (Number(c.balance) > 0) cand.push({ type: 'impaye', due: t, since: c.balanceAt || '2000-01-01', amount: Number(c.balance) });
       if (c.noMandate) cand.push({ type: 'mandat', due: t, since: c.noMandateAt || '2000-01-01' });
       for (const x of cand) {
+        // Impayé : le dossier (dunning) fait foi ; Rétention n'en tient pas un second état.
+        if (x.type === 'impaye') {
+          const H = (c.dunning && c.dunning.history || []).filter(h => h && h.outcome).sort((a, b) => b.at - a.at);
+          const acts = H.map(h => ({ at: h.at, userId: h.by, outcome: h.outcome, note: h.note || '', dun: true }));
+          const st = typeof dunStatus === 'function' ? dunStatus(c) : 'arelancer';
+          const nx = c.dunning && c.dunning.next && c.dunning.next > t ? c.dunning.next : null;
+          const task = { client: c, ...x, acts, failed: typeof dunTentatives === 'function' ? dunTentatives(c).length : 0, state: st === 'perdu' ? 'lost' : 'todo', nextDate: nx, key: `${c.id}|impaye` };
+          task.valeurEnJeu = valueAtStake(task); out.push(task); continue;
+        }
         const sinceTs = dateOf(x.since).getTime();
-        let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs).sort((a, b) => b.at - a.at);
+        const cut = x.step ? dateOf(addDays(c.start, SUIVI_COUPURE)).getTime() : 0;
+        // Suivis : type suivi15 ou suivi30 ; les anciennes actions « suivi » sont classées par leur étape, sinon par leur date.
+        let acts = actions.filter(a => a.clientId === c.id && a.at >= sinceTs && (a.type === x.type || (x.step && a.type === 'suivi' && (a.step ? a.step === x.step : x.step === 15 ? a.at < cut : a.at >= cut)))).sort((a, b) => b.at - a.at);
         // « Relancer » depuis l'onglet Perdus repart de zero
         const re = acts.findIndex(a => a.outcome === 'reopen'); if (re >= 0) acts = acts.slice(0, re);
         const closed = acts.find(a => OUTCOMES[a.outcome] && OUTCOMES[a.outcome].done);
-        const failed = acts.filter(a => !(OUTCOMES[a.outcome] || {}).done).length;
+        // Tentatives : un essai sans contact compte s'il a lieu un autre jour ou 4 h après le précédent.
+        const essais = acts.filter(a => OUTCOMES[a.outcome] && !OUTCOMES[a.outcome].done && !OUTCOMES[a.outcome].programme);
+        const failed = typeof tentativesComptees === 'function' ? tentativesComptees(essais).length : essais.length;
         let state = 'todo';
         if (closed) state = OUTCOMES[closed.outcome].lost ? 'lost' : 'done';
-        else if (failed >= MAX_ATTEMPTS) state = 'lost';
-        out.push({ client: c, ...x, acts, failed, state, key: `${c.id}|${x.type}` });
+        // 3 tentatives : la tâche attend la fenêtre de confirmation (aucun passage en Perdus sans elle).
+        // Prochaine action datée (session d'appels) : la tâche revient à cette date.
+        const nextDate = state === 'todo' && acts[0] && acts[0].next && acts[0].next > t ? acts[0].next : null;
+        const task = { client: c, ...x, acts, failed, state, nextDate, aConfirmer: state === 'todo' && failed >= MAX_ATTEMPTS, key: `${c.id}|${x.type}${x.step && !/^suivi\d/.test(x.type) ? x.step : ''}` };
+        task.valeurEnJeu = valueAtStake(task);
+        out.push(task);
       }
     }
     return out;

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 382 92" width="382" height="92" role="img" aria-label="Fit Pulse">
+<title>Fit Pulse</title>
+<g fill="none" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 4)">
+<g stroke="#0F3B3D"><path d="M10 80V20H44M10 48H38"/><path d="M58 20V80"/><path d="M89 20V80"/><path d="M152 80V20H170a15 15 0 0 1 0 30H152"/><path d="M196 20V62a17 17 0 0 0 34 0V20"/><path d="M246 20V80H276"/><path d="M322 27c-6-7-23-9-29 0s1 17 14 21 18 13 12 22-24 9-30 1"/><path d="M370 20H338V80H370M338 50H364"/></g>
+<g stroke="#0F3B3D"><path d="M72 20H110l7-17 8 31 6-14H152"/></g>
+</g>
+</svg>

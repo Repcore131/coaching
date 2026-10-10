@@ -36,7 +36,7 @@ export function emailMatin(M) {
 <body style="margin:0;background:#F3F3F0;font-family:Arial,Helvetica,sans-serif;color:#0B0B0C">
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center" style="padding:16px 8px">
 <table width="560" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;width:100%;background:#fff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#0B0B0C;padding:16px 18px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:24px;color:#FFD600;letter-spacing:1px">FIT PULSE</div>
+<tr><td style="background:#0B0B0C;padding:16px 18px"><div style="font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:24px;color:#12B3A8;letter-spacing:1px">FIT PULSE</div>
 <div style="color:#fff;font-size:14px;margin-top:2px">KPI du matin · ${E(M.club)} · résultats du ${jj}</div></td></tr>
 <tr><td style="padding:18px 18px 6px" align="center">
 <a href="${E(wa)}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:14px 26px;border-radius:999px">Envoyer sur WhatsApp</a>
