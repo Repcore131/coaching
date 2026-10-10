@@ -174,10 +174,10 @@ function rampChart() {
 function planSalle() {
   // 950 m² répartis en blocs à l'échelle (1 m² ≈ 0,62 px² sur 640 × 960 → on travaille en rangées)
   const rows = [
-    [["Zone force", 140, 1], ["Poids libres", 160, 1], ["Salle de posing", 24, 1]],
-    [["Machines haut du corps", 135, 0], ["Machines bas du corps", 135, 0], ["Coaching fonctionnel", 60, 0]],
-    [["Cardio", 72, 0], ["Vestiaires H", 52, 2], ["Vestiaires F", 52, 2], ["Bureau / atelier", 24, 2]],
-    [["Accueil et shop", 56, 3], ["Détente et bar", 40, 3]],
+    [["Zone force", 140, 1], ["Poids libres", 160, 1]],
+    [["Machines haut du corps", 135, 0], ["Machines bas du corps", 135, 0]],
+    [["Cardio", 72, 0], ["Coaching fonctionnel", 60, 0], ["Vestiaires H", 52, 2], ["Vestiaires F", 52, 2]],
+    [["Accueil et shop", 56, 3], ["Détente et bar", 40, 3], ["Salle de posing", 24, 1], ["Bureau / atelier", 24, 2]],
   ];
   const W = 640, tot = 950, H = 380; let y = 0; const fills = ["#1a1a1a", "#3a3a3a", "#8c8c8c", C.red];
   const out = [];
@@ -192,7 +192,7 @@ function planSalle() {
     y += rh;
   }
   return `<svg viewBox="0 0 ${W} ${H + 24}" width="100%" role="img">${out.join("")}
-  <text x="0" y="${H + 18}" class="ax">↓ Entrée côté accueil · posing en fond de salle · surfaces proportionnelles à l'échelle</text></svg>`;
+  <text x="0" y="${H + 18}" class="ax">Zonage de principe, surfaces proportionnelles à l'échelle (implantation réelle selon le local)</text></svg>`;
 }
 
 function positionMap() {
