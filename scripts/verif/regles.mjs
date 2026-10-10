@@ -334,29 +334,26 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     console.error('\ndroits/ accepte des champs non prevus : une faute de frappe y passerait.');
     process.exit(1);
   }
-  // ── ET LE CODE QUI ECRIT VERIFIE L'ADRESSE, LUI AUSSI ─────────────────
-  // Defense en profondeur : la regle refuserait l'ecriture d'un autre compte,
-  // mais le refus arriverait APRES le geste, sous forme d'un echec reseau
-  // illisible. La garde locale dit non tout de suite, et dit pourquoi.
+  // ── ECRIT PAR LE WORKER SEUL (10/10/2026) ─────────────────────────────
+  // Plus aucun client n'ecrit droits/ (".write": false), createur compris :
+  // l'ecran Acces passe par /fn/droits (cloudflare/src/droits-serveur.js).
+  if(w[1]!=='false'){
+    console.error('\ndroits/ s\'ecrit encore depuis un client ('+w[1].slice(0,60)+') : seul le worker doit l\'ecrire.');
+    process.exit(1);
+  }
   const iw=source.indexOf('async poserDroits(');
-  if(iw<0){
-    console.error('\nposerDroits a disparu : plus rien dans l\'application ne peut ouvrir ni fermer un acces.');
+  if(iw<0||source.slice(iw,iw+1800).indexOf("_callFn('droits'")<0){
+    console.error('\nposerDroits ne passe plus par le serveur (/fn/droits) : l\'ecran Acces ne marcherait plus.');
     process.exit(1);
   }
-  if(source.slice(iw,iw+1800).indexOf('CREATOR_EMAIL')<0){
-    console.error('\nposerDroits ecrit dans droits/ sans verifier l\'adresse du createur.');
-    process.exit(1);
-  }
-  // ET IL N'Y A QUE DEUX CHEMINS VERS CE NOEUD : la lecture et cette ecriture.
-  // Un troisieme est peut-etre legitime — mais il doit passer par la meme
-  // garde, donc par poserDroits, et ce compte le dira.
+  // ET UN SEUL CHEMIN VERS CE NOEUD DANS L'APP : la lecture.
   const chemins=(source.match(/'droits\/'/g)||[]).length;
-  if(chemins!==2){
-    console.error('\n'+chemins+' endroits construisent une adresse droits/ au lieu de 2 '
-      +'(la lecture et poserDroits). Toute ecriture doit passer par poserDroits.');
+  if(chemins!==1){
+    console.error('\n'+chemins+' endroits construisent une adresse droits/ au lieu de 1 (la lecture). '
+      +'Toute ecriture passe par le serveur (/fn/droits).');
     process.exit(1);
   }
-  console.log('droits : lisible par le titulaire, son coach et le createur ; ecrit par le createur seul');
+  console.log('droits : lisible par le titulaire, son coach et le createur ; ecrit par le worker seul');
   // ── RIEN D'AUTRE NE L'OUVRE (27/09/2026) ──────────────────────────────
   // Une regle posee AU-DESSUS (la racine) s'ajouterait a celle de droits/ :
   // Firebase accorde des qu'un ancetre accorde. Et aucune autre regle ne doit

@@ -244,7 +244,9 @@ await test('offre de lancement : un code peut porter « ultime_demi » ; droits.
   assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/LANCE', { nom: 'Julie', avantage: 'ultime_demi', actif: true })).statut, 200);
   assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/TRICHE', { nom: 'X', avantage: 'ultime_gratuit', actif: true })).statut, 401);
   assert.equal((await appel(LEA, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi' })).statut, 401, 'l’athlète ne s’offre pas le demi-tarif');
-  assert.equal((await appel(KEVIN, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 200);
+  // Depuis le 10/10/2026, droits/ n'est écrit que par le worker (compte de service), créateur compris.
+  assert.equal((await appel(KEVIN, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 401);
+  assert.equal((await appel('owner', 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 200);
 });
 await test('activite : chacun écrit SON résumé, personne ne le lit ; stats/retention au créateur seul, badges publics', async () => {
   const r = { v: 1, inscrit: '2026-10-01', sem: '2026-09-28', src: 'amb', debut: [0, 1, 8], jour: '2026-10-20', j30: '0'.repeat(29) + '1',

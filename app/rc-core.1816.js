@@ -67,19 +67,12 @@ const RC_WHATSAPP='33778439205';
 // dessinee en CSS reste le repli permanent pour tout programme sans visuel,
 // et pour celui-ci quand l'image ne se charge pas — hors ligne, avant toute
 // premiere vue.
-// ⚠ CE QUE LE PLAN SPARK NE PERMET PAS, ET QU'IL FAUT SAVOIR AVANT QUE DE
-// L'ARGENT CIRCULE. Sans fonction serveur, RIEN NE VERIFIE UN ACHAT COTE
-// SERVEUR : `programmesAchetes` est un champ du dossier, et les regles RTDB
-// accordent au titulaire l'ecriture sans restriction de champ. Quelqu'un qui
-// sait ouvrir une console peut donc s'octroyer un programme.
-// C'est le MEME arbitrage, deja assume, que pour `status` et `paymentStatus`
-// cote abonnement — voir le « point dur » du §4 de la note de decision
-// economique. Il porte ici sur le prix d'un programme, pas sur un abonnement
-// reconduit. Le controle redeviendra reel le jour d'un passage a Blaze ; d'ici
-// la il est honorifique, et ce commentaire est la pour qu'il ne soit jamais
-// pris pour autre chose.
-// L'ORDRE PAYPAL, LUI, EST REEL : l'argent est bien encaisse, et
-// l'identifiant de transaction est conserve dans le dossier.
+// ⚠ UN ACHAT EST VÉRIFIÉ PAR LE SERVEUR (10/10/2026), sans plan Blaze : le
+// Worker relit la commande chez PayPal et inscrit le programme dans
+// droits/<clé>/programmes, que les règles ferment à tout client. L'app ne lit
+// plus `programmesAchetes` (le dossier) pour dire qu'un programme est acquis :
+// s'y écrire un programme depuis une console n'ouvre rien. Voir
+// cloudflare/src/droits-serveur.js.
 // ══ Y A-T-IL UN SERVEUR ? NON, ET CE N'EST PAS UN OUBLI ═════════════════
 //
 // Decision de Kevin, 24/09/2026 : « je ne payerai pas le plan Blaze ». Les
@@ -439,8 +432,10 @@ function programmeAcquis(u,id){
   if(RC_BOUTIQUE_GRATUITE) return true;
   const p=programmeDuCatalogue(id);
   if(p&&!p.prixCts) return true;          // un programme a zero euro est libre
-  const a=u&&u.programmesAchetes;
-  if(!a||typeof a!=='object'||typeof id!=='string') return false;
+  // ⚠ LU DANS droits/ (10/10/2026), ÉCRIT PAR LE SERVEUR SEUL. Le dossier
+  //   (programmesAchetes) n'est plus qu'un historique : il ne décide rien.
+  const a=programmesServeurDe(u);
+  if(typeof id!=='string') return false;
   if(!Object.prototype.hasOwnProperty.call(a,id)||!a[id]) return false;
   // ⚠ ACQUIS À VIE, SAUF REMBOURSÉ (09/10/2026). L'accès au programme ne
   //   dépend plus d'aucun abonnement ni d'aucune échéance : seul un
@@ -492,13 +487,22 @@ function ficheAchatProgramme(p,ordre,t,source){
  * @returns {string[]}
  */
 function programmesAcquisDe(u){
-  const a=u&&u.programmesAchetes;
-  if(!a||typeof a!=='object') return [];
+  const a=programmesServeurDe(u);
   return Object.keys(a).filter(id=>{
     if(!programmeAcquis(u,id)) return false;
     const p=programmeDuCatalogue(id);
     return !!(p&&!p.service);
   });
+}
+/**
+ * PURE. Les programmes que le serveur atteste (droits/<clé>/programmes), {} sinon.
+ * @param {any} u
+ * @returns {Object<string,{le:number,prixCts:number,source:string,rembourseLe?:number}>}
+ */
+function programmesServeurDe(u){
+  let d=null; try{ d=droitsDe(u); }catch(e){ d=null; }
+  const a=d&&d.etat==='serveur'?d.programmes:null;
+  return (a&&typeof a==='object')?a:{};
 }
 /**
  * PURE. Ce que l'achat donne, écrit AVANT de payer.
@@ -2119,31 +2123,37 @@ function essaiOuvrir(u,bonusJours){
   const b=Math.max(0,Math.min(60,Math.round(Number(bonusJours)||0)));
   u.essai={ouvertLe:t,finit:t+(ESSAI_JOURS+b)*86400000};
   if(b) u.essai.bonusParrainage=b;
-  // LE SERVEUR SERAIT PREVENU, S'IL Y EN AVAIT UN. Il n'y en a pas : voir
-  // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
-  // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
-  // lecture de droits/, sans qu'une ligne d'interface change.
-  try{
-    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn)
-      CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{});
-  }catch(e){}
+  // ⚠ CE DOSSIER N'OUVRE RIEN (10/10/2026). Il garde la trace de la demande ;
+  //   l'essai, c'est le serveur qui l'ouvre (essaiDemanderAuServeur), une fois
+  //   dans la vie du compte, dans droits/ — que le titulaire ne peut pas écrire.
   return true;
+}
+// LE SERVEUR OUVRE L'ESSAI (/fn/droits, action « essai ») et rend droits/,
+// posé aussitôt dans le cache : l'accueil s'ouvre sans attendre la synchro.
+// Rend true si le serveur a répondu avec un essai.
+async function essaiDemanderAuServeur(u){
+  const c=u||currentUser;
+  if(!c||!c.email||c.role==='coach') return false;
+  let r=null;
+  try{ r=await CLOUD._callFn('droits',{action:'essai'}); }catch(e){ r=null; }
+  if(!r||!r.ok||!r.droits) return false;
+  _droitsPoser(c.email,r.droits,false);
+  return Number(r.droits.essaiFinit)>0;
 }
 // PURE. La fin de l'essai, en millisecondes, ou 0 quand il n'y en a pas.
 //
 // L'ORDRE COMPTE : le serveur, puis la date ecrite a l'ouverture, puis la
 // duree recalculee depuis `ouvertLe` — ce dernier repli sert aux dossiers
 // ouverts AVANT ce lot, qui portent `seancesAuDebut` et aucune fin.
+// ⚠ LE SERVEUR SEUL (10/10/2026) : droits/<clé>/essaiFinit, écrit par le
+//   Worker. essai.finit du dossier, qu'une console réécrivait, n'est plus lu.
 function essaiFin(u){
-  if(!u||!u.essai||typeof u.essai!=='object') return 0;
+  if(!u) return 0;
   try{
     const d=droitsDe(u);
     if(d.etat==='serveur'&&d.essaiFinit>0) return d.essaiFinit;
   }catch(e){}
-  const f=Number(u.essai.finit)||0;
-  if(f>0) return f;
-  const o=Number(u.essai.ouvertLe)||0;
-  return o?(o+ESSAI_JOURS*86400000):0;
+  return 0;
 }
 // PURE. Les jours qu'il reste, arrondis au jour entamé, ou NULL quand ce
 // compte n'a jamais eu d'essai — zero veut dire « fini », null veut dire
@@ -2195,8 +2205,10 @@ function doitVoirLePaywall(u){
   // UN ABONNEMENT QUE LE SERVEUR NE CONFIRME PAS n'évite plus l'écran de
   // paiement : s'écrire AUTONOMIE_PREMIUM dans son dossier ne suffit plus
   // quand droits/ a été lu (voir _palierHerite).
-  if(u.status==='AUTONOMIE_PREMIUM'&&droitsDe(u).etat!=='inconnu'&&palierDe(u)==='aucun') return !essaiActif(u);
-  if((u.status||'FREE')!=='FREE') return false;
+  // 10/10/2026 : le dossier ne dit plus rien de payé. Un suivi coach échu a
+  // son propre écran (loadAccessGate), pas le paywall.
+  if(u.status==='COACHING_SUIVI') return false;
+  if(palierDe(u)!=='aucun') return false;
   return !essaiActif(u);
 }
 // PURE. OU L'ON ATTERRIT QUAND L'ACCES EST FERME (lot 6). Celui qui a vecu le
@@ -4904,8 +4916,8 @@ const CLOUD={
   // cette signature n'existe pas.
   //
   // ⚠ 27/09/2026 : LE SERVEUR LÉGER RÉPOND À CES APPELS (/fn/<nom>, même
-  //   protocole, jeton Firebase vérifié). Seul cloudinaryDestroy y est ;
-  //   ouvrirEssai et verifierAchatProgramme restent coupés par FONCTIONS_SERVEUR.
+  //   protocole, jeton Firebase vérifié). ouvrirEssai et verifierAchatProgramme
+  //   y sont devenus /fn/droits (10/10/2026, droits-serveur.js).
   get _functionsBase(){ return SERVEUR_LEGER?SERVEUR_LEGER_URL+'/fn':'https://europe-west1-repcore-sync.cloudfunctions.net'; },
   async _callFn(name,data){
     const token=await this._getToken();
@@ -5980,20 +5992,15 @@ const CLOUD={
       return {ok:false,raison:'reserve au createur'};
     if(champs!==null&&(!champs||typeof champs!=='object'))
       return {ok:false,raison:'rien a ecrire'};
-    const base=this._fbUrl.replace('users.json','droits/'+mail.replace(/[.]/g,',')+'.json');
-    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),8000);
+    // ⚠ PAR LE SERVEUR (10/10/2026) : droits/ est fermé à tout client, créateur
+    //   compris. /fn/droits (« poser ») vérifie l'adresse du créateur et ne
+    //   touche qu'aux champs d'accès — jamais à l'essai ni aux programmes.
+    //   « Rouvrir » (null) retire ces champs au lieu d'effacer le nœud.
     try{
-      const token=await this._getToken();
-      if(!token) return {ok:false,raison:'non authentifie'};
-      const corps=(champs===null)?'':JSON.stringify(champs);
-      const r=await fetch(base+'?auth='+token,(champs===null)
-        ?{method:'DELETE',signal:ctrl.signal}
-        :{method:'PATCH',headers:{'Content-Type':'application/json'},
-          body:corps,signal:ctrl.signal});
-      try{ _quotaCompter('out',corps.length+base.length); }catch(e){}
-      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
-      return {ok:true};
-    }catch(e){ return {ok:false,raison:'reseau'}; }
+      const r=await this._callFn('droits',{action:'poser',email:mail,champs});
+      if(!r||!r.ok) return {ok:false,raison:(r&&r.raison)||'refus'};
+      return {ok:true,droits:r.droits||null};
+    }catch(e){ return {ok:false,raison:e&&e.statut?('HTTP '+e.statut):'reseau'}; }
   },
   // `opts.etag` (30/09/2026) : demande l'ETag du nœud (en-tête
   // X-Firebase-ETag) et rend {doc, etag} — doc null pour un nœud vide, etag
@@ -9104,22 +9111,12 @@ function routeUser(){
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
     setTimeout(()=>{ try{ if(estAdminAmbassadeurs()) ouvrirAmbassadeurs(); }catch(e){} },1000);}
 }
-// ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
-// paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
-// database.rules.json autorise le titulaire du nœud à y écrire n'importe quelle
-// valeur. La seule barrière est l'interface.
-// Ne pas retirer les contrôles client en croyant qu'un filet serveur existe.
-// Condition de réouverture : premier coach affilié payant, ou passage au plan Blaze.
-//
-// Ce que dit exactement database.rules.json aujourd'hui : sous users/$emailKey,
-// .write est accordé au titulaire du nœud (et à son coach), sans aucune
-// restriction de champ — le seul .validate du fichier porte sur coachEmailKey.
-// Le commentaire précédent affirmait l'inverse : « champs contrôlés
-// exclusivement par le serveur (Cloud Functions Admin SDK) », « les règles RTDB
-// bloquent toute tentative de self-upgrade ». Les Cloud Functions ne tournent
-// plus depuis le passage en 100 % client, et cette règle n'a jamais existé.
-// Un commentaire faux est pire qu'absent : il invite à retirer le seul garde
-// qui reste.
+// ⚠ LE DOSSIER N'OUVRE PLUS RIEN DE PAYÉ (10/10/2026). status, paymentStatus,
+//   paypalSubscriptionId, essai et programmesAchetes restent écrits par leur
+//   titulaire (database.rules.json ne restreint pas les champs de users/) :
+//   ils ne servent plus qu'à l'affichage et à l'historique. L'essai,
+//   l'abonnement et les programmes se lisent dans droits/, écrit par le
+//   Worker seul (cloudflare/src/droits-serveur.js) et fermé à tout client.
 // ══ LES DROITS VIENNENT DU SERVEUR (build 1425, lot 0) ═══════════════════════════════
 //
 // CE QUI CHANGE. Le palier d'un athlete ne se lit plus dans son dossier —
@@ -9192,31 +9189,18 @@ function droitsDe(u){
     avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
     // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
     // d'un code ambassadeur (écrite par le serveur léger).
-    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':''};
+    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':'',
+    // Les programmes achetés, à vie (10/10/2026), et le passage du rattrapage.
+    programmes:(d.programmes&&typeof d.programmes==='object')?d.programmes:{},
+    rattrapeLe:Number(d.rattrapeLe)||0};
 }
-// ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
+// UN NŒUD VIDE OU ILLISIBLE N'OUVRE RIEN DE PAYÉ (10/10/2026) : le compte
+// d'avant est rattrapé par le serveur à la première session (droitsRattraper),
+// qui relit son abonnement et ses achats chez PayPal. Seul le suivi d'un coach
+// passe encore par le dossier (_palierHerite).
 //
-//   Le lot 0 faisait de droits/ la source unique : vide valait « aucun droit »,
-//   parce qu'une Cloud Function allait le remplir a chaque paiement. Kevin a
-//   tranche : pas de plan Blaze, donc pas de fonctions, donc PERSONNE n'ecrira
-//   jamais ce noeud. Garder cette lecture-la aurait coupe l'acces a TOUS les
-//   abonnes et a TOUS les athletes suivis le jour ou les regles seraient
-//   publiees — la lecture aurait abouti, rendu null, et ferme la porte.
-//
-//   CE QUI DECIDE DONC :
-//     droits/ PORTE QUELQUE CHOSE  → il decide, et il prime sur le dossier.
-//     droits/ VIDE OU ILLISIBLE    → le dossier decide, comme avant le lot 0.
-//
-//   CE QU'ON GARDE EN ECHANGE : le noeud s'ecrit depuis la CONSOLE FIREBASE,
-//   qui passe par l'Admin SDK et ignore les regles. Un acces pose la ne se
-//   trafique pas depuis un navigateur, contrairement au dossier. Pour ouvrir
-//   Ultime trois mois a quelqu'un qui a paye hors de l'application :
-//     droits/<adresse avec des virgules>/palier   = "ultime"
-//     droits/<adresse avec des virgules>/echeance = <millisecondes>
-//     droits/<adresse avec des virgules>/source   = "main"
-//   Pour le refermer, remettre palier a "aucun" : la, le noeud PORTE quelque
-//   chose, et il prime.
-//
+// Pour ouvrir un accès à la main : l'écran Accès du créateur (/fn/droits,
+// « poser »). La console Firebase marche aussi : elle passe outre les règles.
 // PURE (elle ne lit que le dossier et le cache local).
 function palierDe(u){
   if(!u) return 'aucun';
@@ -9234,54 +9218,27 @@ function palierDe(u){
     // LE SUIVI D'UN COACH NE PASSE PAS PAR PayPal : un ancien abonné, suivi
     // depuis, garde son suivi même si droits/ ne porte que l'abonnement. Pas
     // quand droits/ a été posé À LA MAIN : une fermeture du créateur tient.
-    const auto=(d.source==='paypal'||d.source==='parrainage');
+    // ⚠ TOUTE SOURCE SAUF LA MAIN (10/10/2026) : essai, rattrapage et programme
+    //   écrivent aussi droits/, et ne doivent pas couper le suivi d'un coach.
+    const auto=(d.source!=='main'&&d.source!=='suspension');
     const h=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
     return PALIERS_ORDRE.indexOf(h)>PALIERS_ORDRE.indexOf(p2)?h:p2;
   }
   return _palierHerite(u,d.etat);
 }
-// LE MODELE DU DOSSIER, ET IL N'EST PLUS EN SURSIS. Il servait « le temps que
-// les regles soient deployees et que la migration ait tourne » : sans plan
-// Blaze, cette migration ne tournera pas, et c'est lui qui decide pour tout le
-// monde sauf pour les acces poses a la main dans droits/.
-//
-// ⚠ IL NE PROTEGE DE RIEN, ET ON NE FAIT PAS SEMBLANT. database.rules.json
-//   accorde au titulaire l'ecriture sans restriction de champ sur son propre
-//   dossier : qui sait ouvrir une console de navigateur peut s'ecrire
-//   status:'AUTONOMIE_PREMIUM'. C'est le meme arbitrage qu'avant le lot 0,
-//   assume, et la seule barriere reelle reste droits/, ecrit a la main.
-//
-// ⚠ DEPUIS LE 27/09/2026, LE SERVEUR LÉGER ÉCRIT droits/ À CHAQUE PAIEMENT.
-//   Ce que le dossier dit avoir PAYÉ (abonnement, programme) ne compte donc
-//   plus dès que droits/ a pu être lu : un nœud vide veut dire « rien de payé
-//   côté serveur », et effacer accessExpiry ou s'écrire AUTONOMIE_PREMIUM dans
-//   son propre dossier n'ouvre plus rien. Deux exceptions, le temps de la
-//   transition :
-//     · droits/ jamais lu (`etat` 'inconnu' : hors ligne à la première
-//       ouverture, règles pas encore publiées) : l'ancien modèle, entier ;
-//     · un paiement fait SUR CET APPAREIL il y a moins de 72 h
-//       (paiementRecent) : le webhook de PayPal n'a peut-être pas encore
-//       écrit droits/, et quelqu'un qui vient de payer ne doit pas trouver
-//       la porte fermée.
-//   Le suivi par un coach (COACHING_SUIVI) n'est pas un paiement PayPal : il
-//   reste lu ici.
+// ⚠ 10/10/2026 : LE DOSSIER NE DIT PLUS RIEN DE PAYÉ. L'abonnement et le
+//   programme ne s'ouvrent que par droits/ (écrit par le Worker seul, les
+//   règles le ferment à tout client) ; un compte d'avant passe par le
+//   rattrapage (/fn/droits, « rattraper ») qui relit tout chez PayPal. Plus de
+//   bascule (reglages_publics/droitsServeur) ni de sursis de 72 h après un
+//   paiement : juste après avoir payé, l'app demande au serveur de confirmer.
+//   RESTE LU ICI : le suivi par un coach (status COACHING_SUIVI, posé par le
+//   code d'accès du coach) — un autre chemin, qui n'est pas un paiement.
 function _palierHerite(u,etat){
   const s=String((u&&u.status)||'FREE');
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
-  const payeCru=(etat!=='absent')||!droitsServeurActif()||paiementRecent(u);
-  if(!payeCru) return 'aucun';
-  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
-    // LA FORMULE PAYEE, quand le dossier la porte. Les dossiers ouverts avant
-    // le 24/09/2026 n'en ont pas : ils valent Essentielle, qui est ce qu'ils
-    // ont effectivement paye — Ultime n'etait pas en vente.
-    const f=String(((u.abonnement||{}).formule)||'');
-    return (f==='ultime')?'ultime':'essentielle';
-  }
-  // UN PROGRAMME ACHETE OUVRE ULTIME LE TEMPS DE SON PROGRAMME (lot 8). Meme
-  // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
-  if(programmeOuvreUltime(u)) return 'ultime';
   return 'aucun';
 }
 // ⚠ LA BASCULE NE SE FAIT QU'UNE FOIS LE RATTRAPAGE PASSÉ. Tant que le script
@@ -9295,6 +9252,8 @@ function _palierHerite(u,etat){
 //   donc aucun téléphone. Il est maintenant relu à chaque session, et retiré
 //   quand le serveur RÉPOND qu'il n'existe plus. Une lecture qui échoue ne
 //   change rien : hors ligne, l'appareil garde ce qu'il savait.
+// ⚠ PLUS LU POUR DÉCIDER (10/10/2026) : la bascule est faite compte par compte
+//   par le rattrapage du serveur. Gardé pour l'écran d'administration.
 const DROITS_SERVEUR_CLE='rc_droits_serveur';
 function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
 let _droitsServeurLu=false;
@@ -9370,18 +9329,6 @@ function paiementRecent(u,maintenant){
     return !!(o&&u&&u.email&&o.email===String(u.email).toLowerCase()&&t-Number(o.le)>=0&&t-Number(o.le)<PAIEMENT_RECENT_MS);
   }catch(e){ return false; }
 }
-// PURE. Un programme achete, encore dans sa fenetre. Rend false sur un dossier
-// sans achat, ce qui est le cas de presque tout le monde.
-function programmeOuvreUltime(u,maintenant){
-  const a=u&&u.programmesAchetes;
-  if(!a||typeof a!=='object') return false;
-  const t=Number(maintenant)||Date.now();
-  for(const k of Object.keys(a)){
-    const x=a[k];
-    if(x&&Number(x.ouvertJusqu)>t) return true;
-  }
-  return false;
-}
 // PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
 function echeanceDe(u){
   const d=droitsDe(u);
@@ -9401,8 +9348,24 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  // UN COMPTE D'AVANT LE 10/10/2026 (droits/ sans rattrapeLe) : le serveur
+  // recopie ce que le dossier affirmait — essai, programmes, abonnement —
+  // après l'avoir vérifié. Une fois par session ; le serveur, lui, ne le
+  // refait plus dès que rattrapeLe est posé.
+  if(cible===currentUser&&!(r.droits&&Number(r.droits.rattrapeLe)>0)) await droitsRattraper(cible);
   // Le serveur vient de répondre : c'est le moment de compter (étape 1c).
   if(cible===currentUser) droitsEcartsCompter(cible);
+  return true;
+}
+let _droitsRattrapes=false;
+async function droitsRattraper(u,abo){
+  const c=u||currentUser;
+  if(!c||!c.email||(_droitsRattrapes&&!abo)) return false;
+  _droitsRattrapes=true;
+  let r=null;
+  try{ r=await CLOUD._callFn('droits',abo?{action:'rattraper',abo:String(abo)}:{action:'rattraper'}); }catch(e){ r=null; }
+  if(!r||!r.ok||!r.droits) return false;
+  _droitsPoser(c.email,r.droits,false);
   return true;
 }
 // ══════════════════════════════════════════════════════════════════════════
@@ -9585,7 +9548,8 @@ async function accesAgir(action,email,opt){
     return false; }
   // LE CACHE SUIT L’ÉCRITURE. Sans ça, l’écran affichait encore l’état d’avant
   // et on cliquait deux fois, en croyant que le premier clic avait raté.
-  if(champs===null) _droitsPoser(mail,null,true);
+  if(r.droits) _droitsPoser(mail,r.droits,false);
+  else if(champs===null) _droitsPoser(mail,null,true);
   else _droitsPoser(mail,Object.assign({},lu.droits||{},champs),false);
   const apres=accesEtatPhrase(droitsDe({email:mail}));
   toast(mail+' : '+apres.phrase.toLowerCase(),'var(--green)');
@@ -9832,7 +9796,6 @@ function accueilChoisir(cle,annuel){
 }
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
-  const s=u.status||'FREE';
   // ⚠ L'ESSAI PASSE PAR LA MEME PORTE QUE TOUT LE RESTE, et c'est voulu :
   // checkAccess est le seul endroit du fichier qui dise oui ou non a un
   // athlete. Un essai branche ailleurs — un garde dans go(), une exception
@@ -9845,23 +9808,12 @@ function checkAccess(u){
   // Un droit pose par le serveur ouvre la porte, quoi que dise le dossier ;
   // un droit expire la ferme, quoi que dise le dossier. L'essai reste lu ici
   // aussi : il n'ouvre rien d'autre qu'une porte, et c'est la meme porte.
-  const d=droitsDe(u);
-  if(d.etat==='serveur'){
-    const p=palierDe(u);
-    if(p!=='aucun') return true;
-    return essaiActif(u);
-  }
-  // ⚠ 'absent' ET 'inconnu' SE REJOIGNENT (24/09/2026). Un noeud vide ne veut
-  //   pas dire « aucun droit » : il veut dire que personne n'y a rien ecrit,
-  //   et sans fonctions personne n'y ecrira. Le dossier decide, exactement
-  //   comme avant le lot 0, et ON NE COUPE PERSONNE SUR UN SILENCE.
-  if(s==='FREE') return essaiActif(u);
-  if(s==='COACHING_SUIVI'){
-    if(!u.accessExpiry) return true;
-    return Date.now()<u.accessExpiry;
-  }
-  if(s==='AUTONOMIE_PREMIUM') return u.paymentStatus==='active';
-  return false;
+  // ⚠ 10/10/2026 : UNE SEULE SOURCE, droits/ (écrit par le serveur seul).
+  //   palierDe ne lit plus rien de payé dans le dossier ; l'essai se lit dans
+  //   droits/ aussi. Seul le suivi d'un coach (COACHING_SUIVI) vient encore du
+  //   dossier, par _palierHerite.
+  if(palierDe(u)!=='aucun') return true;
+  return essaiActif(u);
 }
 function loadAccessGate(){
   const u=currentUser;
@@ -13051,6 +13003,9 @@ async function doRegister(){
       // laisserait un essai dormant a consommer le jour ou le code expire.
       if(essaiOuvrir(currentUser,_bonusParrain)){
         saveUser();
+        // Le serveur ouvre l'essai (droits/) : sans sa réponse, rien n'est ouvert.
+        if(!await essaiDemanderAuServeur(currentUser))
+          toast('Ton essai s’ouvre dès que le serveur répond : vérifie ta connexion.','var(--orange)',5000);
         // L'accueil, pas l'ecran de code : l'essai est ouvert, il y a donc
         // quelque chose a faire. La promesse est rappelee a l'arrivee.
         routeUser();
@@ -23473,10 +23428,10 @@ function activiteResume(u,maintenant){
   return {v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
     seance1:ses.length>0,
     parcours:!!(p.fini&&!p.existant),
-    finEssai:Number(u.essai&&u.essai.finit)||0,
+    finEssai:essaiFin(u)||0,
     // LE RÉSUMÉ DE L'ESSAI (10/10/2026) : quatre nombres, pour la notification
     // de fin d'essai du serveur (« 12 séances, 3 records : on continue ? »).
-    ...((()=>{ if(!(Number(u.essai&&u.essai.finit)>0)) return {};
+    ...((()=>{ if(!(essaiFin(u)>0)) return {};
       const e=essaiResumeDe(u); return {essai:{s:e.seances,t:e.tonnage,r:e.records,w:e.semaines}}; })()),
     payant:!!((u.origine&&u.origine.payeLe)||u.paypalSubscriptionId),
     lev:{parcours:!!(p.fini&&!p.existant&&Number(p.fini)<=fin30),checkin:ciTot>=3,notif,
@@ -48309,17 +48264,36 @@ function _enregistrerAchat(id,ordre){
   //   ⚠ 30 JOURS, PLUS TROIS MOIS (09/10/2026), et le programme À VIE : voir
   //   « UN PROGRAMME DE LA BOUTIQUE » près de programmeAcquis. Le worker écrit
   //   la même fiche de son côté (champ par champ, sans effacer celle-ci).
-  paiementRecentNoter(currentUser,'programme');
+  // L'HISTORIQUE, dans le dossier. Il ne décide plus rien (10/10/2026).
   currentUser.programmesAchetes[p.id]=ficheAchatProgramme(p,ordre,t,'paypal');
   saveUser();
-  // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
-  // a la premiere lecture de droits/.
-  try{
-    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn&&ordre)
-      CLOUD._callFn('verifierAchatProgramme',{orderId:String(ordre),programmeId:p.id})
-        .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
-  }catch(e){}
   fermerAchatProgramme(true);
+  // LE SERVEUR VÉRIFIE LA COMMANDE CHEZ PayPal, puis inscrit le programme dans
+  // droits/ ; c'est seulement alors qu'il s'applique. Sans réponse, le webhook
+  // de PayPal l'inscrira dans les minutes qui viennent.
+  _verifierAchatPuisAppliquer(p,ordre);
+  return true;
+}
+async function _verifierAchatPuisAppliquer(p,ordre){
+  toast('Vérification du paiement…');
+  let ok=false;
+  for(let i=0;i<3&&!ok;i++){
+    if(i) await new Promise(r=>setTimeout(r,2500));
+    let r=null;
+    try{ r=await CLOUD._callFn('droits',{action:'verifierAchat',ordre:String(ordre||''),programme:p.id}); }catch(e){ r=null; }
+    if(r&&r.droits) _droitsPoser(currentUser.email,r.droits,false);
+    ok=!!(r&&r.ok);
+    if(r&&!r.ok&&['autre_compte','montant','format','rembourse','compte'].indexOf(r.raison)>=0) break;
+  }
+  if(!ok){
+    toast('Paiement reçu. Ton programme s’ouvre dès que PayPal le confirme, d’ici quelques minutes.','var(--orange)',6000);
+    try{ _rendreBoutique(); }catch(e){}
+    return false;
+  }
+  return _apresAchatVerifie(p,ordre);
+}
+function _apresAchatVerifie(p,ordre){
+  const t=Date.now();
   // UN SERVICE NE S'INSTALLE PAS DANS LES SEANCES (lot 9) : il n'a rien a y
   // ecrire, et « Programme applique » serait un mensonge poli.
   if(p.service){
@@ -48400,7 +48374,8 @@ async function appliquerProgramme(id){
   // « Appliquer » que sur un programme acquis, mais un appel direct
   // contournerait l'affichage — c'est la meme discipline que la case de
   // renonciation, verrouillee deux fois elle aussi.
-  if(!programmeAcquis(currentUser,id)){
+  // Le créateur applique son propre catalogue sans l'acheter (offrirProgramme).
+  if(!programmeAcquis(currentUser,id)&&!(currentUser&&currentUser.email===CREATOR_EMAIL)){
     ouvrirAchatProgramme(id); return false;
   }
   let g=_genreProgramme(currentUser);
@@ -132449,6 +132424,9 @@ function renderPaypalButton(planId,coachId){
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.
         abonnementSignaler(data.subscriptionID,true);
+        // LE SERVEUR CONFIRME (relit l'abonnement chez PayPal) et ouvre droits/ :
+        // c'est lui qui décide, plus le statut écrit ci-dessus.
+        if(!_estCoach){ try{ await droitsRattraper(currentUser,data.subscriptionID); }catch(e){} }
         try{ attribPremierPaiement(currentUser); }catch(e){}
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;

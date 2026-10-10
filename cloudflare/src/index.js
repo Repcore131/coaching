@@ -26,6 +26,7 @@ import { creerBase } from './base.js';
 import { lireCompteService, jetonCompteService } from './google.js';
 import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
+import { creerDroits } from './droits-serveur.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
@@ -51,7 +52,9 @@ const abonnement = (req, ctx) => ctx.M.paypal.appelAbonnement(req);
 const email = (req, ctx) => ctx.M.emails.appel(req);
 // coaching : les formules de Kevin, commande et capture contrôlées (coaching.js, via paypal.js).
 const coaching = (req, ctx) => ctx.M.paypal.appelCoaching(req);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement, email, coaching };
+// /fn/droits : l'essai, le rattrapage, l'achat vérifié, l'écran Accès (droits-serveur.js).
+const droits = (req, ctx) => creerDroits({ db: ctx.db, M: ctx.M, paypal: ctx.M.paypal }).appel(req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement, email, coaching, droits };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {

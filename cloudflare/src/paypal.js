@@ -34,6 +34,7 @@ import { avisDu, texteAvis } from './renouvellement.js';
 import { envoyerModele, lienDesinscription } from './brevo.js';
 import * as AL from './alternatives.js';
 import TARIFS from '../../tarifs.json' with { type: 'json' };
+import { creerDroits } from './droits-serveur.js';
 
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
@@ -181,6 +182,8 @@ export function creerPaypal(ctx) {
   // LE PAIEMENT DIRECT AU COACH : ses commandes portent un custom_id à TROIS
   // segments (« <coach>|<athlète>|<formule> ») et suivent leur propre chemin.
   const PC = creerPaiementsCoach(ctx);
+  // droits/<clé>/programmes : les achats à vie, écrits par ce serveur seul (droits-serveur.js).
+  const D = creerDroits({ db, M, maintenant: now });
   // LES FORMULES DE KEVIN (coaching.js) : custom_id à QUATRE segments
   // (« ck|<athlète>|<formule>|<entrée> »), argent sur le compte de l'app.
   // Le premier paiement et le registre des transactions sont ceux d'ici.
@@ -378,22 +381,82 @@ export function creerPaypal(ctx) {
     // ET L'ACHAT EST ENREGISTRÉ À VIE dans le dossier, champ par champ : la
     // date du premier enregistrement (celui de l'app, s'il est passé avant)
     // n'est pas réécrite, et rien de ce que l'app y a mis n'est effacé.
-    if (valide) {
-      const t = now();
-      const fin = t + PROGRAMME_MS;
-      await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
-        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, fin) }));
-      const b = 'users/' + cle + '/programmesAchetes/' + prog + '/';
-      const deja = await lire('users/' + cle + '/programmesAchetes/' + prog);
-      const maj = { [b + 'prixCts']: Number(prixCts), [b + 'source']: 'paypal', [b + 'ordre']: net(idCommande),
-        [b + 'ouvertJusqu']: Math.max(Number(deja && deja.ouvertJusqu) || 0, fin), ['users/' + cle + '/updatedAt']: t };
-      if (!(deja && (Number(deja.date) > 0 || Number(deja.le) > 0))) maj[b + 'date'] = t;
-      await db.ref().update(maj);
-    }
+    if (valide) await enregistrerProgrammePaye(cle, prog, Number(prixCts), idCommande);
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
     if (!valide) return 'achat_non_compte';
     return premier ? 'premier_paiement' : 'paiement';
+  }
+
+  // LE PROGRAMME PAYÉ : à vie dans droits/<clé>/programmes/<id> (ce que l'app
+  // lit), 30 jours d'Ultime par-dessus l'abonnement (ultimeJusqu, sans
+  // raccourcir une échéance plus lointaine), et la fiche du dossier, champ par
+  // champ, pour l'historique et les versions d'avant de l'app. Idempotent :
+  // le webhook et la vérification demandée par l'app peuvent passer tous deux.
+  async function enregistrerProgrammePaye(cle, prog, prixCts, idCommande, o) {
+    const opt = o || {};
+    const t = now();
+    const le = Number(opt.le) > 0 && Number(opt.le) <= t ? Number(opt.le) : t;
+    await D.enregistrerProgramme(cle, prog, { le, prixCts, source: opt.rattrapage ? 'rattrapage' : 'paypal', ordre: net(idCommande) });
+    // Un achat rattrapé ne rouvre pas 30 jours : ils comptent depuis l'achat.
+    const fin = le + PROGRAMME_MS;
+    if (fin > t) await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
+      ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, fin) }));
+    if (opt.rattrapage) return;
+    const b = 'users/' + cle + '/programmesAchetes/' + prog + '/';
+    const deja = await lire('users/' + cle + '/programmesAchetes/' + prog);
+    const maj = { [b + 'prixCts']: Number(prixCts), [b + 'source']: 'paypal', [b + 'ordre']: net(idCommande),
+      [b + 'ouvertJusqu']: Math.max(Number(deja && deja.ouvertJusqu) || 0, fin), ['users/' + cle + '/updatedAt']: t };
+    if (!(deja && (Number(deja.date) > 0 || Number(deja.le) > 0))) maj[b + 'date'] = t;
+    await db.ref().update(maj);
+  }
+
+  // L'ACHAT D'UN PROGRAMME, VÉRIFIÉ À LA DEMANDE DE L'APP (/fn/droits,
+  // verifierAchat), sans attendre le webhook : la commande est relue chez
+  // PayPal — payée, pour CE compte et CE programme (custom_id), au prix de la
+  // boutique, en euros. Le webhook, lui, porte encore le premier paiement,
+  // la commission et le registre des transactions.
+  async function verifierAchatProgramme(cle, ordre, prog, o) {
+    if (!/^[A-Z0-9]{8,40}$/.test(String(ordre || '')) || !/^[a-z0-9_-]{2,40}$/.test(String(prog || ''))) return { ok: false, raison: 'format' };
+    const [role, prixCts, cmd] = await Promise.all([lire('users/' + cle + '/role'), lire('boutique/' + prog + '/prixCts'), lireCommande(ordre, env, ctx.fetchImpl)]);
+    if (role === null || role === 'coach') return { ok: false, raison: 'compte' };
+    const pu = cmd && Array.isArray(cmd.purchase_units) ? cmd.purchase_units[0] : null;
+    if (!pu) return { ok: false, raison: 'commande' };
+    if (String(pu.custom_id || '') !== cle + '|' + prog) return { ok: false, raison: 'autre_compte' };
+    const caps = (pu.payments && Array.isArray(pu.payments.captures)) ? pu.payments.captures : [];
+    const cap = caps.find((c) => c && c.status === 'COMPLETED');
+    if (cmd.status !== 'COMPLETED' || !cap) return { ok: false, raison: 'non_payee' };
+    const devise = (x) => String((x && x.currency_code) || '').toUpperCase();
+    if (!(Number(prixCts) > 0) || devise(pu.amount) !== 'EUR' || centimes(pu.amount.value) !== Number(prixCts)
+      || devise(cap.amount) !== 'EUR' || centimes(cap.amount.value) !== Number(prixCts)) return { ok: false, raison: 'montant' };
+    if (await lire('paypal_transactions/' + net(cap.id) + '/rembourses')) return { ok: false, raison: 'rembourse' };
+    const le = (o && Number(o.le)) || Date.parse(cap.create_time || '') || 0;
+    await enregistrerProgrammePaye(cle, prog, Number(prixCts), ordre, { le, rattrapage: !!(o && o.rattrapage) });
+    return { ok: true };
+  }
+
+  // L'ABONNEMENT D'UN COMPTE, RELU CHEZ PayPal (rattrapage, ou juste après le
+  // paiement dans l'app) : il doit appartenir au compte (indexer : custom_id),
+  // et être l'abonnement courant. Actif : droits ouverts ; résilié mais payé
+  // jusqu'à une date à venir : ouverts jusqu'à elle. Rend un mot pour le rapport.
+  async function rattraperAbonnement(cle, candidats) {
+    const vus = new Set();
+    let res = 'aucun';
+    for (const brut of candidats || []) {
+      const abo = net(brut);
+      if (!/^I-[A-Z0-9]{8,}$/.test(abo) || vus.has(abo)) continue;
+      vus.add(abo);
+      const ix = await indexer(cle, abo);
+      if (ix !== 'indexe') { res = ix; continue; }
+      const [sub, courant] = await Promise.all([abonnement(abo), lire('users/' + cle + '/paypalSubscriptionId')]);
+      if (!sub || !estCourant(courant || abo, abo, sub, cle)) { res = 'ancien_abonnement'; continue; }
+      const plan = OFFRES_PAYPAL[sub.plan_id];
+      const prochain = Date.parse((sub.billing_info && sub.billing_info.next_billing_time) || '') || 0;
+      if (sub.status === 'ACTIVE') { await droitsOuverts(cle, abo, plan); return 'ouvert'; }
+      if (prochain > now()) { await droitsJusqua(cle, abo, plan, prochain); return 'jusqua'; }
+      res = 'termine';
+    }
+    return res;
   }
 
   // ── LE REGISTRE DES ENCAISSEMENTS ──────────────────────────────────────
@@ -517,6 +580,7 @@ export function creerPaypal(ctx) {
     if (rec.type === 'programme') {
       // REMBOURSÉ, LE PROGRAMME N'EST PLUS ACQUIS : l'accès à vie tombe avec
       // l'argent (rembourseLe, lu par programmeAcquis dans l'app).
+      if (rec.prog) await D.programmeRembourse(rec.cle, rec.prog, t);
       if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
         await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t,
           [b + 'programmesAchetes/' + rec.prog + '/rembourseLe']: t, [b + 'updatedAt']: t });
@@ -954,7 +1018,7 @@ export function creerPaypal(ctx) {
     return { ok: false, raison: 'action' };
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn,
+  return { verifierAchatProgramme, rattraperAbonnement, traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn,
     appelCoaching: CK.appel, coaching: CK,
     appelAbonnement, pauser, reprendre, reprisesQuotidien, versEssentielle, verifierEssentielle, resiliation, reconqueteQuotidien };
 }

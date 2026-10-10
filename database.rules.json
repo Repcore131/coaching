@@ -731,10 +731,33 @@
       "$autre": { ".validate": false }
     }
   },
+  // ⚠ ECRIT PAR LE WORKER SEUL DEPUIS LE 10/10/2026 (cloudflare/src/droits-serveur.js).
+  //   Aucun client, createur compris, n ecrit plus ici : l essai, les programmes
+  //   achetes et l abonnement y sont poses par le compte de service, qui ne
+  //   passe pas par les regles. L ecran Acces du createur passe par /fn/droits
+  //   (action « poser », reservee a son adresse et bornee aux champs d acces).
+  //   Un dossier (users/) trafique n ouvre donc plus rien : l app lit ce noeud.
+  //   Les .validate ci-dessous decrivent ce que le worker ecrit.
   "droits": {
     "$emailKey": {
       ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  auth.token.email === 'guellec.coachingpro@gmail.com'\n)",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".write": false,
+      // L essai : ouvert une fois par le worker ; essaiBonus = le mois de l ami deja compte.
+      "essaiBonus": { ".validate": "newData.isBoolean()" },
+      // Le compte d avant ce lot, rattrape (essai, programmes, abonnement verifies).
+      "rattrapeLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+      // Les programmes de la boutique, a vie : ce que l app lit (plus le dossier).
+      "programmes": {
+        "$prog": {
+          ".validate": "$prog.matches(/^[a-z0-9_-]{2,40}$/) && newData.hasChildren(['le', 'prixCts', 'source'])",
+          "le": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "prixCts": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "source": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "ordre": { ".validate": "newData.isString() && newData.val().length <= 64" },
+          "rembourseLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        }
+      },
       "palier": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "avant": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "echeance": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4102444800000" },
