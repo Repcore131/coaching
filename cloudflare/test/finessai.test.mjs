@@ -82,7 +82,7 @@ await test('essai SANS séance, J-1 : le message sans chiffre', async () => {
 await test('DÉJÀ PAYANT : ni notification ni e-mail (activite.payant ou statut abonné)', async () => {
   const w = monde({
     activite: { 'pay@t,fr': act(finDans(3), { s: 5, r: 1 }, { payant: true }), 'abo@t,fr': act(finDans(3), { s: 5, r: 1 }) },
-    users: { 'pay@t,fr': { role: 'athlete', status: 'FREE' }, 'abo@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', consent: { emailMarketing: true } } },
+    users: { 'pay@t,fr': { role: 'athlete', status: 'FREE' }, 'abo@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', consentements: { email: { accepte: true, le: 1 } } } },
   }, { env: { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_FIN_ESSAI: '9' } });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['pay@t,fr'], 'payant'); assert.equal(b['abo@t,fr'], 'payant');
@@ -92,7 +92,7 @@ await test('DÉJÀ PAYANT : ni notification ni e-mail (activite.payant ou statut
 await test('J-3 avec accord e-mail : étiquette « fin d’essai » posée dans Systeme.io ; sans accord, rien', async () => {
   const env = { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_FIN_ESSAI: '9' };
   const w = monde({ activite: { 'oui@t,fr': act(finDans(3), { s: 2, r: 0 }), 'non@t,fr': act(finDans(3), { s: 2, r: 0 }) },
-    users: { 'oui@t,fr': { role: 'athlete', status: 'FREE', email: 'oui@t.fr', consent: { emailMarketing: true } }, 'non@t,fr': { role: 'athlete', status: 'FREE' } } }, { env });
+    users: { 'oui@t,fr': { role: 'athlete', status: 'FREE', email: 'oui@t.fr', consentements: { email: { accepte: true, le: 1 } } }, 'non@t,fr': { role: 'athlete', status: 'FREE' } } }, { env });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['oui@t,fr'].mail, 'envoye');
   assert.equal(b['non@t,fr'].mail, 'sans_accord');

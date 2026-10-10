@@ -529,6 +529,18 @@ footer a{color:var(--dim);margin:0 8px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}
   .nutri-scene *,.eparpille span,.tel.defile .ecran img{animation:none!important}}
+/* LE GUIDE OFFERT (11/10/2026) : caché tant que le serveur ne dit pas que le formulaire est ouvert. */
+#guide{display:none}
+#guide.ouvert{display:block}
+#guide .boite{max-width:560px;margin:22px 0 0;display:grid;gap:12px}
+#guide input[type=text],#guide input[type=email]{width:100%;background:#111;border:1px solid #2a2a2a;color:var(--text);
+  padding:14px 16px;border-radius:12px;font-size:16px;font-family:inherit}
+#guide .accord{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#b5b5b5;line-height:1.55}
+#guide .accord input{margin-top:3px;accent-color:#E02020;width:16px;height:16px;flex-shrink:0}
+#guide .accord a{color:#ff6b6b}
+#guide .piege{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+#guide .msg{font-size:14px;line-height:1.6;min-height:1.2em}
+#guide .msg.ok{color:#4ade80}#guide .msg.ko{color:#ff6b6b}
 </style>
 </head>
 <body>
@@ -780,6 +792,23 @@ footer a{color:var(--dim);margin:0 8px}
   </div>
 </section>
 
+<section id="guide" aria-labelledby="guide-titre">
+  <div class="wrap">
+    <p class="eyebrow">Offert</p>
+    <h2 id="guide-titre">Le guide offert&nbsp;: <em>muscu et cycle menstruel, phase par phase</em></h2>
+    <p class="lead">Ce qui change d'une phase à l'autre, et comment adapter tes séances. Laisse ton prénom et ton e-mail&nbsp;: le guide t'arrive par e-mail.</p>
+    <form class="boite" id="guide-form" novalidate>
+      <input type="text" name="prenom" autocomplete="given-name" maxlength="40" placeholder="Ton prénom" aria-label="Ton prénom">
+      <input type="email" name="email" autocomplete="email" maxlength="200" placeholder="ton@email.com" aria-label="Ton e-mail" required>
+      <div class="piege" aria-hidden="true"><label>Site web <input type="text" name="site" tabindex="-1" autocomplete="off"></label></div>
+      <label class="accord"><input type="checkbox" name="accord" required>
+        <span>J'accepte de recevoir le guide et les e-mails de RepCore (conseils, nouveautés). Désinscription en un clic dans chaque e-mail. <a href="privacy.html" target="_blank" rel="noopener">Confidentialité</a></span></label>
+      <button class="cta" type="submit">Recevoir le guide</button>
+      <p class="msg" id="guide-msg" role="status"></p>
+    </form>
+  </div>
+</section>
+
 <section id="coaching">
   <div class="wrap">
     <div class="ancre">
@@ -980,6 +1009,34 @@ footer a{color:var(--dim);margin:0 8px}
     });
   }catch(e){}
 })();
+</script>
+<script>
+// LE GUIDE OFFERT (11/10/2026) : le formulaire n'apparaît que si le serveur
+// léger dit qu'il est ouvert (clé Systeme.io posée, LEAD_OUVERT=oui). Prénom
+// + e-mail partent au serveur (/lead), jamais à un service d'e-mail : c'est
+// lui qui crée le contact dans Systeme.io, et Systeme.io qui envoie le guide.
+(function(){try{
+var W='https://repcore-serveur.repcore.workers.dev', z=document.getElementById('guide'), f=document.getElementById('guide-form'), m=document.getElementById('guide-msg');
+if(!z||!f) return;
+fetch(W+'/lead/etat').then(function(r){return r.json();}).then(function(j){ if(j&&j.ouvert) z.classList.add('ouvert'); }).catch(function(){});
+f.addEventListener('submit',function(e){
+  e.preventDefault();
+  var d=new FormData(f), email=String(d.get('email')||'').trim();
+  m.className='msg';
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ m.textContent='Vérifie ton adresse e-mail.'; m.className='msg ko'; return; }
+  if(!f.accord.checked){ m.textContent='Coche la case pour recevoir le guide.'; m.className='msg ko'; return; }
+  var src=(new URLSearchParams(location.search).get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+  var b=f.querySelector('button'); b.disabled=true; m.textContent='Envoi…';
+  fetch(W+'/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prenom:String(d.get('prenom')||'').slice(0,40),email:email,site:String(d.get('site')||''),accord:true,src:src})})
+    .then(function(r){ return r.json().then(function(j){ return {s:r.status,j:j}; }); })
+    .then(function(x){
+      if(x.s===200){ m.textContent='C\u2019est noté\u00a0: le guide arrive dans ta boîte e-mail (pense à regarder les promotions).'; m.className='msg ok'; f.reset(); }
+      else if(x.s===429){ m.textContent='Trop d\u2019envois depuis cette connexion aujourd\u2019hui. Réessaie demain.'; m.className='msg ko'; }
+      else { m.textContent='L\u2019envoi n\u2019a pas abouti. Réessaie dans un instant.'; m.className='msg ko'; }
+    }).catch(function(){ m.textContent='Pas de connexion\u00a0: réessaie dans un instant.'; m.className='msg ko'; })
+    .then(function(){ b.disabled=false; });
+});
+}catch(e){}})();
 </script>
 <script>
 // L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait

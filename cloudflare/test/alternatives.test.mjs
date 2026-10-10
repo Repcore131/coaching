@@ -194,7 +194,7 @@ await test('MOTIF : compté par mois sous sa clé, une fois par résiliation ; j
 
 await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de tarifs.json ; étiquette Systeme.io seulement avec accord ; revenu → rien', async () => {
   const base = (consent) => lea({ resiliationDemandee: { ts: 7, motif: '' } }, { tonnageTotal: 12500, sessions: [{ date: 1 }, { date: 2 }, { date: 3 }],
-    consent: consent ? { emailMarketing: true } : undefined });
+    consentements: consent ? { email: { accepte: true, le: 1 } } : undefined });
   const env = { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_RECONQUETE: '31', SYSTEMEIO_TAG_RENOUVELLEMENT: '42' };
   const w = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env });
   w.t = T0 + 20 * J;

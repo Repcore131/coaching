@@ -347,6 +347,19 @@
         // renonciationRetractation.accepte porte un consentement JURIDIQUE
         // (art. L221-28 13 du code de la consommation) : il doit rester un
         // booleen horodate, jamais un texte libre ou un objet arbitraire.
+        // ── Les consentements hors sante (11/10/2026) ─────────────────────
+        // email : la case « Recois mes conseils et les nouveautes par e-mail »
+        // de l inscription, decochee par defaut. Horodatee, avec la version du
+        // texte : de quoi demontrer le consentement (RGPD, art. 7.1).
+        "consentements": {
+          "email": {
+            "accepte": { ".validate": "newData.isBoolean()" },
+            "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "texte": { ".validate": "newData.isString() && newData.val().length < 60" },
+            "$autre": { ".validate": false }
+          },
+          "$autre": { ".validate": false }
+        },
         "abonnement": {
           "palier": { ".validate": "newData.isString() && newData.val().length < 40" },
           // ⚠ LA FORMULE PAYEE (24/09/2026), et elle DOIT etre declaree ici.
@@ -2289,6 +2302,26 @@
     "push_log":     { ".read": false, ".write": false },
     "premiere_trace": { ".read": false, ".write": false },
     "pauses":         { ".read": false, ".write": false },
+    // LES CONTACTS E-MAIL (11/10/2026, serveur leger : systemeio.js). La file
+    // vers Systeme.io, ses echecs, la preuve du consentement du guide et les
+    // compteurs d IP (haches) : le serveur seul.
+    "sio_file":       { ".read": false, ".write": false },
+    "sio_echecs":     { ".read": false, ".write": false },
+    "leads":          { ".read": false, ".write": false },
+    "lead_ip":        { ".read": false, ".write": false },
+    // Le drapeau de l inscription (« Recois mes conseils par e-mail ») : ecrit
+    // par le compte lui-meme, lu par le serveur, qui relit le consentement
+    // dans le dossier avant toute synchronisation.
+    "email_optin": {
+      "$k": {
+        ".read": false,
+        ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
+        ".validate": "newData.hasChildren(['le', 'accepte'])",
+        "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "accepte": { ".validate": "newData.val() === true" },
+        "$autre": { ".validate": false }
+      }
+    },
     "reconquete":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja

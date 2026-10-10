@@ -92,6 +92,8 @@ export function travaux(M) {
     // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
     // LES CONNEXIONS SIMULTANÉES (09/10/2026) : CHAQUE MINUTE (minute: true),
     // comptées depuis /presence, alerte à Kevin à 70 (affluence.js).
+    // LES CONTACTS E-MAIL (systemeio.js) : CHAQUE MINUTE, 30 requêtes au plus.
+    { nom: 'systemeio', minute: true, quand: () => true, une: (t) => (M.systemeio ? M.systemeio.minute(t) : null) },
     { nom: 'affluence', minute: true, quand: () => true, une: (t) => (M.affluence ? M.affluence.minute(t) : null) },
     // Et chaque nuit, les présences de plus de 24 h.
     { nom: 'presence_purge', quand: (p) => apres(p, 4, 40), une: (t) => (M.affluence ? M.affluence.purger(t) : null) },

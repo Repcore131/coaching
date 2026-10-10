@@ -10,7 +10,7 @@
 // publie (essaiResumeDe, rc-core) : séances terminées, tonnage, records battus,
 // semaines actives. Sans séance, un autre message, sans chiffre.
 //
-// À J-3, si le compte a accepté les e-mails (consent.emailMarketing === true),
+// À J-3, si le compte a accepté les e-mails (users/<clé>/consentements/email.accepte === true),
 // l'étiquette Systeme.io SYSTEMEIO_TAG_FIN_ESSAI est posée : c'est la règle
 // d'automatisation de Systeme.io qui envoie la séquence. Sans accord ou sans
 // configuration, rien ne part.
@@ -92,7 +92,7 @@ export function creerFinEssai(ctx) {
       push = r && r.envoye ? 'oui' : String((r && r.raison) || 'non');
     } catch (e) { push = 'erreur'; }
     let mail = 'sans_accord';
-    if (palier === 'j3' && (await lire('users/' + cle + '/consent/emailMarketing')) === true) {
+    if (palier === 'j3' && (await lire('users/' + cle + '/consentements/email/accepte')) === true) {
       try {
         const email = (await lire('users/' + cle + '/email')) || cle.replace(/,/g, '.');
         mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', tag: env.SYSTEMEIO_TAG_FIN_ESSAI || '' });
