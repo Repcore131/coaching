@@ -73,7 +73,7 @@ export function texteAvis(o) {
  */
 export async function etiqueterSystemeio(env, fetchImpl, { email, prenom, date, montant, tag: tagDemande }) {
   // `tag` : une autre étiquette que celle du renouvellement (fin d'essai, 10/10/2026).
-  const cle = String(env.SYSTEMEIO_API_KEY || '').trim(), tag = String(tagDemande || env.SYSTEMEIO_TAG_RENOUVELLEMENT || '').trim();
+  const cle = String(env.SYSTEMEIO_API_KEY || '').trim(), tag = String((tagDemande !== undefined ? tagDemande : env.SYSTEMEIO_TAG_RENOUVELLEMENT) || '').trim();   // une étiquette demandée et non configurée ne retombe JAMAIS sur celle du renouvellement
   if (!cle || !/^\d+$/.test(tag)) return 'non_configure';
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'sans_email';
   const f = fetchImpl || fetch;

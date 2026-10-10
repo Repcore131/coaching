@@ -42,7 +42,9 @@ import { creerGarmin, garminOuvert } from './garmin.js';
 const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
 // garmin : relier sa montre Garmin (OAuth), l'état, la révocation (garmin.js).
 const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin };
+// abonnement : pause d'un mois, reprise, passage à Essentielle, avis de résiliation (paypal.js).
+const abonnement = (req, ctx) => ctx.M.paypal.appelAbonnement(req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
