@@ -121,8 +121,8 @@ test('J4 : carte Arrivée des exports : manager et créateur seulement ; club sa
   assert.match(J(appli(club(), 'c'), 'arriveeExportsCard()'), /Dépôt manuel/);
   assert.match(readFileSync(new URL('../pages-data.js', import.meta.url), 'utf8'), /arriveeExportsCard\(\)/);
 });
-test('J4 : 4 lignes avec état, dernier fichier et nombre du mois ; aucun secret enregistré', () => {
-  const run = appli(club(), 'm'); const t = Date.now();
+test('J4 : mode Cloud : 4 lignes avec état, dernier fichier et nombre du mois ; aucun secret enregistré', () => {
+  const run = appli(club(), 'm'); run(`S.serveur = { ingestCloud: true }; REV++;`); const t = Date.now();
   const r = J(run, `ingestCanalOps('a', { api_status: 'en attente', mail_status: 'actif', drive_status: 'actif', drive_folder: '1AbCdEfGhIjKlMnOp', token: 'x', password: 'y' })`);
   run(`db.batch(${JSON.stringify(r.ops)}); S.rsm = { autoLog: { a: { l1: { at: ${t}, name: 'RSM_clients.csv', source: 'auto' }, l2: { at: ${t - 1000}, name: 'RSM_ventes.csv', canal: 'drive' } } } };
     S.imports = { i1: { id: 'i1', clubId: 'a', at: ${t - 5000}, name: 'RSM_paiements.csv', by: 'm' } }; REV++;`);
@@ -195,7 +195,7 @@ test('J10 : onglet Imports > Automatique : 30 derniers rapports, filtre par stat
   run(`UI.ingFiltre = 'failed'`); const h2 = run('ingestAutoTab()'); assert.equal((h2.match(/<tr data-statut="failed"/g) || []).length, 1); assert.equal((h2.match(/<tr data-statut=/g) || []).length, 1);
   assert.deepEqual(J(run, `ingestRattacherOps(INGEST_ATTENTES.a.p1, 'v')`), [[['rsm', 'aliases', 'zinc'], 'v'], [['rsm', 'aliases', 'zoe inconnue'], 'v']]);
   assert.deepEqual(J(run, `ingestRattacherOps(INGEST_ATTENTES.a.p1, 'inconnu')`), []);
-  assert.match(readFileSync(new URL('../pages-data.js', import.meta.url), 'utf8'), /\['automatique', 'Automatique'\]/);
+  assert.match(readFileSync(new URL('../pages-data.js', import.meta.url), 'utf8'), /\[\['automatique', 'Automatique'\]\]/);
 });
 test('J6 : adresse d’import {slugClub}-{4 caractères}@import.fitpulse.app, régénérable ; liste blanche', () => {
   const run = appli({ ...club(), clubs: { a: { id: 'a', name: 'Club Énergie Niort-Est' } } }, 'm');
@@ -207,9 +207,22 @@ test('J6 : adresse d’import {slugClub}-{4 caractères}@import.fitpulse.app, r�
   assert.deepEqual(J(run, `ingestAutoriserOps('a', 'Nouveau@Exemple.fr')`), [[['ingestConfig', 'a', 'mail', 'allow', '2'], 'nouveau@exemple.fr']]);
 });
 test('J6 : page d’aide « Créer la règle de transfert » (Gmail et Outlook), réservée aux managers', () => {
-  const run = appli(club(), 'm'); run(`db.batch(ingestCanalOps('a', { mail_status: 'actif' }).ops); REV++;`);
+  const run = appli(club(), 'm'); run(`S.serveur = { ingestCloud: true }; db.batch(ingestCanalOps('a', { mail_status: 'actif' }).ops); REV++;`);
   assert.equal(J(run, `PAGES['aide-transfert'].manager`), true);
   const h = run(`PAGES['aide-transfert'].render()`); const adr = J(run, `S.ingestConfig.a.mail.address`);
   assert.match(h, /Gmail/); assert.match(h, /Outlook/); assert.ok(h.includes(adr)); assert.match(h, /Capture 1 à venir/); assert.doesNotMatch(h, /[–—]/);
   assert.match(run('arriveeExportsCard()'), /#\/aide-transfert/);
+});
+
+test('Mode gratuit : sans fonctions Cloud, la carte montre la boîte Gmail et le Drive du club relevés par le serveur, jamais l’adresse payante', () => {
+  const run = appli(club(), 'm');
+  assert.deepEqual(J(run, 'ingestCanaux().map(c => [c.k, c.status])'), [['manual', 'actif']]);
+  run(`S.clubs.a.rsmAuto = { label: 'Resamania', driveFolder: '1AbCdEfGhIjKl' }; REV++;`);
+  assert.deepEqual(J(run, 'ingestCanaux().map(c => [c.k, c.status])'), [['mail', 'en attente'], ['drive', 'en attente'], ['manual', 'actif']]);
+  run(`S.rsm = { autoMeta: { a: { lastRunAt: 5 } }, autoLog: { a: { l1: { at: Date.now(), name: 'RSM_clients.csv', source: 'mail' } } } }; REV++;`);
+  assert.equal(J(run, 'ingestCanaux()[0].status'), 'actif');
+  const h = run('arriveeExportsCard()');
+  assert.match(h, /Boîte Gmail du club/); assert.match(h, /Libellé Gmail « Resamania »/); assert.match(h, /data-act="rsmAutoCfg"/);
+  assert.doesNotMatch(h, /import\.fitpulse\.app|ingestJeton|aide-transfert|Régénérer/);
+  assert.match(h, /Sans frais/); assert.match(h, /RSM_clients\.csv/);
 });

@@ -19,8 +19,29 @@ const INGEST_ETATS = ['actif', 'en attente', 'inactif'];
 // Rapports d'ingestion lus dans /ingest/{clubId}/reports (managers et créateur ; voir plus bas).
 let INGEST_RAPPORTS = {};
 const ingestConfig = (clubId = CLUB.id) => deepGet(S, ['ingestConfig', clubId]) || {};
+// Mode gratuit (par défaut) : rien à payer, ni fonctions Cloud ni domaine. La boîte Gmail du club
+// et son dossier Drive (S.clubs[id].rsmAuto) sont relevés par le serveur Fit Pulse gratuit
+// (GitHub Actions, chaque heure de 6 h à 22 h). Le mode Cloud (adresse d'import par club, script
+// Gmail, API) ne s'affiche que si les fonctions ont été déployées : S.serveur.ingestCloud.
+const ingestCloud = () => !!deepGet(S, ['serveur', 'ingestCloud']);
+const INGEST_GRATUIT = {
+  mail: ['Boîte Gmail du club', 'Relevée par le serveur Fit Pulse chaque heure de 6 h à 22 h.'],
+  drive: ['Dossier Drive', 'Relevé avec la boîte Gmail du club, chaque heure de 6 h à 22 h.'],
+};
+function canauxGratuits(clubId) {
+  const a = deepGet(S, ['clubs', clubId, 'rsmAuto']) || {}; const meta = deepGet(S, ['rsm', 'autoMeta', clubId]) || {};
+  const etat = meta.lastRunAt ? (meta.lastErrorAt && meta.lastErrorAt > meta.lastRunAt ? 'inactif' : 'actif') : 'en attente';
+  const L = [];
+  if (a.address || a.label) L.push({ k: 'mail', label: INGEST_GRATUIT.mail[0], detail: a.address ? a.address : `Libellé Gmail « ${a.label} »`, status: etat, cfg: {} });
+  if (a.driveFolder) L.push({ k: 'drive', label: INGEST_GRATUIT.drive[0], detail: INGEST_GRATUIT.drive[1], status: etat, cfg: {} });
+  return L;
+}
 // Canaux affichés : ceux qui ont une configuration, et le dépôt manuel, toujours actif.
 function ingestCanaux(clubId = CLUB.id) {
+  if (!ingestCloud()) {
+    const C0 = ingestConfig(clubId); const api = C0.api && C0.api.status ? [{ k: 'api', label: INGEST_CANAUX[0][1], detail: INGEST_CANAUX[0][2], status: INGEST_ETATS.includes(C0.api.status) ? C0.api.status : 'inactif', cfg: C0.api }] : [];
+    return [...api, ...canauxGratuits(clubId), { k: 'manual', label: INGEST_CANAUX[3][1], detail: INGEST_CANAUX[3][2], status: 'actif', cfg: {} }];
+  }
   const C = ingestConfig(clubId);
   return INGEST_CANAUX.filter(([k]) => k === 'manual' || (C[k] && C[k].status)).map(([k, label, detail]) => ({ k, label, detail, status: k === 'manual' ? 'actif' : (INGEST_ETATS.includes(C[k].status) ? C[k].status : 'inactif'), cfg: C[k] || {} }));
 }
@@ -44,10 +65,10 @@ function arriveeExportsCard(clubId = CLUB.id) {
   const St = ingestStats(clubId); const L = ingestCanaux(clubId);
   const etat = s => `<span class="badge ingest-${s.replace(' ', '-')}">${esc(s.charAt(0).toUpperCase() + s.slice(1))}</span>`;
   const quand = f => f ? `${esc(dmy(isoOf(new Date(f.at))))}, ${esc(f.name)}` : '<span class="muted">aucun fichier</span>';
-  return `<div class="card" id="arrivee-exports"><div class="card-head"><h3>Arrivée des exports</h3><span class="spacer"></span><button class="btn sm ghost" data-act="ingestJeton">Jeton du script Gmail</button><button class="btn sm" data-act="ingestCanalForm">Configurer un canal</button></div>
-    <p class="muted small" style="margin-top:-4px">Tous les canaux aboutissent au même moteur d’import. Aucun mot de passe ni jeton n’est gardé ici.</p>
+  return `<div class="card" id="arrivee-exports"><div class="card-head"><h3>Arrivée des exports</h3><span class="spacer"></span>${ingestCloud() ? '<button class="btn sm ghost" data-act="ingestJeton">Jeton du script Gmail</button><button class="btn sm" data-act="ingestCanalForm">Configurer un canal</button>' : '<button class="btn sm" data-act="rsmAutoCfg">Configurer la boîte Gmail et le Drive</button>'}</div>
+    <p class="muted small" style="margin-top:-4px">Tous les canaux aboutissent au même moteur d’import. ${ingestCloud() ? 'Aucun mot de passe ni jeton n’est gardé ici.' : 'Sans frais : la boîte Gmail et le dossier Drive du club sont relevés par le serveur Fit Pulse.'}</p>
     <div class="table-wrap"><table class="t ingest-t"><thead><tr><th>Canal</th><th>État</th><th>Dernier fichier reçu</th><th class="num">Ce mois-ci</th></tr></thead><tbody>
-    ${L.map(c => `<tr data-canal="${c.k}" data-etat="${c.status}"><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.k === 'mail' && c.cfg.address ? c.cfg.address : c.detail)}</small>${c.k === 'mail' ? ' <a class="small" href="#/aide-transfert">Créer la règle de transfert</a>' : ''}</td><td>${etat(c.status)}${c.k === 'mail' && c.cfg.address ? ' <button class="btn ghost sm" data-act="ingestRegenerer">Régénérer l’adresse</button>' : ''}</td><td class="small">${quand(St[c.k].dernier)}</td><td class="num">${St[c.k].ceMois}</td></tr>`).join('')}
+    ${L.map(c => `<tr data-canal="${c.k}" data-etat="${c.status}"><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.k === 'mail' && c.cfg.address ? c.cfg.address : c.detail)}</small>${c.k === 'mail' && ingestCloud() ? ' <a class="small" href="#/aide-transfert">Créer la règle de transfert</a>' : ''}</td><td>${etat(c.status)}${c.k === 'mail' && c.cfg.address && ingestCloud() ? ' <button class="btn ghost sm" data-act="ingestRegenerer">Régénérer l’adresse</button>' : ''}</td><td class="small">${quand(St[c.k].dernier)}</td><td class="num">${St[c.k].ceMois}</td></tr>`).join('')}
     </tbody></table></div></div>`;
 }
 ACTIONS.ingestCanalForm = () => {
