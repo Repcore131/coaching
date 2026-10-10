@@ -134,7 +134,8 @@ const LB_RENDER = PAGES.leaderboard.render;
 PAGES.leaderboard.render = function (...a) {
   setTimeout(liguesAJour, 0);
   const t = UI.lbTab || 'classement';
-  const onglets = tabs('lbTab', [['classement', 'Classement'], ['ligue', 'Ma ligue']], t);
+  const onglets = tabs('lbTab', [['classement', 'Classement'], ['ligue', 'Ma ligue'], ['defis', 'Défis']], t);
+  if (t === 'defis' && typeof defisEcran === 'function') return `<div class="page-head"><div><h1>Classement</h1><p>Duels de clubs et défis d’équipe</p></div></div>${onglets}${defisEcran()}`;
   if (t !== 'ligue') return LB_RENDER.apply(this, a).replace('</div></div>\n      <div class="row wrap"', `</div></div>${onglets}\n      <div class="row wrap"`);
   return `<div class="page-head"><div><h1>Classement</h1><p>Ligues du réseau</p></div></div>${onglets}${ligueEcran()}`;
 };

@@ -1464,3 +1464,11 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .ligue-r.descend { background: var(--surface-2, #EEE); color: var(--muted); }
 .ligue-r.moi { outline: 2px solid var(--accent); }
 .ligue-n { width: 24px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Duels de clubs et défis d'équipe */
+.duel-face { display: grid; gap: 10px; }
+.duel-c { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; }
+.duel-bar { height: 12px; border-radius: 6px; background: var(--surface-2, var(--line)); overflow: hidden; }
+.duel-bar i { display: block; height: 100%; border-radius: 6px; background: var(--muted); }
+.duel-c.nous .duel-bar i { background: var(--fil-or, #F2C500); }
+.duel-l { padding: 8px 0; border-bottom: 1px solid var(--line); gap: 6px; }
+.defi-e { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }

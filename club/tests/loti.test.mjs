@@ -13,6 +13,8 @@ function reseau(n = 5) {
     for (let i = 0; i < n; i++) users[c + i] = { id: c + i, first: 'Vendeur' + ci + i, last: 'Nom' + c, role: 'membre', status: 'active', clubs: [c] }; });
   return { clubs, users, kpis };
 }
+// Formulaire simulé : les champs d'un formulaire de l'appli, lus par formData.
+const formulaire = (run, sel, champs) => run(`document.querySelector = s => (s === '${sel}' ? { querySelectorAll: () => ${JSON.stringify(Object.entries(champs).map(([name, value]) => ({ name, value, type: 'text' })))} } : null)`);
 const appli = (data, qui) => { const run = chargerAppli(data); run(`ME = S.users['${qui}']; CLUB = S.clubs[ME.clubs[0]]; toast = () => {};`); return run; };
 
 test('I1 : 3 clubs, 15 commerciaux : groupes équilibrés, jamais d’un seul club ; un club qui refuse n’apparaît nulle part', () => {
@@ -47,4 +49,38 @@ test('I1 : écran Ma ligue : zone de montée, autres clubs en prénom et initial
   const h = run('PAGES.leaderboard.render()');
   assert.match(h, /Ligue Bronze, groupe/); assert.match(h, /data-zone="monte"/); assert.doesNotMatch(h, /€/);
   assert.match(h, /Vendeur\d+ N\.|Commercial/); assert.match(h, /Masquer mon nom hors de mon club/);
+});
+function deuxClubs() {
+  const clubs = { a: { id: 'a', name: 'Club Petit' }, b: { id: 'b', name: 'Club Grand' } }, users = {};
+  users.ma = { id: 'ma', first: 'Manager', last: 'A', role: 'manager', status: 'active', clubs: ['a'] }; users.mb = { id: 'mb', first: 'Manager', last: 'B', role: 'manager', status: 'active', clubs: ['b'] };
+  for (let i = 0; i < 3; i++) users['a' + i] = { id: 'a' + i, first: 'Alpha' + i, last: 'X', role: 'membre', status: 'active', clubs: ['a'] };
+  for (let i = 0; i < 9; i++) users['b' + i] = { id: 'b' + i, first: 'Bravo' + i, last: 'Y', role: 'membre', status: 'active', clubs: ['b'] };
+  return { clubs, users, kpis };
+}
+test('I2 : duel proposé puis accepté : sur l’accueil des deux clubs, deux pourcentages ; 3 contre 9 vendeurs comparés au pourcentage', () => {
+  const run = appli(deuxClubs(), 'ma'); const mk = run('curMonth()');
+  run(`S.targets = { '${mk}': Object.fromEntries(Object.keys(S.users).filter(id => /^[ab]\\d$/.test(id)).map(id => [id, { contrats: 30 }])) }; REV++`);
+  formulaire(run, '#duel-f', { club: 'b', kpi: 'contrats', reward: 'Petit déjeuner' }); run('ACTIONS.duelProposer()');
+  const id = run('Object.keys(S.duels)[0]'); assert.equal(run(`S.duels['${id}'].status`), 'pending');
+  run(`ME = S.users.mb; CLUB = S.clubs.b; ACTIONS.duelAccepter({ dataset: { id: '${id}' } })`); assert.equal(run(`S.duels['${id}'].status`), 'live');
+  // club A : 3 vendeurs à 2 contrats ; club B : 9 vendeurs, 1 contrat chacun pour 8 d'entre eux (plus de volume, moins de %)
+  run(`S.duels['${id}'].start -= 2 * 864e5; const t = S.duels['${id}'].start + 3600e3; ['a0','a1','a2'].forEach(u => { S.entries['e'+u] = { id: 'e'+u, userId: u, clubId: 'a', kpiId: 'contrats', date: today(), value: 2, source: 'manual', at: t }; });
+    ['b0','b1','b2','b3','b4','b5','b6','b7'].forEach(u => { S.entries['e'+u] = { id: 'e'+u, userId: u, clubId: 'b', kpiId: 'contrats', date: today(), value: 1, source: 'manual', at: t }; }); S.duels['${id}'].end = Date.now() + 864e5; REV++`);
+  for (const [qui, club] of [['a0', 'a'], ['b0', 'b']]) { run(`ME = S.users.${qui}; CLUB = S.clubs.${club}`); const h = run('duelCard()'); assert.match(h, /Duel en cours/); assert.equal((h.match(/\d+ %/g) || []).length, 2, h); assert.doesNotMatch(h, /Alpha|Bravo|€/); }
+  assert.ok(J(run, `duelClub(S.duels['${id}'], 'a').pct`) > J(run, `duelClub(S.duels['${id}'], 'b').pct`));
+  assert.match(run(`ME = S.users.b0; CLUB = S.clubs.b; duelCard()`), /il manque \d+ contrats? pour repasser devant/i);
+  // fin : trophée « Duel gagné » aux seuls contributeurs du club vainqueur ; événement dans le fil des deux clubs
+  run(`S.duels['${id}'].end = Date.now() - 1000; S.entries.ea2.value = 0; REV++`);
+  const T = J(run, `allTrophies().filter(t => t.duel).map(t => t.userId).sort()`); assert.deepEqual(T, ['a0', 'a1']);
+  assert.ok(J(run, `feedEvents(['a']).some(e => /Duel gagné contre Club Grand/.test(e.label))`)); assert.ok(J(run, `feedEvents(['b']).some(e => /Duel perdu contre Club Petit/.test(e.label))`));
+});
+test('I2 : défi d’équipe, barre commune et réussite partagée', () => {
+  const run = appli(deuxClubs(), 'ma');
+  formulaire(run, '#defi-f', { kpi: 'contrats', target: '5', jours: '7' }); run('ACTIONS.defiEquipeCreer()');
+  const ch = J(run, 'Object.values(S.challenges)[0]'); assert.equal(ch.type, 'team');
+  run(`['a0','a1'].forEach((u, i) => { S.entries['t'+u] = { id: 't'+u, userId: u, clubId: 'a', kpiId: 'contrats', date: today(), value: 3, source: 'manual', at: ${ch.start} + 1000 }; }); REV++`);
+  assert.equal(J(run, `defiEquipeEtat(S.challenges['${ch.id}']).reussi`), true);
+  run(`ME = S.users.a2; CLUB = S.clubs.a`); assert.match(run('defiEnCoursCard()'), /6 contrats sur 5 contrats ensemble/);
+  run(`S.challenges['${ch.id}'].start -= 3600e3; S.entries.ta0.at -= 3600e3; S.entries.ta1.at -= 3600e3; S.challenges['${ch.id}'].end = Date.now() - 1000; REV++`);
+  assert.deepEqual(J(run, `allTrophies().filter(t => /Défi d’équipe réussi/.test(t.label)).map(t => t.userId).sort()`), ['a0', 'a1']);
 });

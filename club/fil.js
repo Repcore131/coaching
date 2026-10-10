@@ -76,6 +76,7 @@ function feedEvents(clubIds, sinceTs = 0) {
     for (const ch of Object.values(S.challenges || {})) {
       if (!C.has(ch.clubId)) continue;
       if (ch.start <= Date.now()) out.push({ id: `chs_${ch.id}`, type: 'challenge', at: ch.start, clubId: ch.clubId, label: `Défi lancé : ${ch.title || 'défi'}`, sub: `fin dans ${finDans(ch.end)}`, link: '#/leaderboard' });
+      if (ch.type === 'team') continue; // défi d'équipe : sa réussite est publiée par duelEvenements
       if (ch.end <= Date.now()) { const w = challengeRanking(ch)[0]; out.push({ id: `che_${ch.id}`, type: 'challenge', at: ch.end, userId: w && w.value > 0 ? w.u.id : null, clubId: ch.clubId, label: `Défi terminé : ${ch.title || 'défi'}${w && w.value > 0 ? `, gagné par ${prenom(w.u)}` : ''}`, link: '#/leaderboard' }); }
     }
     // Bravos : l'heure est gardée depuis cette version (les anciens, sans heure, ne remontent pas).
@@ -83,6 +84,7 @@ function feedEvents(clubIds, sinceTs = 0) {
       const e = S.entries[eid]; if (!e || !C.has(e.clubId)) continue;
       for (const [uid, v] of Object.entries((rx || {}).bravo || {})) if (typeof v === 'number' && S.users[uid]) out.push({ id: `kd_${eid}_${uid}`, type: 'kudos', at: v, userId: uid, toUserId: e.userId, clubId: e.clubId, kpiId: e.kpiId, label: `${prenom(S.users[uid])} : bravo à ${prenom(S.users[e.userId])}`, link: '#/pouls' });
     }
+    if (typeof duelEvenements === 'function') out.push(...duelEvenements(clubs));
     for (const m of Object.values(S.chat || {})) if (m && m.annonce && C.has(m.channel)) out.push({ id: `an_${m.id}`, type: 'manager', at: m.at, userId: m.userId, clubId: m.channel, label: 'Annonce du manager', sub: m.text, link: '#/pouls' });
     return out.sort((a, b) => b.at - a.at);
   });
