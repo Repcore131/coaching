@@ -406,6 +406,8 @@ export function creerPaypal(ctx) {
     await M.parrainagePaiement(cle, 'paypal').catch(() => null);
     await M.ambassadeurPaiement(cle, { montant, le: Date.parse(ress.create_time || '') || t, abonnement: abo, venteId: ress.id }).catch(() => null);
     await M.attributionPaiement(cle).catch(() => null);
+    // Le contact e-mail (s'il a consenti) passe au statut « payant ».
+    if (M.systemeio) await M.systemeio.contactDuCompte(cle, 'payant').catch(() => null);
     return true;
   }
 
@@ -889,7 +891,7 @@ export function creerPaypal(ctx) {
     if (d.perimee) { await db.ref('reconquete/' + cle).remove(); return 'perimee'; }
     if (!d.due) return 'pas_encore';
     const [resil, abo, status, fname, kg, consent, email] = await Promise.all(['abonnement/resiliationDemandee', 'paypalSubscriptionId', 'status',
-      'fname', 'tonnageTotal', 'consent/emailMarketing', 'email'].map((c) => lire('users/' + cle + '/' + c)));
+      'fname', 'tonnageTotal', 'consentements/email/accepte', 'email'].map((c) => lire('users/' + cle + '/' + c)));
     // Revenu entre-temps : un autre abonnement, ou plus de résiliation.
     if (!resil || Number(resil.ts) !== Number(r.ts) || (abo && r.abo && abo !== r.abo && status === 'AUTONOMIE_PREMIUM')) {
       await db.ref('reconquete/' + cle).remove(); return 'revenu';

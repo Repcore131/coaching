@@ -7605,6 +7605,8 @@ const CHAMPS_SANTE=Object.freeze([
 // consentir a quoi que ce soit d'autre que la politique de confidentialite.
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
+  // L'opt-in e-mail (11/10/2026) : un consentement horodaté, pas une donnée de santé.
+  'consentements',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
@@ -12807,6 +12809,10 @@ async function doRegister(){
       // accepterConsentementSante, avec sa propre date — `healthAt` — le jour ou
       // la premiere donnee de sante sera saisie.
       consent:{cgu:true,health:false,at:Date.now(),policyVersion:POLICY_VERSION}};
+    // L'OPT-IN E-MAIL (11/10/2026) : posé SEULEMENT si la case est cochée,
+    // horodaté et versionné. Case décochée : aucun champ (l'absence vaut refus).
+    {const _ce=consentementEmailDepuisCase(!!document.getElementById('r-optin')?.checked,Date.now());
+     if(_ce) user.consentements={email:_ce};}
     // athletePhoto, et non `photo` : c'est le champ que la fiche, la grille de
     // vignettes et le carnet d'adresses lisent deja.
     if(_inscriptionPhotoB64) user.athletePhoto=_inscriptionPhotoB64;
@@ -12963,6 +12969,9 @@ async function doRegister(){
     // sorties précédentes (compte déjà présent côté cloud, invitation coach
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
     rcm('register_completed');
+    // Le drapeau pour le serveur léger (email_optin/<clé>), après le premier
+    // envoi du dossier : c'est lui qui synchronise avec Systeme.io.
+    try{ setTimeout(()=>{ emailOptinPublier(currentUser).catch(()=>{}); },4000); }catch(e){}
     // L'ORIGINE DU COMPTE (users/<clé>/origine) et l'inscription par src.
     try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){}
     if(selRole==='coach'){
@@ -22909,6 +22918,36 @@ function activiteResume(u,maintenant){
       invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')}};
 }
 // Une fois par jour au plus, et seulement s'il a changé.
+// ══ L'OPT-IN E-MAIL (11/10/2026) ═══════════════════════════════════════
+// ⚠ L'APP N'APPELLE AUCUN SERVICE D'E-MAIL (test « AUCUN service d'envoi »).
+//   Elle enregistre la case dans le dossier (users/<clé>/consentements/email)
+//   et pose un drapeau dans SA propre base (email_optin/<clé>) ; le serveur
+//   léger relit le consentement dans le dossier et parle à Systeme.io.
+const OPTIN_EMAIL_TEXTE='optin-email-v1';   // la version de la phrase de la case
+/**
+ * PURE. Le consentement e-mail d'après la case : un objet si elle est cochée,
+ * null sinon (jamais un « false » posé d'office, jamais coché par défaut).
+ * @param {boolean} coche
+ * @param {number} t
+ * @returns {?{accepte:boolean, le:number, texte:string}}  (accepte vaut toujours vrai quand l'objet existe)
+ */
+function consentementEmailDepuisCase(coche,t){
+  return coche===true?{accepte:coche,le:Number(t)||Date.now(),texte:OPTIN_EMAIL_TEXTE}:null;
+}
+// Le drapeau, une fois par appareil et par compte ; rejoué au démarrage s'il a échoué.
+async function emailOptinPublier(u){
+  const c=u&&u.consentements&&u.consentements.email;
+  if(!c||c.accepte!==true||!u.email||u.role==='coach'||!CLOUD||!CLOUD.ok||!CLOUD.ok()) return false;
+  const marque='rc_optin_'+String(u.email).toLowerCase();
+  try{ if(localStorage.getItem(marque)) return false; }catch(e){}
+  const token=await CLOUD._getToken();
+  if(!token) return false;
+  const moi=String(u.email).toLowerCase().replace(/\./g,',');
+  const x=await fetch(CLOUD._fbUrl.replace('users.json','email_optin/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({le:Number(c.le)||Date.now(),accepte:c.accepte})}).catch(()=>null);
+  if(x&&x.ok){ try{ localStorage.setItem(marque,'1'); }catch(e){} return true; }
+  return false;
+}
 async function activitePublier(u){
   if(!SERVEUR_LEGER||!u||!u.email||u.role==='coach'||!CLOUD||!CLOUD.ok()) return false;
   const r=activiteResume(u);
@@ -46176,6 +46215,7 @@ function loadClientHome(){
   try{ _afficherRepriseDouce(u); }catch(e){}
   // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
   try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
+  try{ setTimeout(()=>{ emailOptinPublier(u).catch(()=>{}); },8000); }catch(e){}
   // Le tonnage cumulé, posé une fois pour un dossier d'avant ce champ.
   try{ const _tt=tonnageTotalDe(u); if(u.role!=='coach'&&u.tonnageTotal!==_tt){ u.tonnageTotal=_tt; saveUser(); } }catch(e){}
   // Le rappel du défi en cours.
@@ -129912,6 +129952,12 @@ async function requestAccountDeletion(){
     const safeKey=myKey.toLowerCase().replace(/\./g,',');
     let fbTok=null;
     try{ fbTok=await CLOUD._getToken(); }catch(e){}
+
+    // 0. LE CONTACT E-MAIL (11/10/2026) : le serveur léger le supprime chez
+    //    Systeme.io (DELETE), qu'il vienne de la case ou du guide. AVANT tout
+    //    le reste : l'appel a besoin du jeton, qui disparaît à l'étape 4.
+    try{ await CLOUD._callFn('email',{action:'supprimer'}); }catch(e){}
+    try{ localStorage.removeItem('rc_optin_'+myKey.toLowerCase()); }catch(e){}
 
     // 1. Dossier utilisateur dans la base temps reel
     try{

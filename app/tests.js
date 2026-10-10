@@ -13061,7 +13061,10 @@ async function testExercices(){
           try{
             window.saveUser=()=>true;
             CLOUD.ok=()=>true;
-            CLOUD.pushOne=()=>{ envois++; return Promise.resolve(); };
+            // Une promesse qui ne se résout pas : l'envoi est compté, et la suite
+            // (l'avis au serveur, /fn/abonnement) ne part jamais sur le réseau
+            // pendant la suite de tests — elle tournerait après le finally.
+            CLOUD.pushOne=()=>{ envois++; return new Promise(()=>{}); };
             localStorage.removeItem(RESIL_FILE);
             currentUser=_ath();
             demanderResiliation('');
@@ -15652,7 +15655,9 @@ async function testExercices(){
           if(prod.length<100000) return _echec('source trop court');
           const bannis=['sendgrid'+'.com','api.mailgun'+'.net','api.twilio'+'.com',
             'api.brevo'+'.com','api.sendinblue'+'.com','api.postmarkapp'+'.com',
-            'api.resend'+'.com','api.emailjs'+'.com','smtp'+'.'];
+            'api.resend'+'.com','api.emailjs'+'.com','smtp'+'.',
+            // Systeme.io (11/10/2026) : le serveur léger seul lui parle.
+            'api.systeme'+'.io','systeme'+'.io/api'];
           const t=bannis.filter(m=>prod.indexOf(m)>=0);
           if(t.length) return _echec('service d\'envoi : '+t.join(', '));
           // Le transport reste le partage natif ou WhatsApp, déjà déclaré.
@@ -58236,6 +58241,46 @@ async function testExercices(){
       for(const k of ['prixSouscrit','engagementJusqu','formule','palier','pause','pauseFinie','changement','resiliationDemandee'])
         if(bloc.indexOf('"'+k+'"')<0) return _echec(k+' manque dans le bloc abonnement des règles');
       return true;})());
+
+    // ══ L'OPT-IN E-MAIL (11/10/2026) — LA CASE, ET RIEN D'AUTRE CÔTÉ CLIENT ══
+    ok('OPT-IN E-MAIL — la case est décochée et facultative ; le consentement n’existe que si elle est cochée, horodaté',(()=>{
+      const c=document.getElementById('r-optin');
+      if(!c||c.type!=='checkbox') return _echec('pas de case r-optin à l’inscription');
+      if(c.checked||c.hasAttribute('checked')) return _echec('la case est cochée par défaut');
+      const lab=document.querySelector('label[for="r-optin"]');
+      if(!lab||lab.textContent.indexOf('Reçois mes conseils et les nouveautés par e-mail')<0) return _echec('libellé');
+      if(consentementEmailDepuisCase(false,5)!==null||consentementEmailDepuisCase(undefined,5)!==null||consentementEmailDepuisCase('oui',5)!==null) return _echec('un consentement sans case cochée');
+      const ce=consentementEmailDepuisCase(true,123);
+      if(!ce||ce.accepte!==true||ce.le!==123||ce.texte!==OPTIN_EMAIL_TEXTE) return _echec('consentement : '+JSON.stringify(ce));
+      // doRegister lit la case, et la case seule n'empêche pas l'inscription.
+      const src=String(doRegister);
+      if(src.indexOf("consentementEmailDepuisCase(!!document.getElementById('r-optin')?.checked")<0) return _echec('doRegister ne lit pas la case');
+      if(/r-optin[^;]*showErr/.test(src)) return _echec('la case bloque l’inscription');
+      return true;})());
+
+    ok('OPT-IN E-MAIL — sans consentement, aucun drapeau ; avec, un seul PUT vers SA base (email_optin), jamais vers un service d’e-mail',(()=>{
+      const sF=window.fetch, sT=CLOUD._getToken, sO=CLOUD.ok, vus=[];
+      const u={email:'o@t.fr',role:'athlete',consentements:{email:{accepte:true,le:9,texte:'optin-email-v1'}}};
+      try{
+        window.fetch=(url,i)=>{ vus.push(String(url)+' '+(i&&i.method)); return Promise.resolve({ok:true}); };
+        CLOUD._getToken=async()=>'tok'; CLOUD.ok=()=>true;
+        try{ localStorage.removeItem('rc_optin_o@t.fr'); }catch(e){}
+        // Sans consentement : la fonction rend la main AVANT tout réseau.
+        emailOptinPublier({email:'n@t.fr',role:'athlete'});
+        emailOptinPublier({email:'n@t.fr',role:'athlete',consentements:{email:{accepte:false,le:1}}});
+        if(vus.length) return _echec('un envoi sans consentement');
+        const src=String(emailOptinPublier);
+        if(src.indexOf("'email_optin/'+moi+'.json'")<0||!/method:'PUT'/.test(src)) return _echec('le drapeau ne va pas dans email_optin');
+        if(/systeme/i.test(src)) return _echec('l’app parle à Systeme.io');
+        return true;
+      } finally { window.fetch=sF; CLOUD._getToken=sT; CLOUD.ok=sO; try{ localStorage.removeItem('rc_optin_o@t.fr'); }catch(e){} }})());
+
+    ok('SUPPRESSION DU COMPTE — le contact e-mail est supprimé par le serveur, AVANT que le jeton disparaisse',(()=>{
+      const src=String(requestAccountDeletion);
+      const i=src.indexOf("CLOUD._callFn('email',{action:'supprimer'})"), j=src.indexOf('accounts:delete');
+      if(i<0) return _echec('la suppression du contact n’est pas demandée');
+      if(!(j>i)) return _echec('demandée après la suppression de l’identité (plus de jeton)');
+      return src.indexOf("users/'+safeKey+'.json'")>i?true:_echec('demandée après l’effacement du dossier');})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est
