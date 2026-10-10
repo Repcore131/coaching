@@ -134,10 +134,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
-  // LES PRIX SONT LUS DANS tarifs.json, le tableau des offres, JAMAIS RECOPIES
-  // dans la vitrine : la vitrine ne porte que les CLES des formules choisies par
-  // le coach. Tableau illisible : les formules ne s'affichent pas, plutot qu'un
-  // prix faux.
+  // Les prix de Kevin se lisent dans tarifs.json ; illisible : rien plutot qu'un prix faux.
   var tarifs=fetch(racine+'tarifs.json').then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
   fetch(DB+'/vitrines/'+encodeURIComponent(slug)+'.json',ctrl?{signal:ctrl.signal}:{})
     .then(function(r){ return r.ok?r.json():null; })
@@ -162,15 +159,23 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
           +'<div class="ligne"><span class="prix">'+esc(p.prix||'')+'</span>'
           +(https(p.lienAchat)?'<a href="'+https(p.lienAchat)+'" target="_blank" rel="noopener noreferrer">Voir le programme</a>':'')
           +'</div></div></div>';}).join('');
-      var fk=v.formules?Object.keys(v.formules).map(function(k){return v.formules[k];}):[];
+      // Offres d'un coach externe : SES prix (0-2 000 EUR, 1-12 mois). Sans offre, les cles du
+      // tableau (page de Kevin) ; sinon rien, jamais les prix de Kevin ailleurs.
+      var off=v.offres||{}, ent=function(n,a,b){ return typeof n==='number'&&n%1===0&&n>=a&&n<=b; };
+      var fo=Object.keys(off).filter(function(k){ var o=off[k]; return /^[a-z0-9_-]{2,24}$/.test(k)&&o&&typeof o.lib==='string'&&o.lib&&ent(o.prixCts,0,2e5)&&ent(o.mois,1,12); })
+        .sort(function(a,b){ return off[a].prixCts-off[b].prixCts; }).slice(0,8).map(function(k){ var o=off[k];
+          return {k:k,lib:o.lib.slice(0,60),comprend:String(o.comprend||'').slice(0,300),prix:o.prixCts?euros(o.prixCts/100):'Gratuit',duree:o.mois+' mois',payable:o.prixCts>=100}; });
+      var fk=(!fo.length&&v.formules)?Object.keys(v.formules).map(function(k){return v.formules[k];}):[];
       var C=(T&&T.coaching)||{};
       fk=fk.filter(function(k){ return C[k]&&typeof C[k].prix==='number'&&C[k].lib; });
-      if(fk.length){
-        h+='<h2>Mes formules</h2>'+fk.map(function(k){
-          var f=C[k];
+      var liste=fo.length?fo:fk.map(function(k){ var f=C[k];
+        return {k:k,lib:f.lib,comprend:f.comprend||'',prix:euros(f.prix),duree:duree(k,f),payable:true}; });
+      if(liste.length){
+        h+='<h2>Mes formules</h2>'+liste.map(function(f){
+          var k=f.k;
           return '<div class="frm" data-f="'+esc(k)+'"><b>'+esc(f.lib)+'</b>'+(f.comprend?'<p>'+esc(f.comprend)+'</p>':'')
-            +'<div class="ligne"><span><span class="prix">'+euros(f.prix)+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
-            +'<span class="gestes">'+(v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
+            +'<div class="ligne"><span><span class="prix">'+esc(f.prix)+'</span> <span class="duree">'+esc(f.duree)+'</span></span>'
+            +'<span class="gestes">'+(v.paiement===true&&f.payable?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
             +'<button type="button" class="interesse">Ça m’intéresse</button></span></div>'
             +'<form novalidate><input name="prenom" autocomplete="given-name" maxlength="30" placeholder="Ton prénom" aria-label="Ton prénom">'
             +'<input name="contact" autocomplete="tel" maxlength="120" placeholder="Ton téléphone ou ton e-mail" aria-label="Ton téléphone ou ton e-mail">'

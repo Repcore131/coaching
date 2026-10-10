@@ -147,6 +147,27 @@ formules de `tarifs.json → coaching` par PayPal, sur ton compte.
   changé : à trancher (créditer chaque mensualité pendant 12 mois, ou garder le
   premier paiement seul).
 
+
+## 8. Coachs externes : prix libres et commission sur les athlètes convertis
+
+*Ajouté le 10/10/2026.* Un coach externe saisit ses formules (nom, prix de 0 à
+2 000 €, 1 à 12 mois, contenu). Sa page publique et le paiement direct
+(`paiements-coach.js`) lisent ces prix, jamais les tiens. Un athlète qu'il
+suivait et qui s'abonne dans les 90 jours après la fin de son code lui ouvre la
+commission des ambassadeurs (20 %, puis 25 % au-delà de 50, 12 mois, due à
+J+30, même rapport mensuel).
+
+- **a. Les CGV coach.** Le texte à ajouter est dans
+  `docs/CGV-COACHS-A-AJOUTER.md`. Le paiement direct reste fermé
+  (`PAIEMENTS_COACH`) tant que tu ne l'as pas validé et publié.
+- **b. Le parrainage en plus.** Un athlète parrainé par un ami ET suivi par un
+  coach : l'ami garde son mois offert, et le coach a sa commission. Ce ne sont
+  pas deux commissions (le parrain ne touche pas d'argent). Dis-le si tu veux
+  que l'un exclue l'autre.
+- **c. Mensualités.** Comme pour les ambassadeurs (point 7c), seul le premier
+  paiement d'abonnement est commissionné aujourd'hui. Ta décision au 7c vaudra
+  pour les deux.
+
 ---
 
 *Ce fichier se vide au fur et à mesure : une fois un point tranché et

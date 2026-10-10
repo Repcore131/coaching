@@ -33,10 +33,12 @@ import * as SA from './saisons.js';
 import * as RE from './retour.js';
 import * as RL from './relances.js';
 import * as PR from './prospects.js';
+import * as CC from './commission-coach.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
+export const CREATEUR_CLE = 'guellec,coachingpro@gmail,com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 // 'message' : un athlète a écrit à son coach (messagerie, lot M2). Vers l'athlète,
 // un message du coach part en type 'coach'.
@@ -838,7 +840,7 @@ export function creerMetier(deps) {
     const a = await _val('ambassadeurs/' + code);
     if (!a || !a.nom) return null;
     const o = {};
-    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret', 'avantage'])
+    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret', 'avantage', 'type'])
       if (a[k] !== null && a[k] !== undefined) o[k] = a[k];
     return o;
   }
@@ -855,6 +857,9 @@ export function creerMetier(deps) {
       palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t,
       avantage: AVANTAGES_AMB.indexOf(a.avantage) >= 0 ? a.avantage : 'essai+1mois', semaine: semaineAmbassadeur(lus) });
     await db.ref('ambassadeurs_vue/' + a.secret).set(v);
+    // UN COMPTE DE COACH : sa ligne du tableau de bord, lisible par lui seul.
+    if (a.type === 'coach' && typeof a.coach === 'string' && a.coach)
+      await db.ref('coach_commissions_vue/' + a.coach).set(CC.vueCoach(a, A.moisParis(t), t));
     return v;
   }
   const incr = (c) => db.ref(c).transaction((n) => (Number(n) || 0) + 1);
@@ -866,7 +871,7 @@ export function creerMetier(deps) {
     const [lien, parrain, droits, creeLe] = await Promise.all([
       _val('ambassadeurs_liens/' + uid), _val('parrainage/liens/' + uid), lireDroits(uid), _lire(uid, 'createdAt')]);
     let raison = null;
-    if (!cfg || cfg.actif === false) raison = 'code_inconnu';
+    if (!cfg || cfg.actif === false || cfg.type === 'coach') raison = 'code_inconnu';
     else if (lien) raison = 'deja_rattache';
     else if (parrain) raison = 'deja_parraine';
     else if (await dejaPaye(uid, droits)) raison = 'deja_client';
@@ -886,6 +891,45 @@ export function creerMetier(deps) {
     else await bonusEssai(uid, droits);
     await ambMajVue(code);
     return { ok: true };
+  }
+  // ══ LA COMMISSION DU COACH (commission-coach.js) ═════════════════════════
+  // Au premier paiement de l'athlète, AVANT ambassadeurPaiement : si son coach
+  // y a droit, l'athlète est rattaché au compte du coach dans le registre des
+  // ambassadeurs (créé au besoin, hors ambassadeurs_publics). La commission
+  // suit ensuite le chemin des ambassadeurs. Rend {ok, code?, raison?}.
+  async function lierCoachCommission(cle, t0) {
+    const t = Number(t0) || now();
+    const [lienAmb, coach, expiry, droits] = await Promise.all([_val('ambassadeurs_liens/' + cle),
+      _lire(cle, 'coachEmailKey'), _lire(cle, 'accessExpiry'), lireDroits(cle)]);
+    const c = typeof coach === 'string' ? coach : '';
+    const ok0 = CC.eligibilite({ athlete: cle, coach: c, lienAmb, t, roleCoach: 'coach', rattache: true, finCode: 1 });
+    if (!ok0.ok && ok0.raison !== 'hors_fenetre') return ok0;
+    const [roleCoach, rattache, nom] = await Promise.all([_lire(c, 'role'), _val('coachs/' + c + '/clients/' + cle), _lire(c, 'fname')]);
+    const finCode = Math.max(Number(expiry) || 0, Number(droits && droits.suiviJusqu) || 0);
+    const e = CC.eligibilite({ athlete: cle, coach: c, lienAmb, t, roleCoach, rattache, finCode });
+    if (!e.ok) return e;
+    const code = CC.codeCoach(c);
+    const fiche = await _val('ambassadeurs/' + code);
+    if (fiche && (fiche.type !== 'coach' || fiche.coach !== c)) return { ok: false, raison: 'code_pris' };
+    const id = P.idFilleul(cle);
+    const maj = { ['ambassadeurs_liens/' + cle]: { code, id, le: t, coach: true }, ['ambassadeurs/' + code + '/filleuls/' + id]: { inscritLe: t } };
+    if (!fiche) {
+      const b = new Uint8Array(24); crypto.getRandomValues(b);
+      const secret = Array.from(b, (x) => 'abcdefghijklmnopqrstuvwxyz0123456789'[x % 36]).join('');
+      maj['ambassadeurs/' + code + '/nom'] = 'Coach ' + (String(nom || '').trim().slice(0, 40) || c.split('@')[0].slice(0, 40));
+      maj['ambassadeurs/' + code + '/type'] = 'coach';
+      maj['ambassadeurs/' + code + '/coach'] = c;
+      maj['ambassadeurs/' + code + '/actif'] = true;
+      maj['ambassadeurs/' + code + '/secret'] = secret;
+      maj['ambassadeurs/' + code + '/creeLe'] = t;
+    }
+    // Un lien, une commission : la transaction ferme la porte à un ambassadeur arrivé entre-temps.
+    const tx = await db.ref('ambassadeurs_liens/' + cle).transaction((cur) => (cur ? undefined : maj['ambassadeurs_liens/' + cle]));
+    if (!tx.committed) return { ok: false, raison: 'deja_ambassadeur' };
+    delete maj['ambassadeurs_liens/' + cle];
+    await db.ref().update(maj);
+    await incr('ambassadeurs/' + code + '/stats/inscrits');
+    return { ok: true, code };
   }
   async function ambassadeurPaiement(cle, p) {
     const lien = await _val('ambassadeurs_liens/' + cle);
@@ -1353,11 +1397,13 @@ export function creerMetier(deps) {
     const [coach, vitrine] = await Promise.all([_val('slugs/' + slug), _val('vitrines/' + slug)]);
     if (!coach || !vitrine) return { ok: false, raison: 'page' };
     const existants = await _val('prospects/' + coach);
-    const r = PR.prospectDepuisFormulaire(corps, vitrine, existants, t);
+    // Les clés du tableau des offres (les prix de Kevin) ne valent que sur la vitrine de Kevin.
+    const v = coach === CREATEUR_CLE ? vitrine : Object.assign({}, vitrine, { formules: null });
+    const r = PR.prospectDepuisFormulaire(corps, v, existants, t);
     // Un doublon n'est pas une erreur pour la personne : sa demande est bien arrivée.
     if (!r.ok) return r.raison === 'doublon' ? { ok: true, deja: true } : r;
     await db.ref('prospects/' + coach + '/' + idFile(t, 'p')).set(r.prospect);
-    try { await envoyerPush(coach, PR.messageNouveauProspect(r.prospect, LIB_FORMULES[r.prospect.formule]), { attendre: true }); } catch (e) { /* le prospect est enregistré, c'est l'essentiel */ }
+    try { await envoyerPush(coach, PR.messageNouveauProspect(r.prospect, PR.libOffre(v, r.prospect.formule) || LIB_FORMULES[r.prospect.formule]), { attendre: true }); } catch (e) { /* le prospect est enregistré, c'est l'essentiel */ }
     return { ok: true };
   }
   // GET /vitrine-vue?s=<slug> : une visite par appareil et par jour (la page
@@ -1605,7 +1651,7 @@ export function creerMetier(deps) {
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
-    crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
+    crediterMoisOffert, lierCoachCommission, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
     duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };

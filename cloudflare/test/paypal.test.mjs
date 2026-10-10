@@ -428,10 +428,11 @@ await test('la table OFFRES du serveur suit les plans et les prix de l’app', a
 
 // ── LE PAIEMENT DIRECT AU COACH, PAR LE WEBHOOK (paiements-coach.js) ─────────
 await test('une capture à trois segments va au coach, une capture à deux reste un achat de programme', async () => {
-  const cmdCoach = { id: 'ORDCOACH01', purchase_units: [{ custom_id: 'kev@t,fr|lea@t,fr|coaching_essentiel', payee: { merchant_id: 'ABCDEFGH12345' },
+  const cmdCoach = { id: 'ORDCOACH01', purchase_units: [{ custom_id: 'kev@t,fr|lea@t,fr|essentiel', payee: { merchant_id: 'ABCDEFGH12345' },
     amount: { currency_code: 'EUR', value: '150.00' } }] };
   const cmdProg = { id: 'ORDPROG001', purchase_units: [{ custom_id: 'lea@t,fr|prog1', amount: { currency_code: 'EUR', value: '14.90' } }] };
   const w = monde({ users: Object.assign(LEA(), { 'kev@t,fr': { role: 'coach', coachPlan: 'pro' } }), boutique: { prog1: { prixCts: 1490 } },
+    coachs: { 'kev@t,fr': { formules: { essentiel: { lib: 'Suivi', prixCts: 15000, mois: 1, comprend: '' } } } },
     coach_paiement: { 'kev@t,fr': { marchand: 'ABCDEFGH12345', type: 'merchant_id', statut: 'relie', le: 1 } } },
     { commandes: { ORDCOACH01: cmdCoach, ORDPROG001: cmdProg } });
   const cap = (id, value, ord) => evt('PAYMENT.CAPTURE.COMPLETED', { id, status: 'COMPLETED', amount: { currency_code: 'EUR', value },

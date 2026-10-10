@@ -53789,8 +53789,11 @@ async function testExercices(){
 
     // ══ LOT C6 — LE PARCOURS DU PROSPECT (29/09/2026) ═══════════════════════
     ok('C6 — la vitrine publie les CLÉS des formules cochées, jamais un prix ; le prix se lit dans le tableau des offres',(()=>{
-      const u={role:'coach',email:'c6@t.fr',fname:'Kévin',lname:'Guellec',vitrineFormules:['coaching_evolution','boutique_prog','inconnue','coaching_essentiel']};
+      const u={role:'coach',email:CREATOR_EMAIL,fname:'Kévin',lname:'Guellec',vitrineFormules:['coaching_evolution','boutique_prog','inconnue','coaching_essentiel']};
       const v=vitrinePubliqueDonnees(u,1);
+      // 10/10/2026 : les clés du tableau (les prix de Kevin) ne valent que pour Kevin.
+      const ext=vitrinePubliqueDonnees(Object.assign({},u,{email:'c6@t.fr'}),1);
+      if('formules' in ext||'offres' in ext) return _echec('un coach externe publie les prix de Kevin : '+JSON.stringify(ext));
       if(JSON.stringify(v.formules)!==JSON.stringify(['coaching_essentiel','coaching_evolution'])) return _echec('formules : '+JSON.stringify(v.formules));
       if(/prix|€|\b150\b|\b600\b/.test(JSON.stringify(v))) return _echec('un prix recopié dans la vitrine : '+JSON.stringify(v));
       if(v.accueil!==PROSPECT_ACCUEIL_DEFAUT) return _echec('accueil par défaut');
@@ -53906,7 +53909,7 @@ async function testExercices(){
       // La page publique ne montre « Payer » que si la vitrine le dit.
       const x=new XMLHttpRequest(); x.open('GET','../c/index.html',false); x.send();
       const page=x.status===200?x.responseText:'';
-      if(!/v\.paiement===true\?'<a class="payer"/.test(page)) return _echec('la vitrine ne garde pas le bouton derrière v.paiement');
+      if(!/v\.paiement===true(&&f\.payable)?\?'<a class="payer"/.test(page)) return _echec('la vitrine ne garde pas le bouton derrière v.paiement');
       // Les contacts : « Lien de paiement » seulement relié.
       const svU=currentUser, svB=_prBrut, z=document.getElementById('pr-corps'), av=z?z.innerHTML:null;
       try{
@@ -53932,9 +53935,11 @@ async function testExercices(){
       } finally { _pcEtat=sv; }})());
     ok('Paiement coach — le lien de paiement, et le suivi payé qui s’ajoute au palier sans l’écraser',(()=>{
       if(pcLienPayer('kevin-g','coaching_essentiel')!==PC_APP+'?payer=kevin-g~coaching_essentiel') return _echec(pcLienPayer('kevin-g','coaching_essentiel'));
-      if(pcLienPayer('kevin-g','boutique_prog')||pcLienPayer('../x','coaching_essentiel')) return _echec('lien invalide accepté');
+      if(pcLienPayer('kevin-g','Mauvais id!')||pcLienPayer('../x','coaching_essentiel')) return _echec('lien invalide accepté');
       const p=pcLirePayer('kevin-g~coaching_transfo');
-      if(!p||p.slug!=='kevin-g'||p.formule!=='coaching_transfo'||pcLirePayer('kevin-g~inconnue')||pcLirePayer('x')) return _echec('lecture du lien');
+      if(!p||p.slug!=='kevin-g'||p.formule!=='coaching_transfo'||pcLirePayer('kevin-g~Inconnue!')||pcLirePayer('x')) return _echec('lecture du lien');
+      const q=pcLirePayer('sam-coach~suivi-mensuel');
+      if(!q||q.formule!=='suivi-mensuel'||pcLienPayer('sam-coach','suivi-mensuel')!==PC_APP+'?payer=sam-coach~suivi-mensuel') return _echec('formule d’un coach externe');
       // droits : un suiviJusqu à venir donne le suivi ; passé, le palier payé reprend.
       const src=String(palierDe);
       if(!/suiviJusqu/.test(src)||!/suiviJusqu/.test(String(droitsDe))) return _echec('suiviJusqu ignoré par palierDe ou droitsDe');
@@ -53944,6 +53949,52 @@ async function testExercices(){
       if(l.map(x=>x.id).join()!=='c,a') return _echec(l.map(x=>x.id).join());
       const d=document.createElement('div'); d.innerHTML=htmlPaiementsFiche(l);
       return (/Remboursé/.test(d.textContent)&&/Reçu/.test(d.textContent)&&/150/.test(d.textContent))?true:_echec(d.textContent);})());
+
+    // ══ COACHS EXTERNES : LEURS PRIX, LEUR COMMISSION (10/10/2026) ══════════
+    ok('Coachs externes — prix bornés : 0 à 2 000 € en centimes entiers, 1 à 12 mois ; gratuit affichable, pas payable',(()=>{
+      if(!formuleCoachNette({lib:'Suivi',prixCts:12000,mois:1})) return _echec('formule valable refusée');
+      if(!formuleCoachNette({lib:'Découverte',prixCts:0,mois:1})) return _echec('gratuit refusé');
+      if(!formuleCoachNette({lib:'Max',prixCts:200000,mois:12})) return _echec('bornes hautes refusées');
+      for(const f of [{lib:'x',prixCts:200001,mois:1},{lib:'x',prixCts:-1,mois:1},{lib:'x',prixCts:99.5,mois:1},{lib:'x',prixCts:'12000',mois:1},
+        {lib:'x',prixCts:100,mois:0},{lib:'x',prixCts:100,mois:13},{lib:'x',prixCts:100,mois:1.5},{lib:'',prixCts:100,mois:1},{lib:'y'.repeat(61),prixCts:100,mois:1},
+        {lib:'x',prixCts:100,mois:1,comprend:'z'.repeat(301)},null,'texte'])
+        if(formuleCoachNette(f)) return _echec('acceptée : '+JSON.stringify(f));
+      // La saisie, en euros.
+      const a=formuleCoachSaisie({lib:'  Suivi  mensuel ',prix:'89,90',mois:3,comprend:'Bilans'});
+      if(!a.f||a.f.lib!=='Suivi mensuel'||a.f.prixCts!==8990||a.f.mois!==3) return _echec(JSON.stringify(a));
+      if(formuleCoachSaisie({lib:'X',prix:'2000,01',mois:1}).erreur===undefined) return _echec('2 000,01 € accepté');
+      if(formuleCoachSaisie({lib:'X',prix:'2 000 €',mois:1}).f.prixCts!==200000) return _echec('2 000 €');
+      if(!formuleCoachSaisie({lib:'X',prix:'abc',mois:1}).erreur||!formuleCoachSaisie({lib:'X',prix:'10',mois:13}).erreur||!formuleCoachSaisie({lib:'',prix:'10',mois:1}).erreur) return _echec('saisies fautives');
+      if(!formuleCoachSaisie({lib:'',prix:'',mois:1}).vide) return _echec('ligne vide');
+      if(idFormuleCoach('Suivi Été',['suivi-ete'])!=='suivi-ete-2'||!FORMULE_COACH.idRe.test(idFormuleCoach('!',[]))) return _echec('identifiants');
+      return (prixFormuleCoach({prixCts:0})==='Gratuit'&&prixFormuleCoach({prixCts:8990})===_euros(89.9))?true:_echec('prix affiché');})());
+    ok('Coachs externes — la vitrine publie SES offres, jamais les prix de Kevin ; Kevin garde le tableau',(()=>{
+      const sam={role:'coach',email:'sam@t.fr',fname:'Sam',formulesCoach:{'suivi':{lib:'Suivi',prixCts:9000,mois:1,comprend:''},'trimestre':{lib:'Trimestre',prixCts:24000,mois:3,comprend:'Un bilan par semaine'},
+        'faux':{lib:'Trop cher',prixCts:999999,mois:1}},vitrineFormules:['coaching_essentiel']};
+      const v=vitrinePubliqueDonnees(sam,1);
+      if('formules' in v) return _echec('clés du tableau publiées');
+      if(JSON.stringify(v.offres)!==JSON.stringify({suivi:{lib:'Suivi',prixCts:9000,mois:1},trimestre:{lib:'Trimestre',prixCts:24000,mois:3,comprend:'Un bilan par semaine'}})) return _echec(JSON.stringify(v.offres));
+      if(vitrineOffreIds(sam).join()!=='suivi,trimestre'||libFormuleVitrine(sam,'trimestre')!=='Trimestre') return _echec('ids, libellé');
+      // Sans formule : rien (pas de repli).
+      if('offres' in vitrinePubliqueDonnees({role:'coach',email:'sam@t.fr',fname:'Sam'},1)) return _echec('repli');
+      // Kevin : ses formulesCoach n'existent pas, le tableau reste.
+      if(formulesCoachDe(Object.assign({},sam,{email:CREATOR_EMAIL})).length) return _echec('Kevin a des formules libres');
+      // L'éditeur : une ligne par formule, et les cases du tableau absentes.
+      const d=document.createElement('div'); d.innerHTML=htmlReglagesProspects(sam);
+      if(d.querySelectorAll('.fc-l').length!==2||d.querySelector('[data-formule]')) return _echec('éditeur');
+      if(d.querySelector('.fc-l .fc-prix').value!=='90') return _echec('prix en euros : '+d.querySelector('.fc-prix').value);
+      const d2=document.createElement('div'); d2.innerHTML=_fcLigne({id:'x',lib:'X',prixCts:8990,mois:1,comprend:''});
+      if(d2.querySelector('.fc-prix').value!=='89,90') return _echec('centimes : '+d2.querySelector('.fc-prix').value);
+      const vide=document.createElement('div'); vide.innerHTML=htmlReglagesProspects({role:'coach',email:'n@t.fr'});
+      if(vide.querySelectorAll('.fc-l').length!==1) return _echec('une ligne vide pour commencer');
+      const k=document.createElement('div'); k.innerHTML=htmlReglagesProspects({role:'coach',email:CREATOR_EMAIL});
+      return (k.querySelectorAll('[data-formule]').length===5&&!k.querySelector('.fc-l'))?true:_echec('Kevin : les cases');})());
+    ok('Coachs externes — la ligne du tableau : « Tes athlètes devenus abonnés : X · ta commission du mois : Y € »',(()=>{
+      if(ligneCommissionCoach(null)!==''||ligneCommissionCoach({convertis:0,commissionMois:0})!=='') return _echec('affichée sans converti');
+      const l=ligneCommissionCoach({convertis:3,commissionMois:5.7});
+      if(l!=='Tes athlètes devenus abonnés : 3 · ta commission du mois : '+_euros(5.7)) return _echec(l);
+      const src=String(renderCommissionCoach);
+      return (/coach_commissions_vue/.test(src)&&/escapeHtml/.test(src))?true:_echec('source');})());
 
     // ══ LOT T1 — L'e1RM CORRIGÉE, LE PLAFOND DU PAS (29/09/2026) ═════════════
     ok('T1 — le plafond du pas : +10 kg en bas du corps, +5 kg en haut, rien sur une isolation ni sur une baisse',(()=>{
@@ -54534,7 +54585,7 @@ async function testExercices(){
       const v=vitrinePubliqueDonnees(c,5);
       // LOT C6 (29/09/2026) : deux champs publics de plus, bornés par les règles :
       // les CLÉS des formules proposées (jamais un prix) et le message d'accueil.
-      const permis=['nom','equipe','phrase','bio','vision','photo','specialites','programmes','formules','accueil','maj'];
+      const permis=['nom','equipe','phrase','bio','vision','photo','specialites','programmes','formules','offres','accueil','maj'];
       const trop=Object.keys(v).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       if(v.photo!=='https://res.cloudinary.com/k.jpg'||/base64|0600|privé/.test(JSON.stringify(v))) return _echec(JSON.stringify(v));

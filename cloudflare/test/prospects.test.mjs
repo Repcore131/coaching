@@ -74,7 +74,8 @@ test('aucun paiement dans le parcours : ni PayPal, ni lien d’achat, ni prix é
 });
 
 // ── DE BOUT EN BOUT ───────────────────────────────────────────────────────
-const COACH = 'kev@t,fr';
+const COACH = 'guellec,coachingpro@gmail,com'; // la vitrine de Kevin : les clés du tableau des offres y valent
+const EXTERNE = 'sam@t,fr';
 function monde(initial, t) {
   const Fb = fausseBase(initial);
   const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: Fb.fetchImpl });
@@ -109,6 +110,21 @@ test('le formulaire crée le prospect chez le coach et le prévient ; la relance
   await w.db.ref('push_log/' + COACH).remove();
   await w.M.prospectsRelanceHeure(T + 50 * H);
   assert.equal(w.F.recus.length, 2, 'pas deux relances pour le même prospect');
+});
+
+test('coach externe : ses offres seulement, jamais les clés du tableau de Kevin ; le libellé du coach dans la notification', async () => {
+  const tel = appareil('https://push.test/sam');
+  const offres = { suivi1: { lib: 'Suivi mensuel Sam', prixCts: 9000, mois: 1, comprend: 'Un bilan par semaine' }, faux: { lib: 'x', prixCts: 999999, mois: 1 } };
+  const w = monde({ slugs: { 'sam-coach': EXTERNE }, vitrines: { 'sam-coach': { nom: 'Sam', formules: ['coaching_essentiel'], offres } },
+    push: { [EXTERNE]: { x: tel.abonnement } } }, T);
+  // Une clé du tableau (prix de Kevin) sur la vitrine d'un coach externe : refusée.
+  assert.equal((await w.M.prospectRecevoir(Object.assign({ slug: 'sam-coach' }, F()), T)).raison, 'formule');
+  // Une offre hors bornes : refusée.
+  assert.equal((await w.M.prospectRecevoir(Object.assign({ slug: 'sam-coach' }, F({ formule: 'faux' })), T)).raison, 'formule');
+  assert.deepEqual(await w.M.prospectRecevoir(Object.assign({ slug: 'sam-coach' }, F({ formule: 'suivi1' })), T), { ok: true });
+  assert.match(tel.lire(w.F.recus[0].init.body).body, /Suivi mensuel Sam/);
+  assert.deepEqual(PR.formulesVitrine({ offres }), ['suivi1']);
+  assert.deepEqual(PR.formulesVitrine({}), []);
 });
 
 test('le coach a répondu avant 48 h : rien ne part', async () => {

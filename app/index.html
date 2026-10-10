@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1814';
+window.RC_BUILD='1815';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-10';
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1814.css">
+<link rel="stylesheet" href="./rc-style.1815.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1724,6 +1724,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ch-relances"></div>
         <!-- LOT C6 : les trois chiffres de la page et les contacts (renderEntreeProspects). -->
         <div id="ch-prospects"></div>
+        <!-- Coachs externes : la commission sur les athlètes devenus abonnés (renderCommissionCoach). -->
+        <div id="ch-commission"></div>
         <div id="ch-premiers-pas"></div>
         <!-- LE TITRE PREND SA PROPRE LIGNE. Cote a cote avec trois boutons, il
              passait a la ligne — « MES / ATHLETES » — et un titre coupe en deux
@@ -6135,5 +6137,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1814.js"></script>
+<script src="./rc-core.1815.js"></script>
 </body></html>
