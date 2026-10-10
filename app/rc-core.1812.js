@@ -1261,7 +1261,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi.","reponse":"Ton programme est prêt sous 24 h après ton bilan de départ."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1,"moisParrain":1,"mentorPayants":10},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi.","reponse":"Ton programme est prêt sous 24 h après ton bilan de départ."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -23826,10 +23826,10 @@ function ambCopier(l,btn){
 // LA RÉCOMPENSE (Kevin, 09/10/2026, DECISIONS §1 et §2) : le filleul a son
 // mois d'essai PLUS un mois offert par son parrain (essai_parrainage.moisEnPlus
 // = 1, soit moisInvite() = 2) ; le parrain gagne 1 mois offert — ses droits
-// prolongés — aux QUATRE PREMIÈRES SÉANCES du filleul ou à son PREMIER
-// PAIEMENT, le premier des deux, une seule fois par filleul (worker :
-// parrainageSeuil, parrainagePaiement). Au 10e filleul payant, 1 mois
-// d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
+// prolongés — au PREMIER PAIEMENT du filleul, confirmé par PayPal, une seule
+// fois par filleul (Kevin, 11/10/2026 : plus aux quatre séances ; worker :
+// parrainagePaiement). Au 10e filleul PAYANT (essai_parrainage.mentorPayants),
+// 1 mois d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
 //
 // OÙ VIVENT LES DONNÉES (voir database.rules.json et functions/index.js) :
 //   /parrainage/codes/<CODE> → clé du parrain ; /parrainage/codesPublics/<CODE>
@@ -23852,7 +23852,7 @@ const PARRAINAGE_CODE_RE=/^[A-Z]{4,6}[A-Z2-9]{3}$/;
 const PARRAINAGE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const PARRAINAGE_PALIERS=Object.freeze([
   {n:3,badge:'recruteur',nom:'RECRUTEUR',gain:'Badge RECRUTEUR'},
-  {n:10,badge:'mentor',nom:'MENTOR',gain:'Badge MENTOR et 1 mois d’Ultime offert'}
+  {n:Number(TARIFS.essai_parrainage.mentorPayants)||10,badge:'mentor',nom:'MENTOR',gain:'Badge MENTOR et 1 mois d’Ultime offert'}
 ]);
 const PARRAINAGE_REF_CLE='rc_ref';
 const PARRAINAGE_REF_JOURS=60;
@@ -24114,9 +24114,9 @@ function parrainageFusionnerCompte(u,compte){
   if(parrainageCodeValide(compte.code)) p.code=compte.code;
   if(compte.parrain&&parrainageCodeValide(compte.parrain.code)) p.parrainCode=compte.parrain.code;
   p.inscrits=l.length; p.payants=payantsLe.length; p.payantsLe=payantsLe;
-  // LES FILLEULS « AU TRAVAIL » (lot C) : quatre séances faites (creditE,
-  // posée par le Worker) ou abonnés. Ce sont eux qui comptent pour RECRUTEUR
-  // et MENTOR, datés du jour où ils ont compté.
+  // LES FILLEULS CRÉDITÉS (creditE, posée par le Worker au premier paiement,
+  // ou aux quatre séances avant le 11/10/2026) ou abonnés. Gardés pour
+  // l'historique ; RECRUTEUR et MENTOR comptent désormais les payants (payantsLe).
   const actifsLe=l.filter(x=>x.creditE===true||x.statut==='payant')
     .map(x=>Number(x.actifLe)||Number(x.creditLe)||Number(x.payeLe)||Number(x.date)||0).filter(x=>x>0).sort((a,b)=>a-b);
   const avantA=(u.parrainage&&Array.isArray(u.parrainage.actifsLe))?u.parrainage.actifsLe.length:0;
@@ -24127,18 +24127,19 @@ function parrainageFusionnerCompte(u,compte){
   u.parrainage=p;
   return payantsLe.length!==avant||actifsLe.length!==avantA;
 }
-// PURE. Où en est un filleul : 'payant' (abonné), 'actif' (ses quatre
-// premières séances : le mois du parrain est tombé), 'seance' (sa première
-// séance est faite : le Worker l'a notée, événement filleul_seance) ou
-// 'inscrit'. Les marches de l'écran parrainage.
+// PURE. Où en est un filleul : 'payant' (abonné : le mois du parrain est
+// tombé), 'seance' (il s'entraîne : première séance notée par le Worker, ou
+// crédité par ses séances avant le 11/10/2026) ou 'inscrit'. Les marches de
+// l'écran parrainage.
 function filleulStatut(x){
   if(!x||typeof x!=='object') return 'inscrit';
   if(x.statut==='payant') return 'payant';
-  if(x.statut==='actif'||x.creditE===true) return 'actif';
+  if(x.statut==='actif'||x.creditE===true) return 'seance';
   if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
   return 'inscrit';
 }
-const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','4 séances ✓'],['payant','Abonné']]);
+// Trois marches depuis le 11/10/2026 : le mois du parrain tombe à l'abonnement.
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['payant','Abonné']]);
 // PURE. La ligne d'un filleul : son prénom, et ses trois marches.
 function htmlFilleul(x){
   const st=filleulStatut(x);
@@ -24155,10 +24156,8 @@ function htmlLigneFilleuls(u){
   if(!PARRAINAGE_ACTIF||!(n>0)) return '';
   const l=Array.isArray(p.prenoms)?p.prenoms:[];
   const seance=l.filter(x=>filleulStatut(x)==='seance').length, pay=Number(p.payants)||0, mois=Number(p.moisGagnes)||0;
-  const actifs=l.filter(x=>filleulStatut(x)==='actif').length;
   const bouts=[n+' filleul'+(n>1?'s':'')];
   if(seance) bouts.push(seance+' en route');
-  if(actifs) bouts.push(actifs+' au travail');
   if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
   if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
   return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
@@ -24194,14 +24193,14 @@ function htmlParrainage(u){
   const p=(u&&u.parrainage)||{};
   const code=p.code||'';
   const inscrits=Number(p.inscrits)||0, mois=Number(p.moisGagnes)||0;
-  // Les paliers comptent les filleuls AU TRAVAIL (quatre séances, ou abonnés).
-  const actifs=Math.max(Number(p.actifs)||0,Number(p.payants)||0);
+  // Les paliers comptent les filleuls ABONNÉS (11/10/2026), comme le serveur.
+  const actifs=Number(p.payants)||0;
   const tuile=(v,l)=>'<div class="pr-tuile"><b>'+escapeHtml(String(v))+'</b><span>'+escapeHtml(l)+'</span></div>';
   const paliers=PARRAINAGE_PALIERS.map(x=>{
     const part=Math.min(1,actifs/x.n);
     const reste=x.n-actifs;
     return '<div class="pr-palier'+(actifs>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
-      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' à quatre séances')+'</span></div>'
+      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
@@ -24209,8 +24208,8 @@ function htmlParrainage(u){
   // LA CARTE D'ABORD (28/09/2026) : une image se partage en story, un texte
   // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
-    +'<p>Tu offres <b>son premier mois</b> à ton ami. Toi, tu gagnes <b>1 mois</b> quand il s’y met vraiment.</p>'
-    +'<p class="pr-regle">Ton mois arrive quand ton pote a fait ses quatre premières séances.</p></div>'
+    +'<p>Tu offres <b>un mois de plus</b> à ton ami. Toi, tu gagnes <b>'+escapeHtml(String(Number(TARIFS.essai_parrainage.moisParrain)||1))+' mois</b> quand il s’abonne.</p>'
+    +'<p class="pr-regle">Ton mois arrive au premier paiement de ton pote, confirmé par PayPal. Ses séances seules ne comptent pas.</p></div>'
     +'<div class="pr-carte-inv">'
     +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
       +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
@@ -24224,7 +24223,7 @@ function htmlParrainage(u){
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
     +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
-    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,'à 4 séances')
+    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,actifs>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
     +(liste?'<div class="pr-liste"><div class="pr-sous">Tes filleuls</div>'+liste+'</div>':'')
@@ -83914,12 +83913,12 @@ const BADGES_ACQUIS=Object.freeze([
   // lit pas depuis un dossier : on compare la date d'inscription à celle du
   // 500e, FONDATEUR_LIMITE. Tant qu'elle n'est pas posée, le badge dort.
   {id:'fondateur',nom:'FONDATEUR',famille:'unique',palier:null,icone:'fondateur',condition:'Fais partie des 500 premiers inscrits.',test:f=>f.fondateur,inactif:()=>!(FONDATEUR_LIMITE>0)},
-  // LE PARRAINAGE : des filleuls AU TRAVAIL (quatre séances faites, ou
-  // abonnés : un inscrit ne compte pas, anti-fraude), datés du 3e et du 10e
-  // (u.parrainage.actifsLe, recopié de /parrainage/comptes, où seul le Worker
-  // écrit). Fermés tant que PARRAINAGE_ACTIF l'est.
-  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes qui font leurs quatre premières séances.',test:f=>_bdgNieme(f.parrainages,3),inactif:()=>!PARRAINAGE_ACTIF},
-  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes qui font leurs quatre premières séances.',test:f=>_bdgNieme(f.parrainages,10),inactif:()=>!PARRAINAGE_ACTIF},
+  // LE PARRAINAGE : des filleuls ABONNÉS (11/10/2026 ; un inscrit ne compte
+  // pas, anti-fraude), datés du 3e et du 10e (u.parrainage.payantsLe, recopié
+  // de /parrainage/comptes, où seul le Worker écrit). Fermés tant que
+  // PARRAINAGE_ACTIF l'est.
+  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes qui s’abonnent.',test:f=>_bdgNieme(f.parrainages,3),inactif:()=>!PARRAINAGE_ACTIF},
+  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes qui s’abonnent.',test:f=>_bdgNieme(f.parrainages,10),inactif:()=>!PARRAINAGE_ACTIF},
   // LES DÉFIS DU CANAL : CHAMPION est daté par la clôture du défi
   // (defis_resultats → u.defisReleves) — le premier du classement d'un défi
   // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
@@ -84151,9 +84150,10 @@ function _badgesFaits(u,maintenant){
     .sort().map(j=>{ const [a,m,dd]=j.split('-').map(Number); return new Date(a,m-1,dd,20).getTime(); });
   const cree=Number(u&&u.createdAt)||0;
   if(FONDATEUR_LIMITE>0&&cree>0&&cree<=FONDATEUR_LIMITE) f.fondateur=cree;
-  // Les filleuls au travail, datés (RECRUTEUR, MENTOR) ; les abonnés d'un miroir d'avant.
+  // Les filleuls ABONNÉS, datés (RECRUTEUR, MENTOR), depuis le 11/10/2026.
+  // Un badge déjà gagné reste au dossier (u.badges) : rien n'est repris.
   const _pr=(u&&u.parrainage)||{};
-  f.parrainages=(Array.isArray(_pr.actifsLe)?_pr.actifsLe:Array.isArray(_pr.payantsLe)?_pr.payantsLe:[])
+  f.parrainages=(Array.isArray(_pr.payantsLe)?_pr.payantsLe:[])
     .map(Number).filter(x=>x>0).sort((a,b)=>a-b);
   // Le premier défi gagné (CHAMPION).
   const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];

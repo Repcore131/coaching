@@ -63,22 +63,20 @@ const assert = (c, m) => { if (!c) { console.log("ECHEC:", m); process.exitCode 
   const neuf = {}; for (let i = 0; i < 9; i++) neuf["x" + i] = { statut: "payant" }; neuf.a = { statut: "inscrit" };
   assert(P.premierPaiement({ filleuls: neuf }, "a", 9).mentor === true, "10e filleul payant : palier MENTOR");
   assert(P.premierPaiement({ filleuls: neuf, mentorLe: 5 }, "a", 9).mentor === false, "le palier des 10 ne se gagne qu'une fois");
-  // Les quatre séances (29/09/2026) : un seul mois par filleul, quel que soit le chemin.
-  const s1 = P.seuilSeances(c0, "a", 7);
-  assert(s1 && s1.credit && s1.moisGagnes === 3 && s1.filleul.creditE === true && s1.actifs === 1, "quatre séances : +1 mois, creditE");
-  const c1 = { filleuls: { a: Object.assign({}, c0.filleuls.a, s1.filleul) }, moisGagnes: 3 };
-  assert(P.seuilSeances(c1, "a", 8) === null, "rejoué : rien");
+  // LE PREMIER PAIEMENT SEUL (11/10/2026) : les séances ne créditent plus.
+  assert(P.seuilSeances === undefined && P.texteSeuil === undefined && P.SEUIL_SEANCES === undefined, "plus de crédit aux séances");
+  assert(P.PALIER_MENTOR === require(path.join(__dirname, "..", "..", "tarifs.json")).essai_parrainage.mentorPayants, "le palier mentor vient de tarifs.json");
+  assert(p1.credit === true && p1.filleul.creditE === true && p1.filleul.payeLe === 9, "le paiement crédite et marque");
+  const c1 = { filleuls: { a: Object.assign({}, c0.filleuls.a, { creditE: true }) }, moisGagnes: 3 };
   const p2 = P.premierPaiement(c1, "a", 9);
-  assert(p2 && p2.credit === false && p2.moisGagnes === 3 && p2.payants === 1, "paiement après les séances : pas de second mois");
+  assert(p2 && p2.credit === false && p2.moisGagnes === 3 && p2.payants === 1, "crédité par ses séances avant le changement : pas de second mois");
   assert(/vient de s’abonner/.test(P.textePaiement(p2).title) && !/offert/.test(P.textePaiement(p2).title), "le push sans mois");
-  const c2 = { filleuls: { a: Object.assign({}, c0.filleuls.a, p1.filleul) }, moisGagnes: 3 };
-  assert(P.seuilSeances(c2, "a", 10) === null, "payé avant les séances : les séances ne créditent plus");
-  const s2 = P.seuilSeances({ filleuls: { a: { statut: "payant" } }, moisGagnes: 1 }, "a", 10);
-  assert(s2 && s2.credit === false && s2.moisGagnes === 1 && s2.filleul.creditE, "payé avant cette règle : marqué, sans second mois");
-  assert(P.seuilSeances({ filleuls: {} }, "z", 1) === null, "pas ce filleul : rien");
   const neufA = {}; for (let i = 0; i < 9; i++) neufA["x" + i] = { statut: "inscrit", creditE: true }; neufA.a = { statut: "inscrit" };
-  assert(P.seuilSeances({ filleuls: neufA }, "a", 9).mentor === true, "10e filleul au travail : MENTOR");
-  assert(/s’est mis au travail : ton mois est offert/.test(P.texteSeuil({ prenom: "Julie", mentor: false }, "mois_ouvert").title), "texte du seuil");
+  assert(P.premierPaiement({ filleuls: neufA }, "a", 9).mentor === false, "9 crédités sans payer + 1 payant : pas MENTOR (il faut 10 PAYANTS)");
+  const neufB = {}; for (let i = 0; i < 9; i++) neufB["x" + i] = { statut: "payant" }; neufB.a = { statut: "inscrit", creditE: true };
+  const pm = P.premierPaiement({ filleuls: neufB }, "a", 9);
+  assert(pm.mentor === true && pm.credit === false, "10e PAYANT déjà crédité : MENTOR quand même, sans second mois");
+  assert(/10 filleuls abonnés/.test(P.textePaiement(pm).title), "le push mentor");
 
   // 2. Le parcours.
   const RealNow = Date.now;

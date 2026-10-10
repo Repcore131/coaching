@@ -22,8 +22,10 @@ contredisaient ont été réécrits (FAQ de la landing, /i, /a, app, CGV §4).
 1. **Essai de la personne invitée : 2 mois** (l'essai + un mois offert par
    l'ami ou l'ambassadeur « essai+1mois »). App : `moisInvite()`,
    `offreMoisInvite()`, `texteMoisOfferts()` lisent `tarifs.json`.
-2. **Récompense du parrain : aux quatre premières séances ou au premier
-   paiement**, le premier des deux, une fois par invité (worker inchangé).
+2. **Récompense du parrain : au premier paiement seulement** (Kevin, 11/10/2026,
+   au lieu de « quatre séances ou premier paiement » du 09/10), une fois par
+   invité ; le mois « mentor » à 10 filleuls **payants** (`tarifs.json →
+   essai_parrainage`). Les filleuls déjà crédités par leurs séances le restent.
 3. **Commission des ambassadeurs : 20 %, puis 25 % au-delà de 50 payants,
    pendant 12 mois** (`AMB_DEFAUTS` inchangé).
 4. **Premier mois d'Ultime à moitié prix : après un suivi ET avec un code

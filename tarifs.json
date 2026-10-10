@@ -12,7 +12,7 @@
   },
   "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
   "essai": { "mois": 1, "jours": 30, "carte": false },
-  "essai_parrainage": { "moisEnPlus": 1 },
+  "essai_parrainage": { "moisEnPlus": 1, "moisParrain": 1, "mentorPayants": 10, "_lisezmoi": "moisEnPlus : le mois offert à la personne invitée (son essai). moisParrain : le mois gagné par celui qui invite, au PREMIER PAIEMENT de la personne invitée, confirmé par PayPal (Kevin, 11/10/2026 : plus aux quatre séances), une fois par filleul. mentorPayants : le nombre de filleuls PAYANTS qui donne le mois d'Ultime « mentor ». Lus par functions/parrainage-calcul.js (serveur), l'app, la FAQ et les CGV." },
   "coach": { "libre": 0, "coach": 19, "pro": 39 },
   "quotas_coach": {
     "_lisezmoi": "CE QUE CHAQUE FORMULE COACH PERMET : athletes = nombre d'athlètes actifs qu'on peut rattacher (null = sans limite : JSON ne connaît pas Infinity, l'app le lit comme Infinity) ; moisCode = durée maximale d'un code d'accès, en mois. Recopié dans l'app (QUOTAS_COACH) ; la durée est aussi tenue par database.rules.json (rc_codes/months), que scripts/verif/tarifs.mjs compare à ces valeurs.",
