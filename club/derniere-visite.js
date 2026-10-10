@@ -66,7 +66,7 @@ function deltaCard() {
     if (affiche && !lignes.length) { const m = prochaineMicroAction(); if (m) lignes.push({ k: 'action', t: m.label, href: m.link }); else affiche = false; }
     UI.deltaVisite = { uid: ME.id, lignes, affiche };
     // Carte masquée par « Vu » et rien de neuf : elle reste masquée à la visite suivante.
-    if (!recent && !CFG.capture) setTimeout(() => { if (UI.deltaVisite && UI.deltaVisite.uid === ME.id) deltaEnregistrer(!affiche && vu ? { homeVu: Date.now() + 1 } : {}); }, 3000);
+    if (!recent && !CFG.capture) setTimeout(() => { if (ME && UI.deltaVisite && UI.deltaVisite.uid === ME.id) deltaEnregistrer(!affiche && vu ? { homeVu: Date.now() + 1 } : {}); }, 3000);
   }
   const V = UI.deltaVisite; if (!V.affiche || !V.lignes.length) return '';
   return `<div class="card col12 delta" id="delta"><div class="race-h"><div><h3>Depuis ta dernière visite</h3></div><span class="spacer"></span><button class="btn sm" data-act="deltaVu">Vu</button></div>

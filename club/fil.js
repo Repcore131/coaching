@@ -8,12 +8,12 @@
 //   save       client sauvé ;             recovered  impayé récupéré (montant pour les managers seuls) ;
 //   challenge  début et fin d'un défi ;   kudos      bravo donné sur une vente ;
 //   manager    annonce publiée par un manager.
-// Les réglages de chacun (prefs.feed) filtrent le fil, le bandeau en direct et le compteur de non-lus.
-const FEED_LABELS = { sale: 'Ventes saisies', import: 'Ventes importées', trophy: 'Trophées', palier: 'Paliers d’équipe', save: 'Clients sauvés', recovered: 'Impayés récupérés', challenge: 'Défis', kudos: 'Bravos', manager: 'Annonces du manager' };
-const FEED_PUCES = [['tout', 'Tout', null], ['ventes', 'Ventes', ['sale', 'import']], ['victoires', 'Victoires', ['trophy', 'palier', 'save', 'recovered', 'challenge']], ['bravo', 'Bravo', ['kudos']], ['annonces', 'Annonces', ['manager']]];
-const FEED_VICTOIRES = ['trophy', 'palier', 'save', 'recovered', 'challenge'];
-const FEED_BADGE = { sale: ['VENTE', 'chart'], import: ['IMPORT', 'upload'], trophy: ['TROPHÉE', 'trophy'], palier: ['VICTOIRE', 'users'], save: ['VICTOIRE', 'lifebuoy'], recovered: ['VICTOIRE', 'coins'], challenge: ['DÉFI', 'bolt'], kudos: ['BRAVO', 'sparkle'], manager: ['ANNONCE', 'bell'] };
-const FEED_PAGE = 30;
+// Les réglages de chacun (préférences du fil) filtrent le fil, les alertes en direct et le compteur de non-lus.
+const FIL_LABELS = { sale: 'Ventes saisies', import: 'Ventes importées', trophy: 'Trophées', palier: 'Paliers d’équipe', save: 'Clients sauvés', recovered: 'Impayés récupérés', challenge: 'Défis', kudos: 'Bravos', manager: 'Annonces du manager' };
+const FIL_PUCES = [['tout', 'Tout', null], ['ventes', 'Ventes', ['sale', 'import']], ['victoires', 'Victoires', ['trophy', 'palier', 'save', 'recovered', 'challenge']], ['bravo', 'Bravo', ['kudos']], ['annonces', 'Annonces', ['manager']]];
+const FIL_VICTOIRES = ['trophy', 'palier', 'save', 'recovered', 'challenge'];
+const FIL_BADGE = { sale: ['VENTE', 'chart'], import: ['IMPORT', 'upload'], trophy: ['TROPHÉE', 'trophy'], palier: ['VICTOIRE', 'users'], save: ['VICTOIRE', 'lifebuoy'], recovered: ['VICTOIRE', 'coins'], challenge: ['DÉFI', 'bolt'], kudos: ['BRAVO', 'sparkle'], manager: ['ANNONCE', 'bell'] };
+const FIL_PAGE = 30;
 const prenom = u => (u && (u.first || fullName(u))) || 'Un collègue';
 const kpiTexte = (k, v) => fmtU(v, k); // « 4 contrats », « 45 € »
 
@@ -48,7 +48,7 @@ function palierEvenements(clubId, mk) {
 }
 function feedEvents(clubIds, sinceTs = 0) {
   const clubs = [...clubIds].sort();
-  const all = memo(`feed|${clubs.join(',')}|${ME ? ME.id + isManager() : ''}`, () => {
+  const all = memo(`fil|${clubs.join(',')}|${ME ? ME.id + isManager() : ''}`, () => {
     const C = new Set(clubs); const mgr = isManager(); const out = [];
     const imports = new Map();
     for (const e of Object.values(S.entries)) {
@@ -88,7 +88,7 @@ function feedEvents(clubIds, sinceTs = 0) {
   });
   return sinceTs ? all.filter(e => e.at > sinceTs) : all;
 }
-// Réglages du fil (prefs.feed) : type, sourdine par KPI.
+// Réglages du fil : type, sourdine par KPI.
 function feedAccepte(ev, F = prefsOf().feed) {
   if (F.types && F.types[ev.type] === false) return false;
   const k = ev.kpiIds || (ev.kpiId ? [ev.kpiId] : []);
@@ -107,7 +107,7 @@ function unseenFeed() {
 
 // ── Carte d'un événement ─────────────────────────────────────────────────
 function filCarte(ev) {
-  const u = ev.userId ? S.users[ev.userId] : null; const win = FEED_VICTOIRES.includes(ev.type); const [badge, ic] = FEED_BADGE[ev.type];
+  const u = ev.userId ? S.users[ev.userId] : null; const win = FIL_VICTOIRES.includes(ev.type); const [badge, ic] = FIL_BADGE[ev.type];
   const rx = ev.type === 'sale' || ev.type === 'recovered' || ev.type === 'save' ? S.reactions[ev.id] || {} : null;
   const multi = myClubs().length > 1; const c = S.clubs[ev.clubId];
   return `<div class="fil-c ${win ? 'fil-win' : ''}" data-type="${ev.type}" data-ev="${esc(ev.id)}"><div class="fil-h">${u && !win ? avatar(u) : `<span class="fil-ic">${ico(ev.icon && ev.type === 'trophy' ? ev.icon : ic)}</span>`}
@@ -115,7 +115,7 @@ function filCarte(ev) {
     ${rx ? `<div class="reacts">${reactBtns('react', ev.id, rx)}</div>` : ''}</div>`;
 }
 function filListe(clubIds, puce, n) {
-  const P = FEED_PUCES.find(x => x[0] === puce) || FEED_PUCES[0];
+  const P = FIL_PUCES.find(x => x[0] === puce) || FIL_PUCES[0];
   const L = feedEvents(clubIds).filter(e => feedAccepte(e) && (!P[2] || P[2].includes(e.type)));
   let jour = '';
   const html = L.slice(0, n).map(e => { const d = isoOf(new Date(e.at)); const sep = d !== jour ? `<div class="day-sep">${d === today() ? 'Aujourd’hui' : d === addDays(today(), -1) ? 'Hier' : dayLabel(d)}</div>` : ''; jour = d; return sep + filCarte(e); }).join('');
@@ -124,31 +124,31 @@ function filListe(clubIds, puce, n) {
 // Accueil : les 3 derniers événements.
 function filAccueilCard(n = 3) {
   const L = feedEvents(feedClubs()).filter(e => feedAccepte(e)).slice(0, n);
-  return `<div class="card col6"><div class="race-h"><div><div class="eyebrow">Équipe</div><h3>Fil d’équipe</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/pouls">Tout voir</a></div>${L.length ? L.map(filCarte).join('') : '<p class="muted small">Rien de neuf pour l’instant.</p>'}</div>`;
+  return `<div class="card col6"><div class="race-h"><div><div class="eyebrow">Équipe</div><h3>${TXT.pages.pouls}</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/pouls">Tout voir</a></div>${L.length ? L.map(filCarte).join('') : '<p class="muted small">Rien de neuf pour l’instant.</p>'}</div>`;
 }
 
 PAGES.pouls = {
   title: TXT.pages.pouls,
   render() {
-    const puce = UI.filPuce || 'tout'; const n = UI.filN || FEED_PAGE; const F = prefsOf().feed;
+    const puce = UI.filPuce || 'tout'; const n = UI.filN || FIL_PAGE; const F = prefsOf().feed;
     const L = filListe(feedClubs(), puce, n);
     setTimeout(() => { if (ME && Date.now() - prefsOf().seen.feed > 1000) setPrefPath(['seen', 'feed'], Date.now()); }, 600);
-    return `<div class="page-head"><div><h1>Fil d’équipe</h1><p>${TXT.pouls.sous}</p></div><span class="spacer"></span><button class="btn sm" data-act="filReglages">${ico('menu')} Réglages du fil</button></div>
+    return `<div class="page-head"><div><h1>${TXT.pages.pouls}</h1><p>${TXT.pouls.sous}</p></div><span class="spacer"></span><button class="btn sm" data-act="filReglages">${ico('menu')} Réglages du fil</button></div>
       ${feedEnPause() ? `<div class="banner-info row" style="margin-bottom:12px"><span class="spacer">Fil en pause jusqu’à ${timeOf(F.muteUntil).replace(':', ' h ')} : ni bandeau ni compteur.</span><button class="btn sm" data-act="filReprendre">Reprendre</button></div>` : ''}
-      <div class="fil-puces" role="tablist">${FEED_PUCES.map(([id, l]) => `<button class="fil-puce ${id === puce ? 'on' : ''}" role="tab" aria-selected="${id === puce}" data-act="filPuce" data-p="${id}">${l}</button>`).join('')}</div>
+      <div class="fil-puces" role="tablist">${FIL_PUCES.map(([id, l]) => `<button class="fil-puce ${id === puce ? 'on' : ''}" role="tab" aria-selected="${id === puce}" data-act="filPuce" data-p="${id}">${l}</button>`).join('')}</div>
       ${isManager() ? `<form class="fil-annonce row" id="fil-an" onsubmit="return false"><input class="input spacer" name="t" maxlength="280" placeholder="Une annonce pour l’équipe" aria-label="Annonce"><button class="btn primary" data-act="filAnnonce">Publier</button></form>` : ''}
       <div class="pouls fil">${L.html || `<div class="card">${emptyBox({ art: 'pouls', title: TXT.pouls.videTitre, text: 'Les ventes et les victoires de l’équipe apparaissent ici.', cta: '<button class="btn primary sm" data-act="openSaisies">Nouvelle saisie</button>' })}</div>`}</div>
       ${L.total > n ? `<div class="center" style="margin:14px 0"><button class="btn" data-act="filPlus">Voir plus (${L.total - n})</button></div>` : ''}`;
   },
 };
-ACTIONS.filPuce = el => { UI.filPuce = el.dataset.p; UI.filN = FEED_PAGE; render(); };
-ACTIONS.filPlus = () => { UI.filN = (UI.filN || FEED_PAGE) + FEED_PAGE; render(); };
+ACTIONS.filPuce = el => { UI.filPuce = el.dataset.p; UI.filN = FIL_PAGE; render(); };
+ACTIONS.filPlus = () => { UI.filN = (UI.filN || FIL_PAGE) + FIL_PAGE; render(); };
 ACTIONS.filAnnonce = () => { const i = $('#fil-an [name=t]'); const t = (i && i.value || '').trim().slice(0, 280); if (!t || !isManager()) return; const id = newId(); db.set(['chat', id], { id, channel: CLUB.id, userId: ME.id, at: Date.now(), text: t, annonce: true }); toast('1 annonce publiée'); };
 ACTIONS.filReglages = () => {
   const F = prefsOf().feed; const multi = myClubs().length > 1;
   const sw = (act, k, on, label) => `<label class="row fil-r"><span class="spacer">${label}</span><span class="switch"><input type="checkbox" data-change="${act}" data-k="${k}" ${on ? 'checked' : ''} aria-label="${esc(label)}"><i></i></span></label>`;
-  openModal({ title: 'Réglages du fil', body: `<p class="muted small" style="margin-top:0">Ces réglages valent aussi pour le bandeau en direct et le compteur de non-lus.</p>
-    <h3 class="t-16">Types d’événements</h3>${FEED_TYPES.map(t => sw('filType', t, F.types[t] !== false, FEED_LABELS[t])).join('')}
+  openModal({ title: 'Réglages du fil', body: `<p class="muted small" style="margin-top:0">Ces réglages valent aussi pour les alertes des saisies en direct et le compteur de non-lus.</p>
+    <h3 class="t-16">Types d’événements</h3>${FIL_TYPES.map(t => sw('filType', t, F.types[t] !== false, FIL_LABELS[t])).join('')}
     <h3 class="t-16" style="margin-top:14px">Indicateurs</h3>${kpiList().map(k => sw('filKpi', k.id, (F.kpis || {})[k.id] !== false, k.label)).join('')}
     ${multi ? `<h3 class="t-16" style="margin-top:14px">Portée</h3><div class="row" style="gap:6px">${[['club', 'Ce club'], ['all', 'Tous nos clubs']].map(([v, l]) => `<button class="btn sm ${F.scope === v ? 'primary' : ''}" data-act="filPortee" data-v="${v}">${l}</button>`).join('')}</div>` : ''}`,
     foot: `<button class="btn" data-act="${feedEnPause() ? 'filReprendre' : 'filPause'}">${feedEnPause() ? 'Reprendre maintenant' : 'Mettre en pause 1 h'}</button><span class="spacer"></span><button class="btn primary" data-close>Fermer</button>` });
@@ -159,7 +159,7 @@ ACTIONS.filPortee = el => { setPrefPath(['feed', 'scope'], el.dataset.v === 'all
 ACTIONS.filPause = () => { setPrefPath(['feed', 'muteUntil'], Date.now() + 3600e3); closeModal(); toast('Fil en pause pour 1 h'); };
 ACTIONS.filReprendre = () => { setPrefPath(['feed', 'muteUntil'], 0); closeModal(); };
 
-// Bandeau en direct : texte d'une saisie d'un collègue, si mes réglages l'acceptent.
+// Alerte en direct : texte d'une saisie d'un collègue, si mes réglages l'acceptent.
 // Format : « Inès · 1 contrats signés · Club Centre », ni emoji ni tiret.
 function liveTexte(e) {
   if (!ME || feedEnPause()) return null;

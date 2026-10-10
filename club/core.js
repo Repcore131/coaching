@@ -11,7 +11,7 @@
 // Configuration du déploiement (config.js). Repli sur les anciens noms window.PARKPULSE_* pour une installation existante.
 const CFG = window.FITPULSE_CONFIG || { firebase: window.PARKPULSE_FIREBASE, club: window.PARKPULSE_CLUB, assets: window.PARKPULSE_ASSETS, demo: window.PARKPULSE_DEMO, mailAuto: window.PARKPULSE_MAIL_AUTO };
 CFG.assets = CFG.assets || {};
-const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.8' };
+const APP = { name: TXT.app.nom, tagline: TXT.app.accroche, version: '2026.10.9' };
 // ── Le client (S.tenant) : nom, enseigne, logo, couleurs, société, panier moyen ──
 // Saisi à la création du club (formulaire de départ), modifiable dans Club et réglages.
 // Aucune valeur par défaut ne cite une enseigne, une ville ou une personne.

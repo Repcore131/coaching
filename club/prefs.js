@@ -16,12 +16,12 @@
 //   tips: { drag }
 // Les autres clés à plat (onboarded, dashSort, kmLast, profil…) restent lisibles par pref().
 const PREFS_V = 2;
-const FEED_TYPES = ['sale', 'import', 'trophy', 'palier', 'save', 'recovered', 'challenge', 'kudos', 'manager'];
+const FIL_TYPES = ['sale', 'import', 'trophy', 'palier', 'save', 'recovered', 'challenge', 'kudos', 'manager'];
 const prefsDefaut = () => ({
   v: PREFS_V,
   home: { cards: null, hidden: [] }, // null : accueil conseillé selon le rôle (voir HOME_CARDS)
   kpiOrder: {},
-  feed: { types: Object.fromEntries(FEED_TYPES.map(t => [t, true])), kpis: {}, scope: 'club', muteUntil: 0 },
+  feed: { types: Object.fromEntries(FIL_TYPES.map(t => [t, true])), kpis: {}, scope: 'club', muteUntil: 0 },
   seen: { feed: 0, chat: 0, home: 0, rank: null, wrap: {} },
   sense: { haptics: true, sound: false, motion: 'auto' },
   theme: 'auto',
@@ -38,7 +38,8 @@ function fusionPrefs(base, brut) {
 }
 // L'objet complet : valeurs par défaut + ce que le compte a choisi.
 function prefsOf(userId = ME && ME.id) { return fusionPrefs(prefsDefaut(), ((S && S.prefs) || {})[userId] || {}); }
-const setPrefPath = (path, value) => db.set(['prefs', ME.id, ...(Array.isArray(path) ? path : String(path).split('.'))], value === undefined ? null : value);
+// Sans compte connecté (écriture différée après une déconnexion) : rien n'est écrit.
+const setPrefPath = (path, value) => ME && db.set(['prefs', ME.id, ...(Array.isArray(path) ? path : String(path).split('.'))], value === undefined ? null : value);
 
 // ── Migration de l'ancien format (clés à plat), une seule fois ────────────
 // Quand v est absent. Idempotente : relancée, elle ne trouve plus rien.

@@ -103,7 +103,7 @@ export function plan(S, state, now = new Date(), { catalogue = null } = {}) {
   const repos = {};
   // Catalogue commercial (début de journée, relances dues, dépassé, défi, bravos, palier proche, fin de journée, bilan du mois).
   if (catalogue) for (const u of users) {
-    let r = null; try { r = catalogue(u.id, { jour: t, hm: P.hm, last, W: next.cat[u.id] || {} }); } catch (e) { r = null; }
+    let r = null; try { r = catalogue(u.id, { jour: t, hm: P.hm, last, W: next.cat[u.id] || {} }); } catch { r = null; }
     if (!r) continue; next.cat[u.id] = r.W || {}; if (r.repos) repos[u.id] = true;
     for (const it of r.items || []) out.push({ uid: u.id, rule: it.type, key: `${it.key}|${u.id}`, title: it.title, body: it.body, url: it.url, ttl: 4 * 3600, urgent: false, cat: true, on: it.on !== false, priority: it.priority || 'normal', cooldownMin: Number(it.cooldownMin) || 0 });
   }

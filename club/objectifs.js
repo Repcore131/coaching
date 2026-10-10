@@ -117,14 +117,14 @@ const jokerTexte = s => (s.jokerDispo ? 'Joker disponible' : `Joker utilisé le 
 // Meilleure série personnelle (prefs.records.serie), mise à jour quand elle est battue.
 function serieRecord(uid = ME.id) {
   const s = serieJours(uid); const best = Number(deepGet(S, ['prefs', uid, 'records', 'serie']) || 0);
-  if (ME && uid === ME.id && s.n > best && !CFG.capture) setTimeout(() => { if (Number(deepGet(S, ['prefs', uid, 'records', 'serie']) || 0) < s.n) setPrefPath(['records', 'serie'], s.n); }, 0);
+  if (ME && uid === ME.id && s.n > best && !CFG.capture) setTimeout(() => { if (ME && ME.id === uid && Number(deepGet(S, ['prefs', uid, 'records', 'serie']) || 0) < s.n) setPrefPath(['records', 'serie'], s.n); }, 0);
   return Math.max(best, s.n);
 }
 
 // ── Carte « Ma journée » ──────────────────────────────────────────────────
 function maJourneeCard(ctx) {
   const G = dailyGoals(); const s = serieJours(); const tout = G.every(g => g.done);
-  if (tout && prefsOf().seen.journee !== today() && !CFG.capture) setTimeout(() => { if (prefsOf().seen.journee === today()) return; setPrefPath(['seen', 'journee'], today()); stepBanner('Journée gagnée'); vibrer([20, 30, 20]); }, 300);
+  if (tout && prefsOf().seen.journee !== today() && !CFG.capture) { const qui = ME.id; setTimeout(() => { if (!ME || ME.id !== qui || prefsOf().seen.journee === today()) return; setPrefPath(['seen', 'journee'], today()); stepBanner('Journée gagnée'); vibrer([20, 30, 20]); }, 300); }
   const rw = typeof weeklyRewardCheck === 'function' ? weeklyRewardCheck(ME.id) : null;
   return `<div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div><span class="spacer"></span>${tout ? '<span class="tag is-ok">Journée gagnée</span>' : `<span class="muted small">${G.filter(g => g.done).length} sur 3</span>`}</div>
     <ul class="mj-obj">${G.map(g => `<li class="${g.done ? 'done' : ''}" data-obj="${g.id}"><span class="mj-case" role="img" aria-label="${g.done ? 'Fait' : 'À faire'}">${g.done ? ico('check', 'ico ico-xs') : ''}</span><a class="spacer" href="${g.link}">${esc(g.label)}</a>${g.done ? '' : g.target > 1 && g.value ? `<small class="muted">${esc(String(Math.floor(g.value)))} sur ${esc(String(g.target))}</small>` : ''}</li>`).join('')}</ul>

@@ -107,7 +107,7 @@ test('H5 : du mardi au samedi, un objectif chaque jour : la série continue apr�
 test('H4 : résiliation attribuée au commercial = « 1 nouvelle relance à ton nom » ; 20 minutes ; 4 lignes au plus', () => {
   const run = appli({ kpis }, 'v');
   run(`setTimeout = (f) => f(); UI._lastRoute = 'x'`);
-  const h1 = run('deltaCard()'); // première visite : instantané
+  run('deltaCard()'); // première visite : instantané
   assert.deepEqual(J(run, 'S.prefs.v.seen.dossiers'), []); assert.ok(J(run, 'S.prefs.v.seen.home') > 0);
   run(`S.prefs.v.seen.home = Date.now() - 30 * 60e3; S.resiliations.r1 = { id: 'r1', clubId: 'k', client: 'Paul Exemple', date: today(), effective: addDays(today(), 20), status: 'nouvelle', ownerId: 'v', at: Date.now() }; REV++; UI._lastRoute = 'x'`);
   const h2 = run('deltaCard()'); assert.match(h2, /1 nouvelle relance à ton nom/); assert.ok((h2.match(/<li /g) || []).length <= 4);

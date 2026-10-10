@@ -1,5 +1,13 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.9 (octobre 2026)
+- Préférences du compte en version 2 (prefsOf, setPrefPath), suivies d'un appareil à l'autre : thème, accueil, ordre des indicateurs par club, fil, sons, vibrations, animations, heures calmes ; migration unique de l'ancien format ; carte Mon appli dans Profil.
+- Accueil personnalisable : cartes choisies et ordonnées par chacun (feuille Personnaliser, Revenir à l'accueil conseillé) ; déplacement au doigt par appui long, à la souris et au clavier, aussi pour les indicateurs du tableau de bord.
+- Fil d'équipe : ventes, imports regroupés par vendeur, trophées, paliers, clients sauvés, impayés récupérés, défis, bravos et annonces ; puces de filtre, réglages du fil appliqués au bandeau et au compteur, pagination par 30.
+- Carte Depuis ta dernière visite (4 lignes au plus) et Ma journée : 3 objectifs du jour, série sur les jours travaillés avec joker.
+- Notifications commerciales plafonnées (6 par jour, heures calmes, jour de repos), boîte de réception, mesure des ouvertures et mise en pause automatique.
+- Trophées personnels de la semaine, plafond de 2 trophées KPI par mois, membres sans récompense dans le cockpit, classement all-time sur les membres actifs.
+
 ## 2026.10.8 (octobre 2026)
 - Impayés : un seul enregistrement « Payé » (markPaid) quel que soit l'écran, crédité au responsable du dossier sinon à l'auteur ; client obligatoire pour une saisie détaillée ; Membres > Contrôles (saisies sans client, fusion avec l'import).
 - Acomptes : « Acompte reçu », reste dû, historique au centime ; deux acomptes le même jour donnent deux saisies distinctes.
