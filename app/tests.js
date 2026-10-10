@@ -56722,6 +56722,53 @@ async function testExercices(){
       } finally { fr.remove(); }
     });
 
+    okA('ASSISTANT — la bulle de la landing : cachée sans serveur, chargée au clic, clavier, texte échappé, FAQ si panne',async()=>{
+      const fr=document.createElement('iframe'); fr.style.cssText='position:fixed;left:-9999px;width:390px;height:800px';
+      fr.src='../index.html';
+      document.body.appendChild(fr);
+      const attendre=async(f,ms)=>{ const t0=Date.now(); while(Date.now()-t0<(ms||6000)){ const v=f(); if(v) return v; await new Promise(r=>setTimeout(r,50)); } return null; };
+      try{
+        await new Promise((ok,ko)=>{ fr.onload=ok; setTimeout(()=>ko(new Error('landing non chargée')),15000); });
+        const w=fr.contentWindow, doc=fr.contentDocument;
+        const b=doc.getElementById('rc-assistant-b');
+        if(!b||!b.hidden) return _echec('bulle visible sans avis du serveur');
+        if(b.tagName!=='BUTTON'||b.getAttribute('aria-controls')!=='rc-assistant'||b.getAttribute('aria-expanded')!=='false'||!b.getAttribute('aria-label')) return _echec('bulle : bouton accessible');
+        if(doc.querySelector('script[src="assistant.js"]')||doc.getElementById('rc-assistant')) return _echec('panneau chargé avant le clic');
+        const src=[...doc.scripts].map(x=>x.textContent).join('\n');
+        if(src.indexOf('/chat/etat')<0) return _echec('la bulle ne demande pas l’état');
+        let envoye=null;
+        w.fetch=async(url,init)=>{ envoye={url:String(url),corps:JSON.parse(init.body)};
+          return {ok:true,json:async()=>({texte:'<img src=x onerror=window.__pwn=1> Oui, 1 mois.',cat:'ok',
+            actions:[{lib:'Essayer gratuitement',href:'https://repcore-sync.web.app/app/#install'},{lib:'Piège',href:'javascript:alert(1)'}]})}; };
+        b.hidden=false; b.click();
+        const z=await attendre(()=>doc.getElementById('rc-assistant'));
+        if(!z) return _echec('assistant.js non chargé au clic');
+        await attendre(()=>doc.activeElement&&doc.activeElement.id==='ra-q',2000);
+        if(z.hidden||z.getAttribute('role')!=='dialog'||b.getAttribute('aria-expanded')!=='true') return _echec('panneau : dialogue ouvert');
+        if(doc.activeElement.id!=='ra-q') return _echec('le focus ne va pas au champ');
+        if(!doc.querySelector('label[for="ra-q"]')||z.querySelector('.ra-log').getAttribute('role')!=='log') return _echec('libellé ou zone annoncée');
+        const champ=doc.getElementById('ra-q'); champ.value='Combien dure l’essai ?';
+        z.querySelector('form').requestSubmit();
+        const rep=await attendre(()=>[...z.querySelectorAll('.ra-a')].find(x=>/Oui, 1 mois/.test(x.textContent)));
+        if(!rep) return _echec('réponse non affichée');
+        if(!envoye||!/\/chat$/.test(envoye.url)||envoye.corps.q!=='Combien dure l’essai ?') return _echec('appel : '+JSON.stringify(envoye));
+        if(rep.querySelector('img')||w.__pwn) return _echec('texte du serveur interprété comme du HTML');
+        const liens=[...rep.querySelectorAll('a')];
+        if(liens.length!==1||liens[0].getAttribute('href')!=='https://repcore-sync.web.app/app/#install') return _echec('actions : '+liens.map(a=>a.getAttribute('href')));
+        // Échap ferme, le focus revient à la bulle.
+        z.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(!z.hidden||doc.activeElement!==b||b.getAttribute('aria-expanded')!=='false') return _echec('Échap');
+        // Le réseau en panne : la FAQ.
+        w.fetch=async()=>{ throw new TypeError('réseau'); };
+        b.click(); champ.value='Et le prix ?'; z.querySelector('form').requestSubmit();
+        const p=await attendre(()=>[...z.querySelectorAll('.ra-a')].find(x=>/FAQ/.test(x.textContent)));
+        if(!p||!p.querySelector('a[href="https://repcore-sync.web.app/#faq"]')) return _echec('panne : pas de renvoi vers la FAQ');
+        // La politique de confidentialité porte l'ancre du lien.
+        if(!z.querySelector('a[href="privacy.html#assistant"]')) return _echec('lien confidentialité');
+        return true;
+      } finally { fr.remove(); }
+    });
+
     // ══ 28/09/2026 — LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ══
     const _SYT=new Date(2026,9,15,10).getTime();
     const _syJ=n=>localISODate(new Date(_SYT-n*864e5));

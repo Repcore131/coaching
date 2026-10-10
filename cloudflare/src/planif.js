@@ -40,6 +40,11 @@ export function travaux(M) {
     //   l'après-midi avec moins de 16 requêtes de budget (une lecture d'état
     //   par travail déjà fini) et ne démarrait jamais.
     { nom: 'emails', minute: true, quand: () => true, une: (t) => (M.emails ? M.emails.minute(t) : null) },
+    // L'ASSISTANT DE LA PAGE D'ACCUEIL (chat.js) : la purge des quotas et du
+    // journal (60 jours), puis le rapport du lundi à Kevin (questions
+    // fréquentes, réponses manquantes), en notification et par e-mail.
+    { nom: 'chat_purge', quand: (p) => apres(p, 3, 40), une: () => (M.chatPurge ? M.chatPurge() : null) },
+    { nom: 'rapport_lundi', quand: (p) => p.joursem === 1 && apres(p, 8, 30), une: () => (M.rapportLundi ? M.rapportLundi() : null) },
     { nom: 'stats_badges', quand: (p) => apres(p, 3, 17), cles: () => M.coachsEtUsers(), un: (c, t, acc) => M.statsBadgesUn(c, acc), fin: M.statsBadgesFin, cout: 3 },
     // Le 1er du mois : l'idempotence PayPal de plus de 90 jours.
     { nom: 'purge_paypal', quand: (p) => p.date === 1 && apres(p, 4, 10), une: (t) => (M.paypal ? M.paypal.purgerEvenements(t) : null) },

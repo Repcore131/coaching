@@ -2111,6 +2111,11 @@
     "paiements_coach_captures": { ".read": false, ".write": false },
     // LES ACHATS DE COACHING DE KEVIN (serveur leger, coaching.js) : ecrits et lus par lui seul.
     "coaching_achats": { ".read": false, ".write": false },
+    // L ASSISTANT DE LA PAGE D ACCUEIL (serveur leger, chat.js) : quotas, journal anonymise, rapports. Lus et ecrits par lui seul.
+    "chat_quota": { ".read": false, ".write": false },
+    "chat_jour": { ".read": false, ".write": false },
+    "chat_journal": { ".read": false, ".write": false },
+    "rapports": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'", ".write": false },
     "prospects": {
       "$coachKey": {
         ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
@@ -2406,6 +2411,8 @@
       "resiliations": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       // LES VENTES DE COACHING DE KEVIN, par mois (serveur leger, coaching.js) : chiffre d affaires, le createur seul.
       "coaching": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LE COUT DE L ASSISTANT, par mois (serveur leger, chat.js) : le createur seul.
+      "chat": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       "$autre": { ".read": true }
     },
     // LA PRESENCE (09/10/2026) : « cet appareil est ouvert », pour estimer les

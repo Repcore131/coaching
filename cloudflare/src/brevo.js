@@ -160,6 +160,20 @@ export async function envoyerModele(env, fetchImpl, { email, prenom, modele, par
   return 'envoye';
 }
 
+/**
+ * UN E-MAIL SANS MODÈLE (le rapport du lundi à Kevin) : sujet et HTML fournis.
+ * Expéditeur : BREVO_EXPEDITEUR_ID (1 par défaut, l'adresse validée du compte).
+ * Rend 'envoye', 'non_configure', 'sans_email', ou lève.
+ */
+export async function envoyerHtml(env, fetchImpl, { email, sujet, html }) {
+  if (!String(env.BREVO_API_KEY || '').trim()) return 'non_configure';
+  if (!emailValide(email)) return 'sans_email';
+  const api = client(env, fetchImpl);
+  exiger(await api('POST', '/smtp/email', { sender: { id: Number(env.BREVO_EXPEDITEUR_ID) || 1 }, to: [{ email: String(email).trim() }],
+    subject: String(sujet || '').slice(0, 150), htmlContent: String(html || '') }), 'envoi', [200, 201, 202]);
+  return 'envoye';
+}
+
 /** @param {{db:any, env:any, fetchImpl?:Function, maintenant?:()=>number, reste?:()=>number}} ctx */
 export function creerBrevo(ctx) {
   const { db, env } = ctx;
