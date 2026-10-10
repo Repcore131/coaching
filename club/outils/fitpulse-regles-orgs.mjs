@@ -16,6 +16,7 @@
 // Assemblé dans le bloc Fit Pulse par fitpulse-serveur.mjs (avecRegle).
 
 const DOM = '@fitpulse-niort.web.app';
+import { INGEST_CONFIG } from './fitpulse-regles-ingest.mjs';
 const j = s => JSON.stringify(s);
 const AUTHOK = `auth != null && auth.token.email.endsWith('${DOM}')`;
 const KEY = `auth.token.email.replace('${DOM}', '').replace('fp-', '')`;
@@ -72,6 +73,7 @@ export const REGLE_ORGS = `"orgs": {
           "entries": { "$id": { ".write": ${j(SAISIE)}, ".validate": "newData.hasChildren(['userId', 'kpiId', 'date', 'value']) && newData.child('value').isNumber() && newData.child('value').val() > -1000000 && newData.child('value').val() < 1000000" } },
           "targets": { ".write": ${j(mgr(O))} },
           "imports": { ".write": ${j(mgr(O))} },
+          "ingestConfig": ${INGEST_CONFIG(mgr(O))},
           "kpis": { ".write": ${j(crea(O))} },
           "prefs": { "$uid": { ".write": ${j(SOIMEME)} } },
           "usage": { "$uid": { ".write": ${j(SOIMEME)} } },

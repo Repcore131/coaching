@@ -524,6 +524,7 @@ function clubSettings() {
     ${reperesCard()}
     ${typeof ligueReglageCard === 'function' ? ligueReglageCard() : ''}
     ${releveCard()}
+    ${typeof arriveeExportsCard === 'function' ? arriveeExportsCard() : ''}
     ${typeof resModelesCard === 'function' ? resModelesCard() : ''}
     ${ordreKpiCard()}
     ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>

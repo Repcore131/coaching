@@ -112,3 +112,24 @@ test('J2 : serveur : taux d’ouverture par type sur 30 jours et purge de l’us
   assert.deepEqual(ouverturesParType(ib, now), { kudos: { n: 2, o: 1 } });
   assert.deepEqual(usagePurge({ usage: { v: { '2025-09-09': {}, '2025-09-10': {}, '2026-01-01': {} } } }, '2026-10-10'), { 'v/2025-09-09': null });
 });
+
+test('J4 : carte Arrivée des exports : manager et créateur seulement ; club sans configuration : Dépôt manuel seul, actif', () => {
+  const run = appli(club(), 'm');
+  const h = run('arriveeExportsCard()'); assert.match(h, /Arrivée des exports/);
+  assert.deepEqual(J(run, 'ingestCanaux().map(c => [c.k, c.status])'), [['manual', 'actif']]);
+  assert.equal(J(appli(club(), 'v'), 'arriveeExportsCard()'), '');
+  assert.match(J(appli(club(), 'c'), 'arriveeExportsCard()'), /Dépôt manuel/);
+  assert.match(readFileSync(new URL('../pages-data.js', import.meta.url), 'utf8'), /arriveeExportsCard\(\)/);
+});
+test('J4 : 4 lignes avec état, dernier fichier et nombre du mois ; aucun secret enregistré', () => {
+  const run = appli(club(), 'm'); const t = Date.now();
+  const r = J(run, `ingestCanalOps('a', { api_status: 'en attente', mail_status: 'actif', drive_status: 'actif', drive_folder: '1AbCdEfGhIjKlMnOp', token: 'x', password: 'y' })`);
+  run(`db.batch(${JSON.stringify(r.ops)}); S.rsm = { autoLog: { a: { l1: { at: ${t}, name: 'RSM_clients.csv', source: 'auto' }, l2: { at: ${t - 1000}, name: 'RSM_ventes.csv', canal: 'drive' } } } };
+    S.imports = { i1: { id: 'i1', clubId: 'a', at: ${t - 5000}, name: 'RSM_paiements.csv', by: 'm' } }; REV++;`);
+  const L = J(run, 'ingestCanaux().map(c => [c.k, c.status])'); assert.deepEqual(L, [['api', 'en attente'], ['mail', 'actif'], ['drive', 'actif'], ['manual', 'actif']]);
+  const St = J(run, 'ingestStats()'); assert.equal(St.mail.dernier.name, 'RSM_clients.csv'); assert.equal(St.drive.ceMois, 1); assert.equal(St.manual.dernier.name, 'RSM_paiements.csv'); assert.equal(St.api.ceMois, 0);
+  const cfg = J(run, `S.ingestConfig.a`); assert.match(cfg.mail.address, /^club-a-[a-z2-9]{4}@import\.fitpulse\.app$/);
+  assert.doesNotMatch(JSON.stringify(cfg), /token|password|secret/i);
+  const h = run('arriveeExportsCard()'); assert.equal((h.match(/<tr data-canal=/g) || []).length, 4);
+  assert.doesNotMatch(h, /[–—]/);
+});

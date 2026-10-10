@@ -103,5 +103,12 @@ await check('responsable ajoute un numéro', await req('PUT', 'private/resiliati
 await check('champ inconnu refusé', await req('PUT', 'private/resiliations/niort/rp1/note', 'x', who('mgr')), false);
 await check('manager ne falsifie pas la dernière relève', await req('PUT', 'pulse/clubs/niort/mailSync', { at: 9999, ok: true }, who('mgr')), false);
 await check('manager règle son club sans toucher à la relève', await req('PUT', 'pulse/clubs/niort/name', 'Club Centre', who('mgr')), true);
+// Arrivée des exports : forme stricte, aucun secret possible (lot J, point 4).
+await check('manager configure la boîte d’import', await req('PUT', 'pulse/ingestConfig/niort/mail', { address: 'niort-ab12@import.fitpulse.app', status: 'actif', rotatedAt: 1 }, who('mgr')), true);
+await check('manager active le dépôt manuel', await req('PUT', 'pulse/ingestConfig/niort/manual', true, who('mgr')), true);
+await check('aucun jeton dans la configuration (manager)', await req('PUT', 'pulse/ingestConfig/niort/api', { status: 'actif', since: 1, token: 'abc' }, who('mgr')), false);
+await check('aucun mot de passe dans la configuration (créateur)', await req('PUT', 'pulse/ingestConfig/niort/mail/password', 'x', who('crea')), false);
+await check('état de canal inconnu refusé', await req('PUT', 'pulse/ingestConfig/niort/drive', { folderId: '1AbCdEfGhIjKlMn', status: 'ouvert' }, who('mgr')), false);
+await check('membre ne configure pas les canaux', await req('PUT', 'pulse/ingestConfig/niort/manual', true, who('mem')), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

@@ -26,6 +26,7 @@ import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
 import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
 import { passageBrief } from './fitpulse-brief.mjs';
 import { REGLE_ORGS } from './fitpulse-regles-orgs.mjs';
+import { INGEST_CONFIG } from './fitpulse-regles-ingest.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -97,6 +98,7 @@ export const REGLE = `${DEBUT}
       "clients": { ".write": ${j(MEMBRE)} },
       "loyalty": { ".write": ${j(MEMBRE)} },
       "transferts": { ".write": ${j(MEMBRE)} },
+      "ingestConfig": ${INGEST_CONFIG(MGR)},
       "leagues": { ".write": ${j(MEMBRE)} }, "leagueMember": { ".write": ${j(MEMBRE)} }, "duels": { ".write": ${j(MEMBRE)} }, "comments": { ".write": ${j(MEMBRE)} },
       // Dossiers relevés dans la boîte accueil (« ml… ») : créés et tenus à jour par le seul compte de service
       // (fonction ingestResiliations) ; l'équipe les traite (statut, responsable, journal) sans toucher au fil e-mail.

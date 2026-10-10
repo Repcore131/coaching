@@ -1516,3 +1516,6 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .pad button { min-height: 44px; min-width: 44px; }
 /* Pastille de santé : la couleur et un libellé texte. */
 .hdot-t { font-size: var(--t-12); font-weight: 500; color: var(--muted); margin-left: 4px; white-space: nowrap; }
+.ingest-actif { background: var(--ok-soft); color: var(--ok); }
+.ingest-en-attente { background: var(--warn-soft); color: var(--warn); }
+.ingest-inactif { background: var(--surface-2); color: var(--muted); }
