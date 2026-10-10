@@ -258,7 +258,7 @@ function planning3() {
 let pageNo = 1;
 const page = (cls, body, { num = true } = {}) => {
   pageNo++;
-  return `<section class="page ${cls}">${body}${num ? `<footer><span>UNBROKEN · Dossier de présentation</span><span>${pageNo}</span></footer>` : ""}</section>`;
+  return `<section class="page ${cls}" data-document-role="page">${body}${num ? `<footer><span>UNBROKEN · Dossier de présentation</span><span>${pageNo}</span></footer>` : ""}</section>`;
 };
 const head = (n, t, lead) => `<div class="sec-head"><div class="sec-n">${n}</div><h2>${t}</h2>${lead ? `<p class="lead">${lead}</p>` : ""}</div>`;
 const kpis = (arr) => `<div class="kpis">${arr.map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join("")}</div>`;
@@ -355,7 +355,7 @@ ${cover ? "" : `.cover .ring{position:absolute;right:-40mm;top:30mm;width:170mm;
 .end{display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
 </style></head><body>
 
-<section class="page cover"><div class="art"></div>${cover ? "" : `<div class="ring"></div>`}<div class="shade"></div>
+<section class="page cover" data-document-role="page" data-label="Couverture"><div class="art"></div>${cover ? "" : `<div class="ring"></div>`}<div class="shade"></div>
 <div class="in"><div class="eyebrow red">Dossier de présentation · Projet de création · 2026</div><br>
 <img src="${logo}" alt="UNBROKEN">
 <h1>Une salle de musculation premium, indépendante et familiale</h1>
