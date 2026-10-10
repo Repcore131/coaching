@@ -95,11 +95,14 @@ await test('programme acheté : Ultime 30 jours par-dessus l’abonnement (ultim
   await w.envoyer('PAYMENT.CAPTURE.COMPLETED', { id: 'CAP00000001', amount: { value: '14.90', currency_code: 'EUR' },
     supplementary_data: { related_ids: { order_id: 'ORD00000001' } } });
   // 30 jours à partir de l'achat (tarifs.json, boutique_prog.mois = 1) : plus trois mois (09/10/2026).
-  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + MOIS });
+  // Et le programme, à vie, dans droits/ (10/10/2026) : c'est lui que l'app lit, plus le dossier.
+  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + MOIS,
+    programmes: { p1: { le: T0, prixCts: 1490, source: 'paypal', ordre: 'ORD00000001' } } });
   w.t = T0 + J;
   await w.envoyer('PAYMENT.CAPTURE.REFUNDED', { id: 'RC000000001', amount: { value: '14.90', currency_code: 'EUR' },
     links: [{ rel: 'up', href: 'https://x/v2/payments/captures/CAP00000001' }] });
   assert.equal(w.droits().ultimeJusqu, T0 + J);
+  assert.equal(w.droits().programmes.p1.rembourseLe, T0 + J, 'remboursé : le programme n’est plus acquis');
 });
 
 await test('un accès posé à la main par le créateur n’est pas réécrit par PayPal', async () => {

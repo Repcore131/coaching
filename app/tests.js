@@ -97,6 +97,19 @@ function _stylesProd(){
 //
 // Son unique appelant, chargerTests(), est deja `async` et fait
 // `return testExercices()` : une promesse y est attendue d'elle-meme.
+// 10/10/2026 : L'ESSAI, L'ABONNEMENT ET LES PROGRAMMES VIENNENT DE droits/,
+// écrit par le serveur seul. Ce banc pose dans le cache ce que le serveur
+// aurait écrit pour ce dossier : l'essai (depuis u.essai, la date d'ouverture
+// et sa fin), et les champs donnés (palier, programmes…). Rend le dossier.
+function _srvDroits(u,d){
+  if(!u.email) u.email='srv'+Math.random().toString(36).slice(2,8)+'@t.fr';
+  const e=(u.essai&&typeof u.essai==='object')?u.essai:null;
+  const o=Number(e&&e.ouvertLe)||0;
+  const x=Object.assign({palier:'aucun',echeance:0,source:'essai'},
+    e?{essaiOuvertLe:o,essaiFinit:Number(e.finit)||(o+ESSAI_JOURS*864e5)}:{},d||{});
+  _droitsPoser(u.email,x,false);
+  return u;
+}
 async function testExercices(){
   const R=[];
   // Un test qui rend une CHAÎNE passerait : ok ne regarde que la véracité de
@@ -13081,7 +13094,7 @@ async function testExercices(){
             window.saveUser=()=>true;
             localStorage.removeItem(RESIL_FILE);
             const fin=Date.now()+20*864e5;
-            currentUser=_ath({accessExpiry:fin});
+            currentUser=_srvDroits(_ath({accessExpiry:fin}),{palier:'essentielle',echeance:fin,source:'paypal'});
             demanderResiliation('');
             if(!checkAccess(currentUser)) return _echec('l\'accès a été coupé');
             if(currentUser.accessExpiry!==fin) return _echec('l\'échéance a bougé');
@@ -36300,39 +36313,33 @@ async function testExercices(){
         const iAp=h.indexOf('bq-apercu'), iAc=h.indexOf('ouvrirAchatProgramme');
         return (iAp>=0&&iAc>=0&&iAp<iAc)?true:_echec('l’aperçu passe après le bouton d’achat');})());
 
-      ok('LOT 8 — UN PROGRAMME ACHETÉ OUVRE ULTIME PENDANT SA DURÉE',(()=>{
+      ok('LOT 8 — UN PROGRAMME ACHETÉ OUVRE ULTIME PENDANT SA DURÉE (droits/, posé par le serveur)',(()=>{
         const sauve=localStorage.getItem(DROITS_CLE);
         try{
-          const mail='ach8@t.fr';
-          localStorage.removeItem(DROITS_CLE);   // le serveur n’a rien dit : l’ancien modèle décide
-          const t0=Date.now();
+          const mail='ach8@t.fr', t0=Date.now();
+          // 10/10/2026 : le dossier n'ouvre plus rien. Un achat écrit dans le
+          // dossier, sans droits/ : aucun palier, et le programme n'est pas acquis.
           const u={id:'A8',email:mail,role:'athlete',status:'FREE',
             programmesAchetes:{fondations:{le:t0,prixCts:1490,ordre:'X',ouvertJusqu:t0+60*86400000}}};
-          if(!programmeOuvreUltime(u)) return _echec('un programme acheté n’ouvre rien');
+          localStorage.removeItem(DROITS_CLE);
+          if(palierDe(u)!=='aucun') return _echec('un achat écrit dans le dossier ouvre : '+palierDe(u));
+          if(programmeAcquis(u,'fondations')) return _echec('un achat écrit dans le dossier est acquis');
+          // Le serveur a vérifié l'achat : Ultime 30 jours (ultimeJusqu), le programme à vie.
+          _srvDroits(u,{source:'paypal',ultimeJusqu:t0+30*86400000,programmes:{fondations:{le:t0,prixCts:1490,source:'paypal'}}});
           if(palierDe(u)!=='ultime') return _echec('palier : '+palierDe(u));
           for(const c of ['bibliothequeExercices','planification','dieteCalculee'])
             if(!peut(u,c)) return _echec('l’acheteur n’a pas '+c);
           if(peut(u,'correctionVideo')) return _echec('un achat ouvre la correction vidéo');
-          // LA FENÊTRE SE REFERME.
-          const vieux={id:'V8',email:mail,role:'athlete',status:'FREE',
-            programmesAchetes:{fondations:{le:t0,prixCts:1490,ordre:'X',ouvertJusqu:t0-86400000}}};
-          if(programmeOuvreUltime(vieux)) return _echec('un programme expiré ouvre encore');
-          if(palierDe(vieux)!=='aucun') return _echec('palier après expiration : '+palierDe(vieux));
-          // UN ACHAT SANS FENÊTRE (dossier d’avant ce lot) n’ouvre rien de neuf.
-          if(programmeOuvreUltime({programmesAchetes:{x:{le:t0}}}))
-            return _echec('un achat sans échéance ouvre Ultime');
-          // ET LE SERVEUR GARDE LE DERNIER MOT : un droit posé à « aucun »
-          // ferme, quoi que dise le dossier.
-          localStorage.setItem(DROITS_CLE,JSON.stringify(
-            {[mail]:{d:{palier:'aucun',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
-          if(palierDe(u)!=='aucun') return _echec('le dossier passe devant le serveur');
-          // L’ACHAT PREVIENT LE SERVEUR, et ne se contente pas du dossier.
-          const src=String(_enregistrerAchat);
-          if(src.indexOf('verifierAchatProgramme')<0)
-            return _echec('l’achat ne demande rien au serveur');
-          // La fiche d'achat (ficheAchatProgramme, 09/10/2026) porte la fenêtre.
+          if(!programmeAcquis(u,'fondations')) return _echec('le programme vérifié n’est pas acquis');
+          // LA FENÊTRE SE REFERME, le programme reste.
+          _srvDroits(u,{source:'paypal',ultimeJusqu:t0-86400000,programmes:{fondations:{le:t0,prixCts:1490,source:'paypal'}}});
+          if(palierDe(u)!=='aucun') return _echec('palier après expiration : '+palierDe(u));
+          if(!programmeAcquis(u,'fondations')) return _echec('le programme se perd avec la fenêtre');
+          // L'ACHAT DEMANDE AU SERVEUR DE VÉRIFIER, avant d'appliquer.
+          const src=String(_enregistrerAchat)+String(_verifierAchatPuisAppliquer);
+          if(src.indexOf("action:'verifierAchat'")<0) return _echec('l’achat ne demande rien au serveur');
           return (src.indexOf('ficheAchatProgramme')>=0&&String(ficheAchatProgramme).indexOf('ouvertJusqu')>=0)
-            ?true:_echec('l’achat ne pose aucune fenêtre côté dossier');
+            ?true:_echec('l’achat ne garde plus sa fiche dans le dossier');
         } finally {
           if(sauve==null) localStorage.removeItem(DROITS_CLE);
           else localStorage.setItem(DROITS_CLE,sauve);
@@ -36420,8 +36427,8 @@ async function testExercices(){
         // LE SERVEUR ROUVRE : une révision vaut un mois, un programme trois.
         // (La fonction vit dans functions/index.js ; ce que l’application
         //  garantit, c’est qu’elle lui envoie bien l’identifiant.)
-        const src=String(_enregistrerAchat);
-        if(src.indexOf('verifierAchatProgramme')<0)
+        const src=String(_enregistrerAchat)+String(_verifierAchatPuisAppliquer)+String(_apresAchatVerifie);
+        if(src.indexOf("action:'verifierAchat'")<0)
           return _echec('l’achat d’une révision ne prévient pas le serveur');
         if(src.indexOf('p.service')<0) return _echec('un service s’installerait dans les séances');
         if(src.indexOf('revisions')<0) return _echec('la révision n’est pas comptée');
@@ -36675,11 +36682,13 @@ async function testExercices(){
           const ult=Object.assign({},base,{abonnement:{palier:'mensuel',formule:'ultime'}});
           const ess=Object.assign({},base,{abonnement:{palier:'annuel',formule:'essentielle'}});
           const vieux=Object.assign({},base,{abonnement:{palier:'mensuel'}});
+          // 10/10/2026 : LA FORMULE VIENT DU SERVEUR (le plan facturé, relu chez
+          // PayPal), plus du dossier : sans droits/, rien de payé.
+          if(palierDe(ult)!=='aucun'||palierDe(vieux)!=='aucun') return _echec('le dossier décide encore de l’abonnement');
+          _srvDroits(ult,{palier:'ultime',source:'paypal'});
           if(palierDe(ult)!=='ultime') return _echec('un abonné à Ultime reçoit '+palierDe(ult));
+          _srvDroits(ess,{palier:'essentielle',source:'paypal'});
           if(palierDe(ess)!=='essentielle') return _echec('un abonné à Essentielle reçoit '+palierDe(ess));
-          // LES DOSSIERS D’AVANT VALENT ESSENTIELLE : Ultime n’était pas en
-          // vente, c’est bien ce qu’ils ont payé.
-          if(palierDe(vieux)!=='essentielle') return _echec('un dossier sans formule reçoit '+palierDe(vieux));
           // ET LA FORMULE SE LIT SUR LE PLAN FACTURE, pas sur ce qu’on a
           // choisi à l’écran : entre les deux, on a pu changer d’avis.
           if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME)!=='ultime') return _echec('le plan Ultime mensuel n’est pas reconnu');
@@ -36818,10 +36827,11 @@ async function testExercices(){
           _droitsPoser(mail,null,true);
           const avant=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
           if(droitsEcarts(suivi).join()!=='suivi') return _echec('suivi : '+droitsEcarts(suivi).join());
-          if(droitsEcarts(abo).join()!=='abo') return _echec('abonnement : '+droitsEcarts(abo).join());
-          if(droitsEcarts(essai).join()!=='essai') return _echec('essai : '+droitsEcarts(essai).join());
+          // 10/10/2026 : l'abonnement et l'essai du dossier n'ouvrent plus rien, ce ne sont plus des écarts.
+          if(droitsEcarts(abo).length) return _echec('abonnement : '+droitsEcarts(abo).join());
+          if(droitsEcarts(essai).length) return _echec('essai : '+droitsEcarts(essai).join());
           const apres=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
-          if(avant.join()!==apres.join()||avant[0]!=='suivi'||avant[1]!=='ultime'||!avant[2]) return _echec('compter a changé un accès : '+avant.join()+' → '+apres.join());
+          if(avant.join()!==apres.join()||avant[0]!=='suivi'||avant[1]!=='aucun'||avant[2]) return _echec('compter a changé un accès : '+avant.join()+' → '+apres.join());
           // Ce que le serveur atteste n'est pas un écart.
           _droitsPoser(mail,{palier:'ultime',echeance:0,source:'paypal'},false);
           if(droitsEcarts(abo).length) return _echec('un abonnement attesté est compté : '+droitsEcarts(abo).join());
@@ -36853,10 +36863,11 @@ async function testExercices(){
         const sauve=localStorage.getItem(DROITS_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE), sauveS=localStorage.getItem(DROITS_SERVEUR_CLE);
         try{
           localStorage.removeItem(PAIEMENT_RECENT_CLE);
-          // 0. AVANT LA BASCULE (rattrapage pas encore passé) : un nœud vide ne coupe personne.
+          // 0. 10/10/2026 : plus de bascule. Un nœud vide n'ouvre rien ; le compte
+          //    d'avant est rattrapé par le serveur (droitsRattraper), qui relit PayPal.
           localStorage.removeItem(DROITS_SERVEUR_CLE);
           _droitsPoser(mail,null,true);
-          if(palierDe(u)!=='ultime') return _echec('avant le rattrapage, un nœud vide coupe un abonné : '+palierDe(u));
+          if(palierDe(u)!=='aucun') return _echec('un nœud vide laisse décider le dossier : '+palierDe(u));
           localStorage.setItem(DROITS_SERVEUR_CLE,'1');
           // 1. droits/ porte une fin passée : le dossier sans accessExpiry n'y change rien.
           _droitsPoser(mail,{palier:'ultime',echeance:now-864e5,source:'paypal',abo:'I-ABC12345678'},false);
@@ -36867,15 +36878,15 @@ async function testExercices(){
           if(palierDe(u)!=='aucun') return _echec('nœud vide, dossier « abonné » : '+palierDe(u));
           if(palierDe(Object.assign({},u,{programmesAchetes:{p:{ouvertJusqu:now+864e5}}}))!=='aucun')
             return _echec('un programme écrit dans le dossier ouvre Ultime');
-          // 3. … sauf un paiement fait sur CET appareil il y a moins de 72 h.
+          // 3. Plus de sursis de 72 h sur la foi de l'appareil : après un paiement,
+          //    l'app demande au serveur de confirmer (droitsRattraper avec l'abonnement).
           paiementRecentNoter(u,'abonnement');
-          if(palierDe(u)!=='ultime') return _echec('le paiement qui vient d’aboutir ne compte pas : '+palierDe(u));
-          localStorage.setItem(PAIEMENT_RECENT_CLE,JSON.stringify({email:mail,le:now-73*3600000}));
-          if(palierDe(u)!=='aucun') return _echec('la preuve locale vaut plus de 72 h');
+          if(palierDe(u)!=='aucun') return _echec('une preuve locale ouvre encore : '+palierDe(u));
           localStorage.removeItem(PAIEMENT_RECENT_CLE);
-          // 4. droits/ jamais lu (hors ligne, règles pas publiées) : l'ancien modèle, pour la transition.
+          if(!/droitsRattraper\(currentUser,data\.subscriptionID\)/.test(_prodSrc())) return _echec('le paiement ne demande pas au serveur de confirmer');
+          // 4. droits/ jamais lu : rien de payé non plus.
           const o=_droitsTous(); delete o[mail]; localStorage.setItem(DROITS_CLE,JSON.stringify(o));
-          if(palierDe(u)!=='ultime') return _echec('transition : droits/ jamais lu, le dossier ne décide plus');
+          if(palierDe(u)!=='aucun') return _echec('droits/ jamais lu, le dossier décide : '+palierDe(u));
           // 5. Ce que droits/ ouvre : le palier payé, Ultime d'un programme par-dessus, le suivi d'un coach à côté.
           _droitsPoser(mail,{palier:'essentielle',echeance:0,source:'paypal',ultimeJusqu:now+864e5},false);
           if(palierDe(u)!=='ultime') return _echec('ultimeJusqu ne s’ajoute pas');
@@ -37315,19 +37326,16 @@ async function testExercices(){
         if(f.date!==t||f.prixCts!==1490||f.source!=='paypal'||f.ordre!=='ORDX'||f.ouvertJusqu!==t+30*J) return _echec('fiche : '+JSON.stringify(f));
         const o=ficheAchatProgramme({prixCts:1490},'offert',t,'offert');
         if(o.source!=='offert'||o.prixCts!==0||o.ouvertJusqu!==0) return _echec('offert : '+JSON.stringify(o));
+        // 10/10/2026 : ACQUIS = attesté par le serveur (droits/<clé>/programmes), à vie.
         const u={id:'b1',email:'b1@t.fr',role:'athlete',status:'FREE',programmesAchetes:{fondations:f}};
-        // PENDANT 30 JOURS : Ultime ouvert (repli du dossier) ; APRÈS : plus d'Ultime…
-        if(!programmeOuvreUltime(u,t+29*J)) return _echec('29e jour : Ultime fermé');
-        if(programmeOuvreUltime(u,t+31*J)) return _echec('31e jour : Ultime encore ouvert');
-        // …MAIS LE PROGRAMME RESTE ACQUIS, sans échéance.
+        _srvDroits(u,{programmes:{}});
+        if(programmeAcquis(u,'fondations')||programmesAcquisDe(u).length) return _echec('la fiche du dossier suffit à acquérir');
+        _srvDroits(u,{programmes:{fondations:{le:t,prixCts:1490,source:'paypal',ordre:'ORDX'}}});
         if(!programmeAcquis(u,'fondations')) return _echec('le programme n’est pas acquis');
         if(programmesAcquisDe(u).join()!=='fondations') return _echec('programmesAcquisDe : '+programmesAcquisDe(u).join());
-        // Un achat d'avant (`le`, trois mois) reste acquis, et garde son échéance.
-        const vieux={programmesAchetes:{fondations:{le:t-10*J,prixCts:1490,ordre:'O',ouvertJusqu:t+80*J}}};
-        if(!programmeAcquis(vieux,'fondations')||!programmeOuvreUltime(vieux,t+79*J)) return _echec('un achat d’avant a perdu ses droits');
-        // Remboursé : plus acquis.
-        const remb={programmesAchetes:{fondations:Object.assign({},f,{rembourseLe:t+2*J})}};
-        if(programmeAcquis(remb,'fondations')||programmesAcquisDe(remb).length) return _echec('un programme remboursé reste acquis');
+        // Remboursé (rembourseLe, posé par le serveur) : plus acquis.
+        _srvDroits(u,{programmes:{fondations:{le:t,prixCts:1490,source:'paypal',rembourseLe:t+2*J}}});
+        if(programmeAcquis(u,'fondations')||programmesAcquisDe(u).length) return _echec('un programme remboursé reste acquis');
         // Ce que l'achat donne est écrit avant de payer, avec la durée de TARIFS.
         const ta=texteAchatProgramme();
         if(!/à vie/.test(ta)||ta.indexOf(joursAppProgramme()+' jours')<0||!/Essentielle/.test(ta)) return _echec('texte : '+ta);
@@ -37342,7 +37350,7 @@ async function testExercices(){
           programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDY',t-40*J)}};
         try{
           // Le serveur a parlé : rien de payé en cours, l'Ultime du programme est échu.
-          localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:{palier:'aucun',echeance:0,ultimeJusqu:t-10*J,maj:t},vide:false,lu:t}}));
+          _srvDroits(u,{ultimeJusqu:t-10*J,programmes:{fondations:{le:t-40*J,prixCts:1490,source:'paypal'}}});
           if(palierDe(u)!=='aucun') return _echec('palier : '+palierDe(u));
           if(peut(u,'bibliothequeExercices')) return _echec('la bibliothèque reste ouverte après 30 jours');
           // Le programme, lui, se lit : ses séances et leurs exercices.
@@ -37360,7 +37368,7 @@ async function testExercices(){
           const porte=document.querySelector('#eb-corps [data-eb-programmes]');
           if(!porte) return _echec('l’écran de fin d’essai ne mène pas au programme');
           // Sans achat : pas de porte, et pas de lecture.
-          const sans=Object.assign({},u,{programmesAchetes:{}});
+          const sans=_srvDroits(Object.assign({},u,{email:'b2s@t.fr',programmesAchetes:{}}),{ultimeJusqu:t-10*J});
           currentUser=sans; rendreEssaiBilan(sans);
           if(document.querySelector('#eb-corps [data-eb-programmes]')) return _echec('une porte sans programme acheté');
           if(ouvrirLectureProgramme('fondations')) return _echec('lecture sans achat');
@@ -37376,7 +37384,8 @@ async function testExercices(){
         const sauve=localStorage.getItem(DROITS_CLE);
         const u={id:'b3',email:'b3@t.fr',role:'athlete',status:'FREE',
           programmesAchetes:{fondations:ficheAchatProgramme({prixCts:1490},'ORDZ',t-5*J)}};
-        const poser=d=>localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:Object.assign({echeance:0,maj:t},d),vide:false,lu:t}}));
+        const poser=d=>localStorage.setItem(DROITS_CLE,JSON.stringify({[u.email]:{d:Object.assign({echeance:0,maj:t,
+          programmes:{fondations:{le:t-5*J,prixCts:1490,source:'paypal'}}},d),vide:false,lu:t}}));
         const ULT=['bibliothequeExercices','planification','dieteCalculee','volume'];
         try{
           // Pendant les 30 jours (ultimeJusqu posé par le worker) : Ultime.
@@ -37606,7 +37615,7 @@ async function testExercices(){
           // AUCUN DROIT : rien, sauf pendant l'essai, qui vaut Ultime.
           poser('aucun');
           if(peut(u,'seance')) return _echec('un compte sans droit s’entraîne encore');
-          const enEssai=Object.assign({},u,{essai:{ouvertLe:Date.now(),seancesAuDebut:0},sessions:[]});
+          const enEssai=_srvDroits(Object.assign({},u,{email:'cap1e@t.fr',essai:{ouvertLe:Date.now(),seancesAuDebut:0},sessions:[]}));
           if(!peut(enEssai,'bibliothequeExercices')) return _echec('l’essai n’ouvre pas Ultime');
           if(peut(enEssai,'correctionVideo')) return _echec('l’essai ouvre la correction vidéo');
           // UN COACH PASSE PARTOUT.
@@ -37673,13 +37682,13 @@ async function testExercices(){
           // 3. UNE ECHEANCE DEPASSEE FERME, quoi que dise le dossier.
           poser({palier:'ultime',echeance:Date.now()-1000,source:'paypal',maj:Date.now()});
           if(palierDe(u)!=='aucun') return _echec('un droit expiré ouvre encore : '+palierDe(u));
-          // 4. RIEN N'A JAMAIS ETE LU : le dossier decide, et lui seul. ON NE
-          //    COUPE PERSONNE SUR UN SILENCE DU SERVEUR. Ce n'est plus un pont
-          //    vers une migration a venir : c'est le fonctionnement normal.
+          // 4. RIEN N'A JAMAIS ETE LU (10/10/2026) : rien de payé ne vient du
+          //    dossier, même pas en attendant. Le cache des droits garde la
+          //    dernière réponse du serveur d'une session à l'autre.
           localStorage.removeItem(DROITS_CLE);
           if(droitsDe(u).etat!=='inconnu') return _echec('l’état sans lecture : '+droitsDe(u).etat);
-          if(palierDe(u)!=='essentielle') return _echec('le repli hérité : '+palierDe(u));
-          if(checkAccess(u)!==true) return _echec('le repli coupe un abonné');
+          if(palierDe(u)!=='aucun') return _echec('le dossier décide sans le serveur : '+palierDe(u));
+          if(checkAccess(u)!==false) return _echec('le dossier ouvre l’accès sans le serveur');
           // 5. ET LE COACH PASSE TOUJOURS.
           if(palierDe({role:'coach',email:'c@t.fr'})!=='suivi') return _echec('le coach n’est plus au palier suivi');
           return checkAccess({role:'coach',email:'c@t.fr'})===true
@@ -37701,16 +37710,68 @@ async function testExercices(){
           if(await rafraichirDroits(u,true)!==false) return _echec('une lecture refusée a été prise pour bonne');
           if(droitsDe(u).etat!=='inconnu') return _echec('le cache a été écrit malgré le refus');
           if(checkAccess(u)!==true) return _echec('un suivi valide est coupé par un refus du serveur');
-          // Et une lecture qui ABOUTIT, elle, fait foi tout de suite.
-          CLOUD.pullDroits=async()=>({ok:true,droits:{palier:'ultime',echeance:0,maj:Date.now()}});
-          if(await rafraichirDroits(u,true)!==true) return _echec('une lecture réussie est rendue fausse');
-          return palierDe(u)==='ultime'?true:_echec('le palier lu : '+palierDe(u));
+          // Et une lecture qui ABOUTIT, elle, fait foi tout de suite (le suivi du
+          // dossier, plus haut qu'Ultime, reste : on lit un compte sans code).
+          CLOUD.pullDroits=async()=>({ok:true,droits:{palier:'ultime',echeance:0,maj:Date.now(),rattrapeLe:1}});
+          const libre=Object.assign({},u,{status:'FREE',accessExpiry:0});
+          if(await rafraichirDroits(libre,true)!==true) return _echec('une lecture réussie est rendue fausse');
+          return palierDe(libre)==='ultime'?true:_echec('le palier lu : '+palierDe(libre));
         } finally {
           CLOUD.pullDroits=sPull;
           if(sauve==null) localStorage.removeItem(DROITS_CLE);
           else localStorage.setItem(DROITS_CLE,sauve);
         }});
 
+      // ══ DROITS SERVEUR (10/10/2026) : LE CLIENT LIT, IL NE DÉCIDE PLUS ═════
+      ok('DROITS SERVEUR — un dossier trafiqué ne prolonge pas l’essai, ne s’attribue ni programme ni abonnement',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE), t=Date.now(), J=864e5;
+        try{
+          const mail='triche-droits@t.fr';
+          const u={id:'TD',email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',
+            abonnement:{formule:'ultime'},essai:{ouvertLe:t,finit:t+999*J},
+            programmesAchetes:{fondations:{le:t,prixCts:1490,ordre:'FAUX',source:'paypal',ouvertJusqu:t+999*J}}};
+          // Le serveur dit : essai fini il y a dix jours, rien de payé, aucun programme.
+          _droitsPoser(mail,{palier:'aucun',echeance:0,source:'essai',essaiOuvertLe:t-40*J,essaiFinit:t-10*J,rattrapeLe:t},false);
+          if(essaiActif(u)) return _echec('essai.finit du dossier prolonge l’essai');
+          if(essaiFin(u)!==t-10*J) return _echec('la fin lue n’est pas celle du serveur : '+essaiFin(u));
+          if(programmeAcquis(u,'fondations')||programmesAcquisDe(u).length) return _echec('un programme écrit dans le dossier est acquis');
+          if(palierDe(u)!=='aucun'||palierEffectif(u)!=='aucun') return _echec('le dossier ouvre un palier : '+palierEffectif(u));
+          if(checkAccess(u)) return _echec('checkAccess ouvre sur la foi du dossier');
+          if(!doitVoirLePaywall(u)) return _echec('le paywall est évité');
+          // Les mêmes champs, attestés par le serveur, ouvrent.
+          _droitsPoser(mail,{palier:'ultime',echeance:0,source:'paypal',essaiOuvertLe:t-40*J,essaiFinit:t-10*J,
+            programmes:{fondations:{le:t,prixCts:1490,source:'paypal'}},rattrapeLe:t},false);
+          if(palierDe(u)!=='ultime'||!programmeAcquis(u,'fondations')||!checkAccess(u)) return _echec('les droits du serveur n’ouvrent pas');
+          // Le code ne décide plus nulle part sur ces champs du dossier.
+          for(const [f,interdit] of [[essaiFin,'u.essai'],[programmeAcquis,'u.programmesAchetes'],[_palierHerite,'AUTONOMIE_PREMIUM'],[_palierHerite,'paiementRecent']])
+            if(String(f).indexOf(interdit)>=0) return _echec(f.name+' lit encore '+interdit);
+          return true;
+        } finally { if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve); }})());
+      okA('DROITS SERVEUR — un compte d’avant est rattrapé une fois par session, et l’inscription demande l’essai au serveur',async()=>{
+        const sauve=localStorage.getItem(DROITS_CLE), sPull=CLOUD.pullDroits, sFn=CLOUD._callFn, sR=_droitsRattrapes, sU=currentUser;
+        const appels=[];
+        try{
+          const mail='rattrape@t.fr', t=Date.now();
+          const u={id:'RT',email:mail,role:'athlete',status:'FREE',essai:{ouvertLe:t-5*864e5}};
+          _droitsRattrapes=false; currentUser=u;
+          CLOUD.pullDroits=async()=>({ok:true,droits:null});
+          CLOUD._callFn=async(nom,d)=>{ appels.push(nom+':'+d.action);
+            return {ok:true,droits:{palier:'aucun',echeance:0,source:'rattrapage',essaiOuvertLe:t-5*864e5,essaiFinit:t+25*864e5,rattrapeLe:t}}; };
+          if(await rafraichirDroits(u,true)!==true) return _echec('la lecture échoue');
+          if(appels.join()!=='droits:rattraper') return _echec('appels : '+appels.join());
+          if(!essaiActif(u)) return _echec('l’essai rattrapé n’est pas lu');
+          await rafraichirDroits(u,true);
+          if(appels.length!==1) return _echec('rattrapé deux fois dans la session');
+          // L'inscription : l'essai demandé au serveur, sa réponse posée.
+          appels.length=0;
+          if(!await essaiDemanderAuServeur({email:'neuf@t.fr',role:'athlete'})) return _echec('l’essai du serveur n’est pas pris');
+          if(appels.join()!=='droits:essai') return _echec('inscription : '+appels.join());
+          if(!/await essaiDemanderAuServeur\(currentUser\)/.test(_prodSrc())) return _echec('l’inscription ne demande pas l’essai au serveur');
+          return true;
+        } finally {
+          CLOUD.pullDroits=sPull; CLOUD._callFn=sFn; _droitsRattrapes=sR; currentUser=sU;
+          if(sauve==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve);
+        }});
       ok('LOT 0 — LE CLIENT NE PEUT PAS ÉCRIRE DANS droits/',(()=>{
         // La serrure est dans les regles ; ici on tient que le code ne tente
         // meme pas de la forcer, et que la lecture passe par UNE fonction.
@@ -37723,7 +37784,9 @@ async function testExercices(){
         // du meme droit finiraient par diverger.
         if(typeof palierDe!=='function'||typeof droitsDe!=='function')
           return _echec('palierDe ou droitsDe a disparu');
-        return /function checkAccess\(u\)\{[\s\S]{0,1800}droitsDe\(u\)/.test(src)
+        // L'écran Accès du créateur passe par le serveur (/fn/droits, « poser »).
+        if(!/_callFn\('droits',\{action:'poser'/.test(src)) return _echec('l’écran Accès écrit encore lui-même');
+        return /function checkAccess\(u\)\{[\s\S]{0,1800}palierDe\(u\)/.test(src)
           ?true:_echec('checkAccess ne lit pas les droits du serveur');})());
 
       ok('1412 — LES CHIFFRES DU MOIS : moyenne par jour saisi, parts des macros, jours saisis',(()=>{
@@ -55477,6 +55540,7 @@ async function testExercices(){
         checkin:{[localISODate(new Date(cree+8*_RETJ))]:{sommeil:3,energie:3,courbatures:3,at:cree+8*_RETJ}},
         nutrition:{log:{[localISODate(new Date(_RET))]:{entries:[{nom:'riz'}]}}},
         parcours:{debut:cree,fini:cree+5*_RETJ,etapes:{}},coachEmailKey:'k@t,fr',duels:{d1:{}},essai:{finit:cree+30*_RETJ}};
+      _srvDroits(u,{essaiOuvertLe:cree,essaiFinit:cree+30*_RETJ});
       const r=activiteResume(u,_RET);
       if(!r||r.inscrit!=='2026-10-01'||r.sem!=='2026-09-28'||r.src!=='amb') return _echec(JSON.stringify(r));
       if(r.debut.join()!=='0,1,8') return _echec('jours de début : '+r.debut);
@@ -58072,18 +58136,19 @@ async function testExercices(){
       if(checkAccess(u)) return _echec('un dossier sans essai a l’accès');
       if(!essaiOuvrir(u)) return _echec('l’essai ne s’ouvre pas');
       if(essaiOuvrir(u)) return _echec('l’essai se rouvre : il serait infini');
-      // LA FIN EST POSEE A L'OUVERTURE, et elle vaut un mois.
+      // 10/10/2026 : LE DOSSIER NE L'OUVRE PAS, le serveur si (essaiDemanderAuServeur).
+      if(checkAccess(u)||essaiJoursRestants(u)!==null) return _echec('le dossier ouvre l’essai sans le serveur');
+      if(String(essaiFin).indexOf('u.essai')>=0) return _echec('essaiFin lit encore le dossier');
       const attendu=ESSAI_JOURS*86400000;
-      const ecart=Math.abs((u.essai.finit-u.essai.ouvertLe)-attendu);
-      if(ecart>60000) return _echec('la fin posée n’est pas à un mois : '+ecart+' ms d’écart');
+      _srvDroits(u);
       if(essaiJoursRestants(u)!==ESSAI_JOURS) return _echec('jour 1 : '+essaiJoursRestants(u)+' jours restants');
       if(essaiJour(u)!==1) return _echec('jour 1 annoncé comme le jour '+essaiJour(u));
       if(!essaiActif(u)||essaiFini(u)) return _echec('l’essai n’est pas actif le premier jour');
       // LE MOIS S'ECOULE : on déplace l'ouverture, ce qui revient au même que
       // de déplacer l'horloge, sans toucher à l'horloge du banc.
       const dans=n=>{ const t0=Date.now()-n*86400000;
-        return {id:'e',email:'e@t',role:'athlete',status:'FREE',sessions:[],
-          essai:{ouvertLe:t0,finit:t0+attendu}}; };
+        return _srvDroits({id:'e',email:'e@t',role:'athlete',status:'FREE',sessions:[],
+          essai:{ouvertLe:t0,finit:t0+attendu}}); };
       for(const [n,reste] of [[0,30],[9,21],[21,9],[27,3],[29,1]]){
         const v=dans(n);
         if(essaiJoursRestants(v)!==reste) return _echec('jour '+(n+1)+' : '+essaiJoursRestants(v)+' restants au lieu de '+reste);
@@ -58099,7 +58164,7 @@ async function testExercices(){
       // jours, plus en séances déjà faites.
       const v={id:'v',email:'v@t',role:'athlete',status:'FREE',
         sessions:Array.from({length:10},(_,i)=>({date:i+1}))};
-      essaiOuvrir(v);
+      essaiOuvrir(v); _srvDroits(v);
       return essaiJoursRestants(v)===ESSAI_JOURS
         ?true:_echec('un dossier déjà garni ouvre un essai entamé : '+essaiJoursRestants(v));})());
 
@@ -58111,14 +58176,16 @@ async function testExercices(){
       const n=(src.match(/doitVoirLePaywall\(/g)||[]).length;
       if(n<7) return _echec('seulement '+n+' mention(s) du prédicat : des chemins n’y passent pas');
       const t0=Date.now();
-      const enCours={role:'athlete',status:'FREE',sessions:[],
-        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}};
+      const enCours=_srvDroits({role:'athlete',status:'FREE',sessions:[],
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}});
       if(doitVoirLePaywall(enCours)) return _echec('un athlète en essai est renvoyé au paywall');
-      const fini={role:'athlete',status:'FREE',sessions:[],
-        essai:{ouvertLe:t0-40*86400000,finit:t0-10*86400000}};
+      const fini=_srvDroits({role:'athlete',status:'FREE',sessions:[],
+        essai:{ouvertLe:t0-40*86400000,finit:t0-10*86400000}});
       if(!doitVoirLePaywall(fini)) return _echec('un essai fini échappe au paywall');
       if(!doitVoirLePaywall({role:'athlete',status:'FREE',sessions:[]}))
         return _echec('un compte FREE sans essai échappe au paywall');
+      if(!doitVoirLePaywall({role:'athlete',email:'triche@t.fr',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',sessions:[]}))
+        return _echec('« AUTONOMIE_PREMIUM » écrit dans le dossier évite le paywall');
       if(doitVoirLePaywall({role:'coach',status:'FREE'}))
         return _echec('un coach est renvoyé au paywall');
       if(doitVoirLePaywall({role:'athlete',status:'COACHING_SUIVI'}))
@@ -58162,9 +58229,9 @@ async function testExercices(){
       // LA SEQUENCE, JOUR PAR JOUR : on accueille, on se tait, on rappelle,
       // puis on chiffre. C'est celle que Kevin a écrite.
       const dans=n=>{ const t0=Date.now()-n*86400000;
-        return {role:'athlete',status:'FREE',email:'seq@t.fr',
+        return _srvDroits({role:'athlete',status:'FREE',email:'seq@t.fr',
           sessions_config:[{day:'Lundi',active:true,exercises:[{name:'SQUAT'},{name:'TRACTIONS'}]}],
-          sessions:[],essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}}; };
+          sessions:[],essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}}); };
       const j1=texteEssaiRestant(dans(0));
       if(!/un mois/i.test(j1)||!/première séance/i.test(j1))
         return _echec('le premier jour n’accueille pas : « '+j1+' »');
@@ -58185,8 +58252,8 @@ async function testExercices(){
       return true;})());
     ok('Parrainage : sur les 60 jours d’un filleul, les phrases de l’essai restent justes (jour 1, 35, 52, 58)',(()=>{
       const dans=n=>{ const t0=Date.now()-n*86400000;
-        return {role:'athlete',status:'FREE',email:'seq60@t.fr',sessions_config:[{day:'Lundi',active:true,exercises:[{name:'SQUAT'}]}],
-          sessions:[],essai:{ouvertLe:t0,finit:t0+(ESSAI_JOURS+parrainageBonusJours())*86400000,bonusParrainage:30}}; };
+        return _srvDroits({role:'athlete',status:'FREE',email:'seq60@t.fr',sessions_config:[{day:'Lundi',active:true,exercises:[{name:'SQUAT'}]}],
+          sessions:[],essai:{ouvertLe:t0,finit:t0+(ESSAI_JOURS+parrainageBonusJours())*86400000,bonusParrainage:30}}); };
       if(essaiDuree(dans(0))!==60) return _echec('durée : '+essaiDuree(dans(0)));
       const j1=texteEssaiRestant(dans(0));
       if(!/deux mois/.test(j1)||/un mois/.test(j1)) return _echec('jour 1 : '+j1);
@@ -58228,8 +58295,8 @@ async function testExercices(){
         window.accueilChoisir=(k,a)=>{ choix.push(k+(a?':an':':mois')); };
         window.ouvrirBoutique=()=>{ choix.push('boutique'); };
         const J=864e5, t0=Date.now()-40*J;
-        const base={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
-          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DIPS'}]}]};
+        const base=_srvDroits({id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DIPS'}]}]});
         const lire=()=>{ const z=document.getElementById('eb-corps'); return {z,txt:z.textContent.replace(/\s+/g,' ')}; };
         const commun=(txt,z,qui)=>{
           if(!/rien n’est effacé/i.test(txt)) return qui+' : rien n’est effacé n’est pas dit';
@@ -58297,11 +58364,13 @@ async function testExercices(){
     // publié au serveur dit « payant » (le worker ne relance pas).
     ok('FIN D’ESSAI — déjà payant : pas d’écran de fin, et activiteResume publie le résumé de l’essai',(()=>{
       const J=864e5, t0=Date.now()-40*J;
-      const u={id:'pp',email:'pp@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',
-        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions:[{date:t0+J,volume:100}]};
+      const u=_srvDroits({id:'pp',email:'pp@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions:[{date:t0+J,volume:100}]},{palier:'essentielle',source:'paypal'});
       if(doitVoirLePaywall(u)) return _echec('un abonné voit l’écran de fin d’essai');
-      if(!doitVoirLePaywall(Object.assign({},u,{status:'FREE'}))) return _echec('le même essai, sans abonnement, ne mène pas à l’écran');
-      const a=activiteResume(Object.assign({},u,{status:'FREE'}));
+      const libre=_srvDroits({id:'pf',email:'pf@t.fr',role:'athlete',status:'FREE',
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions:[{date:t0+J,volume:100}]});
+      if(!doitVoirLePaywall(libre)) return _echec('le même essai, sans abonnement, ne mène pas à l’écran');
+      const a=activiteResume(libre);
       if(!a.essai||a.essai.s!==1||a.essai.t!==100) return _echec('résumé publié : '+JSON.stringify(a.essai));
       for(const k of Object.keys(a.essai)) if(['s','t','r','w'].indexOf(k)<0) return _echec('champ en trop : '+k);
       return true;})());
@@ -59401,6 +59470,7 @@ async function testExercices(){
           sessions_config:_seancesViergesSemaine(),
           // Acquis : sinon on mesure le verrou d'achat, pas la copie.
           programmesAchetes:{fondations:{le:Date.now(),prixCts:1490,ordre:'T'}}};
+        _srvDroits(currentUser,{programmes:{fondations:{le:Date.now(),prixCts:1490,source:'paypal'}}});
         DB.set('users',{'bq@t.fr':currentUser});
         const pr=appliquerProgramme('fondations');
         if(!pr||typeof pr.then!=='function') return _echec('appliquerProgramme ne rend pas de promesse');
@@ -59707,7 +59777,7 @@ async function testExercices(){
     //   la vraie vie. Tant que les ecrans ne demandaient rien, l'oubli ne se
     //   voyait pas ; depuis que l'essai vaut Ultime, il decidait de ce que
     //   Nina voit — et ces tests-la parlent d'etats vides, pas de verrous.
-    const _r13Neuf=()=>({id:'r13',email:'r13@t.fr',fname:'Nina',lname:'Neuve',role:'athlete',exAlias:{},exMuscles:{},
+    const _r13Neuf=()=>_srvDroits({id:'r13',email:'r13@t.fr',fname:'Nina',lname:'Neuve',role:'athlete',exAlias:{},exMuscles:{},
       sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],nutrition:{},
       essai:{ouvertLe:Date.now(),seancesAuDebut:0},
       consent:{health:true,policyVersion:POLICY_VERSION}});

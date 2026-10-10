@@ -34,6 +34,7 @@ import * as RE from './retour.js';
 import * as RL from './relances.js';
 import * as PR from './prospects.js';
 import * as CC from './commission-coach.js';
+import { creerDroits } from './droits-serveur.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
 
@@ -555,13 +556,12 @@ export function creerMetier(deps) {
       body: 'Ses quatre premières séances t’offriront 1 mois de RepCore.' });
     return { ok: true };
   }
-  // ⚠ L'ESSAI DU FILLEUL NE PASSE PAS PAR droits/. La version Cloud Functions
-  //   y posait `bonusEssaiJours` seul : un nœud sans palier, lu « aucun », qui
-  //   fermait l'accès au moment même où le filleul utilisait un code ami.
-  //   Le serveur léger n'écrit dans droits/ que des accès complets (palier et
-  //   échéance, voir majDroits) ; l'essai, c'est l'app qui le donne à
-  //   l'inscription (essaiOuvrir, bonusJours). Rien à faire ici.
-  async function bonusEssai() { return null; }
+  // LE MOIS DE L'AMI (10/10/2026) : l'essai vit dans droits/ (droits-serveur.js),
+  // écrit par ce serveur seul. Un rattachement accepté APRÈS l'ouverture de
+  // l'essai en recule la fin d'un mois, une fois ; avant l'ouverture, l'essai
+  // le compte lui-même. (L'ancienne version écrivait un nœud sans palier, lu
+  // « aucun » : celle-ci ne touche qu'à essaiFinit d'un essai déjà ouvert.)
+  async function bonusEssai(uid) { return creerDroits({ db, M: null, maintenant: now }).bonusEssai(uid); }
   // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain (P.premierPaiement),
   // une fois par filleul. C'EST LE SEUL CHEMIN DU CRÉDIT (Kevin, 11/10/2026) :
   // les quatre séances ne créditent plus. Appelé par paypal.js au premier
