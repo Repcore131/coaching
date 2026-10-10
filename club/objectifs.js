@@ -10,9 +10,12 @@
 //   c. mon défi perso de la semaine (prefs.goal), sinon le 2e KPI le plus en retard.
 // Série : un jour travaillé compte s'il a au moins un objectif fait, ou une
 // relance notée avec une issue. Jours non travaillés (absence, dimanche ou jour
-// fermé du club, jour sans aucune saisie de l'équipe) : neutres. Un jour manqué
+// fermé du club, jour sans aucune saisie de l'équipe, jour sans connexion ni
+// activité du commercial) : neutres. Un jour manqué
 // par période de 14 jours est couvert par le joker.
 const EUR_MIN = 5;
+// Impayés récupérés et sauvetages dépendent des dossiers reçus, pas d'une vente : l'objectif b (relances) les couvre.
+const KPI_HORS_OBJECTIFS = ['impayes', 'sauvetage'];
 const SERIE_MAX_JOURS = 120;
 
 // Actions de relance notées un jour (relances, rétention, résiliations, dossiers impayés).
@@ -28,7 +31,7 @@ function kpisEnRetard(uid, clubId, d) {
     const st = statsFor(clubId, uid, r, { requiredOnly: true });
     const restants = Math.max(1, workdays(uid, clubId, d, `${mk}-${daysIn(mk)}`));
     const passes = workdays(uid, clubId, mk + '-01', veille); const total = Math.max(1, workdays(uid, clubId, mk + '-01', `${mk}-${daysIn(mk)}`));
-    return st.rows.filter(x => x.target > 0).map(x => {
+    return st.rows.filter(x => x.target > 0 && !KPI_HORS_OBJECTIFS.includes(x.k.id)).map(x => {
       const avant = veille >= mk + '-01' ? sumRange(clubId, uid, x.k.id, mk + '-01', veille) : 0;
       const attendu = x.target * passes / total; const ratio = attendu > 0 ? avant / attendu : avant / x.target;
       const reste = x.target - avant; let q = reste / restants;
@@ -85,6 +88,8 @@ function jourReposHabituel(uid, d) {
 function jourNeutre(uid, clubId, d) {
   if (deepGet(S, ['absences', uid, d])) return true;
   if (jourReposHabituel(uid, d)) return true;
+  // Sans planning : un jour où le commercial n'a ni ouvert l'appli ni rien saisi ou noté est présumé non travaillé.
+  if (!jourActif(uid, d) && !deepGet(S, ['usage', uid, d])) return true;
   if (!isWorkday(d, clubId) || (typeof estFerie === 'function' && estFerie(d))) return true;
   return !memo('joursEquipe|' + clubId, () => new Set(Object.values(S.entries).filter(e => e.clubId === clubId && entryCounts(e)).map(e => e.date))).has(d);
 }
@@ -129,3 +134,50 @@ function maJourneeCard(ctx) {
 }
 // Prochaine micro-action : le premier objectif du jour pas encore fait.
 function prochaineMicroAction(uid = ME.id) { const g = dailyGoals(uid).find(x => !x.done); return g ? { label: g.label, link: g.link } : null; }
+
+// ── Récompenses de la semaine (non compétitives) ─────────────────────────
+// « Semaine complète » : la série n'a pas cassé de la semaine (3 jours travaillés au moins, joker compris) ;
+// « Record perso » : meilleur score de semaine depuis 8 semaines ;
+// « Objectifs du jour » : au moins 4 journées gagnées dans la semaine.
+const SEMAINES_PERSO = 8;
+function semainePerso(uid, clubId, lundi) {
+  const jours = [...Array(7)].map((_, i) => addDays(lundi, i)).filter(d => d <= today());
+  const travailles = jours.filter(d => !jourNeutre(uid, clubId, d));
+  const comptes = travailles.filter(d => jourCompte(uid, clubId, d)).length;
+  const gagnees = travailles.filter(d => d < today() || d === today()).filter(d => dailyGoals(uid, d, clubId).every(g => g.done)).length;
+  const score = statsFor(clubId, uid, rangeOf('week', lundi), { requiredOnly: true }).score;
+  const avant = [...Array(SEMAINES_PERSO)].map((_, i) => statsFor(clubId, uid, rangeOf('week', addDays(lundi, -7 * (i + 1))), { requiredOnly: true }).score).filter(x => x != null);
+  const meilleur = avant.length ? Math.max(...avant) : null;
+  return { travailles: travailles.length, manques: travailles.length - comptes, gagnees, score, meilleur };
+}
+function tropheesPersoSemaine(clubId) {
+  return memo('trPerso|' + clubId, () => {
+    const out = []; const t = today(); let w = weekStart(addDays(t, -7));
+    const team = clubMembers(clubId).filter(u => !u.virtual && u.role === 'membre');
+    for (let i = 0; i < SEMAINES_PERSO; i++, w = addDays(w, -7)) {
+      for (const u of team) {
+        const s = semainePerso(u.id, clubId, w); const base = { userId: u.id, kind: 'perso', mk: w.slice(0, 7), week: w, clubId, perso: true };
+        // le joker de la série couvre un jour manqué
+        if (s.travailles >= 3 && s.manques <= 1) out.push({ ...base, icon: 'calcheck', label: `Semaine complète du ${dm(w)}` });
+        if (s.score != null && s.score > 0 && s.meilleur != null && s.score > s.meilleur + 1e-9) out.push({ ...base, icon: 'flag', label: `Record perso, semaine du ${dm(w)}` });
+        if (s.gagnees >= 4) out.push({ ...base, icon: 'check', label: `Objectifs du jour, semaine du ${dm(w)}` });
+      }
+    }
+    return out;
+  });
+}
+// Le trophée personnel le plus proche cette semaine et ce qu'il reste à faire.
+function weeklyRewardCheck(userId = ME.id, clubId = CLUB.id) {
+  const lundi = weekStart(today()); const s = semainePerso(userId, clubId, lundi);
+  const restants = workdays(userId, clubId, today(), addDays(lundi, 6)) - (jourNeutre(userId, clubId, today()) ? 0 : (jourCompte(userId, clubId, today()) ? 1 : 0));
+  const L = [];
+  const jg = Math.max(0, 4 - s.gagnees); if (jg <= Math.max(0, restants)) L.push({ trophee: 'Objectifs du jour', reste: jg, texte: jg ? `Encore ${plur(jg, 'journée gagnée', 'journées gagnées')} pour Objectifs du jour` : 'Objectifs du jour : obtenu cette semaine' });
+  if (s.manques <= 1) { const n = Math.max(0, 3 - s.travailles); L.push({ trophee: 'Semaine complète', reste: Math.max(n, restants > 0 ? 1 : 0), texte: restants > 0 ? `Semaine complète : ${s.manques ? '1 jour couvert par le joker' : 'aucun jour manqué jusqu’ici'}, encore ${plur(Math.max(1, restants), 'jour', 'jours')}` : 'Semaine complète : obtenue cette semaine' }); }
+  if (s.meilleur != null && s.score != null && s.score <= s.meilleur) { const ecart = Math.ceil((s.meilleur - s.score) * 100 + 1e-9); L.push({ trophee: 'Record perso', reste: ecart, texte: `Encore ${ecart} points de score pour Record perso` }); }
+  return L.sort((a, b) => a.reste - b.reste)[0] || null;
+}
+// Cockpit : membres sans aucune récompense depuis 3 semaines.
+function sansRecompense(clubId, jours = 21) {
+  const lim = Date.now() - jours * 864e5;
+  return clubMembers(clubId).filter(u => !u.virtual && u.role === 'membre').filter(u => !allTrophies().some(t => t.userId === u.id && tropheeAt(t) >= lim && tropheeAt(t) <= Date.now()));
+}

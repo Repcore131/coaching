@@ -356,10 +356,13 @@ function allTrophies() {
         const r = rangeOf('month', mk);
         const rk = ranking(c.id, r);
         if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: 'trophy', label: `N°1 du mois ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
+        // Trophées KPI : 2 au plus par vendeur et par mois ; au-delà, le trophée va au suivant s'il dépasse 50 % de son objectif.
+        const parVendeur = {};
         for (const k of kpiList()) {
           if (!k.points) continue;
-          const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0);
-          if (kr[0] && kr[0].score >= 0.5) out.push({ userId: kr[0].u.id, kind: 'month', icon: kpiIconName(k), label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
+          const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0 && x.score >= 0.5);
+          const w = kr.find(x => (parVendeur[x.u.id] || 0) < 2) || kr[0];
+          if (w) { parVendeur[w.u.id] = (parVendeur[w.u.id] || 0) + 1; out.push({ userId: w.u.id, kind: 'month', kpiTrophy: k.id, icon: kpiIconName(k), label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
         }
       }
       // trimestres termines
@@ -402,6 +405,8 @@ function allTrophies() {
         team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = manualDays(u.id); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }
+    // trophées personnels de la semaine, non compétitifs (objectifs.js)
+    if (typeof tropheesPersoSemaine === 'function') for (const c of Object.values(S.clubs)) out.push(...tropheesPersoSemaine(c.id));
     // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;

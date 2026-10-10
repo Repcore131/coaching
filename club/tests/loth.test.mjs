@@ -100,7 +100,8 @@ test('H5 : du mardi au samedi, un objectif chaque jour : la série continue apr�
   assert.ok(s.n >= attendu, `${s.n} jours, au moins ${attendu} attendus (5 semaines, lundis neutres)`); assert.equal(s.jokerDispo, true);
   assert.match(run('serieTexte(serieJours())'), /^Série : \d+ jours travaillés$/);
   // un mardi manqué : couvert par le joker, la série continue
-  run(`for (const id of Object.keys(S.entries)) { const e = S.entries[id]; if (e.userId === 'v' && dateOf(e.date).getDay() === 2 && e.date >= addDays('${d0}', -7)) delete S.entries[id]; } REV++`);
+  // un mardi où Léa a ouvert l'appli sans rien faire : jour manqué
+  run(`for (const id of Object.keys(S.entries)) { const e = S.entries[id]; if (e.userId === 'v' && dateOf(e.date).getDay() === 2 && e.date >= addDays('${d0}', -7)) { delete S.entries[id]; S.usage = { v: { [e.date]: { opens: 1 } } }; } } REV++`);
   const s2 = J(run, 'serieJours()'); assert.equal(s2.jokerDispo, false); assert.equal(s2.n, s.n - 1); assert.match(run('jokerTexte(serieJours())'), /^Joker utilisé le \d+ /);
 });
 test('H4 : résiliation attribuée au commercial = « 1 nouvelle relance à ton nom » ; 20 minutes ; 4 lignes au plus', () => {
@@ -124,4 +125,23 @@ test('H4 : une perte de place n’est pas affichée deux fois de suite pour la m
   assert.match(run('deltaCard()'), /Tu perds 1 place, Alex est passé devant/);
   run(`S.prefs.v.seen.home = Date.now() - 3600e3; S.prefs.v.seen.rank = { mk: curMonth(), club: 'k', rank: 1, devant: [] }; REV++; UI._lastRoute = 'x'`);
   assert.doesNotMatch(run('deltaCard()'), /Tu perds/);
+});
+test('H7 : démo, chaque membre actif avec 4 jours saisis dans la semaine a au moins un trophée personnel', () => {
+  const run = chargerAppli({}); run(`S = normalizeState(seedDemo('demo')); REV++; CLUB = S.clubs.demo; ME = S.users.u1;`);
+  const ko = J(run, `(() => { const out = []; const team = clubMembers('demo').filter(u => u.role === 'membre' && !u.virtual); let w = weekStart(addDays(today(), -7));
+    for (let i = 0; i < 8; i++, w = addDays(w, -7)) for (const u of team) { const jours = new Set(Object.values(S.entries).filter(e => e.userId === u.id && entryCounts(e) && e.date >= w && e.date <= addDays(w, 6)).map(e => e.date)).size;
+      if (jours >= 4 && !allTrophies().some(t => t.userId === u.id && t.perso && t.week === w)) out.push(u.first + ' ' + w); } return out; })()`);
+  assert.deepEqual(ko, []);
+  assert.equal(J(run, `(() => { const by = {}; allTrophies().filter(t => t.kpiTrophy).forEach(t => { const k = t.mk + '|' + t.userId; by[k] = (by[k] || 0) + 1; }); return Object.values(by).filter(n => n > 2).length; })()`), 0);
+});
+test('H7 : 2 trophées KPI au plus par vendeur et par mois quand un autre dépasse 50 % ; cockpit sans récompense ; all-time actifs', () => {
+  const k3 = { a: { id: 'a', label: 'Alpha', unit: 'qty', enabled: true, required: true, points: 100, order: 1 }, b: { id: 'b', label: 'Bêta', unit: 'qty', enabled: true, required: true, points: 100, order: 2 }, c: { id: 'c', label: 'Gamma', unit: 'qty', enabled: true, required: true, points: 100, order: 3 } };
+  const run = appli({ kpis: k3, users: { u: { id: 'u', first: 'Alex', last: 'M', role: 'manager', status: 'active', clubs: ['k'] }, v: { id: 'v', first: 'Léa', last: 'B', role: 'membre', status: 'active', clubs: ['k'] }, w: { id: 'w', first: 'Noé', last: 'C', role: 'membre', status: 'active', clubs: ['k'] }, z: { id: 'z', first: 'Zoé', last: 'D', role: 'membre', status: 'archived', clubs: ['k'] } } });
+  const mk = run(`addMonths(curMonth(), -1)`);
+  run(`S.targets = { '${mk}': { v: { a: 10, b: 10, c: 10 }, w: { a: 10, b: 10, c: 10 } } }; ['a', 'b', 'c'].forEach((k, i) => { S.entries['v' + k] = { id: 'v' + k, userId: 'v', clubId: 'k', kpiId: k, date: '${mk}-10', value: 10, source: 'manual', at: 1 }; S.entries['w' + k] = { id: 'w' + k, userId: 'w', clubId: 'k', kpiId: k, date: '${mk}-10', value: 6, source: 'manual', at: 1 }; }); REV++`);
+  const T = J(run, `allTrophies().filter(t => t.kpiTrophy && t.mk === '${mk}').map(t => [t.kpiTrophy, t.userId])`);
+  assert.deepEqual(T, [['a', 'v'], ['b', 'v'], ['c', 'w']]);
+  const L = J(run, `sansRecompense('k').map(u => u.first)`); assert.ok(!L.includes('Zoé'));
+  run(`ME = S.users.u`); assert.match(run(`managerCockpit()`), /Membres sans récompense depuis 3 semaines/);
+  run(`UI.lbScope = 'members'`); assert.doesNotMatch(run(`PAGES.leaderboard.render()`), /Zoé/);
 });

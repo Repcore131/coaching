@@ -453,7 +453,8 @@ PAGES.leaderboard = {
     }
     const atMode = UI.atMode || 'score';
     const y12 = (UI.atRange || '12') === '12'; const since = addMonths(curMonth(), -11);
-    const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'pending').map(u => ({ u, pts: y12 ? pointsSince(u.id, since) : allTime(u.id), tr: trophies(u.id).filter(t => !y12 || (t.mk || '') >= since).length }));
+    // Membres actifs seulement ; 12 derniers mois par défaut.
+    const all = clubMembers(CLUB.id).filter(u => !u.virtual && u.status !== 'pending').map(u => ({ u, pts: y12 ? pointsSince(u.id, since) : allTime(u.id), tr: trophies(u.id).filter(t => !y12 || (t.mk || '') >= since).length }));
     all.sort((a, b) => atMode === 'score' ? b.pts - a.pts : b.tr - a.tr);
     const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div><div style="margin-bottom:8px">${seg('atRange', [['12', '12 derniers mois'], ['all', 'Depuis le début']], UI.atRange || '12')}</div>
       ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : plur(x.tr, 'trophée', 'trophées')}</b></div>`).join('')}
