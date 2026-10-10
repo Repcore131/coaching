@@ -9184,6 +9184,35 @@ async function testExercices(){
             return srv.ifm.every(x=>x)?true:_echec('un PUT sans if-match');
           } finally { _eRanger(sv); }
         });
+        okA('ETag (d) : print=silent — succès sans corps (204), 412 sans corps → on RELIT, jamais de fusion sur du vide',async()=>{
+          const sv=_eMonter();
+          try{
+            const d0=_eDoc(['S1']);
+            const srv=_fauxRTDB(d0); srv.v=1;
+            const urls=[];
+            // Firebase avec print=silent : 204 vide au succès, et un 412 qui ne porte que l'ETag.
+            window.fetch=async(url,o)=>{
+              const u=String(url), m=(o&&o.method)||'GET';
+              if(/\/users\/etag@t,fr\.json/.test(u)) urls.push(m+' '+u);
+              const r=await srv.fetch(url,o);
+              if(m!=='PUT'||!/print=silent/.test(u)) return r;
+              if(r.status===412) return new Response('',{status:412,headers:{'ETag':r.headers.get('ETag')}});
+              return new Response(null,{status:204,headers:{'ETag':r.headers.get('ETag')||''}});
+            };
+            srv.hook={put:async(corps,S)=>{ if(S.ifm.length===1){ S.val=_eDoc(['S1','S2'],1500); S.v++; } }};
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            CLOUD._poserBase('etag@t.fr',d0);
+            const local=_eDoc(['S1','S3'],2000);
+            await CLOUD._doPushOne('etag@t.fr',local,false,{base:CLOUD._baseDe('etag@t.fr',local)});
+            const puts=urls.filter(x=>/^PUT /.test(x));
+            if(!puts.length||!puts.every(x=>/[?&]print=silent/.test(x))) return _echec('PUT sans print=silent : '+puts.join(' | '));
+            if(srv.gets<2) return _echec('412 sans corps : pas de relecture ('+srv.gets+' GET)');
+            const fin=srv.puts[srv.puts.length-1];
+            if(_eIds(fin)!=='S1,S2,S3') return _echec('fusion sur du vide : '+_eIds(fin));
+            return true;
+          } finally { _eRanger(sv); }
+        });
         okA('ETag (b) : trois 412 de suite → erreur rejouable, clé enfilée dans rc_sync_queue',async()=>{
           const sv=_eMonter();
           try{
