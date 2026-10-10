@@ -16,6 +16,7 @@
 // portées gmail.readonly et drive.readonly.
 
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { chargerAppli, paris } from './fitpulse-rapport.mjs';
 import { comptesGmail, jetonGmail } from './fitpulse-resmail.mjs';
 
@@ -132,6 +133,40 @@ export async function passageImports(api, tk, S, { sources, now = Date.now(), fo
 
 // Sources réelles à partir des secrets (même compte OAuth que la relève des résiliations).
 export function sourcesReelles(S, env = process.env) {
-  const comptes = comptesGmail(S, env);
-  return async clubId => { const c = comptes[clubId]; if (!c) return []; const a = await jetonGmail(c); return [sourceGmail(a), sourceDrive(a)]; };
+  const comptes = comptesGmail(S, env); const imap = compteImap(S, env);
+  return async clubId => {
+    const out = []; const c = comptes[clubId];
+    if (c) { const a = await jetonGmail(c); out.push(sourceGmail(a), sourceDrive(a)); }
+    if (imap && imap.club === clubId) out.push(sourceImap(imap));
+    return out;
+  };
+}
+
+// ── Boîte e-mail relevée par mot de passe d'application (IMAP), sans connexion Google ──
+// Secrets IMPORT_IMAP_USER et IMPORT_IMAP_MDP (mot de passe d'application du compte Gmail de
+// l'accueil), club IMPORT_IMAP_CLUB (par défaut : le premier club). Lecture seule : les messages
+// ne sont ni déplacés ni marqués. Pièces jointes CSV, XLSX, ZIP des 14 derniers jours.
+export function compteImap(S, env = process.env) {
+  if (!env.IMPORT_IMAP_USER || !env.IMPORT_IMAP_MDP) return null;
+  const club = env.IMPORT_IMAP_CLUB && S.clubs && S.clubs[env.IMPORT_IMAP_CLUB] ? env.IMPORT_IMAP_CLUB : Object.keys(S.clubs || {}).find(id => S.clubs[id] && !S.clubs[id].archived);
+  return club ? { club, user: env.IMPORT_IMAP_USER, pass: env.IMPORT_IMAP_MDP, host: env.IMPORT_IMAP_HOTE || 'imap.gmail.com', modules: env.IMAP_MODULES || '' } : null;
+}
+const chargerImap = modules => { const r = createRequire((modules ? modules.replace(/\/?$/, '/') : import.meta.url)); return { ImapFlow: r('imapflow').ImapFlow, simpleParser: r('mailparser').simpleParser }; };
+export function sourceImap(c, charger = chargerImap) {
+  return {
+    async fichiers() {
+      const { ImapFlow, simpleParser } = charger(c.modules);
+      const cl = new ImapFlow({ host: c.host, port: 993, secure: true, auth: { user: c.user, pass: c.pass }, logger: false });
+      await cl.connect(); const verrou = await cl.getMailboxLock('INBOX', { readOnly: true }); const out = [];
+      try {
+        const uids = (await cl.search({ since: new Date(Date.now() - 14 * 864e5) }, { uid: true })) || [];
+        for (const uid of uids.slice(-60)) {
+          const m = await cl.fetchOne(String(uid), { source: true }, { uid: true }); if (!m || !m.source) continue;
+          const p = await simpleParser(m.source); const id = p.messageId || `uid${uid}`;
+          for (const a of p.attachments || []) if (a.filename && EXT.test(a.filename) && /\.(csv|xlsx|zip)$/i.test(a.filename)) out.push({ ref: `i:${sha(id + '|' + a.filename).slice(0, 24)}`, name: a.filename, at: p.date ? p.date.getTime() : Date.now(), source: 'mail', lire: async () => Buffer.from(a.content) });
+        }
+      } finally { verrou.release(); await cl.logout().catch(() => null); }
+      return out;
+    },
+  };
 }
