@@ -86,6 +86,7 @@ function feedEvents(clubIds, sinceTs = 0) {
     }
     if (typeof duelEvenements === 'function') out.push(...duelEvenements(clubs));
     if (typeof kudosEvenements === 'function') out.push(...kudosEvenements(clubs));
+    if (typeof bilanEvenements === 'function') out.push(...bilanEvenements(clubs));
     for (const m of Object.values(S.chat || {})) if (m && m.annonce && C.has(m.channel)) out.push({ id: `an_${m.id}`, type: 'manager', at: m.at, userId: m.userId, clubId: m.channel, label: 'Annonce du manager', sub: m.text, link: '#/pouls' });
     return out.sort((a, b) => b.at - a.at);
   });
@@ -115,7 +116,7 @@ function filCarte(ev) {
   const multi = myClubs().length > 1; const c = S.clubs[ev.clubId];
   return `<div class="fil-c ${win ? 'fil-win' : ''}" data-type="${ev.type}" data-ev="${esc(ev.id)}"><div class="fil-h">${u && !win ? avatar(u) : `<span class="fil-ic">${ico(ev.icon && ev.type === 'trophy' ? ev.icon : ic)}</span>`}
     <div class="spacer"><b class="fil-t">${esc(ev.label)}</b>${ev.sub ? `<div class="fil-s">${esc(ev.sub)}</div>` : ''}<div class="muted small">${ago(ev.at)}${multi && c ? ` · ${esc(c.name)}` : ''}</div></div><span class="fil-b">${badge}</span></div>
-    ${ev.pinned ? '<div class="fil-epingle">Épinglé par le manager pour 24 h</div>' : ''}${ev.kudosId && isManager() ? `<div class="reacts"><button class="btn sm ghost" data-act="kudosEpingler" data-id="${esc(ev.kudosId)}">${ev.pinned ? 'Désépingler' : 'Épingler 24 h'}</button></div>` : ''}${rx ? `<div class="reacts">${reactBtns('react', ev.id, rx)}</div>` : ''}</div>`;
+    ${ev.pinned ? '<div class="fil-epingle">Épinglé par le manager pour 24 h</div>' : ''}${ev.kudosId && isManager() ? `<div class="reacts"><button class="btn sm ghost" data-act="kudosEpingler" data-id="${esc(ev.kudosId)}">${ev.pinned ? 'Désépingler' : 'Épingler 24 h'}</button></div>` : ''}${rx ? `<div class="reacts">${reactBtns('react', ev.id, rx)}</div>` : ''}${typeof commentairesBloc === 'function' ? commentairesBloc(ev) : ''}</div>`;
 }
 function filListe(clubIds, puce, n) {
   const P = FIL_PUCES.find(x => x[0] === puce) || FIL_PUCES[0];

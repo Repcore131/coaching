@@ -105,3 +105,19 @@ test('I3 : un collègue ne peut pas envoyer un quatrième bravo dans la journée
   run(`ME = S.users.ma; CLUB = S.clubs.a; db.set(['clubs', 'a', 'coeur', addMonths(curMonth(), -1)], 'a2')`);
   assert.ok(J(run, `allTrophies().some(t => t.userId === 'a2' && /^Coup de coeur du manager/.test(t.label))`));
 });
+test('I4 : Partager à l’équipe crée une carte dans le fil ; image du bilan sans euro ; commentaire notifié à l’auteur', () => {
+  const run = appli(reseau(), 'a0'); const mk = run('addMonths(curMonth(), -1)');
+  run(`S.targets = { '${mk}': { a0: { contrats: 10 } } }; S.entries.w1 = { id: 'w1', userId: 'a0', clubId: 'a', kpiId: 'contrats', date: '${mk}-10', value: 8, source: 'manual', at: 1 };
+    S.entries.w2 = { id: 'w2', userId: 'a0', clubId: 'a', kpiId: 'impayes', date: '${mk}-10', value: 250, source: 'manual', at: 1 }; REV++`);
+  assert.match(run(`PAGES.wrap.render(['${mk}', 'a0'])`), /data-act="bilanPartager"[\s\S]*Partager à l’équipe[\s\S]*Enregistrer l’image/);
+  run(`ACTIONS.bilanPartager({ dataset: { mk: '${mk}' } })`);
+  const ev = J(run, `feedEvents(['a']).find(e => e.id.startsWith('wr_'))`); assert.ok(ev); assert.match(ev.label, /partage son bilan/); assert.doesNotMatch(ev.label, /€/);
+  assert.doesNotMatch(run(`(() => { UI.chatCh = 'a'; return PAGES.chat ? PAGES.chat.render() : ''; })()`), /partage son bilan/);
+  // image : on relève tout ce qui est écrit sur le canvas
+  const ecrit = J(run, `(() => { const T = []; const ctx = new Proxy({}, { get: (o, k) => k === 'fillText' ? (t => T.push(String(t))) : k === 'measureText' ? (() => ({ width: 10 })) : (() => {}), set: () => true }); drawWrapCard('a0', '${mk}', { getContext: () => ctx }); return T; })()`);
+  assert.ok(ecrit.length > 5); assert.ok(ecrit.every(t => !/€|[–—]/.test(t)), ecrit.join(' | ')); assert.ok(ecrit.some(t => /%/.test(t)));
+  // commentaire d'un collègue sur mon événement
+  run(`ME = S.users.a1; db.batch(commentOps('${ev.id}', 'a0', 'Superbe mois'))`);
+  const c = J(run, `commentairesDe('${ev.id}')`); assert.equal(c.length, 1); assert.equal(c[0].to, 'a0');
+  assert.equal(J(run, `commentOps('x', 'a0', 'y'.repeat(300))`)[0][1].text.length, 140);
+});

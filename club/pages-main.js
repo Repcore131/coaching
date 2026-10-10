@@ -503,7 +503,7 @@ PAGES.chat = {
   render() {
     const chans = [...myClubs().map(c => [c.id, c.name]), ...(Object.keys(S.clubs).length > 1 ? [['all', 'Tous nos clubs']] : [])];
     const ch = chans.find(c => c[0] === UI.chatCh) ? UI.chatCh : CLUB.id;
-    const msgs = Object.values(S.chat).filter(m => m.channel === ch).sort((a, b) => a.at - b.at);
+    const msgs = Object.values(S.chat).filter(m => m.channel === ch && !m.wrap).sort((a, b) => a.at - b.at);
     const roots = msgs.filter(m => !m.parentId);
     const replies = id => msgs.filter(m => m.parentId === id);
     let lastDay = '';
