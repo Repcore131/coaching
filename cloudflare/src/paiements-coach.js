@@ -13,7 +13,12 @@
 //   la documentation PayPal ne dit ni qui reçoit les événements d'une
 //   commande payée à un autre compte, ni si un remboursement fait depuis le
 //   compte du coach nous est signalé.
-// ⚠ LE PRIX EST CELUI DE tarifs.json, relu ici : jamais celui du client.
+// ⚠ LE PRIX EST CELUI QUE LE COACH A FIXÉ (10/10/2026) : /coachs/<coach>/
+//   formules/<id> = {lib, prixCts, mois, comprend}, de 0 à 2 000 €, relu ici à
+//   la commande, et le montant ainsi fixé est gardé sur la commande : la
+//   capture est comparée à LUI, jamais à un montant venu de l'app, ni aux prix
+//   de Kevin (tarifs.json ne sert plus qu'à ses formules à lui, coaching.js).
+//   Une formule absente ou hors bornes : rien ne se vend.
 //
 // LE CHEMIN. L'athlète connecté demande une commande (action « commande ») ;
 // PayPal lui fait approuver le paiement ; il revient dans l'app, qui demande la
@@ -23,7 +28,7 @@
 //
 // OÙ C'EST ÉCRIT (par ce serveur seul) :
 //   coach_paiement/<coach>            {marchand, type, statut, le, raison?}
-//   paiements_coach/<coach>/<commande> {athlete, formule, montant, statut, date, capture?}
+//   paiements_coach/<coach>/<commande> {athlete, formule, lib, mois, montant, statut, date, capture?}
 //   paiements_coach_captures/<capture> "<coach>|<commande>"   (pour un remboursement)
 //   droits/<athlète>.suiviJusqu / .ultimeJusqu  (PROLONGÉS, jamais écrasés)
 
@@ -44,6 +49,9 @@ export const FORMULES_COACH = Object.freeze({
   programme_perso: 'ultime', revision_prog: 'ultime',
   coaching_essentiel: 'suivi', coaching_transfo: 'suivi', coaching_evolution: 'suivi' });
 export const STATUTS = ['en_attente', 'recu', 'rembourse', 'annule'];
+// LES FORMULES DU COACH : ses bornes (les mêmes que database.rules.json).
+import { FORMULE_ID_RE, PRIX_MAX_CTS, PRIX_MIN_PAYABLE_CTS, MOIS_MAX, FORMULES_MAX, formuleCoach, payable } from './formules-coach.js';
+export { FORMULE_ID_RE, PRIX_MAX_CTS, PRIX_MIN_PAYABLE_CTS, MOIS_MAX, FORMULES_MAX, formuleCoach, payable };
 
 // ── PURES ─────────────────────────────────────────────────────────────────
 // L'identifiant marchand : 13 caractères (merchant id PayPal), ou l'adresse
@@ -69,14 +77,13 @@ export function lireCustomId(c) {
   const p = String(c || '').split('|');
   if (p.length !== 3) return null;
   const [coach, athlete, formule] = p;
-  if (!coach || !athlete || /[.#$\[\]\/]/.test(coach + athlete) || !FORMULES_COACH[formule]) return null;
+  if (!coach || !athlete || /[.#$\[\]\/]/.test(coach + athlete) || !FORMULE_ID_RE.test(formule)) return null;
   return { coach, athlete, formule };
 }
 // Le corps de la commande. ⚠ AUCUN platform_fees, AUCUN disbursement : le
-// payee est le coach, et rien d'autre n'est prélevé.
-export function corpsCommande({ coach, athlete, formule, marchand, retour, annulation }) {
-  const cts = prixFormule(formule);
-  const f = T.coaching[formule];
+// payee est le coach, et rien d'autre n'est prélevé. `f` : la formule du coach.
+export function corpsCommande({ coach, athlete, formule, f, marchand, retour, annulation }) {
+  const cts = f.prixCts;
   return {
     intent: 'CAPTURE',
     purchase_units: [{
@@ -102,6 +109,15 @@ export function droitsApresRemboursement(x, formule, t) {
   const champ = FORMULES_COACH[formule] === 'suivi' ? 'suiviJusqu' : 'ultimeJusqu';
   const d = x || {};
   return { [champ]: Math.max(t, (Number(d[champ]) || 0) - dureeFormule(formule)) };
+}
+// La formule d'un coach : SUIVI pendant ses mois (30 jours chacun), prolongé.
+export function droitsCoach(x, mois, t) {
+  const d = x || {};
+  return { suiviJusqu: Math.max(Number(d.suiviJusqu) || 0, t) + Number(mois) * MOIS_MS };
+}
+export function droitsCoachRemboursement(x, mois, t) {
+  const d = x || {};
+  return { suiviJusqu: Math.max(t, (Number(d.suiviJusqu) || 0) - Number(mois) * MOIS_MS) };
 }
 // Le bénéficiaire de la capture est-il bien le coach relié ?
 export function payeeConforme(pu, marchand) {
@@ -156,7 +172,7 @@ export function creerPaiementsCoach(ctx) {
       await db.ref('coach_paiement/' + coach).set({ statut: 'refuse', raison: 'format', le: now() });
       return { relie: false, raison: 'format' };
     }
-    const essai = corpsCommande({ coach, athlete: 'verification', formule: 'coaching_essentiel', marchand: m,
+    const essai = corpsCommande({ coach, athlete: 'verification', formule: 'verification', f: { lib: 'Vérification du compte', prixCts: 100 }, marchand: m,
       retour: APP + '?paiement_coach=verification', annulation: APP + '?paiement_coach=verification' });
     essai.purchase_units[0].custom_id = 'verification';
     const r = await pp('POST', '/v2/checkout/orders', essai);
@@ -184,16 +200,17 @@ export function creerPaiementsCoach(ctx) {
     const coach = await lire('slugs/' + slug);
     if (!coach) throw new ErreurAppel(404, 'Page de coach inconnue.');
     if (coach === athlete) throw new ErreurAppel(400, 'Tu ne peux pas t’acheter ta propre formule.');
-    const [m, vitrine] = await Promise.all([liaison(coach), lire('vitrines/' + slug)]);
+    // LA FORMULE ET SON PRIX : ceux du coach, lus ici (jamais ceux de l'app).
+    const [m, brute] = await Promise.all([liaison(coach), FORMULE_ID_RE.test(formule) ? lire('coachs/' + coach + '/formules/' + formule) : null]);
     if (!m) throw new ErreurAppel(409, 'Ce coach n’encaisse pas encore dans l’app : écris-lui depuis sa page.');
-    const offertes = (vitrine && vitrine.formules) ? Object.values(vitrine.formules) : [];
-    if (offertes.indexOf(formule) < 0 || prixFormule(formule) === null) throw new ErreurAppel(400, 'Cette formule n’est pas proposée.');
+    const f = formuleCoach(brute);
+    if (!f || !payable(f)) throw new ErreurAppel(400, 'Cette formule n’est pas proposée.');
     if (!(await palierCoach(coach))) throw new ErreurAppel(409, 'Ce coach n’encaisse pas encore dans l’app.');
-    const r = await pp('POST', '/v2/checkout/orders', corpsCommande({ coach, athlete, formule, marchand: m,
+    const r = await pp('POST', '/v2/checkout/orders', corpsCommande({ coach, athlete, formule, f, marchand: m,
       retour: APP + '?paiement_coach=retour', annulation: APP + '?paiement_coach=annule' }));
     if ((r.statut !== 201 && r.statut !== 200) || !r.j || !r.j.id) throw new ErreurAppel(502, 'PayPal a refusé la commande. Réessaie dans un moment.');
     const id = net(r.j.id);
-    await db.ref('paiements_coach/' + coach + '/' + id).set({ athlete, formule, montant: prixFormule(formule), statut: 'en_attente', date: now() });
+    await db.ref('paiements_coach/' + coach + '/' + id).set({ athlete, formule, lib: f.lib, mois: f.mois, montant: f.prixCts, statut: 'en_attente', date: now() });
     const lien = (r.j.links || []).find((l) => l && (l.rel === 'payer-action' || l.rel === 'approve'));
     return { commande: id, lien: lien ? lien.href : null };
   }
@@ -208,17 +225,26 @@ export function creerPaiementsCoach(ctx) {
     if (deja && deja.statut === 'recu') return 'deja';
     const m = await liaison(c.coach);
     if (!m) return 'orphelin';
+    // LE MONTANT ATTENDU : celui fixé à la commande (le coach a pu changer son
+    // prix depuis) ; à défaut (commande d'avant), la formule telle qu'elle est.
+    let attendu = deja && Number(deja.montant) > 0 ? Number(deja.montant) : null;
+    let mois = deja && Number(deja.mois) > 0 ? Number(deja.mois) : null;
+    if (attendu === null || mois === null) {
+      const f = formuleCoach(await lire('coachs/' + c.coach + '/formules/' + c.formule));
+      if (f) { if (attendu === null) attendu = f.prixCts; if (mois === null) mois = f.mois; }
+    }
     const cts = centimes(capture && capture.amount && capture.amount.value);
+    const puCts = centimes(pu && pu.amount && pu.amount.value);
     const eur = String((capture && capture.amount && capture.amount.currency_code) || '').toUpperCase() === 'EUR';
-    if (!eur || cts !== prixFormule(c.formule) || !payeeConforme(pu, m)) {
+    if (!eur || !(attendu > 0) || !(mois > 0) || cts !== attendu || puCts !== attendu || !payeeConforme(pu, m)) {
       await db.ref(cheminP).update({ athlete: c.athlete, formule: c.formule, statut: 'annule', raison: 'controle', date: (deja && deja.date) || t });
       return 'refuse';
     }
     const cap = net(capture.id);
-    await db.ref().update({ [cheminP]: { athlete: c.athlete, formule: c.formule, montant: cts, statut: 'recu', date: (deja && deja.date) || t, recuLe: t, capture: cap },
+    await db.ref().update({ [cheminP]: { athlete: c.athlete, formule: c.formule, lib: (deja && deja.lib) || null, mois, montant: cts, statut: 'recu', date: (deja && deja.date) || t, recuLe: t, capture: cap },
       ['paiements_coach_captures/' + cap]: c.coach + '|' + idCommande });
     await M.majDroits(c.athlete, (x) => Object.assign({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0,
-      source: (x && x.source) || 'paiement_coach' }, droitsApresPaiement(x, c.formule, t)));
+      source: (x && x.source) || 'paiement_coach' }, droitsCoach(x, mois, t)));
     return 'recu';
   }
   async function capturer(athlete, data) {
@@ -276,7 +302,7 @@ export function creerPaiementsCoach(ctx) {
     const t = now();
     await db.ref(chemin).update({ statut: 'rembourse', remboursLe: t });
     await M.majDroits(p.athlete, (x) => Object.assign({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0,
-      source: (x && x.source) || 'paiement_coach' }, droitsApresRemboursement(x, p.formule, t)));
+      source: (x && x.source) || 'paiement_coach' }, Number(p.mois) > 0 ? droitsCoachRemboursement(x, p.mois, t) : droitsApresRemboursement(x, p.formule, t)));
     return 'rembourse_coach';
   }
 

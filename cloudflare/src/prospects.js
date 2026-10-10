@@ -17,6 +17,7 @@
 const J = 864e5;
 export const PROSPECT_RELANCE_H = 48;
 export const PROSPECT_DOUBLON_J = 30;
+import { formuleCoach, FORMULE_ID_RE } from './formules-coach.js';
 export const PROSPECTS_JOUR_MAX = 30;
 export const PROSPECT_PRENOM_MAX = 30;
 export const PROSPECT_STATUTS = ['nouveau', 'repondu', 'athlete', 'sans_suite'];
@@ -47,11 +48,22 @@ export function contactNet(c) {
   if (/^\+[1-9]\d{7,14}$/.test(t)) return { type: 'tel', valeur: t };
   return null;
 }
-// PURE. Les formules que la vitrine porte (clés connues seulement).
+// PURE. Les formules que la vitrine porte : les offres du coach (ses prix,
+// vitrines/<slug>/offres/<id>, valides selon formuleCoach), et, pour la seule
+// vitrine de Kevin, les clés du tableau des offres (v.formules). L'appelant
+// retire v.formules d'une vitrine qui n'est pas celle de Kevin : un coach
+// externe n'affiche jamais les prix de Kevin.
 export function formulesVitrine(v) {
   const f = v && v.formules;
   const l = Array.isArray(f) ? f : (f && typeof f === 'object' ? Object.values(f) : []);
-  return l.filter((k) => PROSPECT_FORMULES.indexOf(k) >= 0);
+  const o = v && v.offres && typeof v.offres === 'object' ? v.offres : {};
+  const offres = Object.keys(o).filter((id) => FORMULE_ID_RE.test(id) && formuleCoach(o[id]));
+  return offres.concat(l.filter((k) => PROSPECT_FORMULES.indexOf(k) >= 0 && offres.indexOf(k) < 0));
+}
+// PURE. Le libellé d'une offre du coach, ou '' (alors le libellé du tableau).
+export function libOffre(v, id) {
+  const f = v && v.offres && formuleCoach(v.offres[id]);
+  return f ? f.lib : '';
 }
 function liste(brut) {
   const o = (brut && typeof brut === 'object') ? brut : {};

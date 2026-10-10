@@ -7723,6 +7723,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Les formules proposées sur la vitrine (des clés du tableau des offres) et
   // le message d'accueil des prospects (lot C6).
   'vitrineFormules','prospectAccueil',
+  // Les formules d'un coach externe, à ses prix (10/10/2026).
+  'formulesCoach',
   // Le miroir de la liaison PayPal du coach (le serveur fait foi : coach_paiement).
   'paiementCoach',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
@@ -22297,10 +22299,84 @@ const PROSPECT_ACCUEIL_DEFAUT='Merci {prénom} ! J’ai bien reçu ta demande. J
 const PROSPECT_STATUT_LIB=Object.freeze({nouveau:'Attend ta réponse',repondu:'Tu as répondu',athlete:'Devenu athlète',sans_suite:'Sans suite'});
 const PROSPECT_FENETRE_J=30;
 
-// PURE. Les formules cochées par le coach, dans l'ordre du tableau.
+// PURE. Les formules du tableau des offres cochées, dans l'ordre du tableau.
+// ⚠ KEVIN SEUL (10/10/2026) : ce sont SES prix. Un coach externe fixe les siens
+//   (formulesCoachDe) ; ses anciennes cases cochées ne publient plus rien.
 function vitrineFormulesDe(u){
+  if(!estCreateurCompte(u)) return [];
   const l=Array.isArray(u&&u.vitrineFormules)?u.vitrineFormules:[];
   return VITRINE_FORMULES.filter(k=>l.indexOf(k)>=0&&OFFRES[k]);
+}
+
+// ── LES PRIX DU COACH EXTERNE (10/10/2026) ───────────────────────────────
+// Un coach externe fixe ses prix lui-même : currentUser.formulesCoach =
+// {id:{lib, prixCts, mois, comprend}}. Publiées avec la vitrine dans
+// coachs/<clé>/formules (le serveur y lit le prix payé, paiements-coach.js) et
+// vitrines/<slug>/offres (la page publique). Mêmes bornes que
+// cloudflare/src/formules-coach.js et que les règles : 0 à 2 000 € en centimes
+// entiers, 1 à 12 mois, huit formules au plus.
+// ⚠ JAMAIS DE REPLI SUR LES PRIX DE KEVIN : sans formule, la page n'en montre aucune.
+const FORMULE_COACH=Object.freeze({idRe:/^[a-z0-9_-]{2,24}$/,prixMaxCts:200000,prixMinPayableCts:100,moisMax:12,max:8,libMax:60,comprendMax:300});
+// PURE. Le compte de Kevin ?
+function estCreateurCompte(u){ return !!u&&u.email===CREATOR_EMAIL; }
+/** PURE. Une formule bornée, ou null (la même règle que le serveur). */
+function formuleCoachNette(f){
+  const x=(f&&typeof f==='object')?f:null;
+  if(!x||typeof x.prixCts!=='number'||typeof x.mois!=='number') return null;
+  const lib=String(x.lib==null?'':x.lib).trim();
+  if(!lib||lib.length>FORMULE_COACH.libMax) return null;
+  if(!Number.isInteger(x.prixCts)||x.prixCts<0||x.prixCts>FORMULE_COACH.prixMaxCts) return null;
+  if(!Number.isInteger(x.mois)||x.mois<1||x.mois>FORMULE_COACH.moisMax) return null;
+  const comprend=String(x.comprend==null?'':x.comprend).trim();
+  if(comprend.length>FORMULE_COACH.comprendMax) return null;
+  return {lib,prixCts:x.prixCts,mois:x.mois,comprend};
+}
+/** PURE. Les formules d'un coach externe, valides, par prix croissant (huit au plus). Kevin : aucune. */
+function formulesCoachDe(u){
+  if(!u||estCreateurCompte(u)) return [];
+  const o=(u.formulesCoach&&typeof u.formulesCoach==='object')?u.formulesCoach:{};
+  return Object.keys(o).filter(id=>FORMULE_COACH.idRe.test(id)).map(id=>{ const f=formuleCoachNette(o[id]); return f?Object.assign({id},f):null; })
+    .filter(Boolean).sort((a,b)=>a.prixCts-b.prixCts||a.lib.localeCompare(b.lib)).slice(0,FORMULE_COACH.max);
+}
+/**
+ * PURE. Une ligne saisie {lib, prix (euros : « 120 », « 89,90 »), mois, comprend}
+ * → {f} ou {erreur} ou {vide} (ligne laissée blanche).
+ */
+function formuleCoachSaisie(s){
+  const x=s||{};
+  const lib=String(x.lib||'').replace(/\s+/g,' ').trim();
+  const p=String(x.prix==null?'':x.prix).replace(/[\s\u00a0€]/g,'').replace(',','.');
+  if(!lib&&!p) return {vide:true};
+  if(!lib) return {erreur:'Donne un nom à chaque formule.'};
+  if(lib.length>FORMULE_COACH.libMax) return {erreur:'« '+lib.slice(0,20)+'… » : 60 caractères au plus.'};
+  if(!/^\d{1,4}(\.\d{1,2})?$/.test(p)) return {erreur:'Prix de « '+lib+' » : un nombre d’euros, de 0 à 2 000.'};
+  const prixCts=Math.round(Number(p)*100);
+  if(prixCts>FORMULE_COACH.prixMaxCts) return {erreur:'Prix de « '+lib+' » : 2 000 € au plus.'};
+  const mois=Number(x.mois);
+  if(!Number.isInteger(mois)||mois<1||mois>FORMULE_COACH.moisMax) return {erreur:'Durée de « '+lib+' » : de 1 à 12 mois.'};
+  const comprend=String(x.comprend||'').trim();
+  if(comprend.length>FORMULE_COACH.comprendMax) return {erreur:'« '+lib+' » : 300 caractères au plus pour ce qu’elle comprend.'};
+  return {f:{lib,prixCts,mois,comprend}};
+}
+// PURE. Un identifiant tiré du nom, libre parmi `pris`.
+function idFormuleCoach(lib,pris){
+  let b=String(lib||'');
+  try{ b=b.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){}
+  b=b.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,20);
+  if(b.length<2) b='formule';
+  const l=Array.isArray(pris)?pris:[];
+  let id=b, n=2;
+  while(l.indexOf(id)>=0){ id=b+'-'+n; n++; }
+  return id;
+}
+// PURE. « 120 € », « 89,90 € » ; « Gratuit » à 0.
+function prixFormuleCoach(f){ return f&&f.prixCts>0?_euros(f.prixCts/100):'Gratuit'; }
+// PURE. Les formules proposées sur la vitrine : les clés du tableau pour Kevin, les siennes pour un coach externe.
+function vitrineOffreIds(u){ return estCreateurCompte(u)?vitrineFormulesDe(u):formulesCoachDe(u).map(f=>f.id); }
+// PURE. Le libellé d'une formule de la vitrine de ce coach.
+function libFormuleVitrine(u,k){
+  const o=formulesCoachDe(u).find(f=>f.id===k);
+  return o?o.lib:((OFFRES[k]||{}).lib||'');
 }
 // PURE. Le message d'accueil, borné ; le défaut si le coach n'a rien écrit.
 function prospectAccueilDe(u){
@@ -22337,7 +22413,7 @@ function prospectsListe(brut){
 function prospectLienReponse(p,coach){
   const pr=String((p&&p.prenom)||'').trim();
   const moi=String((coach&&coach.fname)||'').trim();
-  const lib=(OFFRES[p&&p.formule]||{}).lib||'ma formule';
+  const lib=libFormuleVitrine(coach,p&&p.formule)||'ma formule';
   const txt='Salut '+pr+', c’est '+(moi||'ton coach')+' ! Merci pour ton intérêt pour '+lib+'. Quand es-tu disponible pour qu’on en parle quelques minutes ?';
   if(p&&p.canal==='tel') return 'https://wa.me/'+String(p.contact||'').replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(txt);
   if(p&&p.canal==='email') return 'mailto:'+encodeURIComponent(String(p.contact||''))+'?subject='+encodeURIComponent('Ton coaching avec '+(moi||'moi'))+'&body='+encodeURIComponent(txt);
@@ -22345,12 +22421,42 @@ function prospectLienReponse(p,coach){
 }
 
 // ── Les réglages, dans l'identité de la team ──────────────────────────────
+// Une ligne de l'éditeur des formules d'un coach externe (vide pour en ajouter une).
+function _fcLigne(f){
+  const E=escapeHtml;
+  return '<div class="fc-l" data-fc="'+E(f?f.id:'')+'">'
+    +'<input class="fc-lib" maxlength="'+FORMULE_COACH.libMax+'" placeholder="Nom de la formule (ex. Suivi mensuel)" aria-label="Nom de la formule" value="'+E(f?f.lib:'')+'">'
+    +'<div class="fc-2"><label>Prix (€)<input class="fc-prix" inputmode="decimal" maxlength="8" placeholder="0 à 2000" value="'+E(f?(f.prixCts%100?(f.prixCts/100).toFixed(2):String(f.prixCts/100)).replace('.',','):'')+'"></label>'
+    +'<label>Durée (mois)<input class="fc-mois" type="number" min="1" max="'+FORMULE_COACH.moisMax+'" step="1" value="'+(f?f.mois:1)+'"></label>'
+    +'<button type="button" class="cp-lien fc-x" onclick="retirerFormuleCoach(this)">Retirer</button></div>'
+    +'<textarea class="fc-comprend" rows="2" maxlength="'+FORMULE_COACH.comprendMax+'" placeholder="Ce qu’elle comprend (bilans, échanges, programme…)" aria-label="Ce qu’elle comprend">'+E(f?f.comprend:'')+'</textarea></div>';
+}
+function ajouterFormuleCoach(){
+  const l=document.getElementById('fc-liste'); if(!l) return false;
+  if(l.querySelectorAll('.fc-l').length>=FORMULE_COACH.max){ toast('Huit formules au plus.','var(--orange)'); return false; }
+  l.insertAdjacentHTML('beforeend',_fcLigne(null));
+  const z=document.getElementById('coach-formules'); if(z) z.dataset.dirty='1';
+  const d=l.lastElementChild&&l.lastElementChild.querySelector('.fc-lib'); if(d) d.focus();
+  return true;
+}
+function retirerFormuleCoach(btn){
+  const r=btn&&btn.closest('.fc-l'); if(!r) return false;
+  r.remove();
+  const z=document.getElementById('coach-formules'); if(z) z.dataset.dirty='1';
+  return true;
+}
 function htmlReglagesProspects(u){
   const f=vitrineFormulesDe(u), E=escapeHtml;
+  const fc=formulesCoachDe(u);
+  const formules=estCreateurCompte(u)
+    ?'<p class="sub pr-p">Coche celles que tu proposes. Le prix, la durée et ce qu’elles comprennent viennent du tableau des offres : tu n’as rien à recopier. Aucun paiement sur la page, la personne te laisse juste son contact.</p>'
+      +VITRINE_FORMULES.map(k=>{ const o=OFFRES[k]; return '<label class="pr-f"><input type="checkbox" data-formule="'+k+'"'+(f.indexOf(k)>=0?' checked':'')+'>'
+        +'<span><b>'+E(o.lib)+'</b> '+E(prixOffre(k))+' · '+E(formuleDuree(k))+'</span></label>'; }).join('')
+    :'<p class="sub pr-p">Tes formules, à tes prix : de 0 à 2 000 €, de 1 à 12 mois, huit au plus. Elles s’affichent sur ta page avec « Ça m’intéresse ». Sans formule, ta page n’en montre aucune.</p>'
+      +'<div id="fc-liste">'+(fc.length?fc.map(_fcLigne).join(''):_fcLigne(null))+'</div>'
+      +'<button type="button" class="btn btn-outline btn-sm fc-plus" onclick="ajouterFormuleCoach()">+ Ajouter une formule</button>';
   return '<div class="pr-reg"><div class="pp-lab">Mes formules sur ma page</div>'
-    +'<p class="sub pr-p">Coche celles que tu proposes. Le prix, la durée et ce qu’elles comprennent viennent du tableau des offres : tu n’as rien à recopier. Aucun paiement sur la page, la personne te laisse juste son contact.</p>'
-    +VITRINE_FORMULES.map(k=>{ const o=OFFRES[k]; return '<label class="pr-f"><input type="checkbox" data-formule="'+k+'"'+(f.indexOf(k)>=0?' checked':'')+'>'
-      +'<span><b>'+E(o.lib)+'</b> '+E(prixOffre(k))+' · '+E(formuleDuree(k))+'</span></label>'; }).join('')
+    +formules
     +'<label class="pr-lab" for="coach-prospect-accueil">Le message qu’on lit après « Ça m’intéresse »</label>'
     +'<textarea id="coach-prospect-accueil" rows="4" maxlength="'+PROSPECT_ACCUEIL_MAX+'" placeholder="'+E(PROSPECT_ACCUEIL_DEFAUT)+'">'+E(String((u&&u.prospectAccueil)||''))+'</textarea>'
     +'<div class="sub pr-p">Dis ce qui se passe ensuite, et sous quel délai. {prénom} est remplacé par le prénom de la personne. Laissé vide, c’est le message proposé qui s’affiche.</div>'
@@ -22366,14 +22472,68 @@ function _rendreReglagesProspects(){
   return true;
 }
 // Lu par saveCoachIdentity, comme les autres champs de l'identité.
+// Une saisie fautive n'enregistre pas les formules (les anciennes restent) et le dit.
 function _lireReglagesProspects(){
   const z=document.getElementById('coach-formules');
-  if(!z||!z.querySelector('[data-formule]')) return false;
-  currentUser.vitrineFormules=[...z.querySelectorAll('[data-formule]')].filter(c=>c.checked).map(c=>c.dataset.formule).filter(k=>VITRINE_FORMULES.indexOf(k)>=0);
+  if(!z||!(z.querySelector('[data-formule]')||z.querySelector('#fc-liste'))) return false;
+  if(z.querySelector('[data-formule]'))
+    currentUser.vitrineFormules=[...z.querySelectorAll('[data-formule]')].filter(c=>c.checked).map(c=>c.dataset.formule).filter(k=>VITRINE_FORMULES.indexOf(k)>=0);
+  else {
+    const out={}, pris=[];
+    let erreur='';
+    [...z.querySelectorAll('.fc-l')].slice(0,FORMULE_COACH.max).forEach(r=>{
+      if(erreur) return;
+      const v=c=>{ const e=r.querySelector(c); return e?e.value:''; };
+      const s=formuleCoachSaisie({lib:v('.fc-lib'),prix:v('.fc-prix'),mois:Number(v('.fc-mois')),comprend:v('.fc-comprend')});
+      if(s.vide) return;
+      if(s.erreur){ erreur=s.erreur; return; }
+      const a=String(r.dataset.fc||'');
+      const id=(FORMULE_COACH.idRe.test(a)&&pris.indexOf(a)<0)?a:idFormuleCoach(s.f.lib,pris);
+      pris.push(id); out[id]=s.f;
+    });
+    if(erreur){ toast(erreur+' Formules non enregistrées.','var(--orange)',5000); return false; }
+    currentUser.formulesCoach=out;
+  }
   const a=document.getElementById('coach-prospect-accueil');
   if(a) currentUser.prospectAccueil=String(a.value||'').trim().slice(0,PROSPECT_ACCUEIL_MAX);
   delete z.dataset.dirty;
   return true;
+}
+
+// ── LA COMMISSION DU COACH SUR SES ATHLÈTES DEVENUS ABONNÉS (10/10/2026) ──
+// Un athlète suivi par ce coach qui s'abonne à RepCore dans les 90 jours après
+// la fin de son code : le coach touche la commission des ambassadeurs (taux de
+// la décision commune, 12 mois, rapport mensuel). Le serveur tient la ligne,
+// coach_commissions_vue/<clé> (cloudflare/src/commission-coach.js) ; rien ne
+// s'affiche tant qu'aucun athlète n'est devenu abonné.
+// Une fois : la page d'un coach externe qui portait encore des clés du tableau
+// (les prix de Kevin) est republiée sans, à la première ouverture de l'accueil.
+function _migrerVitrineCoachExterne(){
+  const u=currentUser;
+  if(!u||u.role!=='coach'||estCreateurCompte(u)||!u.vitrinePubliee||!Array.isArray(u.vitrineFormules)||!u.vitrineFormules.length) return false;
+  u.vitrineFormules=[];
+  try{ saveUser(); }catch(e){}
+  publierVitrinePublique(u).catch(()=>{});
+  return true;
+}
+let _ccVue=null, _ccLu=0;
+// PURE. La ligne, ou '' sans athlète converti.
+function ligneCommissionCoach(v){
+  const n=Math.max(0,Math.round(Number(v&&v.convertis)||0));
+  if(!n) return '';
+  return 'Tes athlètes devenus abonnés : '+n+' · ta commission du mois : '+_euros(Number(v.commissionMois)||0);
+}
+function renderCommissionCoach(){
+  const z=document.getElementById('ch-commission');
+  if(!z||!currentUser||currentUser.role!=='coach'||estCreateurCompte(currentUser)) return false;
+  const l=ligneCommissionCoach(_ccVue);
+  z.innerHTML=l?'<div class="cc-ligne">'+escapeHtml(l)+'</div>':'';
+  if(Date.now()-_ccLu>10*60e3){
+    _ccLu=Date.now();
+    const moi=String(currentUser.email||'').replace(/\./g,',');
+    if(moi) _fbJson('coach_commissions_vue/'+moi).then(r=>{ if(r&&r.ok){ _ccVue=r.v; renderCommissionCoach(); } }).catch(()=>{});
+  }
+  return !!l;
 }
 
 // ── L'entrée sur l'accueil du coach, et l'écran ───────────────────────────
@@ -22391,7 +22551,7 @@ async function _prCharger(force){
 function renderEntreeProspects(){
   const z=document.getElementById('ch-prospects');
   if(!z||!currentUser||currentUser.role!=='coach') return false;
-  if(!vitrineFormulesDe(currentUser).length&&!_prBrut){ z.innerHTML=''; if(!_prLu) _prCharger().then(()=>{ if(_prBrut&&Object.keys(_prBrut).length) renderEntreeProspects(); }).catch(()=>{}); return false; }
+  if(!vitrineOffreIds(currentUser).length&&!_prBrut){ z.innerHTML=''; if(!_prLu) _prCharger().then(()=>{ if(_prBrut&&Object.keys(_prBrut).length) renderEntreeProspects(); }).catch(()=>{}); return false; }
   const m=prospectsMesure(_prBrut,_prStats);
   z.innerHTML='<button type="button" class="rel-entree pr-entree" onclick="ouvrirProspects()">'
     +'<span class="rel-entree-t">Ma page</span>'
@@ -22416,15 +22576,15 @@ function renderProspects(){
     +'<div><b>'+m.interesses+'</b><span>intéressé'+(m.interesses>1?'s':'')+'</span></div>'
     +'<div><b>'+m.athletes+'</b><span>devenu'+(m.athletes>1?'s':'')+' athlète'+(m.athletes>1?'s':'')+'</span></div></div>'
     +'<p class="sub pr-p">Sur les trente derniers jours. C’est ce qui dit si ta page travaille.</p>';
-  if(!vitrineFormulesDe(currentUser).length)
-    h+='<div class="pr-vide">Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.</div>';
+  if(!vitrineOffreIds(currentUser).length)
+    h+='<div class="pr-vide">Ta page ne propose encore aucune formule. Ajoute-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.</div>';
   const l=prospectsListe(_prBrut);
   if(!_prBrut) h+='<div class="sub pr-p">Lecture…</div>';
   else if(!l.length) h+='<div class="pr-vide">Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.</div>';
   else h+=l.map(p=>{
     const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'
-      +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
+      +'<div class="pr-l-d">'+E(libFormuleVitrine(currentUser,p.formule))+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
       +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
       +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
@@ -22573,14 +22733,16 @@ function pcPalierOk(u){ return !!u&&(u.email===CREATOR_EMAIL||(u.role==='coach'&
 // PURE. Relié, d'après le miroir posé par la réponse du serveur.
 function pcRelie(u){ return !!(u&&u.paiementCoach&&u.paiementCoach.statut==='relie'); }
 // PURE. Le lien qu'on donne à quelqu'un pour payer une formule de ce coach.
+// Les formules d'un coach externe (FORMULE_COACH.idRe) : le serveur lit le prix
+// dans coachs/<coach>/formules, jamais dans le tableau des offres.
 function pcLienPayer(slug,formule){
-  if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(String(slug||''))||VITRINE_FORMULES.indexOf(formule)<0) return '';
+  if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(String(slug||''))||!/^[a-z0-9_-]{2,24}$/.test(String(formule||''))) return '';
   return PC_APP+'?payer='+encodeURIComponent(slug+'~'+formule);
 }
 // PURE. ?payer=<slug>~<formule> → {slug, formule} ou null.
 function pcLirePayer(v){
-  const m=/^([a-z0-9][a-z0-9-]{1,38}[a-z0-9])~([a-z_]{3,40})$/.exec(String(v||''));
-  return (m&&VITRINE_FORMULES.indexOf(m[2])>=0)?{slug:m[1],formule:m[2]}:null;
+  const m=/^([a-z0-9][a-z0-9-]{1,38}[a-z0-9])~([a-z0-9_-]{2,24})$/.exec(String(v||''));
+  return m?{slug:m[1],formule:m[2]}:null;
 }
 
 // ── Le réglage, dans « Mes formules sur ma page » ─────────────────────────
@@ -22639,8 +22801,11 @@ async function pcProposerPaiement(){
   // VERSION GOOGLE PLAY : le lien de paiement du coach ne s'ouvre pas ici.
   if(canalApp()==='play'){ try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){} toast('Ce paiement se fait sur repcore-sync.web.app, dans ton navigateur.','var(--orange)'); return false; }
   try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
-  const o=OFFRES[p.formule]; if(!o) return false;
-  if(!await rcConfirm('Payer '+o.lib+' ('+prixOffre(p.formule)+') ?\n\nLe paiement se fait sur PayPal et va directement sur le compte de ton coach. Ton suivi s’ouvre dès que PayPal confirme.',null,'Payer sur PayPal','Plus tard')) return false;
+  // Le prix affiché est celui de la page du coach ; le serveur facture celui de coachs/<coach>/formules.
+  const lu=await _fbJson('vitrines/'+p.slug+'/offres/'+p.formule,null,undefined,true).catch(()=>null);
+  const o=formuleCoachNette(lu&&lu.ok?lu.v:null);
+  if(!o||o.prixCts<FORMULE_COACH.prixMinPayableCts){ toast('Cette formule n’est plus proposée par ton coach.','var(--orange)'); return false; }
+  if(!await rcConfirm('Payer '+o.lib+' ('+prixFormuleCoach(o)+', '+o.mois+' mois) ?\n\nLe paiement se fait sur PayPal et va directement sur le compte de ton coach. Ton suivi s’ouvre dès que PayPal confirme.',null,'Payer sur PayPal','Plus tard')) return false;
   let r=null;
   try{ r=await CLOUD._callFn('paiementCoach',{coach:p.slug,formuleId:p.formule}); }
   catch(e){ toast(e.message||'Paiement impossible pour l’instant.','var(--orange)'); return false; }
@@ -22682,7 +22847,7 @@ function pcPaiementsDe(brut,cleAthlete){
 function htmlPaiementsFiche(l){
   const E=escapeHtml;
   if(!l.length) return '';
-  return '<div class="pc-liste">'+l.map(p=>'<div class="pc-p pc-'+E(p.statut||'')+'"><span>'+E((OFFRES[p.formule]||{}).lib||p.formule||'')+'</span>'
+  return '<div class="pc-liste">'+l.map(p=>'<div class="pc-p pc-'+E(p.statut||'')+'"><span>'+E(p.lib||(OFFRES[p.formule]||{}).lib||p.formule||'')+'</span>'
     +'<span>'+E(_euros((Number(p.montant)||0)/100))+'</span><span>'+E(new Date(Number(p.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}))+'</span>'
     +'<b>'+E(PC_STATUT_LIB[p.statut]||p.statut||'')+'</b></div>').join('')+'</div>';
 }
@@ -23085,8 +23250,17 @@ function vitrinePubliqueDonnees(u,maintenant){
   // le message d'accueil qu'on lit après « Ça m'intéresse ».
   const fo=vitrineFormulesDe(u);
   if(fo.length) o.formules=fo;
+  // Un coach externe : SES formules, à ses prix (offres). Jamais les clés du tableau.
+  if(formulesCoachDe(u).length) o.offres=offresCoachPubliques(u);
   o.accueil=prospectAccueilDe(u);
   if(pcRelie(u)&&pcPalierOk(u)) o.paiement=true;
+  return o;
+}
+// PURE. {id:{lib, prixCts, mois[, comprend]}} : ce qui part dans vitrines/<slug>/offres
+// et coachs/<clé>/formules (un champ vide n'est pas écrit).
+function offresCoachPubliques(u){
+  const o={};
+  formulesCoachDe(u).forEach(f=>{ o[f.id]={lib:f.lib,prixCts:f.prixCts,mois:f.mois}; if(f.comprend) o[f.id].comprend=f.comprend; });
   return o;
 }
 // Publiée à chaque enregistrement du profil coach (pushProfilCoach). Le slug
@@ -23099,7 +23273,10 @@ async function publierVitrinePublique(u){
   const base=SLUG_PUBLIC_RE.test(u.vitrineSlug||'')?u.vitrineSlug:slugDe(u.fname,u.lname);
   const essais=u.vitrineSlug?[base]:[base].concat([2,3,4,5,6,7,8,9].map(n=>base.slice(0,37)+'-'+n));
   for(const s of essais){
-    const ok=await CLOUD.racinePatch({['slugs/'+s]:moi,['vitrines/'+s]:d}).catch(()=>false);
+    const ch={['slugs/'+s]:moi,['vitrines/'+s]:d};
+    // Les prix que le serveur facture, écrits avec la page qui les affiche.
+    if(!estCreateurCompte(u)) ch['coachs/'+moi+'/formules']=d.offres||null;
+    const ok=await CLOUD.racinePatch(ch).catch(()=>false);
     if(ok){
       if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){} }
       try{ _rendreLienVitrineCoach(); }catch(e){}
@@ -30684,6 +30861,7 @@ function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
   try{ renderEntreeProspects(); }catch(e){}
+  try{ renderCommissionCoach(); _migrerVitrineCoachExterne(); }catch(e){}
   try{ renderEntreeMessages(); }catch(e){}
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;

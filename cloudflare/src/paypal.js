@@ -414,6 +414,9 @@ export function creerPaypal(ctx) {
     if (!tx.committed) return false;
     const montant = ress.amount && (ress.amount.total || ress.amount.value);
     await M.parrainagePaiement(cle, 'paypal').catch(() => null);
+    // Le coach d'avant (commission-coach.js) : rattaché ici s'il y a droit, et rien s'il y a déjà un
+    // ambassadeur. Un ABONNEMENT seulement (abo) : un programme ou un coaching acheté n'en est pas un.
+    if (abo && M.lierCoachCommission) await M.lierCoachCommission(cle, t).catch(() => null);
     await M.ambassadeurPaiement(cle, { montant, le: Date.parse(ress.create_time || '') || t, abonnement: abo, venteId: ress.id }).catch(() => null);
     await M.attributionPaiement(cle).catch(() => null);
     // Le contact e-mail (s'il a consenti) passe au statut « payant ».

@@ -16397,3 +16397,12 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 .ptn-dates{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .ptn-dates input{min-width:0}
 .ptn-err{color:var(--red-light,#ff6b6b);font-size:var(--fs-xs);min-height:1em;margin:6px 0}
+/* Coachs externes : l'éditeur des formules (10/10/2026) et la ligne de commission. */
+.fc-l{border:1px solid var(--border);border-radius:12px;padding:10px;margin:0 0 10px;display:flex;flex-direction:column;gap:8px}
+.fc-l input,.fc-l textarea{width:100%;box-sizing:border-box}
+.fc-2{display:flex;gap:8px;align-items:flex-end}
+.fc-2 label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--sub)}
+.fc-2 .fc-x{flex:none;min-height:44px}
+.fc-plus{width:100%;margin:0 0 14px;min-height:44px}
+#ch-commission:empty{display:none}
+.cc-ligne{margin:8px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:var(--fs-sm);font-weight:700}

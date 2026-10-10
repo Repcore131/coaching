@@ -625,6 +625,22 @@
           "maj": { ".validate": "newData.isNumber() && newData.val() > 0" },
           "$autre": { ".validate": false }
         },
+        // LES PRIX DU COACH EXTERNE (10/10/2026) : ses formules, qu il saisit lui-meme,
+        // bornees comme dans cloudflare/src/formules-coach.js (0 a 2 000 EUR en
+        // centimes entiers, 1 a 12 mois, huit au plus cote app). Lues par le Worker
+        // a la commande (paiements-coach.js) : le prix paye est celui-ci.
+        "formules": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$id": {
+            ".validate": "$id.matches(/^[a-z0-9_-]{2,24}$/) && newData.hasChildren(['lib', 'prixCts', 'mois'])",
+            "lib":      { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+            "prixCts":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000 && newData.val() % 1 === 0" },
+            "mois":     { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12 && newData.val() % 1 === 0" },
+            "comprend": { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "$autre":   { ".validate": false }
+          }
+        },
         "clients": {
           ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
           "$athleteKey": {
@@ -1775,6 +1791,18 @@
         // LOT C6 : les formules proposees (des CLES du tableau des offres, jamais
         // un prix) et le message d accueil montre apres « Ca m interesse ».
         "formules":    { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)" } },
+        // LES OFFRES DU COACH EXTERNE : la copie publique de coachs/<cle>/formules,
+        // ses prix a lui. La vitrine n affiche rien d autre pour un coach externe.
+        "offres": {
+          "$id": {
+            ".validate": "$id.matches(/^[a-z0-9_-]{2,24}$/) && newData.hasChildren(['lib', 'prixCts', 'mois'])",
+            "lib":      { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+            "prixCts":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000 && newData.val() % 1 === 0" },
+            "mois":     { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12 && newData.val() % 1 === 0" },
+            "comprend": { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "$autre":   { ".validate": false }
+          }
+        },
         "accueil":     { ".validate": "newData.isString() && newData.val().length <= 600" },
         // Le coach encaisse dans l app (bouton « Payer ») : un simple drapeau, verifie cote serveur a la commande.
         "paiement":    { ".validate": "newData.isBoolean()" },
@@ -2546,6 +2574,14 @@
     },
     // LA PAGE DE L AMBASSADEUR : lisible par qui connait le secret (24
     // caracteres), jamais listable — aucun .read au-dessus de $secret.
+    // LA LIGNE DU COACH : ses athletes devenus abonnes et sa commission du mois
+    // (cloudflare/src/commission-coach.js). Lue par lui seul, ecrite par le Worker.
+    "coach_commissions_vue": {
+      "$k": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+        ".write": false
+      }
+    },
     "ambassadeurs_vue": {
       "$secret": {
         ".read": true,
