@@ -376,6 +376,27 @@
             "motif": { ".validate": "newData.isString() && newData.val().length < 300" },
             "$autre": { ".validate": false }
           },
+          // ⚠ LES ALTERNATIVES A LA RESILIATION (11/10/2026), ecrites par le
+          //   serveur leger et DECLAREES ICI (liste blanche : un champ inconnu
+          //   ferait rejeter tout le PUT du dossier, en silence).
+          "pause": {
+            "depuis": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "reprise": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "accesJusqu": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "abo": { ".validate": "newData.isString() && newData.val().length < 40" },
+            "$autre": { ".validate": false }
+          },
+          // ⚠ LE PRIX SOUSCRIT (09/10/2026), pose par l app a la souscription et
+          //   JAMAIS declare jusqu au 11/10/2026 : chaque PUT d un dossier qui le
+          //   portait etait rejete en entier, en silence.
+          "prixSouscrit": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+          "pauseFinie": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "changement": {
+            "vers": { ".validate": "newData.isString() && newData.val().matches(/^essentielle$/)" },
+            "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "effetLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$autre": { ".validate": false }
+          },
           "renonciationRetractation": {
             "accepte": { ".validate": "newData.isBoolean()" },
             "ts": { ".validate": "newData.isNumber()" },
@@ -2267,6 +2288,8 @@
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
     "premiere_trace": { ".read": false, ".write": false },
+    "pauses":         { ".read": false, ".write": false },
+    "reconquete":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
@@ -2308,6 +2331,8 @@
       "connexions": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       // LA RELANCE DES INSCRITS SANS SEANCE (serveur leger) : des compteurs, le createur seul.
       "relance_premiere": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LES MOTIFS DE RESILIATION, par mois (serveur leger) : le createur seul.
+      "resiliations": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       "$autre": { ".read": true }
     },
     // LA PRESENCE (09/10/2026) : « cet appareil est ouvert », pour estimer les

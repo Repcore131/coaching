@@ -13040,7 +13040,7 @@ async function testExercices(){
           } finally { currentUser=sauve; window.saveUser=_sv; }})());
         ok('Aucun écran de rétention, aucune remise, aucune friction',(()=>{
           const src=String(_ouvrirResiliation)+String(_confirmerResiliation)
-            +String(demanderResiliation);
+            +String(demanderResiliation)+String(htmlAlternativesResiliation);
           // rcConfirm( AUTANT QUE confirm( : l'app a migré vers le dialogue
           // maison, et une friction posée avec le nouveau nom aurait glissé
           // sous cet interdit sans le déclencher. Vérifié sur la version
@@ -50793,7 +50793,7 @@ async function testExercices(){
       if(!r) return true;                      // règles non servies : regles.mjs le dit
       // Depuis le 28/09/2026 : /stats/retention au créateur seul, le reste
       // (badges, saisons) public par "$autre".
-      const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+900):'';
+      const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+2000):'';
       if(!m) return _echec('le nœud stats manque aux règles');
       if(!/"\$autre"\s*:\s*\{\s*"\.read"\s*:\s*true\s*\}/.test(m)) return _echec('stats n’est pas en lecture publique');
       if(!/"retention"\s*:\s*\{\s*"\.read"\s*:\s*"auth != null && auth\.token\.email === 'guellec\.coachingpro@gmail\.com'"/.test(m)) return _echec('la rétention n’est pas réservée au créateur');
@@ -51698,13 +51698,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,premiere,relance,retour,sante,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,premiere,reconquete,relance,retour,sante,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==12) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==13) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -58139,6 +58139,103 @@ async function testExercices(){
       for(const x of ['Push du 1er jour','25 %','Push du 6e jour','pas encore significatif']) if(txt.indexOf(x)<0) return _echec('« '+x+' » absent : '+txt.slice(0,200));
       if(d.querySelectorAll('tr.vir-alerte').length!==2) return _echec('alertes');
       return htmlRetention({maj:1,premiereSeance:[{levier:'j1',envoyes:1,seances:0,taux:0,alerte:true}]}).indexOf('Relance des inscrits sans séance')>=0?true:_echec('section absente de l’écran');})());
+
+    // ══ LES ALTERNATIVES À LA RÉSILIATION (11/10/2026) — L215-1-1 INTACT ══
+    // Résilier : TROIS clics, comptés ici (Réglages, « Résilier mon
+    // abonnement », « Confirmer la résiliation »). Les alternatives sont SOUS
+    // la confirmation, sur le même écran, en boutons secondaires.
+    ok('RÉSILIATION — 3 clics, motif facultatif, « Confirmer » premier et seul en rouge, les alternatives dessous',(()=>{
+      const sv=currentUser, sS=window.saveUser, sC=CLOUD._callFn, sP=CLOUD.pushOne, sO=CLOUD.ok;
+      const appels=[];
+      try{
+        window.saveUser=()=>true; CLOUD.pushOne=async()=>true; CLOUD.ok=()=>false;
+        CLOUD._callFn=async(n,d)=>{ appels.push(n+':'+JSON.stringify(d)); return {ok:true}; };
+        try{ localStorage.removeItem(RESIL_FILE); }catch(e){}
+        currentUser={email:'r3@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paypalSubscriptionId:'I-MEN12345678',
+          abonnement:{palier:'mensuel',formule:'ultime'}};
+        let z=document.getElementById('cr-abo'); const cree=!z;
+        if(cree){ z=document.createElement('div'); z.id='cr-abo'; document.body.appendChild(z); }
+        try{
+          let clics=1;                                     // 1 : Réglages (l'écran qui porte #cr-abo)
+          _renderAbonnement();
+          const b1=[...z.querySelectorAll('button')].find(b=>/Résilier mon abonnement/.test(b.textContent));
+          if(!b1) return _echec('pas de bouton « Résilier mon abonnement »');
+          b1.click(); clics++;                             // 2
+          const zone=document.getElementById('cr-resil');
+          const boutons=[...zone.querySelectorAll('button')];
+          if(!/Confirmer la résiliation/.test(boutons[0]&&boutons[0].textContent)||!boutons[0].classList.contains('btn-red'))
+            return _echec('« Confirmer » n’est pas le premier bouton, en rouge');
+          if(boutons.slice(1).some(b=>b.classList.contains('btn-red'))) return _echec('une alternative aussi visible que Résilier');
+          const alt=boutons.slice(1).map(b=>b.getAttribute('data-alt'));
+          if(alt.join()!=='pause,essentielle') return _echec('alternatives : '+alt.join());
+          if(zone.querySelector('[data-alternatives]').compareDocumentPosition(boutons[0])&Node.DOCUMENT_POSITION_FOLLOWING) return _echec('alternatives avant la confirmation');
+          boutons[0].click(); clics++;                     // 3 : sans motif, ça passe
+          if(clics!==3) return _echec(clics+' clics');
+          const r=resiliationDemandee(currentUser);
+          if(!r||r.motif!=='') return _echec('résiliation non enregistrée sans motif');
+          // Rien d'autre à faire : l'écran dit que c'est fait, sans bouton de rattrapage.
+          if([...z.querySelectorAll('button')].some(b=>/pause|Essentielle|Résilier mon/i.test(b.textContent))) return _echec('des boutons restent après la résiliation');
+          return true;
+        } finally { if(cree) z.remove(); }
+      } finally { currentUser=sv; window.saveUser=sS; CLOUD._callFn=sC; CLOUD.pushOne=sP; CLOUD.ok=sO; try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }})());
+
+    ok('RÉSILIATION — le motif du menu part au serveur (compté par mois), jamais le texte libre',(()=>{
+      const sv=currentUser, sS=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser={email:'m@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{}};
+        demanderResiliation('Trop cher : la salle me suffit','Trop cher');
+        const f=_fileResilLire();
+        if(!f||f.menu!=='Trop cher') return _echec('motif du menu : '+JSON.stringify(f));
+        if(resiliationDemandee(currentUser).motif!=='Trop cher : la salle me suffit') return _echec('le texte libre reste dans le dossier');
+        localStorage.removeItem(RESIL_FILE); currentUser.abonnement={};
+        demanderResiliation('n’importe quoi','pas dans le menu');
+        if(_fileResilLire().menu!=='') return _echec('un motif hors menu part au serveur');
+        const src=String(_rejouerResiliation);
+        if(!/_callFn\('abonnement',\{action:'resiliation',ts:f\.ts,motif:String\(f\.menu\|\|''\)\}\)/.test(src)) return _echec('l’avis au serveur manque');
+        if(src.indexOf("_callFn('abonnement'")<src.indexOf('pushOne')) return _echec('l’avis part avant l’enregistrement');
+        return true;
+      } finally { currentUser=sv; window.saveUser=sS; try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }})());
+
+    ok('PAUSE — l’appel au serveur ; en pause : la date de reprise, « Reprendre maintenant », et Résilier toujours là',(()=>{
+      const sv=currentUser, sS=window.saveUser, sC=CLOUD._callFn;
+      const appels=[];
+      try{
+        window.saveUser=()=>true;
+        CLOUD._callFn=(n,d)=>{ appels.push(n+':'+d.action); return new Promise(()=>{}); };
+        currentUser={email:'p@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paypalSubscriptionId:'I-MEN12345678',abonnement:{palier:'mensuel',formule:'essentielle'}};
+        const al=alternativesResiliation(currentUser);
+        if(!al.pause||al.essentielle) return _echec('éligibilité : '+JSON.stringify(al));
+        if(alternativesResiliation(Object.assign({},currentUser,{abonnement:{palier:'annuel',formule:'ultime'}})).pause) return _echec('pause d’un annuel');
+        if(alternativesResiliation(Object.assign({},currentUser,{abonnement:{palier:'mensuel',formule:'ultime',engagementJusqu:Date.now()+864e5}})).pause) return _echec('pause sous engagement');
+        abonnementPause();
+        _altEnCours=false;
+        const reprise=Date.now()+30*864e5;
+        currentUser.abonnement.pause={depuis:Date.now(),reprise,abo:'I-MEN12345678',accesJusqu:Date.now()+5*864e5};
+        let z=document.getElementById('cr-abo'); const cree=!z;
+        if(cree){ z=document.createElement('div'); z.id='cr-abo'; document.body.appendChild(z); }
+        try{
+          _renderAbonnement();
+          const txt=z.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('En pause jusqu')<0||txt.indexOf(new Date(reprise).toLocaleDateString('fr-FR'))<0) return _echec('la date de reprise manque');
+          const rep=[...z.querySelectorAll('button')].find(b=>/Reprendre maintenant/.test(b.textContent));
+          if(!rep) return _echec('pas de reprise anticipée');
+          if(![...z.querySelectorAll('button')].some(b=>/Résilier mon abonnement/.test(b.textContent))) return _echec('Résilier a disparu pendant la pause');
+          rep.click();
+          // Et pendant la pause, la confirmation ne repropose rien.
+          if(htmlAlternativesResiliation(currentUser)!=='') return _echec('alternatives pendant la pause');
+        } finally { if(cree) z.remove(); }
+        return appels.join()==='abonnement:pause,abonnement:reprendre'?true:_echec('appels : '+appels.join());
+      } finally { currentUser=sv; window.saveUser=sS; CLOUD._callFn=sC; _altEnCours=false; }})());
+
+    ok('ABONNEMENT — les champs écrits par l’app et le serveur sont déclarés dans les règles (sinon tout le PUT est rejeté)',(()=>{
+      if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+      const i=window._RC_RULES.indexOf('"abonnement": {');
+      if(i<0) return _echec('bloc abonnement introuvable');
+      const bloc=window._RC_RULES.slice(i,i+9000);
+      for(const k of ['prixSouscrit','engagementJusqu','formule','palier','pause','pauseFinie','changement','resiliationDemandee'])
+        if(bloc.indexOf('"'+k+'"')<0) return _echec(k+' manque dans le bloc abonnement des règles');
+      return true;})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est

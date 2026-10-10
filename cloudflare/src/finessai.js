@@ -95,7 +95,7 @@ export function creerFinEssai(ctx) {
     if (palier === 'j3' && (await lire('users/' + cle + '/consent/emailMarketing')) === true) {
       try {
         const email = (await lire('users/' + cle + '/email')) || cle.replace(/,/g, '.');
-        mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', tag: env.SYSTEMEIO_TAG_FIN_ESSAI });
+        mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', tag: env.SYSTEMEIO_TAG_FIN_ESSAI || '' });
       } catch (e) { mail = 'erreur'; }
     }
     // UNE FOIS PAR PALIER ET PAR ESSAI, qu'un appareil ait reçu ou non : le

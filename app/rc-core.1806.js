@@ -2756,8 +2756,8 @@ function _fileResilLire(){
   try{ const x=JSON.parse(localStorage.getItem(RESIL_FILE)||'null');
     return (x&&typeof x==='object')?x:null; }catch(e){ return null; }
 }
-function _fileResilPoser(email,ts){
-  try{ localStorage.setItem(RESIL_FILE,JSON.stringify({email:email,ts:ts})); }catch(e){}
+function _fileResilPoser(email,ts,menu){
+  try{ localStorage.setItem(RESIL_FILE,JSON.stringify({email:email,ts:ts,menu:String(menu||'')})); }catch(e){}
 }
 function _fileResilVider(){ try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }
 async function _rejouerResiliation(){
@@ -2767,13 +2767,17 @@ async function _rejouerResiliation(){
   if(!CLOUD.ok||!CLOUD.ok()) return false;
   try{
     await CLOUD.pushOne(currentUser.email,currentUser);
+    // L'AVIS AU SERVEUR (11/10/2026), APRÈS l'enregistrement : le motif du
+    // menu compté par mois (jamais le texte libre), et la reconquête à J+30.
+    // Un échec ici ne change rien à la résiliation, déjà enregistrée.
+    try{ await CLOUD._callFn('abonnement',{action:'resiliation',ts:f.ts,motif:String(f.menu||'')}); }catch(e){}
     _fileResilVider();   // exactement une fois
     return true;
   }catch(e){ return false; }
 }
 // Le motif est FACULTATIF, toujours. Il n'est jamais bloquant, et une chaîne
 // vide est un motif parfaitement acceptable.
-function demanderResiliation(motif){
+function demanderResiliation(motif,motifMenu){
   const u=currentUser;
   if(!u) return false;
   if(resiliationDemandee(u)) return false;   // pas redemandable
@@ -2782,7 +2786,7 @@ function demanderResiliation(motif){
   u.abonnement.resiliationDemandee={ts:ts,motif:String(motif||'').slice(0,300)};
   // Le LOCAL d'abord : hors ligne, l'utilisateur doit voir son accusé.
   try{ saveUser(); }catch(e){}
-  _fileResilPoser(u.email,ts);
+  _fileResilPoser(u.email,ts,RESIL_MOTIFS.indexOf(motifMenu)>=0?motifMenu:'');
   // Puis l'envoi. S'il aboutit, la file se vide ; sinon elle sera rejouée.
   _rejouerResiliation();
   return true;
@@ -3362,6 +3366,13 @@ function _renderAbonnement(){
           lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
           changé, le mot si. */''}
     ${(fin&&r)?l('Accès jusqu\'au',finTxt):''}
+    ${(()=>{ const a=abonnementDe(u), p=a.pause;
+      // LA PAUSE EN COURS (11/10/2026) : la date de reprise, et la reprise anticipée.
+      if(!r&&p&&Number(p.reprise)>Date.now()) return l('En pause jusqu\'au',new Date(p.reprise).toLocaleDateString('fr-FR'))
+        +`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:4px 0 0">Aucun prélèvement pendant la pause. Le ${escapeHtml(new Date(p.reprise).toLocaleDateString('fr-FR'))}, l'abonnement repart tout seul.</div>
+          <button type="button" class="btn btn-outline" style="width:100%;margin-top:10px" onclick="abonnementReprendre()">Reprendre maintenant</button>`;
+      if(!r&&a.changement&&a.changement.vers==='essentielle') return l('Passage à Essentielle',a.changement.effetLe?'le '+new Date(a.changement.effetLe).toLocaleDateString('fr-FR'):'à la prochaine échéance');
+      return ''; })()}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(texteResilMoyens(u))}</div>
@@ -3385,14 +3396,108 @@ function _ouvrirResiliation(){
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
     </select>
     <input id="resil-libre" type="text" maxlength="300" placeholder="Préciser (facultatif)" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:10px">
-    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>`;
+    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>
+    ${htmlAlternativesResiliation(currentUser)}`;
   return true;
+}
+// ══ LES ALTERNATIVES À LA RÉSILIATION (11/10/2026) ══════════════════════
+// ⚠ L215-1-1 NE BOUGE PAS : elles sont SOUS « Confirmer la résiliation », sur
+//   le même écran, en boutons secondaires. Pas un écran de plus, pas avant,
+//   pas de remise : la résiliation reste trois clics (Réglages, « Résilier
+//   mon abonnement », « Confirmer »). Le serveur léger parle à PayPal
+//   (cloudflare/src/paypal.js : suspend, activate, revise) et refait les mêmes
+//   contrôles (alternatives.js) : ce qui suit n'est que l'affichage.
+/**
+ * PURE. Les alternatives proposées (miroir de alternativesResiliation,
+ * cloudflare/src/alternatives.js) : la PAUSE pour un mensuel, ESSENTIELLE
+ * pour un Ultime ; ni l'une ni l'autre sous engagement, après une résiliation
+ * ou pendant une pause.
+ * @param {any} user
+ * @param {number} [maintenant]
+ * @returns {{pause:boolean, essentielle:boolean}}
+ */
+function alternativesResiliation(user,maintenant){
+  const u=user||{}, t=typeof maintenant==='number'?maintenant:Date.now();
+  const a=abonnementDe(u);
+  const base=u.role!=='coach'&&/^I-[A-Z0-9]{8,}$/.test(String(u.paypalSubscriptionId||''))
+    &&!resiliationDemandee(u)&&!(Number(a.engagementJusqu)>t);
+  const enPause=!!(a.pause&&Number(a.pause.reprise)>t);
+  return {pause:base&&!enPause&&a.palier!=='annuel',
+    essentielle:base&&!enPause&&a.formule==='ultime'&&!(a.changement&&a.changement.vers==='essentielle')};
+}
+const PAUSE_JOURS=30;
+// PURE. Les deux boutons, ou rien.
+function htmlAlternativesResiliation(user){
+  const al=alternativesResiliation(user);
+  if(!al.pause&&!al.essentielle) return '';
+  const annuel=abonnementDe(user).palier==='annuel';
+  const b=(attr,titre,sous)=>`<button type="button" class="btn btn-outline" ${attr} style="width:100%;margin:8px 0 0;padding:10px 12px;text-transform:none;letter-spacing:0;font-size:var(--fs-sm);line-height:1.4">
+      <span style="display:block;font-weight:700">${escapeHtml(titre)}</span><span style="display:block;color:var(--sub);font-weight:400;font-size:var(--fs-xs)">${escapeHtml(sous)}</span></button>`;
+  return `<div data-alternatives style="margin-top:12px;font-size:var(--fs-xs);color:var(--sub)">Ou, si tu préfères :</div>`
+    +(al.pause?b('data-alt="pause" onclick="abonnementPause()"','Mettre en pause 1 mois',
+      'Aucun prélèvement pendant '+PAUSE_JOURS+' jours, puis l’abonnement repart tout seul.'):'')
+    +(al.essentielle?b('data-alt="essentielle" onclick="abonnementEssentielle()"','Passer à Essentielle',
+      prixOffre('essentielle',annuel)+(annuel?' par an':' par mois')+', à partir de ta prochaine échéance. À valider chez PayPal.'):'');
+}
+let _altEnCours=false;
+async function abonnementPause(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'pause'});
+    if(!r||!r.ok){ toast('La pause n’a pas pu être posée chez PayPal. Rien n’a changé.','var(--orange)'); return false; }
+    if(!currentUser.abonnement||typeof currentUser.abonnement!=='object') currentUser.abonnement={};
+    currentUser.abonnement.pause=r.pause;
+    try{ saveUser(); }catch(e){}
+    _renderAbonnement();
+    toast('Abonnement en pause jusqu’au '+new Date(r.pause.reprise).toLocaleDateString('fr-FR')+' ✓','var(--green)');
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+async function abonnementReprendre(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'reprendre'});
+    if(!r||!r.ok){ toast('La reprise n’a pas pu se faire chez PayPal.','var(--orange)'); return false; }
+    if(currentUser.abonnement) delete currentUser.abonnement.pause;
+    try{ saveUser(); }catch(e){}
+    _renderAbonnement();
+    toast('Abonnement repris ✓','var(--green)');
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+async function abonnementEssentielle(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'essentielle'});
+    if(!r||!r.ok||!/^https:\/\/(www\.)?(sandbox\.)?paypal\.com\//.test(String(r.approuver||''))){
+      toast('Le changement n’a pas pu être préparé chez PayPal. Rien n’a changé.','var(--orange)'); return false; }
+    window.location.href=r.approuver;      // la personne valide chez PayPal
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+// Au retour de PayPal (?abo=essentielle) : le serveur relit le plan.
+async function abonnementRetourEssentielle(){
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'verifier_essentielle'});
+    if(r&&r.ok&&r.changement){
+      if(!currentUser.abonnement||typeof currentUser.abonnement!=='object') currentUser.abonnement={};
+      currentUser.abonnement.changement=r.changement;
+      try{ saveUser(); }catch(e){}
+      toast('Passage à Essentielle enregistré ✓','var(--green)');
+      return true;
+    }
+    toast('PayPal n’a pas encore confirmé le changement.','var(--sub)');
+  }catch(e){}
+  return false;
 }
 function _confirmerResiliation(){
   const m=(document.getElementById('resil-motif')||{}).value||'';
   const l=(document.getElementById('resil-libre')||{}).value||'';
   const motif=[m,l].filter(Boolean).join(' : ');
-  if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
+  if(!demanderResiliation(motif,m)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
   toast('Résiliation enregistrée ✓','var(--green)');
   return true;
@@ -7268,6 +7373,10 @@ function _validateAthletePkg(o){
     // ?wo=1&i=<0..6> (11/10/2026) : la notification « ta première séance »
     // ouvre DIRECTEMENT ce créneau de sessions_config, pas le sélecteur.
     if(_woDeepLink&&/^[0-6]$/.test(String(params.get('i')||''))) window._pendingWoIdx=Number(params.get('i'));
+    // ?abonnement=1 (la reconquête) : l'écran des formules. ?abo=essentielle :
+    // le retour de PayPal après le passage à Essentielle.
+    if(params.get('abonnement')==='1') window._pendingAboOpen=true;
+    if(params.get('abo')==='essentielle') window._pendingAboEssentielle=true;
     // ?diete=1 — AJOUTE POUR LE RACCOURCI DU MANIFESTE. « Nouvelle séance »
     // avait déjà son ?wo=1 ; la diète n'avait aucune adresse, et un raccourci
     // qui ouvre l'accueil au lieu de l'écran promis est un lien mort qui ne
@@ -8908,6 +9017,8 @@ function routeUser(){
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
+  if(window._pendingAboOpen){window._pendingAboOpen=false;setTimeout(()=>{ try{ ouvrirAbonnementDepuisEssai(); }catch(e){} },900);}
+  if(window._pendingAboEssentielle){window._pendingAboEssentielle=false;setTimeout(()=>{ abonnementRetourEssentielle(); },1200);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;const _wi=window._pendingWoIdx;window._pendingWoIdx=null;
     setTimeout(()=>{ try{ ouvrirSeanceLien(currentUser,_wi); }catch(e){ openSessionPicker(); } },900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
@@ -82221,8 +82332,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante','premiere']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), tant que ta première séance n’est pas faite (1, 3 et 6 jours après l’inscription), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante','premiere','reconquete']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), tant que ta première séance n’est pas faite (1, 3 et 6 jours après l’inscription), un seul message 30 jours après une résiliation, et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance','message']),
     detail:'quand ton coach t’écrit, répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -82389,6 +82500,7 @@ const PUSH_TYPES=Object.freeze([
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
   {cle:'premiere',titre:'Ta première séance',txt:'1, 3 et 6 jours après ton inscription, tant que tu n’as fait aucune séance. Le message ouvre ta séance du jour.'},
+  {cle:'reconquete',titre:'Après une résiliation',txt:'Un seul message, 30 jours après ta résiliation : ce que tu as fait et l’offre du moment. Puis plus rien.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
   {cle:'relance',titre:'Rappel de ton coach',txt:'Un bilan en retard, un programme en préparation, un accès qui se termine : un message par semaine au plus, seulement si ton coach les a allumés.'},
   {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}
