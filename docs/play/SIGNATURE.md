@@ -2,6 +2,24 @@
 
 *Rédigé le 10/10/2026.*
 
+> **MISE À JOUR DU 10/10/2026 (après-midi) : l'ancienne clé est introuvable.**
+> Une **nouvelle clé** a été créée : `repcore-2026.jks`, alias `repcore`,
+> empreinte SHA-256
+> `90:F6:4B:9B:3A:ED:04:F0:4B:4F:E6:4B:9F:21:8A:BC:9D:FF:65:04:4F:8E:65:72:19:12:13:6F:37:A6:EC:70`.
+> Le fichier et son mot de passe ont été remis à Kevin (« coffre »), et ne
+> sont **jamais** dans le dépôt. Les deux empreintes, l'ancienne et la
+> nouvelle, figurent dans `assetlinks.json`.
+> - **Pour Google Play** : à la première version, laisser Google gérer la clé
+>   de signature (choix par défaut). Ensuite, copier l'empreinte SHA-256 de la
+>   **clé de signature d'application** affichée par Play Console et l'ajouter
+>   dans `assetlinks.json` (option B ci-dessous). `RepCore-play-5.aab` est
+>   signé avec la clé de 2026, qui devient la clé d'importation.
+> - **Pour l'APK GitHub** : `RepCore-5.apk` est signé avec la clé de 2026.
+>   Les utilisateurs de l'APK 4 doivent le **désinstaller** avant d'installer
+>   la version 5 (clé différente).
+> - **Pour que GitHub compile seul les prochaines versions** : poser les
+>   quatre secrets `RC_*` avec le contenu du coffre.
+
 ## Ce qui existe aujourd'hui
 
 - L'APK RepCore (releases GitHub `apk-<versionCode>`) est signé avec **une
