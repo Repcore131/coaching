@@ -106,24 +106,27 @@ for (const z of ZONES) {
 const equip = Math.round((occTot + neufTot) / 1000) * 1000;
 const equipNeuf = ZONES.reduce((s, z) => s + z.neuf, 0) - optTot - n2Tot;
 
+const cardio = ZONES.find(z => z.nom === "Cardio").ouv; // loué sur 48 mois
+const equipAchete = Math.round((equip - cardio) / 1000) * 1000;
 const BESOINS = [
-  ["Équipement (machines restaurées + neuf)", equip],
-  ["Travaux et aménagement (950 m²)", 110000],
-  ["Contrôle d'accès, vidéo, logiciel, sono", 12000],
-  ["Dépôt de garantie du bail (3 mois)", 25500],
-  ["Frais d'établissement (juridique, assurances)", 8000],
-  ["Marketing de pré-ouverture", 10000],
-  ["Stock initial shop et bar", 8000],
-  ["Trésorerie de démarrage (≈ 2,5 mois de charges)", 60000],
+  ["Équipement acheté (cardio en location)", equipAchete],
+  ["Travaux (plomberie et électricité par artisans)", 90000],
+  ["Trésorerie de démarrage", 40000],
+  ["Dépôt de garantie du bail (2 mois)", 17000],
+  ["Frais d'établissement (juridique, assurances)", 6000],
+  ["Accès badge et caméras", 3000],
+  ["Stock initial shop et bar", 3000],
+  ["Communication de lancement", 1500],
 ];
 const besoin = BESOINS.reduce((s, b) => s + b[1], 0);
 const apport = 100000, honneur = 30000, pret = besoin - apport - honneur;
 const r = 0.045 / 12, mens = Math.round(pret * r / (1 - Math.pow(1 + r, -84)));
 const CHARGES = [
-  ["Loyer et charges locatives", 9500], ["Remboursement d'emprunt (7 ans, 4,5 %)", mens],
-  ["Rémunération des 2 fondateurs", 4200], ["Énergie (LED, suivi)", 2500],
-  ["Marketing et événements", 1500], ["Entretien, consommables, ménage", 1200],
-  ["Expert-comptable, banque", 600], ["Assurances", 500], ["Logiciel, badges, internet", 400],
+  ["Loyer et charges locatives", 9500], ["Rémunération des 2 fondateurs", 4200],
+  ["Énergie (LED, suivi)", 2500], ["Remboursement d'emprunt (7 ans, 4,5 %)", mens],
+  ["Location du cardio (48 mois)", 1480], ["Entretien, consommables, ménage", 1200],
+  ["Marketing et événements", 800], ["Expert-comptable, banque", 600],
+  ["Assurances", 500], ["Site, appli, hébergement", 100],
 ];
 const fixes = CHARGES.reduce((s, c) => s + c[1], 0);
 const contrib = 36; // € HT par membre et par mois : abonnement moyen 41 € TTC + marge shop/bar
@@ -149,7 +152,7 @@ function stack(parts, w = 640) {
   const cols = [C.red, C.ink, "#9a9a9a"];
   return `<svg viewBox="0 0 ${w} 74" width="100%" role="img">${parts.map(([l, v], i) => {
     const pw = (v / tot) * w, s = `<rect x="${x + (i ? 1 : 0)}" y="0" width="${pw - (i ? 1 : 0)}" height="34" fill="${cols[i]}"/>
-    <text x="${x + 6}" y="54" class="ax b">${l}</text><text x="${x + 6}" y="70" class="ax">${eur(v)} · ${Math.round(v / tot * 100)} %</text>`;
+    <rect x="${i * 215}" y="44" width="10" height="10" fill="${cols[i]}"/><text x="${i * 215 + 16}" y="53" class="ax b">${l}</text><text x="${i * 215 + 16}" y="70" class="ax">${eur(v)} · ${Math.round(v / tot * 100)} %</text>`;
     x += pw; return s;
   }).join("")}</svg>`;
 }
@@ -376,7 +379,7 @@ ${box("Notre réponse", `<ul><li>Des machines haut de gamme et rares, restaurée
 <h3>Nos trois objectifs</h3>
 <div class="grid3">
 <div class="card"><div class="eyebrow red">Objectif 1 · ouverture</div><h4>400 membres le premier mois</h4><p class="muted">Dont 200 « membres fondateurs » en pré-vente avant l'ouverture.</p></div>
-<div class="card"><div class="eyebrow red">Objectif 2 · équilibre</div><h4>Point mort dès le 9e mois</h4><p class="muted">≈ ${pointMort} membres couvrent toutes les charges, emprunt compris.</p></div>
+<div class="card"><div class="eyebrow red">Objectif 2 · équilibre</div><h4>Point mort dès le 7e mois</h4><p class="muted">≈ ${pointMort} membres couvrent toutes les charges, emprunt compris.</p></div>
 <div class="card"><div class="eyebrow red">Objectif 3 · référence</div><h4>1 000 membres à 24 mois</h4><p class="muted">Devenir LA salle de musculation de référence du territoire.</p></div>
 </div>
 <h3>Nos points forts</h3>
@@ -451,11 +454,11 @@ ${page("", `${head("08", "L'aménagement", "Zonage de principe pour environ 950 
 ${box("Les choix d'aménagement", `<ul><li>Sol caoutchouc renforcé en zone force, parquet pour le soulevé de terre</li><li>Éclairage LED, ambiance sombre et accents rouges</li><li>Murs aux couleurs UNBROKEN : devise et visuels de la communauté</li><li>Coin abdos et mobilité : tatami, espaliers, accessoires</li></ul>`)}</div>`)}
 
 ${page("", `${head("09", "L'équipement", "Un mix assumé : du neuf pour tout ce qui s'use ou se charge (racks, barres, haltères, bancs, cardio, sols) et des machines d'occasion haut de gamme, restaurées par nos soins aux couleurs d'UNBROKEN.")}
-${kpis([[k(equip), "budget équipement à l'ouverture"], [k(equipNeuf), "si tout était acheté neuf"], [`−${k(equipNeuf - equip)}`, "économisés grâce à la restauration"], [`${nbMachines}`, "machines guidées restaurées"]])}
+${kpis([[k(equipAchete), "d'équipement acheté à l'ouverture"], [k(cardio), "de cardio en location sur 48 mois"], [`−${k(equipNeuf - equip)}`, "économisés grâce à la restauration"], [`${nbMachines}`, "machines guidées restaurées"]])}
 <div class="fig"><div class="eyebrow">Budget d'ouverture par zone (machines restaurées, reste neuf)</div>${barsH(ZONES.map(z => [z.nom, z.ouv, z.nom === "Cardio"]).sort((a, b) => b[1] - a[1]))}</div>
 <h3>La restauration, notre savoir-faire</h3>
 <div class="steps">${[["Sourcing", "Salons pros, revendeurs, salles qui ferment"], ["Diagnostic", "Structure, soudures, câbles, poulies"], ["Mécanique", "Roulements, câbles et axes remplacés"], ["Peinture", "Décapage, peinture aux couleurs UNBROKEN"], ["Sellerie", "Mousses et skaï refaits à neuf"], ["Contrôle", "Essais en charge, fiche sécurité"]].map(([t, d], i) => `<div class="step"><b>${i + 1}</b><div style="font-weight:700;margin-bottom:1mm">${t}</div>${d}</div>`).join("")}</div>
-<div class="box line"><p><b>Le cardio est le premier poste.</b> Six tapis et deux escaliers pèsent ${k(ZONES.find(z => z.nom === "Cardio").ouv)}. Le location-vente ou le reconditionné peuvent alléger l'investissement de départ d'environ 20 k€. La restauration devient aussi un contenu fort pour les réseaux.</p></div>`)}
+<div class="box line"><p><b>Le cardio est le premier poste.</b> Six tapis et deux escaliers pèsent ${k(ZONES.find(z => z.nom === "Cardio").ouv)}. Il est pris en location sur 48 mois (≈ 1 480 € par mois) : un parc neuf et sous garantie, sans peser sur l'investissement de départ. La restauration devient aussi un contenu fort pour les réseaux.</p></div>`)}
 
 ${page("", `<div class="sec-n">09 · Annexe 1/3</div><h2 style="font-size:20pt;margin-bottom:5mm">Liste complète de l'équipement</h2>${equipTable(ZONES.slice(0, 2))}`)}
 ${page("", `<div class="sec-n">09 · Annexe 2/3</div><h2 style="font-size:20pt;margin-bottom:5mm">Liste complète de l'équipement</h2>${equipTable(ZONES.slice(2, 4))}`)}
@@ -513,19 +516,19 @@ ${page("", `${head("14", "Plan de financement", `Besoin total estimé : ${eur(be
 <div><h3 style="margin-top:0">Ressources</h3><table><tbody><tr><td>Apport personnel des fondateurs</td><td class="n">${eur(apport)}</td></tr><tr><td>Prêts d'honneur (2 × 15 000 €)</td><td class="n">${eur(honneur)}</td></tr><tr><td>Emprunt bancaire (7 ans, 4,5 %)</td><td class="n">${eur(pret)}</td></tr><tr class="tot"><td>Total</td><td class="n">${eur(besoin)}</td></tr></tbody></table>
 <p class="muted">Mensualité estimée : <b>${eur(mens)}</b>. Garantie Bpifrance à solliciter.</p></div></div>
 <div class="fig"><div class="eyebrow">Origine des fonds</div>${stack([["Apport", apport], ["Prêts d'honneur", honneur], ["Emprunt bancaire", pret]])}</div>
-<div class="box line"><p><b>Leviers pour réduire le besoin :</b> location-vente du cardio (≈ −20 k€ à l'ouverture), franchise de loyer pendant les travaux, pré-ventes encaissées avant l'ouverture (200 × 34,90 € × 3 mois ≈ 21 k€).</p></div>
+<div class="box line"><p><b>Comment on tient ce budget :</b> cardio en location, plomberie et électricité confiées à des artisans et le reste fait par nous, caméras et badge simples, site et appli développés en interne, communication faite maison et portée par les partenariats locaux.</p></div>
 <p class="hyp">Hypothèses à valider : montant des travaux après visite du local, loyer réel, conditions bancaires.</p>`)}
 
 ${page("", `${head("15", "Rentabilité et point mort", `Avec ${eur(fixes)} de charges fixes par mois et ${contrib} € HT de contribution par membre, UNBROKEN couvre toutes ses charges à partir d'environ ${pointMort} membres.`)}
 <div class="grid2"><div><h3 style="margin-top:0">Charges mensuelles</h3><table><tbody>${CHARGES.map(([a, b]) => `<tr><td>${a}</td><td class="n">${eur(b)}</td></tr>`).join("")}<tr class="tot"><td>Total</td><td class="n">${eur(fixes)}</td></tr></tbody></table></div>
 <div><h3 style="margin-top:0">Le calcul</h3>${box("Point mort", `<p style="font-family:var(--display);font-size:15pt;line-height:1.3">${eur(fixes)} ÷ ${contrib} € ≈ <span class="red">${pointMort} membres</span></p><p class="muted" style="margin:0">Contribution = abonnement moyen 41 € TTC (34,2 € HT) + marge shop et bar.</p>`)}
-${kpis([["M9", "point mort atteint"], ["780", "membres à 12 mois"]]).replace("repeat(4,1fr)", "repeat(2,1fr)")}</div></div>
+${kpis([["M7", "point mort atteint"], ["780", "membres à 12 mois"]]).replace("repeat(4,1fr)", "repeat(2,1fr)")}</div></div>
 <div class="fig" style="margin:0 0 3mm"><div class="eyebrow">Membres actifs sur 24 mois et point mort</div>${rampChart()}</div>
 <table><thead><tr><th>Prévisionnel simplifié</th><th class="n">Année 1</th><th class="n">Année 2</th><th class="n">Année 3</th></tr></thead><tbody>
-<tr><td>Membres moyens</td><td class="n">590</td><td class="n">950</td><td class="n">1 120</td></tr>
-<tr><td>Chiffre d'affaires HT</td><td class="n">300 k€</td><td class="n">433 k€</td><td class="n">506 k€</td></tr>
-<tr><td>Charges décaissées (emprunt compris)</td><td class="n">292 k€</td><td class="n">316 k€</td><td class="n">336 k€</td></tr>
-<tr class="tot"><td>Trésorerie dégagée avant impôt</td><td class="n">+8 k€</td><td class="n">+117 k€</td><td class="n">+170 k€</td></tr></tbody></table>`)}
+<tr><td>Membres moyens</td><td class="n">600</td><td class="n">907</td><td class="n">1 100</td></tr>
+<tr><td>Chiffre d'affaires HT</td><td class="n">300 k€</td><td class="n">414 k€</td><td class="n">497 k€</td></tr>
+<tr><td>Charges décaissées (emprunt compris)</td><td class="n">275 k€</td><td class="n">299 k€</td><td class="n">324 k€</td></tr>
+<tr class="tot"><td>Trésorerie dégagée avant impôt</td><td class="n">+25 k€</td><td class="n">+115 k€</td><td class="n">+173 k€</td></tr></tbody></table>`)}
 
 ${page("", `${head("16", "Calendrier de réalisation", "Douze mois entre ce dossier et l'ouverture, avec une ouverture visée à la rentrée de septembre 2027, période la plus forte pour les inscriptions avec janvier.")}
 <div class="fig">${gantt()}</div>
@@ -535,8 +538,8 @@ ${page("", `${head("16", "Calendrier de réalisation", "Douze mois entre ce doss
 ${page("", `${head("17", "Risques et parades", "Chaque risque identifié a sa parade. Les deux plus sensibles sont la vitesse de remplissage et le budget travaux.")}
 <div class="fig">${riskMatrix()}</div>
 <table><thead><tr><th>Risque</th><th>Parade</th></tr></thead><tbody>
-<tr><td><b>Montée en charge lente</b></td><td>Pré-ventes, offre entreprises, parrainage, trésorerie de sécurité de 60 k€</td></tr>
-<tr><td><b>Dépassement de budget ou retard</b></td><td>Devis multiples, travaux réalisés par les fondateurs, marge de 10 % sur les travaux</td></tr>
+<tr><td><b>Montée en charge lente</b></td><td>Pré-ventes, offre entreprises, parrainage, trésorerie de sécurité de 40 k€</td></tr>
+<tr><td><b>Dépassement de budget ou retard</b></td><td>Devis multiples, plomberie et électricité par des artisans, le reste fait par les fondateurs</td></tr>
 <tr><td><b>Concurrence low-cost</b></td><td>Positionnement différent : on ne cherche pas à être les moins chers</td></tr>
 <tr><td><b>Sécurité hors présence</b></td><td>Badge nominatif, vidéo, règlement, bouton d'alerte, défibrillateur</td></tr>
 <tr><td><b>Matériel d'occasion</b></td><td>Restauration complète, contrôles en charge, stock de pièces</td></tr>
