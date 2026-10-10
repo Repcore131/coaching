@@ -303,6 +303,19 @@ instructions du guide Garmin.
 `garmin-client-id` quand il est présent) qui les authentifie. Changer
 `GARMIN_PUSH_SECRET` impose de redéclarer l'adresse au portail.
 
+## Le rapport des ventes (`src/ventes.js`) : fermé sans jeton
+
+`GET /stats/ventes` rend, pour la dernière semaine complète (lundi à dimanche, Paris) et les quatre
+d'avant : l'entonnoir (visites, inscriptions, premières séances, fins d'essai, abonnements), les
+clics / inscriptions / payants par source et par ambassadeur, les encaissements par offre, les
+remboursements, les abonnements arrêtés, et les motifs de résiliation du mois. Des compteurs
+agrégés seulement : aucune adresse, aucune clé de compte, aucun identifiant d'abonnement.
+
+La route n'existe (404) que si le secret est posé : `npx wrangler secret put STATS_TOKEN`.
+L'appelant le présente par `Authorization: Bearer <jeton>` ou, à défaut, `?token=<jeton>`.
+Elle sert à la routine « Rapport du lundi RepCore ». Changer le jeton : reposer le secret, puis
+le reporter dans la routine.
+
 ## Pas encore branché
 
 - **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).

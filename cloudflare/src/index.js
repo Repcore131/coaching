@@ -37,6 +37,7 @@ import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
+import { rapportVentes } from './ventes.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
@@ -236,6 +237,17 @@ export default {
           }
         } catch (e) { r.cloudinary = 'injoignable'; }
         return reponse(JSON.stringify(r));
+      }
+      // LE RAPPORT DES VENTES (routine du lundi) : des compteurs agrégés, lus sur
+      // la semaine. FERMÉ SANS JETON : sans secret STATS_TOKEN posé, la route
+      // n'existe pas (404) ; avec un jeton faux, 401. Voir ventes.js.
+      if (url.pathname === '/stats/ventes' && req.method === 'GET') {
+        const attendu = String(env.STATS_TOKEN || '').trim();
+        if (!attendu) return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
+        const donne = String(req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim() || String(url.searchParams.get('token') || '').trim();
+        if (!egalSecret(donne, attendu)) return reponse(JSON.stringify({ erreur: 'réservé' }), 401);
+        const r = await rapportVentes({ db: outils(env).db, semaines: Number(url.searchParams.get('semaines')) || 5 });
+        return new Response(JSON.stringify(r), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, CORS) });
       }
       // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
       // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
