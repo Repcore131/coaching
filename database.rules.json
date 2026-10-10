@@ -1460,7 +1460,7 @@
           //   Ils sont incrementes par rcq(), par paquets de quarante-cinq
           //   secondes, et lus par la carte « Capacite » du createur.
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|trial_end_viewed|trial_end_offer_clicked|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo|partenaire_vue_complements|partenaire_vue_defi|partenaire_vue_wrapped|partenaire_clic_complements|partenaire_clic_defi|partenaire_clic_wrapped)$/)"
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|trial_end_viewed|trial_end_offer_clicked|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo|partenaire_vue_complements|partenaire_vue_defi|partenaire_vue_wrapped|partenaire_vue_accueil|partenaire_clic_complements|partenaire_clic_defi|partenaire_clic_wrapped|partenaire_clic_accueil)$/)"
         }
       }
     },
@@ -2333,7 +2333,8 @@
         "code": { ".validate": "newData.isString() && newData.val().length <= 40" },
         "lien": { ".validate": "newData.isString() && newData.val().matches(/^https:\\/\\/[^ ]{1,490}$/)" },
         "mention": { ".validate": "newData.isString() && newData.val().length <= 140" },
-        "emplacements": { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(complements|defi|wrapped)$/)" } },
+        "emplacements": { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(accueil|complements|defi|wrapped)$/)" } },
+        "utm": { ".validate": "newData.isBoolean()" },
         "debut": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "fin": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "$autre": { ".validate": false }

@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1809';
+window.RC_BUILD='1810';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-10';
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1809.css">
+<link rel="stylesheet" href="./rc-style.1810.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2200,6 +2200,15 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
             <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
           </div>
+          <!-- LES PARTENAIRES (11/10/2026) : codes du mois, liens d'affiliation, emplacements. -->
+          <div onclick="ouvrirPartenairesAdmin()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;margin-top:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Admin</div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Partenaires</div>
+              <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Code du mois, lien d’affiliation, où la carte s’affiche</div>
+            </div>
+            <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
+          </div>
           <div onclick="ouvrirViralite()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;margin-top:10px">
             <div style="flex:1;min-width:0">
               <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
@@ -3758,6 +3767,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-wo-reminder-row"></div>
       <div id="clh-habitudes"></div>
       <div id="clh-notifs"></div>
+      <!-- LE PARTENAIRE DE L'ACCUEIL (11/10/2026) : vide tant qu'aucun n'est actif ici.
+           Au-dessus de la Nutrition : les bannières du coach gardent le bas. -->
+      <div id="clh-partenaire"></div>
 
       <!-- NUTRITION : le jour en haut, la semaine en bas, un seul cadre.
            Les anneaux sont EXACTEMENT ceux de la diète flexible — même
@@ -5625,6 +5637,18 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ INVITER DES AMIS (parrainage) ══════
      Le code, le partage, les compteurs et les paliers. htmlParrainage. -->
 <!-- ══════ VIRALITE (admin) ══════ htmlViralite. -->
+<!-- PARTENAIRES (créateur) -->
+<div id="s-partenaires" class="screen ecran-coach">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-partenaires','s-coach-home')">←</button>
+    <span class="topbar-title">Partenaires</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="ptn-admin"></div></div>
+  </div>
+</div>
+
 <div id="s-viralite" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-viralite','s-coach-home')">←</button>
@@ -6080,5 +6104,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1809.js"></script>
+<script src="./rc-core.1810.js"></script>
 </body></html>

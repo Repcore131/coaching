@@ -41927,7 +41927,7 @@ async function testExercices(){
         // LES AMBASSADEURS, 26/09/2026 : l'ecran admin des codes et commissions.
         's-ambassadeurs',
         // L'ATTRIBUTION, 26/09/2026 : l'entonnoir de viralite (admin).
-        's-viralite',
+        's-viralite','s-partenaires',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
@@ -58313,6 +58313,26 @@ async function testExercices(){
         return _echec('utm : '+u.toString());
       return true;})());
 
+    ok('PARTENAIRES — lien d’affiliation (utm:false) laissé intact ; le formulaire du créateur vérifie comme les règles',(()=>{
+      const aff='https://tidd.ly/abc123?x=1';
+      if(lienPartenaire(aff,'accueil',false)!==aff) return _echec('lien d’affiliation modifié');
+      const d=document.createElement('div');
+      d.innerHTML=renderCartePartenaire(Object.assign({cle:'myprotein'},_PTN({lien:aff,utm:false,emplacements:['accueil']})),'accueil');
+      if(!d.querySelector('a.ptn-lien')||d.querySelector('a.ptn-lien').getAttribute('href')!==aff) return _echec('carte : lien d’affiliation modifié');
+      const f=o=>partenaireDepuisFormulaire(Object.assign({cle:'myprotein',nom:'MyProtein',lien:aff,emplacements:['accueil'],actif:true,utm:false,code:'KEVIN15'},o||{}));
+      const r=f();
+      if(!r.ok||r.cle!=='myprotein'||r.p.code!=='KEVIN15'||r.p.utm!==false||r.p.actif!==true||r.p.emplacements.join()!=='accueil'||r.p.debut!==0||r.p.fin!==0) return _echec('formulaire : '+JSON.stringify(r));
+      if('logo' in r.p) return _echec('logo vide écrit');
+      for(const [o,quoi] of [[{cle:'My Protein'},'identifiant'],[{nom:''},'nom'],[{lien:'http://x.fr'},'lien'],[{logo:'ftp://x'},'logo'],[{emplacements:[]},'emplacements'],
+        [{emplacements:['seance']},'emplacement de séance'],[{debut:'2026-11-02',fin:'2026-11-01'},'dates à l’envers']])
+        if(f(o).ok) return _echec('accepté : '+quoi);
+      const dt=f({debut:'2026-11-01',fin:'2026-11-30'});
+      if(!dt.ok||dt.p.debut!==new Date(2026,10,1).getTime()||dt.p.fin!==new Date(2026,10,30,23,59,59,999).getTime()) return _echec('dates : '+JSON.stringify(dt.p));
+      if(!partenaireVisible(Object.assign({},dt.p),'accueil',new Date(2026,10,30,22).getTime())) return _echec('dernier jour du mois inclus');
+      // L'écran du créateur : réservé, et branché dans ses réglages.
+      if(String(ouvrirPartenairesAdmin).indexOf('CREATOR_EMAIL')<0||!document.querySelector('[onclick="ouvrirPartenairesAdmin()"]')) return _echec('écran du créateur');
+      return true;})());
+
     ok('PARTENAIRES — la carte : logo, phrase, code copiable en un tap, lien utm, mention « Lien partenaire » visible',(()=>{
       const d=document.createElement('div');
       d.innerHTML=renderCartePartenaire(Object.assign({cle:'b_nutri'},_PTN()),'wrapped');
@@ -58330,7 +58350,8 @@ async function testExercices(){
       return true;})());
 
     ok('PARTENAIRES — emplacements branchés (compléments, défi, fin du Wrapped) et AUCUN dans la séance ; compteurs autorisés',(()=>{
-      if(PARTENAIRE_EMPLACEMENTS.join()!=='complements,defi,wrapped') return _echec('emplacements : '+PARTENAIRE_EMPLACEMENTS.join());
+      if(PARTENAIRE_EMPLACEMENTS.join()!=='accueil,complements,defi,wrapped') return _echec('emplacements : '+PARTENAIRE_EMPLACEMENTS.join());
+      if(String(loadClientHome).indexOf("htmlEmplacementPartenaire('accueil')")<0||!document.getElementById('clh-partenaire')) return _echec('accueil');
       if(String(_renderSupplements).indexOf("htmlEmplacementPartenaire('complements')")<0) return _echec('écran compléments');
       if(String(openSuppEdit).indexOf("htmlEmplacementPartenaire('complements')")<0||!document.getElementById('supp-edit-partenaire')) return _echec('édition d’un complément');
       if(String(htmlCarteDefi).indexOf("htmlEmplacementPartenaire('defi')")<0) return _echec('carte de défi');

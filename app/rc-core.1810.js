@@ -634,8 +634,8 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // LA FIN D'ESSAI (10/10/2026) : l'écran vu, une offre cliquée.
   'trial_end_viewed','trial_end_offer_clicked',
   // LES PARTENAIRES (11/10/2026) : vues et clics, par emplacement.
-  'partenaire_vue_complements','partenaire_vue_defi','partenaire_vue_wrapped',
-  'partenaire_clic_complements','partenaire_clic_defi','partenaire_clic_wrapped',
+  'partenaire_vue_complements','partenaire_vue_defi','partenaire_vue_wrapped','partenaire_vue_accueil',
+  'partenaire_clic_complements','partenaire_clic_defi','partenaire_clic_wrapped','partenaire_clic_accueil',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
   // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
   // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
@@ -46107,6 +46107,8 @@ function _repeindreSiJourChange(){
   return false;
 }
 function loadClientHome(){
+  // LE PARTENAIRE DE L'ACCUEIL (11/10/2026), en bas, s'il est actif et prévu ici.
+  try{ const zp=document.getElementById('clh-partenaire'); if(zp) zp.innerHTML=htmlEmplacementPartenaire('accueil'); }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par
@@ -110557,15 +110559,21 @@ function _htmlBlocSupplements(list,avant){
 // réservée). RIEN NE S'AFFICHE tant que actif !== true, hors des dates, ou
 // hors des emplacements prévus.
 //
-// TROIS EMPLACEMENTS, ET AUCUN AUTRE : les compléments, la carte de défi, la
+// QUATRE EMPLACEMENTS, ET AUCUN AUTRE : le bas de l'accueil de l'athlète
+// (au-dessus des bannières du coach), les compléments, la carte de défi, la
 // fin du Wrapped. ⚠ JAMAIS PENDANT UNE SÉANCE : on ne pollue pas
 // l'entraînement (un test vérifie qu'aucun écran de séance ne porte d'emplacement).
+//
+// UN LIEN D'AFFILIATION (MyProtein…) : `utm: false` le laisse INTACT — des
+// paramètres ajoutés peuvent casser le suivi des commissions chez certains
+// réseaux. Le CODE, qui change souvent (chaque mois), se modifie depuis
+// l'écran « Partenaires » du créateur, sans mise à jour de l'app.
 //
 // CHAQUE CARTE DIT CE QU'ELLE EST : la mention « Lien partenaire » est visible,
 // toujours. Le lien porte utm_source=repcore&utm_medium=app&utm_campaign=<emplacement>.
 // Les vues (une par emplacement et par session) et les clics (lien ou code
 // copié) sont comptés dans metrics/<jour> (partenaire_vue_*, partenaire_clic_*).
-const PARTENAIRE_EMPLACEMENTS=Object.freeze(['complements','defi','wrapped']);
+const PARTENAIRE_EMPLACEMENTS=Object.freeze(['accueil','complements','defi','wrapped']);
 const PARTENAIRES_URL='https://repcore-sync-default-rtdb.firebaseio.com/partenaires.json';
 const PARTENAIRES_CACHE='rc_partenaires';
 const PARTENAIRES_CACHE_MS=6*3600e3;      // une lecture toutes les six heures au plus
@@ -110595,9 +110603,10 @@ function partenairePour(tous,emplacement,maintenant){
   }
   return null;
 }
-/** PURE. Le lien avec ses paramètres utm (ceux du lien d'origine sont gardés). */
-function lienPartenaire(lien,emplacement){
+/** PURE. Le lien avec ses paramètres utm (ceux du lien d'origine sont gardés) ; utm=false : le lien tel quel. */
+function lienPartenaire(lien,emplacement,utm){
   if(!_rcHttps(lien)) return '';
+  if(utm===false) return String(lien);
   try{
     const u=new URL(String(lien));
     u.searchParams.set('utm_source','repcore');
@@ -110613,9 +110622,13 @@ function lienPartenaire(lien,emplacement){
  * @param {string} emplacement
  * @returns {string}
  */
+// Un logo qui ne charge pas disparait, au lieu d'une image cassee. Ecouteur
+// global (l'erreur d'image ne remonte pas, d'ou la capture) : jamais d'onerror
+// dans le HTML genere.
+if(typeof document!=='undefined') document.addEventListener('error',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('ptn-logo')) t.remove();},true);
 function renderCartePartenaire(p,emplacement){
   if(!p||PARTENAIRE_EMPLACEMENTS.indexOf(emplacement)<0) return '';
-  const lien=lienPartenaire(p.lien,emplacement);
+  const lien=lienPartenaire(p.lien,emplacement,p.utm);
   if(!lien||!String(p.nom||'').trim()) return '';
   const cle=escapeHtml(String(p.cle||''));
   const code=String(p.code||'').trim().slice(0,40);
@@ -110687,6 +110700,93 @@ async function partenaireCopier(btn){
   partenaireClic(btn);
   try{ await navigator.clipboard.writeText(code); toast('Code '+code+' copié ✓','var(--green)'); return true; }
   catch(e){ toast('Code : '+code,'var(--sub)'); return false; }
+}
+
+// ══ L'ÉCRAN « PARTENAIRES » DU CRÉATEUR (11/10/2026) ══════════════════════
+// Changer le code du mois, le lien, l'interrupteur, les emplacements — depuis
+// le téléphone, sans console Firebase ni mise à jour. L'écriture passe par les
+// règles (créateur seul) ; ce qui suit n'est que l'affichage.
+const PARTENAIRE_LIBELLES=Object.freeze({accueil:'Accueil',complements:'Compléments',defi:'Carte de défi',wrapped:'Fin du Wrapped'});
+/**
+ * PURE. Un partenaire depuis les champs du formulaire, vérifié comme les règles.
+ * Dates « AAAA-MM-JJ » : début à 0 h, fin à 23 h 59 (heure de l'appareil) ; vide = sans limite.
+ * @returns {{ok:boolean, cle?:string, p?:any, erreur?:string}}
+ */
+function partenaireDepuisFormulaire(f){
+  const x=f||{};
+  const cle=String(x.cle||'').trim().toLowerCase();
+  if(!/^[a-z0-9_-]{2,40}$/.test(cle)) return {ok:false,erreur:'Identifiant : 2 à 40 caractères, minuscules, chiffres, - ou _.'};
+  const nom=String(x.nom||'').trim();
+  if(!nom||nom.length>60) return {ok:false,erreur:'Le nom est obligatoire (60 caractères au plus).'};
+  const lien=String(x.lien||'').trim();
+  if(!_rcHttps(lien)||lien.length>500) return {ok:false,erreur:'Le lien doit commencer par https://'};
+  const logo=String(x.logo||'').trim();
+  if(logo&&(!_rcHttps(logo)||logo.length>500)) return {ok:false,erreur:'Le logo doit être une adresse https://'};
+  const em=(Array.isArray(x.emplacements)?x.emplacements:[]).filter(e=>PARTENAIRE_EMPLACEMENTS.indexOf(e)>=0);
+  if(!em.length) return {ok:false,erreur:'Choisis au moins un emplacement.'};
+  const jour=(v,fin)=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'')); if(!m) return 0;
+    return fin?new Date(+m[1],+m[2]-1,+m[3],23,59,59,999).getTime():new Date(+m[1],+m[2]-1,+m[3],0,0,0,0).getTime(); };
+  const debut=jour(x.debut,false), fin=jour(x.fin,true);
+  if(debut&&fin&&fin<debut) return {ok:false,erreur:'La fin est avant le début.'};
+  const p={actif:x.actif===true,nom,lien,emplacements:em,code:String(x.code||'').trim().slice(0,40),
+    mention:String(x.mention||'').trim().slice(0,140),utm:x.utm!==false,debut,fin};
+  if(logo) p.logo=logo;
+  return {ok:true,cle,p};
+}
+function _ptnDate(ms){ if(!(Number(ms)>0)) return ''; const d=new Date(Number(ms)); return localISODate(d); }
+// PURE. Le formulaire d'un partenaire (existant : identifiant figé).
+function htmlFormPartenaire(cle,p){
+  const x=p||{}, neuf=!cle;
+  const em=Array.isArray(x.emplacements)?x.emplacements:Object.values(x.emplacements||{});
+  const id=neuf?'ptn-neuf':'ptn-'+escapeHtml(cle);
+  const ch=(n,lab,v,ph,type)=>'<label class="ptn-f"><span>'+lab+'</span><input name="'+n+'" type="'+(type||'text')+'" value="'+escapeHtml(v||'')+'" placeholder="'+escapeHtml(ph||'')+'"></label>';
+  return '<form class="card ptn-form" id="'+id+'" onsubmit="event.preventDefault();partenaireEnregistrer(this)">'
+    +'<div class="ptn-form-t">'+(neuf?'Nouveau partenaire':escapeHtml(x.nom||cle))
+      +(neuf?'':' <span class="ptn-etat'+(x.actif===true?' on':'')+'">'+(x.actif===true?'Affiché':'Coupé')+'</span>')+'</div>'
+    +(neuf?ch('cle','Identifiant','','myprotein'):'<input type="hidden" name="cle" value="'+escapeHtml(cle)+'">')
+    +ch('nom','Nom affiché',x.nom,'MyProtein')
+    +ch('code','Code de réduction (celui du mois)',x.code,'KEVIN15')
+    +ch('lien','Lien (ton lien d’affiliation)',x.lien,'https://…')
+    +ch('mention','Une phrase',x.mention,'-15 % sur ta commande')
+    +ch('logo','Logo (adresse https, facultatif)',x.logo,'https://…/logo.png')
+    +'<div class="ptn-f"><span>Emplacements</span><div class="ptn-emp">'
+      +PARTENAIRE_EMPLACEMENTS.map(e=>'<label><input type="checkbox" name="emp" value="'+e+'"'+(em.indexOf(e)>=0?' checked':'')+'> '+PARTENAIRE_LIBELLES[e]+'</label>').join('')
+    +'</div></div>'
+    +'<div class="ptn-dates">'+ch('debut','Début (facultatif)',_ptnDate(x.debut),'','date')+ch('fin','Fin (facultatif)',_ptnDate(x.fin),'','date')+'</div>'
+    +'<label class="ptn-c"><input type="checkbox" name="utm"'+(x.utm===false?'':' checked')+'> Ajouter les paramètres utm au lien <small>(décoche pour un lien d’affiliation)</small></label>'
+    +'<label class="ptn-c"><input type="checkbox" name="actif"'+(x.actif===true?' checked':'')+'> <b>Afficher dans l’app</b></label>'
+    +'<p class="ptn-err" role="alert"></p>'
+    +'<button type="submit" class="btn btn-red" style="width:100%">Enregistrer</button></form>';
+}
+async function ouvrirPartenairesAdmin(){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+  go('s-partenaires');
+  const z=document.getElementById('ptn-admin');
+  if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
+  const tous=await partenairesCharger(true);
+  if(!z) return true;
+  z.innerHTML='<p class="sub" style="line-height:1.6;margin:0 0 14px">La carte s’affiche seulement si « Afficher » est coché, pendant ses dates, aux emplacements choisis. Jamais pendant une séance. La mention « Lien partenaire » est toujours visible.</p>'
+    +Object.keys(tous||{}).sort().map(k=>htmlFormPartenaire(k,tous[k])).join('')
+    +htmlFormPartenaire('',{actif:false,emplacements:['accueil'],utm:false});
+  return true;
+}
+async function partenaireEnregistrer(form){
+  const g=n=>{ const e=form.elements[n]; return e?e.value:''; };
+  const r=partenaireDepuisFormulaire({cle:g('cle'),nom:g('nom'),code:g('code'),lien:g('lien'),mention:g('mention'),logo:g('logo'),
+    debut:g('debut'),fin:g('fin'),actif:!!(form.elements.actif&&form.elements.actif.checked),utm:!!(form.elements.utm&&form.elements.utm.checked),
+    emplacements:[...form.querySelectorAll('input[name="emp"]:checked')].map(x=>x.value)});
+  const err=form.querySelector('.ptn-err');
+  if(!r.ok){ if(err) err.textContent=r.erreur; return false; }
+  if(err) err.textContent='';
+  try{
+    const token=await CLOUD._getToken();
+    const x=await fetch(PARTENAIRES_URL.replace('partenaires.json','partenaires/'+r.cle+'.json')+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(r.p)});
+    if(!x.ok) throw new Error('HTTP '+x.status);
+    toast('Partenaire enregistré ✓','var(--green)');
+    await ouvrirPartenairesAdmin();
+    return true;
+  }catch(e){ if(err) err.textContent='Enregistrement refusé ('+(e.message||'erreur')+').'; return false; }
 }
 
 function loadSupplements(){
