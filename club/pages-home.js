@@ -67,6 +67,7 @@ function quickAdd(kpiId, value, userId = ME.id) {
   const rk0 = ranking(CLUB.id, r).find(x => x.u.id === userId);
   const id = newId();
   db.set(['entries', id], { id, userId, clubId: CLUB.id, kpiId, date: today(), value, source: 'manual', at: Date.now(), by: ME.id });
+  if (typeof usageAction === 'function') usageAction();
   const k = S.kpis[kpiId];
   const row = (statsFor(CLUB.id, userId, r, { kpiIds: [kpiId] }).rows[0]) || null;
   const rk = ranking(CLUB.id, r).find(x => x.u.id === userId);

@@ -1,29 +1,47 @@
 /*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — adoption par l'équipe ══════════════════════════════════════
-//  - Usage léger : S.usage[uid][date] = { opens, pages: { route: n }, lastAt },
-//    compté à la connexion et à chaque changement de page, écrit une fois par
-//    minute au plus (le reste attend en mémoire).
+//  - Usage léger : S.usage[uid][date] = { opens, firstAt, lastAt, screens, actions },
+//    compté à la connexion, au retour au premier plan (5 min d'écart au moins),
+//    à chaque écran et à chaque action ; écrit une fois par minute au plus.
+//    Aucun outil tiers de mesure d'audience.
 //  - Onglet « Adoption » (Équipe et paliers) : 4 semaines par membre.
 //  - Parcours de démarrage d'un nouveau membre : 4 étapes cochées toutes seules.
 //  - Taux d'adoption : membres actifs au moins 4 jours sur 6 cette semaine.
 
-const USAGE_PAS = 60000; // une écriture par minute au plus
-const USAGE = { buf: null, last: 0, timer: null, ecritures: 0 };
-function usageNote(route, ouverture = false) {
+const USAGE_PAS = 60000; // une écriture par minute au plus et par utilisateur
+const USAGE_RETOUR_MS = 5 * 60000; // un retour au premier plan compte s'il suit le précédent d'au moins 5 minutes
+const USAGE_GARDE_MOIS = 13; // purge des données d'usage plus anciennes
+const USAGE = { buf: null, last: 0, timer: null, ecritures: 0, ouverture: 0 };
+// S.usage[uid][date] = { opens, firstAt, lastAt, screens: { home: n, feed: n, ... }, actions }
+function usageNote(route, ouverture = false, actions = 0) {
   if (!ME || !S || ME.virtual) return;
-  const b = USAGE.buf = USAGE.buf || { opens: 0, pages: {} };
-  if (ouverture) b.opens++;
-  if (route) b.pages[route] = (b.pages[route] || 0) + 1;
-  const attente = USAGE.last + USAGE_PAS - Date.now();
+  const b = USAGE.buf = USAGE.buf || { opens: 0, screens: {}, actions: 0, firstAt: 0 };
+  const now = Date.now();
+  if (ouverture && now - USAGE.ouverture >= USAGE_RETOUR_MS) { USAGE.ouverture = now; b.opens++; b.firstAt = b.firstAt || now; }
+  if (route) { const k = safeKey(route) || 'home'; b.screens[k] = (b.screens[k] || 0) + 1; }
+  if (actions) b.actions += actions;
+  const attente = USAGE.last + USAGE_PAS - now;
   if (attente <= 0) usageEcrire(); else if (!USAGE.timer) USAGE.timer = setTimeout(usageEcrire, attente);
 }
+// Une action comptée : saisie, issue de relance, réaction.
+function usageAction(n = 1) { usageNote(null, false, n); }
+const USAGE_ACTIONS = new Set(['react', 'chatReact', 'relQuick', 'relSave', 'loySessOut', 'commenter', 'kudosEnvoyer', 'dunPayOk', 'dunAcompteOk', 'resOutcome', 'resSave']);
 function usageEcrire() {
   clearTimeout(USAGE.timer); USAGE.timer = null; const b = USAGE.buf; if (!b || !ME) return; USAGE.buf = null; USAGE.last = Date.now();
-  const d = today(); const cur = deepGet(S, ['usage', ME.id, d]) || {}; const pages = { ...(cur.pages || {}) };
-  Object.entries(b.pages).forEach(([r, n]) => { const k = safeKey(r) || 'home'; pages[k] = (pages[k] || 0) + n; });
-  USAGE.ecritures++; db.set(['usage', ME.id, d], { opens: (cur.opens || 0) + b.opens, pages, lastAt: Date.now() });
+  const d = today(); const cur = deepGet(S, ['usage', ME.id, d]) || {}; const screens = { ...(cur.pages || {}), ...(cur.screens || {}) };
+  Object.entries(b.screens).forEach(([r, n]) => { screens[r] = (screens[r] || 0) + n; });
+  USAGE.ecritures++;
+  db.set(['usage', ME.id, d], { opens: (cur.opens || 0) + b.opens, firstAt: cur.firstAt || b.firstAt || Date.now(), lastAt: Date.now(), screens, actions: (cur.actions || 0) + b.actions });
 }
+// Retour au premier plan : une ouverture (5 minutes au moins après la précédente).
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' || document.hidden === false) usageNote(null, true); });
+// Purge : jours d'usage de plus de 13 mois (les siens, à la connexion ; le serveur purge tous les comptes).
+function usagePurgeOps(uid, t = today()) {
+  const lim = addMonths(t.slice(0, 7), -USAGE_GARDE_MOIS) + t.slice(7);
+  return Object.keys(deepGet(S, ['usage', uid]) || {}).filter(d => d < lim).map(d => [['usage', uid, d], null]);
+}
+const usageDuJour = (uid, d) => deepGet(S, ['usage', uid, d]) || null;
 
 // ── Mesures par membre ────────────────────────────────────────────────────
 const joursUsage = uid => Object.keys(deepGet(S, ['usage', uid]) || {});
