@@ -76,6 +76,9 @@ export function travaux(M) {
       un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
     // L'accueil d'un athlète coaché (lot C1) : bilan, programme, première séance.
     { nom: 'accueil', quand: (p) => apres(p, 17, 30) && p.heure < 21, une: (t) => (M.accueilRelances ? M.accueilRelances(t) : null) },
+    // La fin d'essai (10/10/2026) : J-3, J-1 et J0 à 18 h 30, avec les vrais
+    // chiffres de l'essai (finessai.js).
+    { nom: 'fin_essai', quand: (p) => apres(p, 18, 30) && p.heure < 21, une: (t) => (M.finEssai ? M.finEssai.quotidien(t) : null) },
     // Le parcours « Mise sous tension » : le rappel du 21e jour d'essai.
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur

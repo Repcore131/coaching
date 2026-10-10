@@ -55377,8 +55377,10 @@ async function testExercices(){
       if(!r.seance1||!r.parcours||r.payant||r.finEssai!==cree+30*_RETJ) return _echec('entonnoir');
       if(!r.lev.parcours||r.lev.checkin||!r.lev.coach||!r.lev.duel||!r.lev.invite) return _echec('leviers '+JSON.stringify(r.lev));
       const txt=JSON.stringify(r);
-      if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,''))) return _echec('un contenu a fui : '+txt);
-      if(Object.keys(r).sort().join()!=='debut,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
+      // LE RÉSUMÉ DE L'ESSAI (10/10/2026) : quatre totaux, rien d'autre.
+      if(!r.essai||Object.keys(r.essai).sort().join()!=='r,s,t,w'||Object.values(r.essai).some(v=>typeof v!=='number')) return _echec('résumé de l’essai : '+JSON.stringify(r.essai));
+      if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,'').replace(/"essai":\{[^}]*\}/,''))) return _echec('un contenu a fui : '+txt);
+      if(Object.keys(r).sort().join()!=='debut,essai,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
       if(activiteResume({role:'coach',createdAt:1},_RET)!==null||activiteResume({role:'athlete'},_RET)!==null) return _echec('coach ou sans date');
       return /activitePublier\(u\)/.test(String(loadClientHome))?true:_echec('publié depuis l’accueil');})());
     ok('Rétention : l’écran Viralité — actifs, cohortes et courbes SVG, entonnoir, leviers avec alerte sous 30',(()=>{
@@ -57991,44 +57993,115 @@ async function testExercices(){
       return /Plus que 2 jours/.test(j58)?true:_echec('jour 58 : '+j58);})());
 
     // LE BOUT DU MOIS : ce qu'on montre, c'est SON programme.
-    ok('LOT 6 — L’ÉCRAN DE FIN MONTRE SON PROGRAMME, ET DIT QUE RIEN N’EST EFFACÉ',(()=>{
-      const sv=currentUser;
+    // ══ LA FIN D'ESSAI, UN MOMENT DE CONVERSION (10/10/2026) ═══════════════
+    ok('FIN D’ESSAI — resumeEssai PURE : fenêtre, tonnage, records, semaines, avatar',(()=>{
+      const J=864e5, d=new Date(2026,8,7,12).getTime();   // un lundi midi
+      const ses=[{date:d-2*J,volume:999},{date:d,volume:1000.4},{date:d+J,volume:500},{date:d+8*J,volume:0},{date:d+40*J,volume:7}];
+      const r=resumeEssai(ses,[{nom:'SQUAT'},{nom:'DIPS'}],{debut:d,fin:d+30*J});
+      if(r.seances!==3) return _echec('séances : '+r.seances);
+      if(r.tonnage!==1500) return _echec('tonnage : '+r.tonnage);
+      if(r.records!==2) return _echec('records (liste) : '+r.records);
+      if(r.semaines!==2) return _echec('semaines : '+r.semaines);
+      if(resumeEssai(ses,4).records!==4||resumeEssai(ses,-3).records!==0) return _echec('records (nombre)');
+      const v=resumeEssai([],0);
+      if(v.seances||v.tonnage||v.records||v.semaines||v.niveauAvatar!==1) return _echec('vide : '+JSON.stringify(v));
+      if(resumeEssai(null,null).seances!==0) return _echec('entrée absente');
+      const plein=resumeEssai(Array.from({length:30},(_,i)=>({date:d+i*J})),0);
+      if(plein.niveauAvatar!==WO_AVA_NIV) return _echec('avatar plein : '+plein.niveauAvatar);
+      const mi=resumeEssai(Array.from({length:6},(_,i)=>({date:d+i*J})),0).niveauAvatar;
+      if(!(mi>1&&mi<WO_AVA_NIV)) return _echec('avatar à 6 séances : '+mi);
+      // PURE : l'entrée n'est pas touchée.
+      if(ses.length!==5||ses[1].volume!==1000.4) return _echec('entrée modifiée');
+      return true;})());
+
+    // L'écran, trois cas : sans séance, avec séances, version Google Play.
+    // ⚠ IL NE MONTRE QUE DES CHIFFRES RÉELS. Sans séance, aucun chiffre.
+    ok('FIN D’ESSAI — l’écran : 4 vrais chiffres avec séances, aucun sans, 3 offres, coaching, rien n’est effacé',(()=>{
+      const sv=currentUser, sR=window.rcm, sA=window.accueilChoisir, sB=window.ouvrirBoutique;
+      const vus=[], choix=[];
+      let canal=null; try{ canal=sessionStorage.getItem(CANAL_PLAY_CLE); sessionStorage.removeItem(CANAL_PLAY_CLE); }catch(e){}
       try{
-        const t0=Date.now()-40*86400000;
-        currentUser={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
-          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000},
-          sessions:[{date:1},{date:2},{date:3},{date:4}],
-          sessions_config:[
-            {day:'Lundi',active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE'},{name:'DIPS'}]},
-            {day:'Mardi',active:false,exercises:[]},
-            {day:'Mercredi',active:true,exercises:[{name:'TRACTIONS'}]}]};
+        window.rcm=n=>{ vus.push(n); };
+        window.accueilChoisir=(k,a)=>{ choix.push(k+(a?':an':':mois')); };
+        window.ouvrirBoutique=()=>{ choix.push('boutique'); };
+        const J=864e5, t0=Date.now()-40*J;
+        const base={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DIPS'}]}]};
+        const lire=()=>{ const z=document.getElementById('eb-corps'); return {z,txt:z.textContent.replace(/\s+/g,' ')}; };
+        const commun=(txt,z,qui)=>{
+          if(!/rien n’est effacé/i.test(txt)) return qui+' : rien n’est effacé n’est pas dit';
+          for(const o of ['mensuel','annuel','programme']) if(!z.querySelector('[data-eb-offre="'+o+'"]')) return qui+' : offre '+o+' absente';
+          const _nb=String.fromCharCode(160);
+          for(const p of [prixOffre('ultime'),prixOffre('ultime',true)]) if(txt.indexOf(p.split(_nb).join(' '))<0) return qui+' : prix '+p+' absent';
+          const rem=texteRemiseAnnuelle('ultime');
+          if(rem&&txt.indexOf(rem.split(_nb).join(' '))<0) return qui+' : la remise de l’annuel (« '+rem+' ») n’est pas dite';
+          if(!z.querySelector('a[href*="beacons.ai/kevin.gllc"]')) return qui+' : pas de lien coaching';
+          if(![...z.querySelectorAll('button')].some(b=>/ouvrirCodeCoach\(\)/.test(b.getAttribute('onclick')||''))) return qui+' : pas de porte code coach';
+          if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0) return qui+' : tiret cadratin';
+          for(const mot of ['palier','quota','capacité','synchronisation','garanti','résultats'])
+            if(new RegExp(mot,'i').test(txt)) return qui+' : mot interdit visible : '+mot;
+          return '';
+        };
+        // 1. SANS SÉANCE : pas de tuile, pas de chiffre dans le titre.
+        currentUser=Object.assign({},base,{sessions:[]});
         if(!rendreEssaiBilan(currentUser)) return _echec('l’écran ne se dessine pas');
-        const z=document.getElementById('eb-corps');
-        const txt=z.textContent.replace(/\s+/g,' ');
-        if(txt.indexOf('Rien n’est effacé')<0) return _echec('l’écran ne dit pas que rien n’est effacé');
-        if(!/2 séances/.test(txt)) return _echec('les séances de son programme ne sont pas comptées : « '+txt.slice(0,160)+' »');
-        if(!/4 séances? terminées?/.test(txt)) return _echec('les séances faites ne sont pas dites');
-        // LES DEUX FORMULES, AVEC LEURS PRIX, ET AUCUN AUTRE PRIX EN DUR.
-        // ⚠ LE TEXTE LU EST NORMALISE (\s avale l'espace insecable des prix) :
-        //   on normalise donc aussi le prix attendu, sans quoi « 24,90 € »
-        //   cherche un caractere que la lecture vient de remplacer.
-        const _nb=String.fromCharCode(160);
-        for(const p of [prixOffre('ultime'),prixOffre('ultime',true),prixOffre('essentielle'),prixOffre('essentielle',true)])
-          if(txt.indexOf(p.split(_nb).join(' '))<0) return _echec('le prix '+p+' ne se lit pas');
-        // ET DES PORTES, PAS UN MUR : Ultime, Essentielle, le coaching, le code.
-        const b=[...z.querySelectorAll('button,a')];
-        if(b.length<4) return _echec(b.length+' portes seulement');
-        if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
-          return _echec('aucune porte ne mène au coaching');
-        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('onclick')||'')))
-          return _echec('aucune porte ne mène au code coach');
-        // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
-        if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
-          return _echec('un tiret cadratin traîne sur l’écran de fin');
-        for(const mot of ['palier','quota','capacité','synchronisation'])
-          if(new RegExp(mot,'i').test(txt)) return _echec('mot technique visible : '+mot);
+        let L=lire();
+        if(L.z.querySelector('.eb-chiffres')) return _echec('sans séance : des tuiles de chiffres');
+        const t1=L.z.querySelector('.eb-titre').textContent;
+        if(/\d/.test(t1)) return _echec('sans séance : un chiffre dans le titre : '+t1);
+        if(!/pas encore fait de séance/.test(L.txt)) return _echec('sans séance : la phrase honnête manque');
+        let e=commun(L.txt,L.z,'sans séance'); if(e) return _echec(e);
+        if(vus.indexOf('trial_end_viewed')<0) return _echec('trial_end_viewed non compté');
+        // 2. AVEC SÉANCES : 4 tuiles, et le titre « N séances, R records : on continue ? ».
+        const ses=[
+          {date:t0+2*J,volume:2000,exercises:[{name:'SQUAT',sets:[{weight:100,reps:5,rir:2}]}]},
+          {date:t0+3*J,volume:1500,exercises:[{name:'DIPS',sets:[{weight:20,reps:8,rir:2}]}]},
+          {date:t0+10*J,volume:2500,exercises:[]},
+          {date:t0+80*J,volume:9999}];                    // après l'essai : pas compté
+        currentUser=Object.assign({},base,{sessions:ses});
+        const r=essaiResumeDe(currentUser);
+        if(r.seances!==3||r.tonnage!==6000||r.semaines<2) return _echec('résumé : '+JSON.stringify(r));
+        rendreEssaiBilan(currentUser); L=lire();
+        const tu=L.z.querySelectorAll('.eb-chiffres .eb-ch');
+        if(tu.length!==4) return _echec(tu.length+' tuiles au lieu de 4');
+        const t2=L.z.querySelector('.eb-titre').textContent;
+        if(t2!==r.seances+' séances, '+r.records+' record'+(r.records>1?'s':'')+' : on continue ?') return _echec('titre : '+t2);
+        if(r.records<1) return _echec('aucun record lu');
+        if(tu[0].textContent.indexOf('3')<0||tu[1].textContent.indexOf(_cpTonnage(6000).replace(String.fromCharCode(160),' ').slice(0,1))<0) return _echec('tuiles : '+L.z.querySelector('.eb-chiffres').textContent);
+        const ava=L.z.querySelector('img.eb-ava');
+        if(!ava||ava.getAttribute('src')!==woSrcAvatar(r.niveauAvatar,woGenreAvatar(currentUser),'face')) return _echec('avatar de progression');
+        e=commun(L.txt,L.z,'avec séances'); if(e) return _echec(e);
+        // LES OFFRES : comptées, puis la bonne porte.
+        vus.length=0;
+        L.z.querySelector('[data-eb-offre="mensuel"]').click();
+        L.z.querySelector('[data-eb-offre="annuel"]').click();
+        L.z.querySelector('[data-eb-offre="programme"]').click();
+        if(choix.join()!=='ultime:mois,ultime:an,boutique') return _echec('portes : '+choix.join());
+        if(vus.filter(n=>n==='trial_end_offer_clicked').length!==3) return _echec('clics comptés : '+vus.join());
+        for(const n of ['trial_end_viewed','trial_end_offer_clicked']) if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors de la liste fermée');
+        // 3. VERSION GOOGLE PLAY : aucune offre payante, le message Play.
+        sessionStorage.setItem(CANAL_PLAY_CLE,'play');
+        rendreEssaiBilan(currentUser); L=lire();
+        if(L.z.querySelector('[data-eb-offre="mensuel"],[data-eb-offre="annuel"],[data-eb-offre="programme"]')) return _echec('Play : une offre payante');
+        if(L.txt.indexOf(prixOffre('ultime').split(String.fromCharCode(160)).join(' '))>=0) return _echec('Play : un prix affiché');
         return true;
-      } finally { currentUser=sv; }})());
+      } finally {
+        currentUser=sv; window.rcm=sR; window.accueilChoisir=sA; window.ouvrirBoutique=sB;
+        try{ if(canal==null) sessionStorage.removeItem(CANAL_PLAY_CLE); else sessionStorage.setItem(CANAL_PLAY_CLE,canal); }catch(e){}
+      }})());
+
+    // DÉJÀ PAYANT : l'écran de fin d'essai ne s'ouvre pas, et le résumé
+    // publié au serveur dit « payant » (le worker ne relance pas).
+    ok('FIN D’ESSAI — déjà payant : pas d’écran de fin, et activiteResume publie le résumé de l’essai',(()=>{
+      const J=864e5, t0=Date.now()-40*J;
+      const u={id:'pp',email:'pp@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions:[{date:t0+J,volume:100}]};
+      if(doitVoirLePaywall(u)) return _echec('un abonné voit l’écran de fin d’essai');
+      if(!doitVoirLePaywall(Object.assign({},u,{status:'FREE'}))) return _echec('le même essai, sans abonnement, ne mène pas à l’écran');
+      const a=activiteResume(Object.assign({},u,{status:'FREE'}));
+      if(!a.essai||a.essai.s!==1||a.essai.t!==100) return _echec('résumé publié : '+JSON.stringify(a.essai));
+      for(const k of Object.keys(a.essai)) if(['s','t','r','w'].indexOf(k)<0) return _echec('champ en trop : '+k);
+      return true;})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est

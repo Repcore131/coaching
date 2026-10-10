@@ -631,6 +631,8 @@ function lienWhatsApp(texte){
 const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
+  // LA FIN D'ESSAI (10/10/2026) : l'écran vu, une offre cliquée.
+  'trial_end_viewed','trial_end_offer_clicked',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
   // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
   // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
@@ -2226,6 +2228,48 @@ function essaiBilanPhrase(u){
   if(!m.length) return '';
   if(m.length===1) return m[0];
   return m.slice(0,-1).join(', ')+' et '+m[m.length-1];
+}
+// ══ LE RÉSUMÉ DE L'ESSAI (10/10/2026) ═════════════════════════════════════
+// Quatre chiffres RÉELS, comptés dans la fenêtre de l'essai : séances
+// terminées, tonnage (le volume enregistré par finishWorkout), records battus
+// (_riteRecords, la même lecture que le rite des quatre semaines) et semaines
+// actives (au moins une séance). Ils nourrissent l'écran de fin d'essai et les
+// notifications du serveur (activite/<compte>.essai) — jamais un chiffre
+// inventé : un zéro reste un zéro, et le texte change.
+const ESSAI_AVATAR_SEANCES=12;   // le bonhomme atteint son dernier niveau à 12 séances
+/**
+ * PURE. Le résumé d'un essai.
+ * @param {Array<{date?:number, volume?:number}>} sessions les séances du dossier
+ * @param {Array|number} records les records battus pendant l'essai (liste ou nombre)
+ * @param {{debut?:number, fin?:number}=} fenetre bornes de l'essai (ms) ; absentes = tout
+ * @returns {{seances:number, tonnage:number, records:number, semaines:number, niveauAvatar:number}}
+ */
+function resumeEssai(sessions,records,fenetre){
+  const f=fenetre||{};
+  const d=Number(f.debut)||0, fi=Number(f.fin)||Infinity;
+  let seances=0,tonnage=0; const sem=new Set();
+  for(const x of (Array.isArray(sessions)?sessions:[])){
+    const t=Number(x&&x.date)||0;
+    if(!t||t<d||t>fi) continue;
+    seances++;
+    tonnage+=Math.max(0,Number(x.volume)||0);
+    const j=new Date(t); const lun=new Date(j.getFullYear(),j.getMonth(),j.getDate()-((j.getDay()+6)%7));
+    sem.add(lun.getFullYear()+'-'+lun.getMonth()+'-'+lun.getDate());
+  }
+  const r=Array.isArray(records)?records.length:Math.max(0,Math.floor(Number(records)||0));
+  const niveauAvatar=1+Math.round(Math.min(seances,ESSAI_AVATAR_SEANCES)*(WO_AVA_NIV-1)/ESSAI_AVATAR_SEANCES);
+  return {seances,tonnage:Math.round(tonnage),records:r,semaines:sem.size,niveauAvatar};
+}
+// Le résumé de l'essai de ce dossier (fenêtre : ouverture → fin).
+function essaiResumeDe(u){
+  const x=u||currentUser||{};
+  const fin=essaiFin(x);
+  let debut=Number(x.essai&&x.essai.ouvertLe)||0;
+  try{ const dr=droitsDe(x); if(dr.etat==='serveur'&&dr.essaiOuvertLe>0) debut=dr.essaiOuvertLe; }catch(e){}
+  if(!fin) return resumeEssai([],0);
+  if(!debut) debut=fin-essaiDuree(x)*864e5;
+  let recs=[]; try{ recs=_riteRecords(x,debut,fin); }catch(e){ recs=[]; }
+  return resumeEssai(x.sessions,recs,{debut,fin});
 }
 // PURE. LA SEQUENCE DE RELANCE, canal principal : le bandeau dans l'app.
 //
@@ -22738,6 +22782,10 @@ function activiteResume(u,maintenant){
     seance1:ses.length>0,
     parcours:!!(p.fini&&!p.existant),
     finEssai:Number(u.essai&&u.essai.finit)||0,
+    // LE RÉSUMÉ DE L'ESSAI (10/10/2026) : quatre nombres, pour la notification
+    // de fin d'essai du serveur (« 12 séances, 3 records : on continue ? »).
+    ...((()=>{ if(!(Number(u.essai&&u.essai.finit)>0)) return {};
+      const e=essaiResumeDe(u); return {essai:{s:e.seances,t:e.tonnage,r:e.records,w:e.semaines}}; })()),
     payant:!!((u.origine&&u.origine.payeLe)||u.paypalSubscriptionId),
     lev:{parcours:!!(p.fini&&!p.existant&&Number(p.fini)<=fin30),checkin:ciTot>=3,notif,
       duel:Object.keys(u.duels||{}).length>0,
@@ -83032,44 +83080,67 @@ function rendreEssaiBilan(u){
   const z=document.getElementById('eb-corps');
   if(!z) return false;
   const x=u||currentUser||{};
-  const quoi=essaiBilanPhrase(x);
-  const faites=essaiBilan(x).faites;
-  const titre=quoi
-    ? 'Ton mois est terminé, et '+quoi+' sont toujours là.'
-    : 'Ton mois est terminé.';
-  const ligne=(t)=>'<li style="margin-bottom:6px">'+t+'</li>';
+  const r=essaiResumeDe(x);
+  try{ rcm('trial_end_viewed'); }catch(e){}
+  const nb=(n)=>escapeHtml(String(n));
+  // LES QUATRE CHIFFRES (10/10/2026), ou, sans séance, une phrase honnête.
+  const tuile=(v,lib)=>'<div class="eb-ch"><div class="eb-ch-v">'+v+'</div><div class="eb-ch-l">'+lib+'</div></div>';
+  const pl=(n,s1,s2)=>n>1?s2:s1;
+  const chiffres=r.seances
+    ? '<div class="eb-chiffres">'
+      +tuile(nb(r.seances),pl(r.seances,'séance','séances'))
+      +tuile(escapeHtml(_cpTonnage(r.tonnage)),'soulevés')
+      +tuile(nb(r.records),pl(r.records,'record battu','records battus'))
+      +tuile(nb(r.semaines),pl(r.semaines,'semaine active','semaines actives'))
+      +'</div>'
+    : '';
+  const titre=r.seances
+    ? (r.records?(r.seances+' séance'+pl(r.seances,'','s')+', '+r.records+' record'+pl(r.records,'','s')+' : on continue ?')
+                :(r.seances+' séance'+pl(r.seances,'','s')+' en un mois : on continue ?'))
+    : 'Ton mois d’essai est terminé.';
+  const sous=r.seances
+    ? 'Tout ce que tu as construit est toujours là. Rien n’est effacé.'
+    : 'Tu n’as pas encore fait de séance. Ton programme et ton compte sont toujours là, rien n’est effacé.';
+  let ava='';
+  try{ ava='<img class="eb-ava" alt="Ton avatar de progression" width="96" height="96" src="'
+    +escapeHtml(woSrcAvatar(r.niveauAvatar,woGenreAvatar(x),'face'))+'">'; }catch(e){ ava=''; }
+  // LES TROIS OFFRES : mensuel, annuel (remise calculée), un programme de la
+  // boutique. VERSION GOOGLE PLAY : aucune offre payante (canalApp).
+  const remise=texteRemiseAnnuelle('ultime');
+  const prixProg=(TARIFS.coaching&&TARIFS.coaching.boutique_prog)||{};
+  const offres=canalApp()==='play' ? htmlCanalPlay() :
+    '<div class="eb-carte">'
+      +'<div class="eb-c-nom">Ultime, chaque mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixOffre('ultime'))+' par mois</div>'
+      +'<button type="button" class="btn btn-red" style="width:100%" data-eb-offre="mensuel" '
+      +'onclick="essaiBilanOffre(\'mensuel\')">Continuer chaque mois</button>'
+    +'</div>'
+    +'<div class="eb-carte">'
+      +(remise?'<div class="eb-c-badge">'+escapeHtml(remise)+'</div>':'')
+      +'<div class="eb-c-nom">Ultime, à l’année</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixOffre('ultime',true))+' l’année en une fois</div>'
+      +'<button type="button" class="btn btn-outline" style="width:100%" data-eb-offre="annuel" '
+      +'onclick="essaiBilanOffre(\'annuel\')">Continuer à l’année</button>'
+    +'</div>'
+    +'<div class="eb-carte">'
+      +'<div class="eb-c-nom">Un programme de la boutique</div>'
+      +'<div class="eb-c-prix">'+(prixProg.prix?escapeHtml(_euros(prixProg.prix)):'')+' · à vie'
+      +(prixProg.mois?', avec '+escapeHtml(String(prixProg.mois*30))+' jours d’application':'')+'</div>'
+      +'<button type="button" class="btn btn-outline" style="width:100%" data-eb-offre="programme" '
+      +'onclick="essaiBilanOffre(\'programme\')">Voir les programmes</button>'
+    +'</div>';
   z.innerHTML=
     '<div class="eb-tete">Ton mois d’essai</div>'
+    +(ava?'<div class="eb-ava-z">'+ava+'</div>':'')
     +'<h1 class="eb-titre">'+escapeHtml(titre)+'</h1>'
-    +(faites?'<p class="eb-sous">'+faites+' séance'+(faites>1?'s':'')+' terminée'
-      +(faites>1?'s':'')+' pendant le mois. Rien n’est effacé.</p>'
-      :'<p class="eb-sous">Rien n’est effacé.</p>')
-    +'<div class="eb-carte">'
-      +'<div class="eb-c-nom">Ultime</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('ultime'))+'</div>'
-      +'<ul class="eb-c-l">'
-      +ligne('Le catalogue d’exercices, filmés et illustrés')
-      +ligne('La charge de ton bloc, semaine par semaine')
-      +ligne('Ta diète calculée et tes compléments')
-      +'</ul>'
-      +'<button type="button" class="btn btn-red" style="width:100%" '
-      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
-    +'</div>'
-    +'<div class="eb-carte">'
-      +'<div class="eb-c-nom">Essentielle</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('essentielle'))+'</div>'
-      +'<ul class="eb-c-l">'
-      +ligne('Tes séances, ton historique et tes bilans')
-      +ligne('Ta nutrition et ton lifestyle')
-      +'</ul>'
-      +'<button type="button" class="btn btn-outline" style="width:100%" '
-      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
-    +'</div>'
+    +chiffres
+    +'<p class="eb-sous">'+escapeHtml(sous)+'</p>'
+    +offres
     +'<div class="eb-pied">'
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
-      +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
-      +'Voir les formules de coaching</a>'
+      +'<a class="eb-lien" data-eb-offre="coaching" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" '
+      +'onclick="try{rcm(\'trial_end_offer_clicked\')}catch(e){}">Voir les formules de coaching</a>'
       +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
       // SES PROGRAMMES ACHETÉS RESTENT LISIBLES (09/10/2026) : ils sont à vie,
       // et cet écran est celui où tout le reste est fermé.
@@ -83078,6 +83149,13 @@ function rendreEssaiBilan(u){
           +(n>1?'Lire mes '+n+' programmes':'Lire mon programme')+'</button>':''; })())
     +'</div>';
   return true;
+}
+// Un clic sur une offre de fin d'essai : compté, puis la suite.
+function essaiBilanOffre(quoi){
+  try{ rcm('trial_end_offer_clicked'); }catch(e){}
+  if(quoi==='programme'){ try{ ouvrirBoutique(); }catch(e){} return 'programme'; }
+  accueilChoisir('ultime',quoi==='annuel');
+  return quoi;
 }
 // Le seul chemin vers le paywall pendant l'essai, et il est VOLONTAIRE : on
 // ne le pousse pas, on le rend atteignable. C'est la difference entre une
