@@ -103,3 +103,25 @@ test('H5 : du mardi au samedi, un objectif chaque jour : la série continue apr�
   run(`for (const id of Object.keys(S.entries)) { const e = S.entries[id]; if (e.userId === 'v' && dateOf(e.date).getDay() === 2 && e.date >= addDays('${d0}', -7)) delete S.entries[id]; } REV++`);
   const s2 = J(run, 'serieJours()'); assert.equal(s2.jokerDispo, false); assert.equal(s2.n, s.n - 1); assert.match(run('jokerTexte(serieJours())'), /^Joker utilisé le \d+ /);
 });
+test('H4 : résiliation attribuée au commercial = « 1 nouvelle relance à ton nom » ; 20 minutes ; 4 lignes au plus', () => {
+  const run = appli({ kpis }, 'v');
+  run(`setTimeout = (f) => f(); UI._lastRoute = 'x'`);
+  const h1 = run('deltaCard()'); // première visite : instantané
+  assert.deepEqual(J(run, 'S.prefs.v.seen.dossiers'), []); assert.ok(J(run, 'S.prefs.v.seen.home') > 0);
+  run(`S.prefs.v.seen.home = Date.now() - 30 * 60e3; S.resiliations.r1 = { id: 'r1', clubId: 'k', client: 'Paul Exemple', date: today(), effective: addDays(today(), 20), status: 'nouvelle', ownerId: 'v', at: Date.now() }; REV++; UI._lastRoute = 'x'`);
+  const h2 = run('deltaCard()'); assert.match(h2, /1 nouvelle relance à ton nom/); assert.ok((h2.match(/<li /g) || []).length <= 4);
+  // seconde ouverture 5 minutes après : pas de carte
+  run(`S.prefs.v.seen.home = Date.now() - 5 * 60e3; UI._lastRoute = 'x'`); assert.equal(run('deltaCard()'), '');
+  // 6 nouveautés : 4 lignes au plus
+  run(`S.prefs.v.seen.home = Date.now() - 60 * 60e3; S.prefs.v.seen.dossiers = []; S.prefs.v.seen.rank = { mk: curMonth(), club: 'k', rank: 9, devant: [] }; S.challenges.c1 = { id: 'c1', clubId: 'k', title: 'Sprint avis', kpiId: 'avis', start: Date.now() - 3600e3, end: Date.now() + 3 * 3600e3 };
+    S.entries.e1 = { id: 'e1', userId: 'v', clubId: 'k', kpiId: 'contrats', date: today(), value: 1, source: 'manual', at: Date.now() - 1000 }; S.reactions.e1 = { bravo: { u: Date.now() - 10 } }; REV++; UI._lastRoute = 'x'`);
+  const h3 = run('deltaCard()'); assert.ok((h3.match(/<li /g) || []).length <= 4, h3); assert.match(h3, /1 bravo reçu|Tu passes/);
+});
+test('H4 : une perte de place n’est pas affichée deux fois de suite pour la même cause', () => {
+  const run = appli({ kpis }, 'v'); const mk = run('curMonth()');
+  run(`setTimeout = (f) => f(); S.targets = { '${mk}': { u: { contrats: 2 }, v: { contrats: 2 } } }; S.entries.a = { id: 'a', userId: 'u', clubId: 'k', kpiId: 'contrats', date: today(), value: 2, source: 'manual', at: 1 }; REV++`);
+  run(`S.prefs.v = { v: 2, seen: { home: Date.now() - 3600e3, rank: { mk: curMonth(), club: 'k', rank: 1, devant: [] }, dossiers: [] } }; REV++; UI._lastRoute = 'x'`);
+  assert.match(run('deltaCard()'), /Tu perds 1 place, Alex est passé devant/);
+  run(`S.prefs.v.seen.home = Date.now() - 3600e3; S.prefs.v.seen.rank = { mk: curMonth(), club: 'k', rank: 1, devant: [] }; REV++; UI._lastRoute = 'x'`);
+  assert.doesNotMatch(run('deltaCard()'), /Tu perds/);
+});
