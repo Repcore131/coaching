@@ -11,12 +11,12 @@
 // semaines actives. Sans séance, un autre message, sans chiffre.
 //
 // À J-3, si le compte a accepté les e-mails (users/<clé>/consentements/email.accepte === true),
-// l'étiquette Systeme.io SYSTEMEIO_TAG_FIN_ESSAI est posée : c'est la règle
-// d'automatisation de Systeme.io qui envoie la séquence. Sans accord ou sans
+// le contact entre dans la liste Brevo BREVO_LISTE_FIN_ESSAI : c'est
+// l'automatisation de Brevo qui envoie la séquence. Sans accord ou sans
 // configuration, rien ne part.
 
 import { paris } from './metier.js';
-import { etiqueterSystemeio } from './renouvellement.js';
+import { inscrireListe } from './brevo.js';
 
 const JOUR = 864e5;
 export const PALIERS_FIN_ESSAI = Object.freeze({ j3: 3, j1: 1, j0: 0 });
@@ -95,7 +95,7 @@ export function creerFinEssai(ctx) {
     if (palier === 'j3' && (await lire('users/' + cle + '/consentements/email/accepte')) === true) {
       try {
         const email = (await lire('users/' + cle + '/email')) || cle.replace(/,/g, '.');
-        mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', tag: env.SYSTEMEIO_TAG_FIN_ESSAI || '' });
+        mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', liste: env.BREVO_LISTE_FIN_ESSAI });
       } catch (e) { mail = 'erreur'; }
     }
     // UNE FOIS PAR PALIER ET PAR ESSAI, qu'un appareil ait reçu ou non : le

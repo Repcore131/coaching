@@ -15656,7 +15656,7 @@ async function testExercices(){
           const bannis=['sendgrid'+'.com','api.mailgun'+'.net','api.twilio'+'.com',
             'api.brevo'+'.com','api.sendinblue'+'.com','api.postmarkapp'+'.com',
             'api.resend'+'.com','api.emailjs'+'.com','smtp'+'.',
-            // Systeme.io (11/10/2026) : le serveur léger seul lui parle.
+            // Systeme.io et Brevo (11/10/2026) : le serveur léger seul leur parle.
             'api.systeme'+'.io','systeme'+'.io/api'];
           const t=bannis.filter(m=>prod.indexOf(m)>=0);
           if(t.length) return _echec('service d\'envoi : '+t.join(', '));
@@ -58271,7 +58271,7 @@ async function testExercices(){
         if(vus.length) return _echec('un envoi sans consentement');
         const src=String(emailOptinPublier);
         if(src.indexOf("'email_optin/'+moi+'.json'")<0||!/method:'PUT'/.test(src)) return _echec('le drapeau ne va pas dans email_optin');
-        if(/systeme/i.test(src)) return _echec('l’app parle à Systeme.io');
+        if(/systeme|brevo/i.test(src)) return _echec('l’app parle à un service d’e-mail');
         return true;
       } finally { window.fetch=sF; CLOUD._getToken=sT; CLOUD.ok=sO; try{ localStorage.removeItem('rc_optin_o@t.fr'); }catch(e){} }})());
 

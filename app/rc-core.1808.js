@@ -12970,7 +12970,7 @@ async function doRegister(){
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
     rcm('register_completed');
     // Le drapeau pour le serveur léger (email_optin/<clé>), après le premier
-    // envoi du dossier : c'est lui qui synchronise avec Systeme.io.
+    // envoi du dossier : c'est lui qui synchronise avec Brevo.
     try{ setTimeout(()=>{ emailOptinPublier(currentUser).catch(()=>{}); },4000); }catch(e){}
     // L'ORIGINE DU COMPTE (users/<clé>/origine) et l'inscription par src.
     try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){}
@@ -22922,7 +22922,7 @@ function activiteResume(u,maintenant){
 // ⚠ L'APP N'APPELLE AUCUN SERVICE D'E-MAIL (test « AUCUN service d'envoi »).
 //   Elle enregistre la case dans le dossier (users/<clé>/consentements/email)
 //   et pose un drapeau dans SA propre base (email_optin/<clé>) ; le serveur
-//   léger relit le consentement dans le dossier et parle à Systeme.io.
+//   léger relit le consentement dans le dossier et parle à Brevo.
 const OPTIN_EMAIL_TEXTE='optin-email-v1';   // la version de la phrase de la case
 /**
  * PURE. Le consentement e-mail d'après la case : un objet si elle est cochée,
@@ -129954,7 +129954,7 @@ async function requestAccountDeletion(){
     try{ fbTok=await CLOUD._getToken(); }catch(e){}
 
     // 0. LE CONTACT E-MAIL (11/10/2026) : le serveur léger le supprime chez
-    //    Systeme.io (DELETE), qu'il vienne de la case ou du guide. AVANT tout
+    //    Brevo (DELETE), qu'il vienne de la case ou du guide. AVANT tout
     //    le reste : l'appel a besoin du jeton, qui disparaît à l'étape 4.
     try{ await CLOUD._callFn('email',{action:'supprimer'}); }catch(e){}
     try{ localStorage.removeItem('rc_optin_'+myKey.toLowerCase()); }catch(e){}

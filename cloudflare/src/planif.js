@@ -42,7 +42,7 @@ export function travaux(M) {
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // L'avis avant le renouvellement d'un annuel (art. L215-1), une fois par
-    // échéance : notification et e-mail Systeme.io (renouvellement.js).
+    // échéance : notification et e-mail Brevo (renouvellement.js).
     { nom: 'renouvellement', quand: (p) => apres(p, 10, 45) && p.heure < 21, cles: () => (M.paypal && M.paypal.renouvellementsCles ? M.paypal.renouvellementsCles() : []),
       un: (k, t) => M.paypal.avisRenouvellementUn(k, t), cout: 12 },
     // « Ton accès se termine dans N jours », une fois par échéance.
@@ -92,8 +92,8 @@ export function travaux(M) {
     // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
     // LES CONNEXIONS SIMULTANÉES (09/10/2026) : CHAQUE MINUTE (minute: true),
     // comptées depuis /presence, alerte à Kevin à 70 (affluence.js).
-    // LES CONTACTS E-MAIL (systemeio.js) : CHAQUE MINUTE, 30 requêtes au plus.
-    { nom: 'systemeio', minute: true, quand: () => true, une: (t) => (M.systemeio ? M.systemeio.minute(t) : null) },
+    // LES CONTACTS E-MAIL (brevo.js) : CHAQUE MINUTE, 30 requêtes au plus.
+    { nom: 'emails', minute: true, quand: () => true, une: (t) => (M.emails ? M.emails.minute(t) : null) },
     { nom: 'affluence', minute: true, quand: () => true, une: (t) => (M.affluence ? M.affluence.minute(t) : null) },
     // Et chaque nuit, les présences de plus de 24 h.
     { nom: 'presence_purge', quand: (p) => apres(p, 4, 40), une: (t) => (M.affluence ? M.affluence.purger(t) : null) },
