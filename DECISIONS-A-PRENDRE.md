@@ -124,6 +124,27 @@ normalement : Google l'autorise.
   repcore-sync.web.app » (posée, à ta demande) ou la variante plus sûre
   ci-dessus. Changer `CANAL_PLAY_TEXTE` dans `rc-core`.
 
+
+## 7. Les formules de coaching vendues dans l'app
+
+*Ajouté le 11/10/2026.* L'écran « Coaching » (`s-coaching-kevin`) vend les cinq
+formules de `tarifs.json → coaching` par PayPal, sur ton compte.
+
+- **a. Les délais affichés.** Un seul est écrit : celui du programme
+  personnalisé, « Ton programme est prêt sous 24 h après ton bilan de départ »,
+  repris de ton message d'invitation. Pour les autres formules, l'écran
+  n'affiche aucun délai. Donne-moi les tiens (par exemple « réponse
+  habituellement sous 24 h ») : ils vont dans `tarifs.json → coaching.<formule>.reponse`.
+- **b. La commission ambassadeur sur le coaching.** Appliquée selon le point 3 :
+  20 %, puis 25 % au-delà de 50 payants, sur chaque achat de coaching du filleul
+  dans les 12 mois qui suivent son premier paiement. Sur Évolution, cela fait
+  120 €. Si tu veux un autre taux pour le coaching, ou aucun, dis-le.
+- **c. Constat sur les abonnements.** Le serveur ne crédite la commission d'un
+  abonnement qu'au **premier** paiement du filleul, pas aux mensualités
+  suivantes, alors que la décision du point 3 parle de 12 mois. Rien n'a été
+  changé : à trancher (créditer chaque mensualité pendant 12 mois, ou garder le
+  premier paiement seul).
+
 ---
 
 *Ce fichier se vide au fur et à mesure : une fois un point tranché et

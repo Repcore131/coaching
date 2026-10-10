@@ -58369,6 +58369,173 @@ async function testExercices(){
       finally{ _partenaires=sv; }
       return true;})());
 
+    // ══ LES FORMULES DE COACHING DE KEVIN (11/10/2026) ══════════════════════
+    ok('COACHING — les cinq formules, leur famille, leur prix et ce qu’elles comprennent viennent de tarifs.json',(()=>{
+      if(CK_FORMULES.join()!=='coaching_essentiel,coaching_transfo,coaching_evolution,programme_perso,revision_prog') return _echec('formules : '+CK_FORMULES.join());
+      for(const f of CK_FORMULES){
+        const o=ckFormule(f), t=TARIFS.coaching[f];
+        if(!o) return _echec(f+' illisible');
+        if(o.prix!==_euros(t.prix)) return _echec(f+' : prix '+o.prix);
+        if(o.lib!==t.lib||o.comprend!==t.comprend) return _echec(f+' : texte recopié à la main');
+        if(o.famille!==(CK_FAMILLES.suivi.indexOf(f)>=0?'suivi':'sans_suivi')) return _echec(f+' : famille');
+        if(o.reponse!==String(t.reponse||'')) return _echec(f+' : délai');
+      }
+      if(ckFormule('boutique_prog')||ckFormule('essentielle')||ckFormule('x')) return _echec('une offre hors coaching');
+      // AUCUN DÉLAI INVENTÉ : seul celui que Kevin a écrit s'affiche.
+      const h=htmlCoachingKevin({role:'athlete',email:'a@b.fr'},'');
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(d.querySelectorAll('.ck-reponse').length!==CK_FORMULES.filter(f=>TARIFS.coaching[f].reponse).length) return _echec('délais affichés');
+      return true;})());
+
+    ok('COACHING — l’écran : deux familles, un bouton par formule ; aucun bouton pour un coach, un athlète d’un autre coach, ou la version Play',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlCoachingKevin({role:'athlete',email:'a@b.fr'},'');
+      const fam=[...d.querySelectorAll('.ck-fam h3')].map(x=>x.textContent).join('|');
+      if(fam!=='Avec suivi|Sans suivi') return _echec('familles : '+fam);
+      const secs=d.querySelectorAll('.ck-fam');
+      if(secs[0].querySelectorAll('.ck-f').length!==3||secs[1].querySelectorAll('.ck-f').length!==2) return _echec('répartition');
+      if(d.querySelectorAll('.ck-choisir').length!==5) return _echec('boutons');
+      if(!/150/.test(secs[0].textContent)||!/350/.test(secs[0].textContent)||!/600/.test(secs[0].textContent)) return _echec('prix avec suivi');
+      if(!/99/.test(secs[1].textContent)||!/40/.test(secs[1].textContent)) return _echec('prix sans suivi');
+      if(!d.querySelector('#ck-secours a[href="'+CK_BEACONS+'"]')) return _echec('pas de secours beacons');
+      if(!d.querySelector('a[href*="terms.html#coaching"]')) return _echec('pas de lien vers les CGV');
+      // Sans compte : l'écran se lit, et le bouton mène au compte.
+      d.innerHTML=htmlCoachingKevin(null,'');
+      if(d.querySelectorAll('.ck-choisir').length!==5) return _echec('sans compte : boutons');
+      for(const [u,canal,quoi] of [[{role:'coach',email:'c@c.fr'},'','coach'],[{role:'athlete',email:'a@b.fr',coachEmailKey:'autre@c,fr'},'','autre coach'],
+        [{role:'athlete',email:'a@b.fr'},'play','Play']]){
+        d.innerHTML=htmlCoachingKevin(u,canal);
+        if(d.querySelector('.ck-choisir')) return _echec(quoi+' : un bouton de paiement');
+        if(!d.querySelector('.ck-raison')) return _echec(quoi+' : la raison n’est pas dite');
+      }
+      // VERSION PLAY : ni bouton, ni lien vers un paiement extérieur.
+      d.innerHTML=htmlCoachingKevin({role:'athlete',email:'a@b.fr'},'play');
+      if(d.querySelector('a[href*="beacons"]')) return _echec('Play : lien de paiement extérieur');
+      // Un athlète déjà suivi par Kevin peut racheter.
+      if(ckPeutPayer({role:'athlete',email:'a@b.fr',coachEmailKey:String(CREATOR_EMAIL).replace(/\./g,',')},'')!=='ok') return _echec('athlète de Kevin');
+      return true;})());
+
+    okA('COACHING — le paiement : la case de démarrage immédiat (L221-25) est exigée ; l’app n’envoie AUCUN montant',async()=>{
+      const z=document.createElement('div'); z.id='ck-test-zone'; z.style.display='none';
+      z.innerHTML='<div id="ck-confirmer"></div><p id="ck-secours" style="display:none"></p>';
+      document.body.appendChild(z);
+      const cf=CLOUD._callFn, svU=currentUser, svC=window.canalApp, appels=[];
+      try{
+        currentUser={role:'athlete',email:'lea@t.fr'};
+        CLOUD._callFn=async(nom,data)=>{ appels.push({nom,data}); return {commande:'ORD00000001',lien:null}; };
+        z.querySelector('#ck-confirmer').innerHTML=htmlConfirmerFormule('coaching_transfo',true);
+        const c=z.querySelector('#ck-exec');
+        if(!c||c.checked) return _echec('la case manque ou est pré-cochée');
+        _ckEntree='carte';
+        if(await ckPayer('coaching_transfo',null)) return _echec('payé sans la case');
+        if(appels.length) return _echec('appel au serveur sans la case');
+        if(!/Coche la case/.test(z.querySelector('#ck-err').textContent)) return _echec('l’erreur n’est pas dite');
+        c.checked=true;
+        await ckPayer('coaching_transfo',null);
+        if(appels.length!==1||appels[0].nom!=='coaching') return _echec('appels : '+JSON.stringify(appels));
+        const dt=appels[0].data;
+        if(dt.formule!=='coaching_transfo'||dt.executionImmediate!==true||dt.entree!=='carte') return _echec('données : '+JSON.stringify(dt));
+        for(const k of ['montant','prix','value','amount']) if(k in dt) return _echec('l’app envoie un '+k);
+        // Pas de lien PayPal : le secours beacons apparaît.
+        if(z.querySelector('#ck-secours').style.display==='none') return _echec('le secours ne s’affiche pas');
+        return true;
+      } finally { CLOUD._callFn=cf; currentUser=svU; z.remove(); _ckEntree='ecran'; }
+    });
+
+    ok('COACHING — attribution : l’entrée est bornée, chaque lien beacons ouvre l’écran et garde beacons en secours',(()=>{
+      if(CK_ENTREES.join()!=='ecran,carte,accueil,bienvenue,abonnement,essai,reglages,landing,vitrine,lien') return _echec('liste différente du serveur');
+      if(ckEntree('carte')!=='carte'||ckEntree('CARTE')!=='carte'||ckEntree('<x>')!=='ecran'||ckEntree('')!=='ecran') return _echec('ckEntree');
+      const src=_prodSrc();
+      // Chaque lien beacons de l'app (hors « Me contacter » d'Ultime) passe par l'écran.
+      const liens=src.match(/href="https:\/\/beacons\.ai\/kevin\.gllc"[^>]*>/g)||[];
+      const sans=liens.filter(l=>l.indexOf('ouvrirCoachingKevin')<0&&l.indexOf('sub-form-b')<0);
+      // (le lien sub-form-b est sur la même ligne que sa classe, avant href)
+      const contacts=(src.match(/class="sub-form-b" href="https:\/\/beacons\.ai\/kevin\.gllc"/g)||[]).length;
+      if(sans.length!==contacts) return _echec(sans.length+' lien(s) beacons sans l’écran');
+      for(const id of ['s-welcome']){
+        const el=document.getElementById(id);
+        const a=[...el.querySelectorAll('a[href*="beacons.ai/kevin.gllc"]')];
+        if(a.length<2||a.some(x=>!/ouvrirCoachingKevin\('bienvenue'/.test(x.getAttribute('onclick')||''))) return _echec(id+' : liens non branchés');
+      }
+      // Le retour de PayPal passe AVANT la barrière d'accès (routeUser).
+      const r=String(routeUser), i=r.indexOf('_pendingCoachingRetour'), j=r.indexOf('doitVoirLePaywall(currentUser)');
+      if(i<0||j<0||i>j) return _echec('retour PayPal derrière le paywall');
+      return true;})());
+
+    ok('COACHING — la carte « Passer au coaching » : une fois, après 3 mois d’abonnement et 20 séances',(()=>{
+      const t=Date.parse('2026-10-12T12:00:00Z'), M=_MONTH_MS;
+      const S=n=>Array.from({length:n},(_,i)=>({date:t-i*864e5}));
+      const u=(o)=>Object.assign({role:'athlete',email:'a@b.fr',paypalSubscriptionId:'I-ABCDEFGH12',origine:{payeLe:t-3*M-1},sessions:S(20)},o||{});
+      if(!ckCarteDue(u(),'essentielle',t,'')) return _echec('due');
+      if(!ckCarteDue(u(),'ultime',t,'')) return _echec('Ultime');
+      const non=[[u({sessions:S(19)}),'essentielle','19 séances'],[u({origine:{payeLe:t-3*M+864e5}}),'essentielle','moins de 3 mois'],
+        [u({origine:{}}),'essentielle','jamais payé'],[u({paypalSubscriptionId:null}),'ultime','essai, sans abonnement'],
+        [u(),'aucun','abonnement fini'],[u({coachEmailKey:'k@k,fr'}),'suivi','déjà suivi'],[u({coachingAchat:{formule:'revision_prog'}}),'ultime','déjà acheté'],
+        [u({role:'coach'}),'suivi','coach'],[u({carteCoaching:{fermeeLe:t-1}}),'essentielle','fermée'],
+        [u({carteCoaching:{vueLe:t-CK_CARTE_VISIBLE_MS}}),'essentielle','vue il y a un jour']];
+      for(const [x,p,quoi] of non) if(ckCarteDue(x,p,t,'')) return _echec('affichée : '+quoi);
+      if(ckCarteDue(u(),'essentielle',t,'play')) return _echec('Play');
+      if(!ckCarteDue(u({carteCoaching:{vueLe:t-3600e3}}),'essentielle',t,'')) return _echec('vue il y a une heure : encore là');
+      // La carte dit le vrai nombre de séances, et rien d'autre.
+      const d=document.createElement('div'); d.innerHTML=htmlCarteCoaching(u({sessions:S(37)}));
+      if(!/37 séances/.test(d.textContent)) return _echec('nombre de séances');
+      if(/garanti|résultat|%/.test(d.textContent)) return _echec('promesse');
+      if(String(loadClientHome).indexOf('renderCarteCoaching()')<0||!document.getElementById('clh-coaching')) return _echec('accueil non branché');
+      for(const n of ['coaching_vue','coaching_choix','coaching_paye','coaching_carte_vue','coaching_carte_clic']){
+        if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors liste');
+        if(typeof window._RC_RULES==='string'&&window._RC_RULES&&window._RC_RULES.indexOf(n)<0) return _echec(n+' manque dans les règles');
+      }
+      return true;})());
+
+    okA('COACHING — la carte est notée vue à sa première apparition, puis disparaît le lendemain',async()=>{
+      const z=document.getElementById('clh-coaching'); if(!z) return _echec('conteneur');
+      const svU=currentUser, svS=window.saveUser, svP=window.palierDe, sv=z.innerHTML, t0=Date.now();
+      try{
+        window.saveUser=()=>true; window.palierDe=()=>'essentielle';
+        currentUser={role:'athlete',email:'a@b.fr',paypalSubscriptionId:'I-ABCDEFGH12',origine:{payeLe:t0-4*_MONTH_MS},
+          sessions:Array.from({length:25},()=>({date:t0}))};
+        if(!renderCarteCoaching()||!z.querySelector('.ck-carte')) return _echec('pas affichée');
+        if(!(Number(currentUser.carteCoaching&&currentUser.carteCoaching.vueLe)>0)) return _echec('vue non notée');
+        currentUser.carteCoaching.vueLe=t0-CK_CARTE_VISIBLE_MS-1;
+        if(renderCarteCoaching()||z.innerHTML) return _echec('encore là le lendemain');
+        return true;
+      } finally { currentUser=svU; window.saveUser=svS; window.palierDe=svP; z.innerHTML=sv; }
+    });
+
+    ok('COACHING — le questionnaire d’entrée : obligatoire ce qu’il faut, facultatifs blessures et cycle ; classé santé',(()=>{
+      const t=1760000000000, f=(o)=>ckQuestionnaireDepuisFormulaire(Object.assign({objectif:'force',jours:'3',duree:'60',materiel:'salle'},o||{}),'coaching_essentiel',t);
+      const r=f();
+      if(!r.ok||r.q.jours!==3||r.q.duree!==60||r.q.blessures!==''||r.q.cycle||r.q.formule!=='coaching_essentiel'||r.q.le!==t) return _echec('valide : '+JSON.stringify(r));
+      for(const [o,quoi] of [[{objectif:''},'objectif'],[{objectif:'x'},'objectif inconnu'],[{jours:'0'},'jours'],[{jours:'8'},'8 jours'],
+        [{duree:'50'},'durée hors liste'],[{materiel:''},'matériel'],[{cycle:true,cycleDuree:'12'},'cycle de 12 jours']])
+        if(f(o).ok) return _echec('accepté : '+quoi);
+      const c=f({cycle:true,cycleDuree:'28',blessures:'  genou droit  '});
+      if(!c.ok||!c.q.cycle||c.q.cycle.duree!==28||c.q.blessures!=='genou droit') return _echec('cycle et blessures : '+JSON.stringify(c));
+      if(!f({cycle:true}).ok||f({cycle:true}).q.cycle.duree!==undefined) return _echec('cycle sans durée');
+      if(f({blessures:'x'.repeat(900)}).q.blessures.length!==600) return _echec('borne');
+      if(CHAMPS_SANTE.indexOf('questionnaireCoaching')<0) return _echec('le questionnaire n’est pas classé santé');
+      for(const k of ['coachingAchat','carteCoaching']) if(CHAMPS_NON_SANTE.indexOf(k)<0) return _echec(k+' non classé');
+      if(!SANTE_MOTIFS.coaching) return _echec('motif de consentement');
+      if(String(ckEnregistrerQuestionnaire).indexOf("demanderConsentementSante('coaching'")<0) return _echec('enregistré sans consentement santé');
+      const d=document.createElement('div'); d.innerHTML=htmlQuestionnaireCoaching({coachingAchat:{formule:'coaching_essentiel'}});
+      for(const n of ['objectif','jours','duree','materiel','blessures','cycle','cycleDuree']) if(!d.querySelector('[name="'+n+'"]')) return _echec('champ '+n);
+      if(d.querySelector('[name="cycle"]').checked) return _echec('cycle pré-coché');
+      return true;})());
+
+    ok('COACHING — la fiche du coach : la formule et le questionnaire, échappés ; les écrans existent',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlFicheCoaching({coachingAchat:{formule:'coaching_transfo',le:1760000000000},
+        questionnaireCoaching:{objectif:'muscle',objectifDetail:'<img src=x onerror=alert(1)>',jours:4,duree:75,materiel:'maison',blessures:'',cycle:{suivi:true,duree:30},le:1760000000000}});
+      if(d.querySelector('img')) return _echec('non échappé');
+      const t=d.textContent;
+      for(const x of ['Coaching Transformation','Prendre du muscle','4 jours par semaine, 75 min','Maison avec haltères','Aucune déclarée','30 jours']) if(t.indexOf(x)<0) return _echec('manque : '+x);
+      d.innerHTML=htmlFicheCoaching({coachingAchat:{formule:'programme_perso',le:1}});
+      if(!/pas encore rempli/.test(d.textContent)) return _echec('questionnaire manquant non dit');
+      if(htmlFicheCoaching({})!=='') return _echec('fiche sans achat');
+      for(const id of ['s-coaching-kevin','ck-ecran','s-coaching-entree','ck-questionnaire','ccd-coaching']) if(!document.getElementById(id)) return _echec(id+' manque');
+      if(document.getElementById('s-coaching-kevin').classList.contains('ecran-coach')) return _echec('écran athlète élargi');
+      return true;})());
+
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est
     // une contrainte explicite du lot, et elle se vérifie plutôt qu'elle ne

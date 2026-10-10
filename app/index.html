@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1810';
+window.RC_BUILD='1811';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-10';
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1810.css">
+<link rel="stylesheet" href="./rc-style.1811.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -858,7 +858,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <span class="wel-p-t">J'ai un code coach</span>
         <span class="wel-p-s">Ton coach te l'a donné : tout est compris dans son suivi.</span>
       </button>
-      <a class="wel-p wel-p-coach" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">
+      <a class="wel-p wel-p-coach" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin('bienvenue',event)">
         <span class="wel-p-t">Je cherche un coach</span>
         <span class="wel-p-s">Un plan écrit pour toi, tes vidéos corrigées, quelqu'un qui suit.</span>
       </a>
@@ -908,7 +908,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="wel-coach-t">Tu veux que quelqu'un s'en occupe pour toi&nbsp;?</div>
       <div class="wel-coach-s">Un plan écrit pour toi, ta diète calculée, tes vidéos
         corrigées, et quelqu'un qui te répond.</div>
-      <a class="wel-coach-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">Voir les formules de coaching</a>
+      <a class="wel-coach-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin('bienvenue',event)">Voir les formules de coaching</a>
     </div>
 
     <!-- L'ENTREE DES DEUX ESPACES, discrete : qui a deja un compte sait ou il
@@ -2552,6 +2552,11 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="cc-sect-t"><span>Accueil</span></div>
           <div class="cc-sect-c" id="ccd-accueil"></div>
         </section>
+        <!-- Les formules de Kevin : la formule achetée et le questionnaire d'entrée (renderFicheCoaching). -->
+        <section class="cc-sect" style="--cc-accent:var(--border);display:none">
+          <div class="cc-sect-t"><span>Coaching acheté</span></div>
+          <div class="cc-sect-c" id="ccd-coaching"></div>
+        </section>
         <!-- Le paiement direct au coach : les paiements de cet athlete (renderPaiementsFiche). -->
         <section class="cc-sect" style="--cc-accent:var(--border);display:none">
           <div class="cc-sect-t"><span>Paiements</span></div>
@@ -3770,6 +3775,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- LE PARTENAIRE DE L'ACCUEIL (11/10/2026) : vide tant qu'aucun n'est actif ici.
            Au-dessus de la Nutrition : les bannières du coach gardent le bas. -->
       <div id="clh-partenaire"></div>
+      <!-- « Passer au coaching » : une fois, après 3 mois d'abonnement et 20 séances (renderCarteCoaching). -->
+      <div id="clh-coaching"></div>
 
       <!-- NUTRITION : le jour en haut, la semaine en bas, un seul cadre.
            Les anneaux sont EXACTEMENT ceux de la diète flexible — même
@@ -5638,6 +5645,30 @@ const COACH_PHOTO='icons/coach.jpg';
      Le code, le partage, les compteurs et les paliers. htmlParrainage. -->
 <!-- ══════ VIRALITE (admin) ══════ htmlViralite. -->
 <!-- PARTENAIRES (créateur) -->
+<!-- ══ LES FORMULES DE COACHING DE KEVIN (11/10/2026) ══════════════════════
+     Remplace le lien beacons.ai : rempli par ouvrirCoachingKevin depuis
+     TARIFS.coaching (tarifs.json). Lisible sans compte ; payer en demande un. -->
+<div id="s-coaching-kevin" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-coaching-kevin',currentUser?null:'s-welcome')">←</button>
+    <span class="topbar-title">Coaching</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="ck-ecran"></div></div>
+  </div>
+</div>
+<!-- Le questionnaire d'entrée, juste après le paiement (ouvrirQuestionnaireCoaching). -->
+<div id="s-coaching-entree" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-coaching-entree','s-client-home')">←</button>
+    <span class="topbar-title">Questionnaire d’entrée</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="ck-questionnaire"></div></div>
+  </div>
+</div>
 <div id="s-partenaires" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-partenaires','s-coach-home')">←</button>
@@ -6104,5 +6135,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1810.js"></script>
+<script src="./rc-core.1811.js"></script>
 </body></html>
