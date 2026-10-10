@@ -32,7 +32,7 @@ import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { creerAffluence } from './affluence.js';
 import { creerFinEssai } from './finessai.js';
 import { creerPremiere } from './premiere.js';
-import { creerSystemeio } from './systemeio.js';
+import { creerBrevo } from './brevo.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
@@ -45,8 +45,8 @@ const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
 const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
 // abonnement : pause d'un mois, reprise, passage à Essentielle, avis de résiliation (paypal.js).
 const abonnement = (req, ctx) => ctx.M.paypal.appelAbonnement(req);
-// email : la suppression du contact Systeme.io quand le compte est supprimé (systemeio.js).
-const email = (req, ctx) => ctx.M.systemeio.appel(req);
+// email : la suppression du contact Brevo quand le compte est supprimé (brevo.js).
+const email = (req, ctx) => ctx.M.emails.appel(req);
 const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement, email };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
@@ -65,11 +65,11 @@ function outils(env) {
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
   // Les connexions simultanées estimées, chaque minute, et l'alerte à 70.
   M.affluence = creerAffluence({ db, M });
-  // La fin d'essai : J-3, J-1, J0 à 18 h 30, et l'étiquette Systeme.io à J-3.
+  // La fin d'essai : J-3, J-1, J0 à 18 h 30, et la liste Brevo à J-3.
   M.finEssai = creerFinEssai({ db, M, env, fetchImpl: fetchCompte });
   M.premiere = creerPremiere({ db, M });
-  // Les contacts e-mail (opt-in, guide, statut) vers Systeme.io : file, 30 requêtes/minute.
-  M.systemeio = creerSystemeio({ db, env, fetchImpl: fetchCompte, reste: () => M.reste() });
+  // Les contacts e-mail (opt-in, guide, statut) vers Brevo : file, 30 requêtes/minute.
+  M.emails = creerBrevo({ db, env, fetchImpl: fetchCompte, reste: () => M.reste() });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
@@ -170,16 +170,16 @@ export default {
         ctx.waitUntil(o.M.arrivee(q).catch(() => {}));
         return reponse('', 204);
       }
-      // LE GUIDE OFFERT (page d'accueil) : prénom + e-mail → file Systeme.io.
+      // LE GUIDE OFFERT (page d'accueil) : prénom + e-mail → file Brevo.
       // GET /lead/etat dit à la page si le formulaire est ouvert (clé posée et
       // LEAD_OUVERT=oui) : rien ne promet un guide qui n'arriverait pas.
       if (url.pathname === '/lead/etat' && req.method === 'GET') {
-        return reponse(JSON.stringify({ ouvert: outils(env).M.systemeio.leadOuvert() }), 200);
+        return reponse(JSON.stringify({ ouvert: outils(env).M.emails.leadOuvert() }), 200);
       }
       if (url.pathname === '/lead' && req.method === 'POST') {
         let corps = null;
         try { corps = await req.json(); } catch (e) { corps = null; }
-        const r = await outils(env).M.systemeio.lead(corps, ipDe(req));
+        const r = await outils(env).M.emails.lead(corps, ipDe(req));
         return reponse(JSON.stringify(r.corps), r.statut);
       }
       // LE PROSPECT (lot C6) : le « Ça m'intéresse » de la vitrine d'un coach.
