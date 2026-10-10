@@ -70,8 +70,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # Relève des exports par mot de passe d'application (IMAP) : deux modules, installés hors du dépôt.
+      - name: Installer la relève IMAP
+        run: |
+          mkdir -p "$RUNNER_TEMP/imap" && cd "$RUNNER_TEMP/imap"
+          npm init -y >/dev/null && npm i --no-audit --no-fund imapflow@1 mailparser@3 >/dev/null
       - name: Envoyer les invitations en attente
         env:
+          # Boîte de l'accueil relevée par mot de passe d'application (exports Resamania)
+          IMPORT_IMAP_USER: ${{ secrets.IMPORT_IMAP_USER }}
+          IMPORT_IMAP_MDP: ${{ secrets.IMPORT_IMAP_MDP }}
+          IMPORT_IMAP_CLUB: ${{ vars.IMPORT_IMAP_CLUB }}
+          IMAP_MODULES: ${{ runner.temp }}/imap
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}

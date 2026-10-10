@@ -80,3 +80,20 @@ test('sans réglage : la boîte de l’accueil déjà reliée est relevée par d
   assert.deepEqual(vus, [['horizon', 'has:attachment newer_than:14d {filename:csv filename:xlsx filename:zip}']]);
   assert.equal(Object.values(S.rsm.autoLog.horizon).length, 1);
 });
+
+test('boîte relevée par mot de passe d’application (IMAP) : pièces jointes tableurs, lecture seule, référence stable', async () => {
+  const { compteImap, sourceImap } = await import('../outils/fitpulse-autoimport.mjs');
+  const S = demo();
+  assert.equal(compteImap(S, {}), null);
+  const c = compteImap(S, { IMPORT_IMAP_USER: 'accueil@example.com', IMPORT_IMAP_MDP: 'x' }); assert.equal(c.club, Object.keys(S.clubs)[0]); assert.equal(c.host, 'imap.gmail.com');
+  let lectureSeule = null; let deconnecte = false;
+  const faux = () => ({
+    ImapFlow: class { async connect() {} async getMailboxLock(b, o) { lectureSeule = o.readOnly; return { release() {} }; } async search() { return [11, 12]; } async fetchOne(uid) { return { source: 'brut' + uid }; } async logout() { deconnecte = true; } },
+    simpleParser: async src => ({ messageId: '<' + src + '@x>', date: new Date(NOW), attachments: src === 'brut11' ? [{ filename: 'RSM_ventes.zip', content: Buffer.from('z') }, { filename: 'notice.pdf', content: Buffer.from('p') }] : [{ filename: 'RSM_clients.csv', content: Buffer.from('a;b') }] }),
+  });
+  const L = await sourceImap(c, faux).fichiers();
+  assert.deepEqual(L.map(f => f.name), ['RSM_ventes.zip', 'RSM_clients.csv']); assert.ok(L.every(f => f.ref.startsWith('i:')));
+  assert.equal(lectureSeule, true); assert.equal(deconnecte, true);
+  const L2 = await sourceImap(c, faux).fichiers(); assert.deepEqual(L2.map(f => f.ref), L.map(f => f.ref));
+  assert.equal((await L[1].lire()).toString(), 'a;b');
+});
