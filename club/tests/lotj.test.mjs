@@ -185,3 +185,24 @@ test('J9 : le moteur ne touche ni au DOM ni à l’état de l’appli ; rsmCommi
   const run = demo(); const avant = run(`JSON.stringify(S)`); run(`planImport([], S, {}, { club: CLUB.id, by: 'auto:api' })`); assert.equal(run(`JSON.stringify(S)`), avant);
   assert.match(readFileSync(new URL('../pages-resamania.js', import.meta.url), 'utf8'), /applyOps\(plan\.ops\);/);
 });
+
+test('J10 : onglet Imports > Automatique : 30 derniers rapports, filtre par statut, lignes en attente rattachées', () => {
+  const run = appli(club(), 'm');
+  run(`INGEST_RAPPORTS.a = Object.fromEntries(Array.from({ length: 35 }, (_, i) => ['r' + i, { file: 'f' + i + '.csv', canal: i % 2 ? 'drive' : 'mail', rowsRead: 10, rowsImported: 8, pending: i === 34 ? 2 : 0, ms: 1200, status: i === 34 ? 'done_with_pending' : i === 33 ? 'failed' : 'done', receivedAt: i * 1000, at: i * 1000, warnings: [] }]));
+    INGEST_ATTENTES.a = { p1: { id: 'p1', kind: 'seller', label: 'Zoé Inconnue', keys: ['zinc', 'zoe inconnue'], count: 2, file: 'f34.csv' } }; REV++;`);
+  const h = run('ingestAutoTab()'); assert.equal((h.match(/<tr data-statut=/g) || []).length, 30); assert.match(h, /Voir les lignes en attente \(2\)/);
+  assert.match(h, /f34\.csv/); assert.doesNotMatch(h, /f4\.csv/);
+  run(`UI.ingFiltre = 'failed'`); const h2 = run('ingestAutoTab()'); assert.equal((h2.match(/<tr data-statut="failed"/g) || []).length, 1); assert.equal((h2.match(/<tr data-statut=/g) || []).length, 1);
+  assert.deepEqual(J(run, `ingestRattacherOps(INGEST_ATTENTES.a.p1, 'v')`), [[['rsm', 'aliases', 'zinc'], 'v'], [['rsm', 'aliases', 'zoe inconnue'], 'v']]);
+  assert.deepEqual(J(run, `ingestRattacherOps(INGEST_ATTENTES.a.p1, 'inconnu')`), []);
+  assert.match(readFileSync(new URL('../pages-data.js', import.meta.url), 'utf8'), /\['automatique', 'Automatique'\]/);
+});
+test('J6 : adresse d’import {slugClub}-{4 caractères}@import.fitpulse.app, régénérable ; liste blanche', () => {
+  const run = appli({ ...club(), clubs: { a: { id: 'a', name: 'Club Énergie Niort-Est' } } }, 'm');
+  const adr = J(run, `ingestAdresse('a')`); assert.match(adr, /^club-energie-niort-est-[a-z2-9]{4}@import\.fitpulse\.app$/);
+  run(`db.batch(1 ? ingestCanalOps('a', { mail_status: 'actif', mail_allow: 'exports@resamania.example, @club.example, pas-une-adresse' }).ops : []); REV++;`);
+  const m1 = J(run, `S.ingestConfig.a.mail`); assert.deepEqual(Object.values(m1.allow), ['exports@resamania.example', '@club.example']);
+  run(`db.batch(ingestRegenererOps('a', 5)); REV++;`); const m2 = J(run, `S.ingestConfig.a.mail`);
+  assert.notEqual(m2.address, m1.address); assert.equal(m2.rotatedAt, 5); assert.deepEqual(m2.allow, m1.allow);
+  assert.deepEqual(J(run, `ingestAutoriserOps('a', 'Nouveau@Exemple.fr')`), [[['ingestConfig', 'a', 'mail', 'allow', '2'], 'nouveau@exemple.fr']]);
+});

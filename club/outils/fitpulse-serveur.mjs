@@ -61,7 +61,12 @@ const MGR = `(${MANAGER})`;
 const SAISIE = `${MGR} || (${MEMBRE} && (newData.exists() ? (newData.child('userId').val() === ${SOI} || (newData.child('by').val() === ${SOI} && (newData.child('kpiId').val() === 'sauvetage' || newData.child('kpiId').val() === 'impayes'))) : (data.child('userId').val() === ${SOI} || data.child('by').val() === ${SOI})))`;
 const FICHE = `${MGR} && (${CREATEUR} || (data.child('role').val() !== 'createur' && (!newData.exists() || newData.child('role').val() === 'membre' || newData.child('role').val() === data.child('role').val())))`;
 const SOIMEME = `${MEMBRE} && $uid === ${SOI}`;
+// /ingest/{club} (rapports d'import, lignes en attente, quarantaine) : lecture par le manager du club
+// et le créateur, écriture par le serveur seulement (compte de service, hors règles).
+const DU_CLUB = `(${ROLE} === 'createur' || ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `root.child('pulse/users/' + ${SOI} + '/clubs/${i}').val() === $club`).join(' || ')})`;
+const INGEST_LECTURE = `${MGR} && ${DU_CLUB}`;
 export const REGLE = `${DEBUT}
+    "ingest": { "$club": { ".read": ${j(INGEST_LECTURE)}, ".write": false } },
     "pulse": {
       ".read": ${j(MEMBRE)},
       ".write": ${j(`${CREATEUR} || (${MEMBRE} && !data.exists())`)},

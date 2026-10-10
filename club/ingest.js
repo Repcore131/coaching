@@ -40,10 +40,11 @@ function ingestStats(clubId = CLUB.id, mk = curMonth()) {
 }
 function arriveeExportsCard(clubId = CLUB.id) {
   if (!isManager()) return '';
+  ingestEcouter(clubId);
   const St = ingestStats(clubId); const L = ingestCanaux(clubId);
   const etat = s => `<span class="badge ingest-${s.replace(' ', '-')}">${esc(s.charAt(0).toUpperCase() + s.slice(1))}</span>`;
   const quand = f => f ? `${esc(dmy(isoOf(new Date(f.at))))}, ${esc(f.name)}` : '<span class="muted">aucun fichier</span>';
-  return `<div class="card" id="arrivee-exports"><div class="card-head"><h3>Arrivée des exports</h3><span class="spacer"></span><button class="btn sm" data-act="ingestCanalForm">Configurer un canal</button></div>
+  return `<div class="card" id="arrivee-exports"><div class="card-head"><h3>Arrivée des exports</h3><span class="spacer"></span><button class="btn sm ghost" data-act="ingestJeton">Jeton du script Gmail</button><button class="btn sm" data-act="ingestCanalForm">Configurer un canal</button></div>
     <p class="muted small" style="margin-top:-4px">Tous les canaux aboutissent au même moteur d’import. Aucun mot de passe ni jeton n’est gardé ici.</p>
     <div class="table-wrap"><table class="t ingest-t"><thead><tr><th>Canal</th><th>État</th><th>Dernier fichier reçu</th><th class="num">Ce mois-ci</th></tr></thead><tbody>
     ${L.map(c => `<tr data-canal="${c.k}" data-etat="${c.status}"><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.k === 'mail' && c.cfg.address ? c.cfg.address : c.detail)}</small></td><td>${etat(c.status)}${c.k === 'mail' && c.cfg.address ? ' <button class="btn ghost sm" data-act="ingestRegenerer">Régénérer l’adresse</button>' : ''}</td><td class="small">${quand(St[c.k].dernier)}</td><td class="num">${St[c.k].ceMois}</td></tr>`).join('')}
@@ -57,7 +58,8 @@ ACTIONS.ingestCanalForm = () => {
     <label class="field"><span>Boîte d’import e-mail</span>${sel('mail', (C.mail || {}).status)}</label>
     <label class="field"><span>Dossier Drive : identifiant du dossier partagé</span><input class="input" name="drive_folder" maxlength="100" value="${esc((C.drive || {}).folderId || '')}" placeholder="Dans l’adresse du dossier, après folders/"></label>
     <label class="field"><span>Dossier Drive</span>${sel('drive', (C.drive || {}).status)}</label>
-    <p class="muted small" style="margin:0">L’adresse d’import e-mail est créée par Fit Pulse ; le dépôt manuel reste toujours actif.</p></form>`,
+    <label class="field"><span>Expéditeurs autorisés pour la boîte d’import (séparés par des virgules ; @domaine pour tout un domaine)</span><input class="input" name="mail_allow" maxlength="600" value="${esc(Object.values((C.mail || {}).allow || {}).join(', '))}"></label>
+    <p class="muted small" style="margin:0">L’adresse d’import e-mail est créée par Fit Pulse ; un expéditeur hors liste est mis en quarantaine. Le dépôt manuel reste toujours actif.</p></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="ingestCanalOk">Enregistrer</button>' });
 };
 // Opérations d'enregistrement : jamais d'autre champ que ceux du modèle.
@@ -66,7 +68,8 @@ function ingestCanalOps(clubId, f, now = Date.now()) {
   const etat = v => (INGEST_ETATS.includes(v) ? v : null);
   const api = etat(f.api_status); ops.push([['ingestConfig', clubId, 'api'], api ? { status: api, since: (C.api && C.api.status === api && C.api.since) || now } : null]);
   const mail = etat(f.mail_status);
-  if (mail) { const adr = (C.mail || {}).address || ingestAdresse(clubId); ops.push([['ingestConfig', clubId, 'mail'], { ...(C.mail || {}), address: adr, status: mail, rotatedAt: (C.mail || {}).rotatedAt || now }]); } else ops.push([['ingestConfig', clubId, 'mail'], null]);
+  const allow = String(f.mail_allow || '').split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(x => /^[^@ ]*@[^@ ]+$/.test(x)).slice(0, 20);
+  if (mail) { const adr = (C.mail || {}).address || ingestAdresse(clubId); ops.push([['ingestConfig', clubId, 'mail'], { ...(C.mail || {}), address: adr, status: mail, rotatedAt: (C.mail || {}).rotatedAt || now, allow: allow.length ? Object.fromEntries(allow.map((a, i) => [String(i), a])) : null }]); } else ops.push([['ingestConfig', clubId, 'mail'], null]);
   const dossier = String(f.drive_folder || '').trim(); const drive = etat(f.drive_status);
   if (drive && /^[A-Za-z0-9_-]{10,100}$/.test(dossier)) ops.push([['ingestConfig', clubId, 'drive'], { folderId: dossier, status: drive }]); else if (!drive) ops.push([['ingestConfig', clubId, 'drive'], null]); else return { erreur: 'Identifiant de dossier Drive invalide : 10 à 100 lettres, chiffres, tirets bas ou traits d’union.' };
   ops.push([['ingestConfig', clubId, 'manual'], true]);
@@ -97,4 +100,65 @@ ACTIONS.ingestRegenerer = async () => {
   if (!isManager()) return;
   if (!(await confirmDlg('L’ancienne adresse sera refusée dans la minute. Pensez à mettre à jour la règle de transfert.', { ok: 'Régénérer l’adresse' }))) return;
   db.batch(ingestRegenererOps(CLUB.id)); render(); toast(`Nouvelle adresse : ${ingestConfig().mail.address}`);
+};
+
+// ── Imports > Automatique : rapports d'ingestion, lignes en attente, quarantaine ──
+// Données lues dans /ingest/{clubId} (managers du club et créateur ; écrites par le serveur).
+const INGEST_ATTENTES = {};
+const INGEST_QUARANTAINE = {};
+const INGEST_ECOUTE = {};
+const INGEST_STATUTS = { queued: 'En file', processing: 'En cours', done: 'Terminé', done_with_pending: 'Lignes en attente', failed: 'En échec', ignored: 'Ignoré' };
+const INGEST_CANAL_LIB = { mail: 'E-mail', drive: 'Drive', api: 'API', manual: 'Dépôt manuel' };
+function ingestEcouter(clubId) {
+  if (INGEST_ECOUTE[clubId] || typeof backend === 'undefined' || backend.mode !== 'firebase' || !backend.fb || (typeof MULTI !== 'undefined' && MULTI)) return;
+  INGEST_ECOUTE[clubId] = true; const ref = p => backend.fb.database().ref(`ingest/${clubId}/${p}`);
+  const suivre = (q, cible) => q.on('value', s => { cible[clubId] = s.val() || {}; REV++; if ((UI.impTab || '') === 'automatique' || location.hash.includes('settings')) render(); }, () => { /* lecture refusée : rien */ });
+  suivre(ref('reports').orderByChild('at').limitToLast(30), INGEST_RAPPORTS);
+  suivre(ref('pending'), INGEST_ATTENTES);
+  suivre(ref('quarantine').limitToLast(30), INGEST_QUARANTAINE);
+}
+function ingestRapports(clubId = CLUB.id, filtre = '') {
+  return Object.entries(INGEST_RAPPORTS[clubId] || {}).map(([id, r]) => ({ id, ...r })).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 30).filter(r => !filtre || r.status === filtre);
+}
+function ingestAutoTab(clubId = CLUB.id) {
+  ingestEcouter(clubId);
+  const f = UI.ingFiltre || ''; const L = ingestRapports(clubId, f);
+  const A = Object.values(INGEST_ATTENTES[clubId] || {}).filter(Boolean); const Q = Object.values(INGEST_QUARANTAINE[clubId] || {}).filter(Boolean).sort((a, b) => (b.at || 0) - (a.at || 0));
+  const hm = ts => { const d = new Date(ts); return `${dmy(isoOf(d))} à ${d.getHours()} h ${pad(d.getMinutes())}`; };
+  const statut = s => `<span class="badge ingest-st-${esc(s || '')}">${esc(INGEST_STATUTS[s] || s || '')}</span>`;
+  return `<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>Imports automatiques</h3><span class="spacer"></span>
+      <select class="input sm" data-change="ingFiltre" aria-label="Filtrer par statut"><option value="">Tous les statuts</option>${Object.entries(INGEST_STATUTS).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <button class="btn sm ${A.length ? 'primary' : ''}" data-act="ingestAttentes" ${A.length ? '' : 'disabled'}>Voir les lignes en attente${A.length ? ` (${A.reduce((s, p) => s + (Number(p.count) || 0), 0)})` : ''}</button></div>
+    <p class="muted small" style="margin-top:-4px">Les 30 derniers fichiers reçus par e-mail, Drive ou API, lus par le même moteur que le dépôt manuel. Un fichier déjà reçu n’est jamais compté deux fois.</p>
+    ${L.length ? `<div class="table-wrap"><table class="t ingest-rapports"><thead><tr><th>Reçu</th><th>Fichier</th><th>Canal</th><th class="num">Lignes lues</th><th class="num">Importées</th><th class="num">En attente</th><th class="num">Durée</th><th>Statut</th><th>Avertissements</th></tr></thead><tbody>
+      ${L.map(r => `<tr data-statut="${esc(r.status || '')}"><td class="nowrap">${esc(hm(r.receivedAt || r.at))}</td><td>${esc(r.file || '')}</td><td>${esc(INGEST_CANAL_LIB[r.canal] || r.canal || '')}</td><td class="num">${fmtN(r.rowsRead || 0)}</td><td class="num">${fmtN(r.rowsImported || 0)}</td><td class="num">${fmtN(r.pending || 0)}</td><td class="num">${r.ms != null ? (Math.round(r.ms / 100) / 10).toString().replace('.', ',') + ' s' : ''}</td><td>${statut(r.status)}</td><td class="small">${(r.warnings || []).map(w => esc(w)).join('<br>') || '<span class="muted">aucun</span>'}</td></tr>`).join('')}
+    </tbody></table></div>` : `<p class="muted small">${f ? 'Aucun rapport avec ce statut.' : 'Aucun import automatique pour l’instant.'}</p>`}</div>
+    ${Q.length ? `<div class="card" id="quarantaine"><h3>Quarantaine</h3><p class="muted small" style="margin-top:-4px">Messages reçus d’un expéditeur hors liste blanche : rien n’a été importé.</p>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Reçu</th><th>Expéditeur</th><th>Objet</th><th class="num">Fichiers</th><th></th></tr></thead><tbody>${Q.map(x => `<tr><td class="nowrap">${esc(hm(x.at))}</td><td>${esc(x.from || '')}</td><td>${esc(x.subject || '')}</td><td class="num">${(x.files || []).length}</td><td><button class="btn sm" data-act="ingestAutoriser" data-from="${esc(x.from || '')}">Autoriser cet expéditeur</button></td></tr>`).join('')}</tbody></table></div>
+      <p class="muted small">Une fois l’expéditeur autorisé, renvoyez l’export : il sera importé automatiquement.</p></div>` : ''}`;
+}
+ACTIONS.ingFiltre = el => { UI.ingFiltre = el.value; render(); };
+// « À trancher » : chaque vendeur inconnu est rattaché à un membre ; le serveur rejoue ses lignes.
+ACTIONS.ingestAttentes = () => {
+  const A = Object.values(INGEST_ATTENTES[CLUB.id] || {}).filter(Boolean); const M = clubMembers(CLUB.id, { all: true });
+  openModal({ title: 'À trancher : lignes en attente', body: `<p class="muted small" style="margin-top:0">Ces lignes ne comptent pas tant que le vendeur n’est pas rattaché. Une fois rattaché, elles sont importées automatiquement, une seule fois.</p>
+    <div class="table-wrap"><table class="t"><tbody>${A.map(p => `<tr><td><b>${esc(p.label || '')}</b><div class="muted small">${plur(Number(p.count) || 0, 'ligne', 'lignes')} · ${esc(p.file || '')}</div></td><td style="width:240px"><select class="input sm" id="att-${esc(p.id)}" aria-label="Membre pour ${esc(p.label || '')}"><option value="">Choisir…</option>${M.map(u => `<option value="${u.id}">${esc(fullName(u))}</option>`).join('')}</select></td><td><button class="btn sm primary" data-act="ingestRattacher" data-id="${esc(p.id)}">Rattacher</button></td></tr>`).join('')}</tbody></table></div>` });
+};
+function ingestRattacherOps(p, uid) { return uid && S.users[uid] ? (p.keys || []).map(k => [['rsm', 'aliases', safeKey(k)], uid]) : []; }
+ACTIONS.ingestRattacher = el => {
+  const p = (INGEST_ATTENTES[CLUB.id] || {})[el.dataset.id]; const uid = ($(`#att-${el.dataset.id}`) || {}).value; const ops = p ? ingestRattacherOps(p, uid) : [];
+  if (!ops.length) { fx.error('Choisissez le membre à rattacher.'); return; }
+  db.batch(ops); closeModal(); toast(`${p.label} rattaché à ${S.users[uid].first} : ${plur(Number(p.count) || 0, 'ligne importée', 'lignes importées')} dans la minute`);
+};
+function ingestAutoriserOps(clubId, from) {
+  const a = String(from || '').trim().toLowerCase(); if (!/^[^@ ]+@[^@ ]+$/.test(a)) return [];
+  const m = ingestConfig(clubId).mail || {}; const L = Object.values(m.allow || {}); if (L.includes(a)) return [];
+  return [[['ingestConfig', clubId, 'mail', 'allow', String(L.length)], a]];
+}
+ACTIONS.ingestAutoriser = el => { if (!isManager()) return; const ops = ingestAutoriserOps(CLUB.id, el.dataset.from); if (!ops.length) { toast('Expéditeur déjà autorisé'); return; } db.batch(ops); toast(`Expéditeur autorisé : ${el.dataset.from}`); };
+// Jeton du script Gmail (Apps Script) : créé côté serveur, montré une seule fois.
+ACTIONS.ingestJeton = async () => {
+  if (!isManager()) return;
+  try { const r = await appelFonction(backend, 'ingestJeton', { clubId: CLUB.id }); openModal({ title: 'Jeton du script Gmail', body: `<p class="small">À coller dans les propriétés du script (FP_CLUB_TOKEN). Il ne sera plus affiché.</p><input class="input" readonly value="${esc(r.jeton || '')}" onfocus="this.select()">` }); }
+  catch (_) { fx.error('Jeton indisponible : fonctions serveur non déployées.'); }
 };
