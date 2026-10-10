@@ -201,7 +201,7 @@ export function creerBrevo(ctx) {
   async function preparer(api) {
     if ((await lire('worker/email/prepare')) === PREPARATION) return 'deja';
     for (const nom of ATTRIBUTS) exiger(await api('POST', '/contacts/attributes/normal/' + nom, { type: 'text' }), 'attribut', [200, 201, 204, 400]);
-    await db.ref('worker/email/prepare').set(PREPARATION);
+    await db.ref().update({ 'worker/email/prepare': PREPARATION, 'worker/email/dernier': null });   // l'ancien refus ne reste pas affiché
     return 'fait';
   }
   // UNE OPÉRATION. Rend une note ou lève Arret.
