@@ -1,0 +1,55 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  QUI TÉLÉCHARGE QUOI DANS LA REALTIME DATABASE ? (à la demande)
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI (10/10/2026). 4,31 Go téléchargés du 1er au 9 octobre pour 5
+#  connexions simultanées au plus : quelque chose relit beaucoup trop. Avant de
+#  corriger, on mesure : `firebase database:profile` observe le trafic réel de
+#  la base pendant N secondes et dit, chemin par chemin, combien d'octets sont
+#  partis. LECTURE SEULE : il n'écrit rien dans la base.
+#
+#  Résultat : le résumé du travail (onglet Actions) et le fichier en artefact.
+#  Lancer : onglet Actions > Profil de la base > Run workflow.
+# ══════════════════════════════════════════════════════════════════════════
+name: Profil de la base
+
+on:
+  workflow_dispatch:
+    inputs:
+      secondes:
+        description: "Durée d'observation, en secondes (max 1800)"
+        required: false
+        default: '900'
+
+permissions:
+  contents: read
+
+jobs:
+  profil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Observer le trafic
+        env:
+          CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SECONDES: ${{ inputs.secondes }}
+        run: |
+          set -e
+          [ -n "$CLE" ] || { echo "FIREBASE_SERVICE_ACCOUNT absent"; exit 1; }
+          npm install -g firebase-tools >/dev/null 2>&1
+          printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/cle.json"
+          d=$(( ${SECONDES:-900} > 1800 ? 1800 : ${SECONDES:-900} ))
+          firebase database:profile --project repcore-sync --duration "$d" --non-interactive > rapport.txt 2>&1 || true
+          rm -f "$RUNNER_TEMP/cle.json"
+          { echo "## Profil de la base ($d s)"; echo; echo '```'; head -c 60000 rapport.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
+          cat rapport.txt | head -200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profil-rtdb
+          path: rapport.txt
+          retention-days: 30
