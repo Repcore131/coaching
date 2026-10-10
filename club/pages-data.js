@@ -522,6 +522,7 @@ function clubSettings() {
     ${monClubCard()}
     ${apparenceCard()}
     ${reperesCard()}
+    ${typeof ligueReglageCard === 'function' ? ligueReglageCard() : ''}
     ${releveCard()}
     ${typeof resModelesCard === 'function' ? resModelesCard() : ''}
     ${ordreKpiCard()}

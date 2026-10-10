@@ -1457,3 +1457,10 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .delta-l { list-style: none; margin: 0; padding: 0; display: grid; }
 .delta-l li a { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-weight: 600; }
 .delta-l li:last-child a { border-bottom: 0; }
+/* Ligues du réseau */
+.ligue-l { display: grid; gap: 4px; }
+.ligue-r { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 10px; border-radius: var(--r-md); border: 1px solid transparent; }
+.ligue-r.monte { background: rgba(242, 197, 0, .16); border-color: var(--fil-or, #F2C500); }
+.ligue-r.descend { background: var(--surface-2, #EEE); color: var(--muted); }
+.ligue-r.moi { outline: 2px solid var(--accent); }
+.ligue-n { width: 24px; text-align: right; font-variant-numeric: tabular-nums; }

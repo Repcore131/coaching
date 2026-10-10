@@ -407,6 +407,8 @@ function allTrophies() {
     }
     // trophées personnels de la semaine, non compétitifs (objectifs.js)
     if (typeof tropheesPersoSemaine === 'function') for (const c of Object.values(S.clubs)) out.push(...tropheesPersoSemaine(c.id));
+    // badges de saison des ligues (ligues.js)
+    if (typeof tropheesLigue === 'function') out.push(...tropheesLigue());
     // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;
