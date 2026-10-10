@@ -85,7 +85,7 @@ export const REGLE_ORGS = `"orgs": {
           "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${acces(O)} && !data.exists() && newData.exists()`)} } } } },
           "coaching": { "$uid": { "actions": { ".write": ${j(LIBRE)} }, "$k": { ".write": ${j(mgr(O))} } } },
           "$autre": { ".write": ${j(mgr(O))} }
-        },
+        }
       }
     },
     "orgs_invites": {
