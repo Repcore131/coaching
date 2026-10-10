@@ -54405,10 +54405,10 @@ async function testExercices(){
       const d=document.createElement('div');
       d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:5,payants:2,moisGagnes:2,prenoms:[{prenom:'Tom',statut:'payant'}]}});
       const t=d.textContent;
-      // Les paliers comptent les amis à quatre séances (lot C, 29/09/2026), et disent ce qu'il reste.
-      if(!/JULIE7K2/.test(t)||!/2 \/ 3 · encore 1 ami à quatre séances/.test(t)||!/2 \/ 10 · encore 8 amis à quatre séances/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
-      if(!/Ton mois arrive quand ton pote a fait ses quatre premières séances\./.test(t)) return _echec('la règle en une phrase');
-      if(/premier paiement|essai gratuit/i.test(t)) return _echec('l’ancienne règle');
+      // Les paliers comptent les amis ABONNÉS (11/10/2026), et disent ce qu'il reste.
+      if(!/JULIE7K2/.test(t)||!/2 \/ 3 · encore 1 ami abonné/.test(t)||!/2 \/ 10 · encore 8 amis abonnés/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
+      if(!/Ton mois arrive au premier paiement de ton pote, confirmé par PayPal\./.test(t)) return _echec('la règle en une phrase');
+      if(/quatre|séances\b.*mois arrive|essai gratuit/i.test(t)) return _echec('l’ancienne règle');
       if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
       const b=[...d.querySelectorAll('button.btn')];
       // La carte d'invitation en tête (rouge), le texte et le lien en second (R31 : un seul bouton en capitales).
@@ -56661,18 +56661,67 @@ async function testExercices(){
       const t=h.replace(/<[^>]+>/g,'');
       if(!/3 filleuls · 1 en route · 1 abonné · 1 mois gagné/.test(t)||!/ouvrirParrainage\(\)/.test(h)) return _echec(t);
       return /1 filleul(?!s)/.test(htmlLigneFilleuls({parrainage:{inscrits:1,prenoms:[{prenom:'A',statut:'inscrit'}]}}).replace(/<[^>]+>/g,''))?true:_echec('singulier');})());
-    ok('Invitation : chaque filleul par son prénom — inscrit, 1re séance, 4 séances, abonné',(()=>{
+    ok('Invitation : chaque filleul par son prénom — inscrit, 1re séance, abonné (crédité par ses séances avant le 11/10 : « 1re séance »)',(()=>{
       const u={};
       parrainageFusionnerCompte(u,{code:'JULIE7K2',filleuls:{a:{prenom:'Tom',statut:'payant',payeLe:5,date:4},m:{prenom:'Max',statut:'inscrit',creditE:true,actifLe:7,date:3},b:{prenom:'Lou',date:2,premiereSeance:10},c:{prenom:'Zoé',date:1}}});
       const st=u.parrainage.prenoms.map(x=>x.prenom+':'+x.statut).join();
-      if(st!=='Tom:payant,Max:actif,Lou:seance,Zoé:inscrit') return _echec(st);
+      if(st!=='Tom:payant,Max:seance,Lou:seance,Zoé:inscrit') return _echec(st);
       if(u.parrainage.actifs!==2||u.parrainage.actifsLe.join()!=='5,7') return _echec('au travail : '+u.parrainage.actifsLe);
       const d=document.createElement('div');
       d.innerHTML=htmlParrainage(u);
       const l=[...d.querySelectorAll('.pr-f')].map(x=>x.querySelector('.pr-f-nom').textContent+'='+x.querySelector('b').textContent+'/'+x.querySelectorAll('.pr-f-etapes i.on').length);
-      if(l.join()!=='Tom=Abonné ✓/4,Max=4 séances ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
+      if(l.join()!=='Tom=Abonné ✓/3,Max=1re séance/2,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
       // Un miroir déjà écrit avec « seance » se relit tel quel.
       return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
+    // ══ PARRAINAGE AU PREMIER PAIEMENT (11/10/2026) ══
+    ok('PARRAINAGE — le mois au premier paiement : l’app le dit, les paliers et les badges comptent les abonnés, tarifs.json décide',(()=>{
+      const tp=TARIFS.essai_parrainage;
+      if(!(tp.moisParrain>=1)||!(tp.mentorPayants>=1)) return _echec('tarifs.json');
+      const m=PARRAINAGE_PALIERS.find(x=>x.badge==='mentor');
+      if(!m||m.n!==tp.mentorPayants) return _echec('palier mentor : '+(m&&m.n));
+      if(FILLEUL_ETAPES.map(e=>e[0]).join()!=='inscrit,seance,payant') return _echec('marches : '+FILLEUL_ETAPES.map(e=>e[0]).join());
+      // Neuf amis crédités par leurs séances (avant), un seul abonné : 1 / 10.
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:10,actifs:9,payants:1,moisGagnes:9,prenoms:[]}});
+      if(!/1 \/ 10 · encore 9 amis abonnés/.test(d.textContent)) return _echec('palier : '+d.textContent.slice(0,240));
+      if(!/quand il s’abonne/.test(d.textContent)) return _echec('la promesse');
+      for(const id of ['recruteur','mentor']){ const b=badgeAcquisDef(id); if(!b||!/s’abonnent/.test(b.condition)||/séances/.test(b.condition)) return _echec('badge '+id); }
+      const f=_badgesFaits({sessions:[],parrainage:{actifsLe:[1,2,3,4],payantsLe:[5,6]}},Date.now());
+      if(!Array.isArray(f.parrainages)||f.parrainages.join()!=='5,6') return _echec('badges sur les crédités : '+f.parrainages);
+      return true;})());
+
+    okA('PARRAINAGE — la landing : « [Prénom] t’offre ton 2e mois », l’emblème du rang, et le prénom ÉCHAPPÉ',async()=>{
+      const fr=document.createElement('iframe'); fr.style.cssText='position:fixed;left:-9999px;width:390px;height:800px';
+      fr.src='../index.html';
+      document.body.appendChild(fr);
+      try{
+        await new Promise((ok,ko)=>{ fr.onload=ok; setTimeout(()=>ko(new Error('landing non chargée')),15000); });
+        const w=fr.contentWindow, doc=fr.contentDocument;
+        if(typeof w.rcAmiBandeau!=='function') return _echec('rcAmiBandeau absente');
+        const z=doc.getElementById('ami-bandeau'), t=doc.getElementById('ami-texte'), e=doc.getElementById('ami-embleme');
+        if(!z||!z.hidden) return _echec('bandeau visible sans ami');
+        if(w.rcAmiBandeau(null)||w.rcAmiBandeau({})||w.rcAmiBandeau({prenom:'   '})) return _echec('affiché sans prénom');
+        if(!z.hidden) return _echec('bandeau affiché par un appel vide');
+        const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+        if(!w.rcAmiBandeau({prenom:'Julie',rang:3})) return _echec('pas affiché');
+        if(z.hidden||t.textContent!=='Julie t’offre ton '+n+(n===1?'er':'e')+' mois') return _echec('texte : '+t.textContent);
+        if(e.hidden||!/rangs\/rang_3-512\.webp$/.test(e.getAttribute('src'))) return _echec('emblème : '+e.getAttribute('src'));
+        // LE PRÉNOM EST DU TEXTE, JAMAIS DU HTML.
+        const piege='<img src=x onerror=window.__pwn=1>';
+        w.rcAmiBandeau({prenom:piege,rang:99});
+        if(t.querySelector('img')||w.__pwn) return _echec('prénom interprété comme du HTML');
+        if(t.textContent.indexOf(piege.slice(0,24))!==0) return _echec('prénom non recopié tel quel : '+t.textContent);
+        if(e.getAttribute('src').indexOf('rang_99')>=0) return _echec('rang hors bornes');
+        // Le script lit la même source que /i.
+        const src=[...doc.scripts].map(x=>x.textContent).join('\n');
+        if(src.indexOf("parrainage/codesPublics/'+ref+'.json")<0) return _echec('pas la source de /i');
+        // La FAQ ne parle plus des séances, et lit tarifs.json.
+        const faq=[...doc.querySelectorAll('details')].find(x=>/Un ami m.a invité/.test(x.textContent));
+        if(!faq||/quatre/.test(faq.textContent)||!faq.querySelector('[data-nb="essai_parrainage.moisParrain"]')||!/premier paiement/.test(faq.textContent)) return _echec('FAQ');
+        return true;
+      } finally { fr.remove(); }
+    });
+
     // ══ 28/09/2026 — LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ══
     const _SYT=new Date(2026,9,15,10).getTime();
     const _syJ=n=>localISODate(new Date(_SYT-n*864e5));

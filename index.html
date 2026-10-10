@@ -89,7 +89,7 @@
    "name": "Un ami m'a invité : qu'est-ce que ça change ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Son lien t'offre un mois de plus que l'essai : 2 mois, toute l'app comprise, sans carte bancaire. Et dès tes quatre premières séances, ou ton premier paiement s'il arrive avant, ton ami gagne un mois."
+    "text": "Son lien t'offre un mois de plus que l'essai : 2 mois, toute l'app comprise, sans carte bancaire. Et à ton premier paiement, ton ami gagne 1 mois. Sans paiement, tes séances ne lui donnent rien : il gagne quand tu choisis de rester."
    }
   },
   {
@@ -451,6 +451,13 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .promesse{margin-top:14px;font-size:13px;color:#bdbdbd}
 .promesse b{color:#fff}
 .invite .promesse b.ami,.invite .cadeau.ami b{color:var(--red)}
+/* LE BANDEAU DE L'AMI (11/10/2026) : ?ref= et un prénom lu dans codesPublics. */
+.ami-bandeau{display:flex;align-items:center;gap:14px;margin:0 0 18px;padding:12px 16px;border:1px solid rgba(224,32,32,.45);border-radius:14px;background:rgba(224,32,32,.08)}
+.ami-bandeau[hidden]{display:none}
+.ami-bandeau img{width:56px;height:56px;flex-shrink:0;filter:drop-shadow(0 4px 14px rgba(224,32,32,.35))}
+.ami-bandeau b{display:block;font-size:17px;color:#fff;line-height:1.3}
+.ami-bandeau>div{text-align:left}
+.ami-bandeau>div>span{display:block;font-size:13px;color:#bdbdbd;margin-top:2px}
 /* ---------- coaching humain ---------- */
 .ancre{display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center;
   background:linear-gradient(120deg,#170909,#0f0f0f 60%);border:1px solid rgba(224,32,32,.35);border-radius:20px;padding:40px}
@@ -559,6 +566,10 @@ footer a{color:var(--dim);margin:0 8px}
     </nav>
     <div class="hero">
       <div>
+        <!-- L'AMI QUI INVITE (11/10/2026) : rempli par le script ?ref= plus bas, depuis
+             /parrainage/codesPublics/<CODE> (la même source que /i). Caché sinon. -->
+        <div class="ami-bandeau" id="ami-bandeau" hidden><img id="ami-embleme" alt="" width="56" height="56" hidden>
+          <div><b id="ami-texte"></b><span><span data-nb="essai.moisParraine" id="ami-mois">2</span>&nbsp;mois d'accès complet, sans carte bancaire.</span></div></div>
         <p class="eyebrow">Application de musculation · créée par un coach</p>
         <h1>La bonne charge,<em>à chaque série.</em></h1>
         <p class="sub">Ta séance, ta nutrition, ton sommeil et ta progression, enfin dans une seule application.
@@ -875,8 +886,8 @@ footer a{color:var(--dim);margin:0 8px}
 
     <details><summary>Un ami m'a invité&nbsp;: qu'est-ce que ça change&nbsp;?</summary>
       <p>Son lien t'offre un mois de plus que l'essai&nbsp;: <span data-nb="essai.moisParraine">2</span>&nbsp;mois, toute l'app
-      comprise, sans carte bancaire. Et dès tes quatre premières séances, ou ton premier paiement s'il arrive
-      avant, ton ami gagne un mois.</p></details>
+      comprise, sans carte bancaire. Et à ton premier paiement, ton ami gagne <span data-nb="essai_parrainage.moisParrain">1</span>&nbsp;mois.
+      Sans paiement, tes séances ne lui donnent rien&nbsp;: il gagne quand tu choisis de rester.</p></details>
 
     <details><summary>Faut-il installer quelque chose&nbsp;?</summary>
       <p>Non. RepCore s'ouvre dans le navigateur. Tu peux ensuite l'ajouter à ton écran
@@ -990,6 +1001,20 @@ footer a{color:var(--dim);margin:0 8px}
 })();
 </script>
 <script>
+// LE BANDEAU DE L'AMI. PURE vis-à-vis du réseau : reçoit {prenom, rang}.
+// Rend true s'il s'affiche. Le prénom est borné (24) et posé en textContent.
+function rcAmiBandeau(d){
+  var z=document.getElementById('ami-bandeau'), t=document.getElementById('ami-texte');
+  if(!z||!t||!d||typeof d!=='object') return false;
+  var prenom=String(d.prenom||'').trim().slice(0,24);
+  if(!prenom) return false;
+  var n=parseInt((document.getElementById('ami-mois')||{}).textContent,10)||2;
+  t.textContent=prenom+' t\u2019offre ton '+n+(n===1?'er':'e')+' mois';
+  var r=Math.round(Number(d.rang)), e=document.getElementById('ami-embleme');
+  if(e&&r>=1&&r<=10){ e.src='app/img/rangs/rang_'+r+'-512.webp'; e.alt='Rang '+r; e.hidden=false; }
+  z.hidden=false;
+  return true;
+}
 // LES CODES D'INVITATION VOYAGENT JUSQU'A L'APP. <domaine>/?amb=CODE (un
 // ambassadeur), ?ref= (un parrain), ?src= : sans ce relais, la page de vente
 // les perdait au premier clic sur « Essayer ». Le clic d'un lien ambassadeur
@@ -1001,6 +1026,16 @@ footer a{color:var(--dim);margin:0 8px}
     // Arrivé par un ami (ref) ou un ambassadeur (amb) : son essai est doublé,
     // la page le met en avant.
     if(g.get('ref')||g.get('amb')) document.body.classList.add('invite');
+    // LE PRÉNOM DE L'AMI ET L'EMBLÈME DE SON RANG (11/10/2026), lus comme /i :
+    // /parrainage/codesPublics/<CODE> = {prenom, rang}. textContent seulement :
+    // un prénom ne devient jamais du HTML. Le mois offert est le n-ième mois
+    // (essai.moisParraine, tarifs.json : 2), lu dans #ami-mois.
+    var ref=(p.get('ref')||'').trim().toUpperCase();
+    if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)){
+      fetch('https://repcore-sync-default-rtdb.firebaseio.com/parrainage/codesPublics/'+ref+'.json')
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){ rcAmiBandeau(d); }).catch(function(){});
+    }
     var q=g.toString(); if(!q) return;
     document.querySelectorAll('a[href^="app/"]').forEach(function(a){
       var h=a.getAttribute('href'), i=h.indexOf('#');

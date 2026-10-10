@@ -560,8 +560,11 @@ export function creerMetier(deps) {
   //   échéance, voir majDroits) ; l'essai, c'est l'app qui le donne à
   //   l'inscription (essaiOuvrir, bonusJours). Rien à faire ici.
   async function bonusEssai() { return null; }
-  // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain, s'il ne l'a pas
-  // déjà eu par les quatre séances du filleul (P.premierPaiement). Idempotent.
+  // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain (P.premierPaiement),
+  // une fois par filleul. C'EST LE SEUL CHEMIN DU CRÉDIT (Kevin, 11/10/2026) :
+  // les quatre séances ne créditent plus. Appelé par paypal.js au premier
+  // paiement CONFIRMÉ (webhook PayPal, ou capture relue chez PayPal par le
+  // serveur pour une formule de coaching). Idempotent.
   async function parrainagePaiement(cle, source) {
     const lien = await _val('parrainage/liens/' + cle);
     if (!lien || !lien.parrain || !lien.id) return null;
@@ -582,7 +585,12 @@ export function creerMetier(deps) {
     });
     if (!tx.committed || !res) return null;
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
-    // Le mois est déjà venu des quatre séances : un merci, rien de plus.
+    // LE MOIS « MENTOR » : au Ne filleul PAYANT (tarifs.json), 1 mois d'Ultime
+    // par-dessus ce qu'il a (droits.bonusUltimeFin, lu par palierDe). Il
+    // s'était perdu au passage des Cloud Functions au serveur léger.
+    if (res.mentor) await mentorUltime(lien.parrain, t);
+    // Le mois est déjà venu (un filleul crédité par ses séances, avant le
+    // 11/10/2026) : un merci, rien de plus.
     if (!res.credit) {
       await db.ref('parrainage/evenements/' + lien.parrain).push().set({ type: 'abonne', at: t, prenom: res.prenom, mois: 0, source: String(source || '') });
       const txt = P.textePaiement(res);
@@ -609,38 +617,15 @@ export function creerMetier(deps) {
     return res;
   }
 
-  // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : 1 mois au parrain, une fois
-  // (la marque creditE, posée dans la même transaction). Un filleul payé
-  // avant ses quatre séances a déjà donné son mois : rien de plus.
-  // ⚠ Ce mois-là ne se reprend pas au remboursement d'un paiement : il ne
-  //   vient pas d'un paiement (pas de trace dans parrainage/credits/).
-  async function parrainageSeuil(k, t) {
-    const lien = await _val('parrainage/liens/' + k);
-    if (!lien || !lien.parrain || !lien.id) return 'sans_parrain';
-    const prenom = await _lire(k, 'fname');
-    let res = null;
-    const tx = await db.ref('parrainage/comptes/' + lien.parrain).transaction((compte) => {
-      const c = compte || {};
-      const p = P.seuilSeances(c, lien.id, t);
-      if (!p) return undefined;
-      res = p;
-      const f = Object.assign({}, (c.filleuls || {})[lien.id], p.filleul);
-      if (prenom && !f.prenom) f.prenom = String(prenom).slice(0, 24);
-      const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, actifs: p.actifs,
-        filleuls: Object.assign({}, c.filleuls, { [lien.id]: f }) });
-      if (p.mentor) out.mentorLe = t;
-      return out;
-    });
-    if (!tx.committed || !res) return 'deja';
-    if (!res.credit) return 'deja_paye';
-    if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
-    const mode = await crediterMoisOffert(lien.parrain, t);
-    await db.ref('parrainage/credits_seances/' + k).set({ parrain: lien.parrain, id: lien.id, mode, le: t });
-    await db.ref('parrainage/evenements/' + lien.parrain).push().set({
-      type: res.mentor ? 'mentor' : 'seances', at: t, prenom: res.prenom, mois: 1 });
-    const txt = P.texteSeuil(res, mode);
-    await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seuil-' + lien.id, title: txt.title, body: txt.body });
-    return 'credite';
+  // LE MOIS D'ULTIME DU MENTOR. Seulement sur un nœud droits/ qui existe :
+  // en poser un pour quelqu'un dont l'accès vient encore du dossier ferait
+  // primer droits/ sur le dossier, et refermerait son accès à la fin du mois
+  // offert. Sans droits/, le mois attend (mentorEnAttente) et se lit à l'écran.
+  async function mentorUltime(parrain, t) {
+    const d = await lireDroits(parrain);
+    if (!d) { await db.ref('parrainage/comptes/' + parrain + '/mentorEnAttente').set(t); return 'en_attente'; }
+    await majDroits(parrain, (x) => ({ bonusUltimeFin: Math.max(Number(x && x.bonusUltimeFin) || 0, t) + MONTH_MS }));
+    return 'ultime';
   }
 
   async function crediterMoisOffert(parrain, t) {
@@ -1328,14 +1313,8 @@ export function creerMetier(deps) {
         : (sem ? { sem, derJour, maj: t } : null);
     }
     await db.ref().update(maj);
-    // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : le mois de son parrain.
-    // Relu une fois le seuil passé, jusqu'à ce que ce soit réglé (etat.parr) ;
-    // sans parrain et trop vieux pour en avoir un, réglé aussi.
-    if ((Number(etat.faites) || 0) >= P.SEUIL_SEANCES && !etat0.parr) {
-      const r = await parrainageSeuil(k, t);
-      if (r !== 'sans_parrain' || !(Number(cree) > 0) || t - Number(cree) > P.DELAI_RATTACHEMENT_MS)
-        await db.ref('xp_etat/' + k + '/parr').set(t);
-    }
+    // (Les quatre premières séances d'un filleul ne créditent plus son
+    // parrain depuis le 11/10/2026 : le mois arrive au premier paiement.)
     // Un lot plein : la suite en sous-tâche.
     if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
     return 'recalcule';
@@ -1624,7 +1603,7 @@ export function creerMetier(deps) {
   }
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
-    defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
+    defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
