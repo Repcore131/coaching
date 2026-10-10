@@ -10622,6 +10622,28 @@ async function testExercices(){
               return _echec('le lancement depuis l’icône n’est pas compté');
             return true;})());
 
+          ok('Un robot ne compte pas, un visiteur si',(()=>{
+            if(!rcmRobot('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',false)) return _echec('Googlebot est compté');
+            if(!rcmRobot('Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/141.0.0.0 Safari/537.36',false)) return _echec('un Chrome sans fenêtre est compté');
+            if(!rcmRobot('Mozilla/5.0 (Linux; Android 11; moto g power) Chrome/141 Mobile Safari/537.36 Chrome-Lighthouse',false)) return _echec('un audit de vitesse est compté');
+            if(!rcmRobot('Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0 Safari/537.36',true)) return _echec('un navigateur piloté est compté');
+            if(rcmRobot('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',false)) return _echec('un iPhone est pris pour un robot');
+            if(rcmRobot('Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',undefined)) return _echec('un Samsung est pris pour un robot');
+            if(String(rcm).indexOf('if(RCM_ROBOT) return;')<0) return _echec('rcm ne consulte plus la règle');
+            if(rcmRobot('Mozilla/5.0 (Linux; Android 13; CUBOT P80) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36',false)) return _echec('un téléphone Cubot est pris pour un robot');
+            return true;})());
+
+          ok('Une installation sans signal du navigateur (iPhone) se compte au premier lancement depuis l’icône, une seule fois',(()=>{
+            if(rcInstallSilencieuse({autonome:true,dejaComptee:false,session:false})!=='compter') return _echec('une installation neuve n’est pas comptée');
+            if(rcInstallSilencieuse({autonome:true,dejaComptee:false,session:true})!=='marquer') return _echec('un installé d’hier serait recompté');
+            if(rcInstallSilencieuse({autonome:true,dejaComptee:true,session:false})!=='') return _echec('comptée deux fois');
+            if(rcInstallSilencieuse({autonome:false,dejaComptee:false,session:false})!=='') return _echec('comptée dans un onglet');
+            const s=_prodSrc(), iF=s.indexOf("addEventListener('rc-install-fait'");
+            if(s.slice(iF,iF+1700).indexOf("localStorage.setItem(RC_INST_COMPTEE,'1')")<0) return _echec('l’installation signalée ne marque pas l’appareil : elle serait comptée deux fois');
+            const c=String(rcInstallSilencieuseCompter);
+            if(c.indexOf("rcm('install_fait')")<0||c.indexOf("rcm('pwa_installed')")<0) return _echec('les deux compteurs jumeaux ne sont plus égaux');
+            return true;})());
+
           // ══════ LA RELANCE : UNE BANNIERE, UNE FOIS, AU BON MOMENT ══════
           // Chaque sonde REPOSE l'etat qu'elle a change. Sans ca la premiere
           // eteindrait toutes les suivantes — et la suite doit rester

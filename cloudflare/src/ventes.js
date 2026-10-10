@@ -40,6 +40,8 @@ export function semaineAvant(t, reculSemaines) {
 // Les étapes de l'entonnoir, et le compteur de l'app qui les porte.
 export const ENTONNOIR = Object.freeze([
   ['visites', 'landing_view'], ['ecran_installation', 'install_ecran_vu'], ['installations', 'install_fait'],
+  ['install_invite_montree', 'install_invite_montree'], ['install_accepte', 'install_accepte'], ['install_refuse', 'install_refuse'],
+  ['install_guide_ios', 'install_guide_ios'], ['lancements_autonomes', 'lancement_autonome'], ['accueil_vu', 'welcome_view'],
   ['inscriptions_commencees', 'register_started'], ['inscriptions', 'register_completed'],
   ['premieres_seances_commencees', 'first_workout_started'], ['premieres_seances', 'first_workout_completed'],
   ['premiers_bilans', 'first_bilan_completed'], ['retours_j1', 'retour_j1'], ['jamais_demarre_7j', 'jamais_demarre_7j'],

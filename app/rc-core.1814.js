@@ -833,9 +833,23 @@ function periodeSync(){
   return quotaDegrade()?SYNC_PERIODE_DEGRADEE_MS:SYNC_PERIODE_MS;
 }
 const RCM_BASE='https://repcore-sync-default-rtdb.firebaseio.com/metrics';
+// UN ROBOT N'EST PAS UN VISITEUR (10/10/2026). L'ecran d'installation est le
+// premier ecran de quiconque arrive sans session : un moteur de recherche, un
+// audit de vitesse ou un navigateur pilote le « voient » donc aussi, et
+// gonflaient « ecrans vus » sans jamais pouvoir installer. Mesure : 13 ecrans
+// pour 0 invitation montree sur une semaine. PURE.
+function rcmRobot(ua,pilote){
+  if(pilote===true) return true;
+  return /(?<!cu)bot\b|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|pingdom|prerender|facebookexternalhit|whatsapp|preview/i.test(String(ua||''));
+}
+// DECIDE UNE FOIS, ET HORS DE rcm() : le compteur lui-meme ne lit rien de
+// l'appareil et n'envoie qu'un « +1 » (point 6 bis de privacy.html, sonde).
+// Ce drapeau ne part nulle part ; il sert seulement a NE PAS envoyer.
+const RCM_ROBOT=(function(){ try{ return rcmRobot(navigator.userAgent,navigator.webdriver); }catch(e){ return false; } })();
 function rcm(nom){
   try{
     if(RCM_EVENEMENTS.indexOf(nom)===-1) return;
+    if(RCM_ROBOT) return;
     // Le développement local ne doit pas polluer les chiffres de production.
     const h=location.hostname;
     if(h==='localhost'||h==='127.0.0.1'||h===''||h.startsWith('192.168.')) return;
@@ -128166,6 +128180,9 @@ window.addEventListener('rc-install-fait',()=>{
   // evenement, donc l'ecouteur d'`appinstalled` a un relais pres. C'est la
   // regle que ce fichier applique deja pour `install_fait` juste au-dessus.
   try{ rcm('pwa_installed'); }catch(e){}
+  // L'APPAREIL EST MARQUE : le premier lancement depuis l'icone ne la
+  // recomptera pas (voir rcInstallSilencieuseCompter).
+  try{ localStorage.setItem(RC_INST_COMPTEE,'1'); }catch(e){}
   const b=document.getElementById('install-btn');
   if(b) b.style.display='none';
   // LA BANNIERE N'A PLUS RIEN A PROPOSER. Sans ca elle resterait affichee
@@ -128179,6 +128196,38 @@ window.addEventListener('rc-install-fait',()=>{
   // L'ECRAN D'INSTALLATION N'A PLUS RIEN A PROPOSER : il repasse en branche A.
   try{ if(document.getElementById('s-install')?.classList.contains('active')) go('s-welcome'); }catch(e){}
 });
+// ══════ L'INSTALLATION QUE LE NAVIGATEUR NE SIGNALE PAS (10/10/2026) ══════
+//
+// `appinstalled` N'EXISTE PAS SUR iPhone, ni pour un raccourci pose depuis le
+// menu de Samsung Internet ou de Firefox. Ces installations-la n'etaient donc
+// JAMAIS comptees : le tunnel affichait « 0 installation » quand bien meme
+// quelqu'un avait suivi le guide jusqu'au bout. La seule preuve qu'elles
+// laissent est le PREMIER LANCEMENT DEPUIS L'ICONE.
+//
+// LA REGLE : lancee en autonome, sur un appareil pas encore marque, SANS
+// session ouverte. Sans session, parce qu'une personne deja installee et
+// connectee recoit ce code par une mise a jour : elle est marquee en silence,
+// sinon tous les installes d'hier compteraient comme des installations
+// d'aujourd'hui. Sur iPhone, l'icone a son propre stockage : une installation
+// neuve y arrive toujours sans session.
+const RC_INST_COMPTEE='rc_inst_comptee';
+/** PURE. 'compter', 'marquer' (deja installe, on ne compte pas) ou '' (rien a faire). */
+function rcInstallSilencieuse(o){
+  if(!o||!o.autonome||o.dejaComptee) return '';
+  return o.session?'marquer':'compter';
+}
+function rcInstallSilencieuseCompter(){
+  try{
+    const quoi=rcInstallSilencieuse({autonome:rcInstallAutonome(),
+      dejaComptee:!!localStorage.getItem(RC_INST_COMPTEE),session:!!localStorage.getItem('rc_session')});
+    if(!quoi) return '';
+    localStorage.setItem(RC_INST_COMPTEE,'1');
+    // LES DEUX JUMEAUX, comme dans l'ecouteur ci-dessus : ils doivent rester egaux.
+    if(quoi==='compter'){ rcm('install_fait'); rcm('pwa_installed'); }
+    return quoi;
+  }catch(e){ return ''; }
+}
+try{ rcInstallSilencieuseCompter(); }catch(e){}
 // LE GESTE, EN UN SEUL ENDROIT. __rcInstall vit dans la tete et connait les
 // trois issues ; installApp n'est plus qu'un nom conserve pour ses appelants.
 function installApp(){
