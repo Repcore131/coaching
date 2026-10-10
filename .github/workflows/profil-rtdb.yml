@@ -45,8 +45,11 @@ jobs:
           d=$(( ${SECONDES:-900} > 1800 ? 1800 : ${SECONDES:-900} ))
           firebase database:profile --project repcore-sync --duration "$d" --non-interactive > rapport.txt 2>&1 || true
           rm -f "$RUNNER_TEMP/cle.json"
-          { echo "## Profil de la base ($d s)"; echo; echo '```'; head -c 60000 rapport.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
-          cat rapport.txt | head -200
+          { echo "## Profil de la base ($d s)"; echo; echo '```'; sed 's/\x1b\[[0-9;]*m//g' rapport.txt | grep -A400 -i 'bandwidth\|downloaded' | head -c 60000; echo '```'; } >> $GITHUB_STEP_SUMMARY
+          # Le rapport ENTIER dans le journal : les volumes téléchargés (« Downloaded
+          # Bytes ») viennent après les temps de réponse, et une coupure à 200
+          # lignes les faisait disparaître (constaté le 10/10/2026).
+          sed 's/\x1b\[[0-9;]*m//g' rapport.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

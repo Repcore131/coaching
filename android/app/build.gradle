@@ -34,6 +34,12 @@ plugins {
 //   RC_KEY_PASS        mot de passe de la clé
 def rcEnv = { String k -> def v = System.getenv(k); v ? v.trim() : null }
 def rcSigne = rcEnv('RC_KEYSTORE') && rcEnv('RC_KEYSTORE_PASS') && rcEnv('RC_KEY_ALIAS') && rcEnv('RC_KEY_PASS')
+// LE CANAL (10/10/2026) : « apk » (release GitHub, installée à la main) ou
+// « play » (bundle AAB pour Google Play) : ./gradlew bundleRelease -Pcanal=play.
+// La version Play ouvre l'app avec ?src=play (pas de paiement PayPal dans
+// l'app, règle de facturation de Google Play) et ne cherche JAMAIS de mise à
+// jour hors du Play Store (MiseAJour) : Google Play l'interdit.
+def rcCanal = (project.findProperty('canal') ?: 'apk').toString() == 'play' ? 'play' : 'apk'
 
 def twaManifest = [
     applicationId: 'com.repcore.app',
@@ -72,11 +78,12 @@ android {
         applicationId "com.repcore.app"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 4
-        versionName "4"
+        versionCode 5
+        versionName "5"
         // L'adresse du serveur léger (réception Health Connect) et du site.
         buildConfigField "String", "SERVEUR", '"https://repcore-serveur.repcore.workers.dev"'
         buildConfigField "String", "SITE", '"https://repcore-sync.web.app"'
+        buildConfigField "String", "CANAL", '"' + rcCanal + '"'
 
         // The name for the application
         resValue "string", "appName", twaManifest.name

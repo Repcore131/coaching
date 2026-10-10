@@ -7168,6 +7168,11 @@ function _validateAthletePkg(o){
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
+    // ?src=play — la version Google Play (LauncherActivity, CANAL=play) l'ajoute
+    // à chaque ouverture. Gardé pour la SESSION seulement : la TWA partage le
+    // stockage de Chrome, et un localStorage aurait suivi l'utilisateur dans
+    // le navigateur, où le paiement web est permis. Voir canalApp().
+    if(params.get('src')==='play'){ try{ sessionStorage.setItem('rc_canal','play'); }catch(e){} }
     const _apkV=String(params.get('apk')||'');
     if(/^\d{1,6}$/.test(_apkV)){ try{ localStorage.setItem('rc_apk',_apkV); }catch(e){} }
     // ?sante=ok|erreur — le retour de ConnecterSanteActivity, après « Autoriser ».
@@ -7259,7 +7264,10 @@ function _validateAthletePkg(o){
     // Écrite ici, en clair (constantes du module pas encore initialisées). La
     // dernière arrivée l'emporte : c'est elle qui a fait venir.
     const _osrc=String(params.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
-    if(_osrc||_amb||params.get('ref')){
+    // ?src=play revient à CHAQUE ouverture de la version Play : il ne remplace
+    // pas une origine déjà notée (le lien d'un ambassadeur, une campagne).
+    let _origineDeja=false; try{ _origineDeja=!!localStorage.getItem('rc_origine'); }catch(e){}
+    if((_osrc||_amb||params.get('ref'))&&!(_osrc==='play'&&!_amb&&!params.get('ref')&&_origineDeja)){
       try{ localStorage.setItem('rc_origine',JSON.stringify({src:_osrc,amb:_amb,
         ref:String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12),le:Date.now()})); }catch(e){}
     }
@@ -22429,6 +22437,8 @@ function _pcPayerEnAttente(){
 async function pcProposerPaiement(){
   const p=_pcPayerEnAttente();
   if(!p||!currentUser||currentUser.role==='coach') return false;
+  // VERSION GOOGLE PLAY : le lien de paiement du coach ne s'ouvre pas ici.
+  if(canalApp()==='play'){ try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){} toast('Ce paiement se fait sur repcore-sync.web.app, dans ton navigateur.','var(--orange)'); return false; }
   try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
   const o=OFFRES[p.formule]; if(!o) return false;
   if(!await rcConfirm('Payer '+o.lib+' ('+prixOffre(p.formule)+') ?\n\nLe paiement se fait sur PayPal et va directement sur le compte de ton coach. Ton suivi s’ouvre dès que PayPal confirme.',null,'Payer sur PayPal','Plus tard')) return false;
@@ -47251,6 +47261,8 @@ function _majBoutonAchat(){
   if(b) b.style.display=(c&&c.checked)?'':'none';
 }
 function _chargerPaypalAchat(){
+  // VERSION GOOGLE PLAY : pas d'achat de contenu numérique hors de Google Play.
+  if(canalApp()==='play'){ const b=document.getElementById('ach-paypal'); if(b) b.innerHTML=htmlCanalPlay().replace('Ton abonnement se gère','Cet achat se fait'); return; }
   const rendre=()=>_rendreBoutonAchat();
   if(document.getElementById('paypal-sdk-achat')){ rendre(); return; }
   const sc=document.createElement('script');
@@ -131108,8 +131120,53 @@ function loadSubscribePage(mode,payload){
   // les distribue. En DERNIER, parce que les deux branches ci-dessus viennent
   // de décider de cette carte et écraseraient la décision prise plus haut.
   if(_palierCoachEnAttente()&&codeOpt) codeOpt.style.display='none';
+  // VERSION GOOGLE PLAY : en tout dernier, pour l'emporter sur ce qui précède.
+  try{ _subCanalPlay(); }catch(e){}
+}
+// ══ LE CANAL GOOGLE PLAY (10/10/2026) ═════════════════════════════════════
+// Google Play interdit, dans une app qu'il distribue, de vendre un contenu
+// numérique (abonnement, programme) par un autre moyen que sa facturation, et
+// d'y renvoyer par un lien ou un bouton. La version Play (AAB, CANAL=play)
+// s'ouvre avec ?src=play ; dans cette session-là :
+//   · l'écran d'abonnement n'affiche ni prix, ni case, ni bouton PayPal, mais
+//     CANAL_PLAY_TEXTE, SANS LIEN (le domaine est écrit, pas cliquable) ;
+//   · l'achat d'un programme et le paiement au coach ne s'ouvrent pas ;
+//   · la résiliation reste là : ce n'est pas un paiement, et la loi l'exige.
+// Option 2 (Google Play Billing, API Digital Goods) : DECISIONS-A-PRENDRE.md.
+const CANAL_PLAY_CLE='rc_canal';
+const CANAL_PLAY_TEXTE='Ton abonnement se gère sur repcore-sync.web.app';
+/**
+ * PURE. Le canal d'après le paramètre d'ouverture et la mémoire de session.
+ * @param {string} src paramètre ?src= de l'ouverture
+ * @param {string} memo valeur gardée en session
+ * @returns {'play'|'web'}
+ */
+function canalDepuis(src,memo){ return (src==='play'||memo==='play')?'play':'web'; }
+/** @returns {'play'|'web'} le canal de cette session */
+function canalApp(){ let m=''; try{ m=sessionStorage.getItem(CANAL_PLAY_CLE)||''; }catch(e){} return canalDepuis('',m); }
+/**
+ * PURE. Le bloc affiché à la place du paiement dans la version Play. Aucun
+ * lien, aucun bouton qui mène à un paiement.
+ * @returns {string}
+ */
+function htmlCanalPlay(){
+  return '<div data-canal-play style="background:#0d0d0d;border:1px solid var(--border,#222);border-radius:var(--r-3,12px);padding:14px;text-align:left;font-size:var(--fs-sm,14px);line-height:1.55;color:var(--text-strong,#eee);text-transform:none;letter-spacing:0">'
+    +'<strong style="display:block;margin-bottom:6px">'+CANAL_PLAY_TEXTE+'.</strong>'
+    +'<span style="color:var(--text-dim,#999)">Ton accès en cours, ton essai et ton code coach restent valables ici, dans l’application.</span></div>';
+}
+// L'écran d'abonnement, version Play : le paiement disparaît, le message prend sa place.
+function _subCanalPlay(){
+  if(canalApp()!=='play') return false;
+  ['sub-paliers','sub-formule','sub-renonc-msg'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  const c=document.getElementById('sub-renonciation'); if(c&&c.closest('label')) c.closest('label').style.display='none';
+  const pp=document.getElementById('paypal-btn-container');
+  // Pleine opacité : le conteneur est grisé tant que la case n'est pas cochée, et la case n'existe plus ici.
+  if(pp){ pp.innerHTML=htmlCanalPlay(); pp.style.opacity='1'; pp.style.pointerEvents='auto'; if(pp.nextElementSibling) pp.nextElementSibling.style.display='none'; }
+  return true;
 }
 function initPaypalSubscription(){
+  // VERSION GOOGLE PLAY : jamais de SDK PayPal (voir canalApp).
+  if(_subCanalPlay()) return;
   // Défense en profondeur : le SDK ne doit jamais être chargé sans compte, même
   // si un appel arrivait par un autre chemin que le bouton de loadSubscribePage.
   if(!currentUser){
