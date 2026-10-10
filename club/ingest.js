@@ -47,7 +47,7 @@ function arriveeExportsCard(clubId = CLUB.id) {
   return `<div class="card" id="arrivee-exports"><div class="card-head"><h3>Arrivée des exports</h3><span class="spacer"></span><button class="btn sm ghost" data-act="ingestJeton">Jeton du script Gmail</button><button class="btn sm" data-act="ingestCanalForm">Configurer un canal</button></div>
     <p class="muted small" style="margin-top:-4px">Tous les canaux aboutissent au même moteur d’import. Aucun mot de passe ni jeton n’est gardé ici.</p>
     <div class="table-wrap"><table class="t ingest-t"><thead><tr><th>Canal</th><th>État</th><th>Dernier fichier reçu</th><th class="num">Ce mois-ci</th></tr></thead><tbody>
-    ${L.map(c => `<tr data-canal="${c.k}" data-etat="${c.status}"><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.k === 'mail' && c.cfg.address ? c.cfg.address : c.detail)}</small></td><td>${etat(c.status)}${c.k === 'mail' && c.cfg.address ? ' <button class="btn ghost sm" data-act="ingestRegenerer">Régénérer l’adresse</button>' : ''}</td><td class="small">${quand(St[c.k].dernier)}</td><td class="num">${St[c.k].ceMois}</td></tr>`).join('')}
+    ${L.map(c => `<tr data-canal="${c.k}" data-etat="${c.status}"><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.k === 'mail' && c.cfg.address ? c.cfg.address : c.detail)}</small>${c.k === 'mail' ? ' <a class="small" href="#/aide-transfert">Créer la règle de transfert</a>' : ''}</td><td>${etat(c.status)}${c.k === 'mail' && c.cfg.address ? ' <button class="btn ghost sm" data-act="ingestRegenerer">Régénérer l’adresse</button>' : ''}</td><td class="small">${quand(St[c.k].dernier)}</td><td class="num">${St[c.k].ceMois}</td></tr>`).join('')}
     </tbody></table></div></div>`;
 }
 ACTIONS.ingestCanalForm = () => {
@@ -107,6 +107,7 @@ ACTIONS.ingestRegenerer = async () => {
 const INGEST_ATTENTES = {};
 const INGEST_QUARANTAINE = {};
 const INGEST_ECOUTE = {};
+const INGEST_CONFIRMATION = {};
 const INGEST_STATUTS = { queued: 'En file', processing: 'En cours', done: 'Terminé', done_with_pending: 'Lignes en attente', failed: 'En échec', ignored: 'Ignoré' };
 const INGEST_CANAL_LIB = { mail: 'E-mail', drive: 'Drive', api: 'API', manual: 'Dépôt manuel' };
 function ingestEcouter(clubId) {
@@ -116,6 +117,7 @@ function ingestEcouter(clubId) {
   suivre(ref('reports').orderByChild('at').limitToLast(30), INGEST_RAPPORTS);
   suivre(ref('pending'), INGEST_ATTENTES);
   suivre(ref('quarantine').limitToLast(30), INGEST_QUARANTAINE);
+  suivre(ref('confirmation'), INGEST_CONFIRMATION);
 }
 function ingestRapports(clubId = CLUB.id, filtre = '') {
   return Object.entries(INGEST_RAPPORTS[clubId] || {}).map(([id, r]) => ({ id, ...r })).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 30).filter(r => !filtre || r.status === filtre);
@@ -126,7 +128,8 @@ function ingestAutoTab(clubId = CLUB.id) {
   const A = Object.values(INGEST_ATTENTES[clubId] || {}).filter(Boolean); const Q = Object.values(INGEST_QUARANTAINE[clubId] || {}).filter(Boolean).sort((a, b) => (b.at || 0) - (a.at || 0));
   const hm = ts => { const d = new Date(ts); return `${dmy(isoOf(d))} à ${d.getHours()} h ${pad(d.getMinutes())}`; };
   const statut = s => `<span class="badge ingest-st-${esc(s || '')}">${esc(INGEST_STATUTS[s] || s || '')}</span>`;
-  return `<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>Imports automatiques</h3><span class="spacer"></span>
+  const conf = INGEST_CONFIRMATION[clubId] && INGEST_CONFIRMATION[clubId].subject ? INGEST_CONFIRMATION[clubId] : null;
+  return `${conf ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Confirmation de transfert Gmail reçue</b> le ${esc(dmy(isoOf(new Date(conf.at))))} : ${esc(conf.subject)}${conf.lien ? ` · <a href="${esc(conf.lien)}" target="_blank" rel="noopener">Confirmer le transfert</a>` : ''}</div></div>` : ''}<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>Imports automatiques</h3><span class="spacer"></span>
       <select class="input sm" data-change="ingFiltre" aria-label="Filtrer par statut"><option value="">Tous les statuts</option>${Object.entries(INGEST_STATUTS).map(([k, l]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
       <button class="btn sm ${A.length ? 'primary' : ''}" data-act="ingestAttentes" ${A.length ? '' : 'disabled'}>Voir les lignes en attente${A.length ? ` (${A.reduce((s, p) => s + (Number(p.count) || 0), 0)})` : ''}</button></div>
     <p class="muted small" style="margin-top:-4px">Les 30 derniers fichiers reçus par e-mail, Drive ou API, lus par le même moteur que le dépôt manuel. Un fichier déjà reçu n’est jamais compté deux fois.</p>
@@ -161,4 +164,27 @@ ACTIONS.ingestJeton = async () => {
   if (!isManager()) return;
   try { const r = await appelFonction(backend, 'ingestJeton', { clubId: CLUB.id }); openModal({ title: 'Jeton du script Gmail', body: `<p class="small">À coller dans les propriétés du script (FP_CLUB_TOKEN). Il ne sera plus affiché.</p><input class="input" readonly value="${esc(r.jeton || '')}" onfocus="this.select()">` }); }
   catch (_) { fx.error('Jeton indisponible : fonctions serveur non déployées.'); }
+};
+
+// ── Aide : créer la règle de transfert (Gmail, Outlook) ─────────────────────
+PAGES['aide-transfert'] = {
+  title: 'Créer la règle de transfert',
+  manager: true,
+  render() {
+    const adr = (ingestConfig().mail || {}).address || 'l’adresse d’import du club (Réglages, Club, Arrivée des exports)';
+    const capture = n => `<div class="aide-capture muted small" aria-hidden="true">Capture ${n} à venir</div>`;
+    return `<div class="page-head"><div><h1>Créer la règle de transfert</h1><p>Les exports Resamania reçus dans votre boîte arrivent seuls dans Fit Pulse : transférez-les à <b>${esc(adr)}</b>.</p></div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(340px, 100%), 1fr))">
+      <div class="card"><h3>Gmail</h3><ol class="aide-etapes">
+        <li>Paramètres (roue dentée), Voir tous les paramètres, onglet Transfert et POP/IMAP.</li>
+        <li>Ajouter une adresse de transfert : ${esc(adr)}. Gmail envoie un code de confirmation à cette adresse ; Fit Pulse l’affiche dans Imports, Automatique.</li>
+        <li>Saisir le code dans Gmail, puis onglet Filtres : Créer un filtre, De = l’adresse d’envoi des exports Resamania.</li>
+        <li>Cocher « Transférer à » et choisir ${esc(adr)}, puis Créer le filtre.</li></ol>${capture(1)}${capture(2)}</div>
+      <div class="card"><h3>Outlook</h3><ol class="aide-etapes">
+        <li>Paramètres, Courrier, Règles, Ajouter une nouvelle règle.</li>
+        <li>Condition : De = l’adresse d’envoi des exports Resamania.</li>
+        <li>Action : Rediriger vers ${esc(adr)} (la redirection garde l’expéditeur d’origine).</li>
+        <li>Enregistrer. Si le transfert externe est bloqué par votre administrateur Microsoft 365, demandez-lui de l’autoriser pour cette adresse.</li></ol>${capture(3)}${capture(4)}</div></div>
+      <div class="card"><h3>Expéditeurs autorisés</h3><p class="small">Fit Pulse importe seulement les messages dont l’expéditeur d’origine figure dans la liste du club (Réglages, Club, Arrivée des exports). Un autre expéditeur est mis en quarantaine, jamais importé automatiquement.</p></div>`;
+  },
 };

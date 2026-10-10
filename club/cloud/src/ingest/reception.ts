@@ -82,6 +82,11 @@ export function fabriquerReceptionMail(o: { deps: Deps; secret: () => Promise<st
     if (m.spf !== 'pass' && m.dkim !== 'pass') return res.status(403).json({ statut: 'SPF et DKIM en échec' });
     const club = await o.clubDe(m.to);
     if (!club || club.status !== 'actif') return res.status(404).json({ statut: 'adresse inconnue' });
+    // Confirmation de transfert Gmail : le code et le lien sont montrés au manager (Imports, Automatique).
+    if (adresseDe(m.origFrom) === 'forwarding-noreply@google.com') {
+      await o.deps.db.update({ [`ingest/${club.clubId}/confirmation`]: { subject: String(m.subject || '').slice(0, 200), lien: (m.links || []).find(u => /mail(-settings)?\.google\.com/.test(u)) || null, at: maintenant() } });
+      return res.status(200).json({ statut: 'confirmation' });
+    }
     const fichiers = (m.attachments || []).filter(a => EXT_TABULAIRES.test(a.name || '')).map(a => ({ name: String(a.name).slice(0, 160), data: Buffer.from(a.b64 || '', 'base64') }));
     if (!autorise(club.allow, m.origFrom)) {
       const id = nouvelId(maintenant()); const L = [];

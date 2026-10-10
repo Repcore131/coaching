@@ -206,3 +206,10 @@ test('J6 : adresse d’import {slugClub}-{4 caractères}@import.fitpulse.app, r�
   assert.notEqual(m2.address, m1.address); assert.equal(m2.rotatedAt, 5); assert.deepEqual(m2.allow, m1.allow);
   assert.deepEqual(J(run, `ingestAutoriserOps('a', 'Nouveau@Exemple.fr')`), [[['ingestConfig', 'a', 'mail', 'allow', '2'], 'nouveau@exemple.fr']]);
 });
+test('J6 : page d’aide « Créer la règle de transfert » (Gmail et Outlook), réservée aux managers', () => {
+  const run = appli(club(), 'm'); run(`db.batch(ingestCanalOps('a', { mail_status: 'actif' }).ops); REV++;`);
+  assert.equal(J(run, `PAGES['aide-transfert'].manager`), true);
+  const h = run(`PAGES['aide-transfert'].render()`); const adr = J(run, `S.ingestConfig.a.mail.address`);
+  assert.match(h, /Gmail/); assert.match(h, /Outlook/); assert.ok(h.includes(adr)); assert.match(h, /Capture 1 à venir/); assert.doesNotMatch(h, /[–—]/);
+  assert.match(run('arriveeExportsCard()'), /#\/aide-transfert/);
+});

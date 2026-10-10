@@ -1,0 +1,8 @@
+{
+  "name": "fitpulse-import-mail",
+  "private": true,
+  "type": "module",
+  "main": "src/worker.js",
+  "dependencies": { "postal-mime": "^2.3.2" },
+  "devDependencies": { "wrangler": "^3.80.0" }
+}

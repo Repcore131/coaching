@@ -1519,3 +1519,5 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .ingest-actif { background: var(--ok-soft); color: var(--ok); }
 .ingest-en-attente { background: var(--warn-soft); color: var(--warn); }
 .ingest-inactif { background: var(--surface-2); color: var(--muted); }
+.aide-etapes { padding-left: 20px; display: grid; gap: 6px; }
+.aide-capture { border: 1px dashed var(--line); border-radius: var(--r-md); padding: 22px; text-align: center; margin-top: 10px; }
