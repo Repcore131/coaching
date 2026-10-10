@@ -493,6 +493,12 @@ details p{margin-top:12px;font-size:14px;color:#c8c8c8}
 /* ---------- pied ---------- */
 footer{padding:40px 0 110px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--dim)}
 footer a{color:var(--dim);margin:0 8px}
+/* ---------- l'assistant (11/10/2026) : la bulle ; le panneau vient avec assistant.js ---------- */
+.rc-assistant-b{position:fixed;right:16px;bottom:88px;z-index:55;width:52px;height:52px;border-radius:50%;border:1px solid #2a2a2a;background:#151515;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rc-assistant-b[hidden]{display:none}
+.rc-assistant-b svg{width:24px;height:24px}
+.rc-assistant-b:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@media(min-width:641px){.rc-assistant-b{bottom:24px;right:24px}}
 /* ---------- barre mobile ---------- */
 .barre{position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;gap:10px;align-items:center;
   padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:#080808;
@@ -1087,6 +1093,33 @@ var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'
 if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
 fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
 }catch(e){}})();
+</script>
+<!-- L'ASSISTANT (11/10/2026). La bulle reste cachée tant que le serveur ne dit
+     pas l'assistant ouvert (clé posée, budget du mois non atteint). Le panneau
+     (assistant.js) n'est chargé qu'au premier clic. -->
+<button type="button" class="rc-assistant-b" id="rc-assistant-b" hidden aria-expanded="false" aria-controls="rc-assistant" aria-label="Poser une question sur RepCore">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.6 1.3c0 1.7-2.1 1.9-2.1 3.2"/><path d="M12 17h.01"/></svg>
+</button>
+<script>
+(function(){
+  var b=document.getElementById('rc-assistant-b');
+  if(!b) return;
+  var charge=false;
+  b.addEventListener('click',function(){
+    if(charge){ if(window.rcAssistantBasculer) window.rcAssistantBasculer(); return; }
+    charge=true;
+    var s=document.createElement('script'); s.src='assistant.js'; s.async=true;
+    s.onerror=function(){ charge=false; location.href='#faq'; };
+    document.body.appendChild(s);
+  });
+  // Après le chargement de la page, sans la ralentir : la bulle si l'assistant est ouvert.
+  function demander(){
+    fetch('https://repcore-serveur.repcore.workers.dev/chat/etat').then(function(r){ return r.ok?r.json():null; })
+      .then(function(d){ if(d&&d.ouvert) b.hidden=false; }).catch(function(){});
+  }
+  if(document.readyState==='complete') setTimeout(demander,1500);
+  else window.addEventListener('load',function(){ setTimeout(demander,1500); });
+})();
 </script>
 </body>
 </html>

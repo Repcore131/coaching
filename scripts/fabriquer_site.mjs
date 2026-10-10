@@ -31,7 +31,9 @@ if (OUT === RACINE || RACINE.startsWith(OUT + path.sep)) { console.error('Refus 
 
 const DOSSIERS = ['app', 'blog', 'i', 'maj', 'p', 'c', 'a'];
 const FICHIERS = ['index.html', 'legal.html', 'privacy.html', 'terms.html', '404.html', 'aide-apk.html',
-  'logo.png', 'og-image.png', 'robots.txt', 'sitemap.xml', 'tarifs.json'];
+  'logo.png', 'og-image.png', 'robots.txt', 'sitemap.xml', 'tarifs.json',
+  // L'assistant de la page d'accueil (11/10/2026), chargé au premier clic sur la bulle.
+  'assistant.js'];
 // Dans app/ : les fichiers de travail qui vivent a cote du code servi.
 const HORS_APP = [/^tests\.js$/, /\.d\.ts$/, /\.map$/, /\.md$/i];
 // LE CONTROLE FINAL : aucun de ces chemins ne doit exister dans la sortie.

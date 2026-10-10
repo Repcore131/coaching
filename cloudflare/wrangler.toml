@@ -28,6 +28,10 @@ BREVO_MODELE_RENOUVELLEMENT = "10"
 BREVO_MODELE_BIENVENUE = "11"
 BREVO_MODELE_FIN_ESSAI = "12"
 BREVO_MODELE_RECONQUETE = "13"
+# L'ASSISTANT DE LA PAGE D'ACCUEIL (chat.js) : budget du mois en dollars, compté
+# sur les jetons facturés ; atteint, il se coupe et renvoie vers la FAQ.
+# Secret : ANTHROPIC_API_KEY (sans lui, la bulle ne s'affiche pas).
+CHAT_BUDGET_USD = "10"
 
 # SECRETS, posés à la main (jamais ici) :
 #   FIREBASE_SERVICE_ACCOUNT  (compte-service.ps1 ; README, « Accès à la base »)

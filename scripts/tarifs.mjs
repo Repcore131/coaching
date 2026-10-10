@@ -35,6 +35,7 @@
 //   node scripts/tarifs.mjs --verifier  ne change rien, sort en erreur si un fichier est en retard
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { fabriquer as fabriquerBaseChat } from './base-chat.mjs';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
 export const PAGES = ['index.html', 'terms.html', 'legal.html', 'aide-apk.html', 'i/index.html', 'c/index.html', 'app/index.html'];
@@ -231,6 +232,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     enRetard.push(chemin.slice(RACINE.length));
     if (!verifier) writeFileSync(chemin, apres);
   }
+  // LA BASE DE L'ASSISTANT (11/10/2026) suit les prix et la FAQ : refabriquée après les pages.
+  for (const f of fabriquerBaseChat(verifier)) enRetard.push(f);
   if (verifier && enRetard.length) { console.error('En retard sur tarifs.json : ' + enRetard.join(', ') + ' — lance node scripts/tarifs.mjs'); process.exit(1); }
   console.log(enRetard.length ? (verifier ? '' : 'Mis à jour : ' + enRetard.join(', ')) : 'Tout suit tarifs.json.');
 }

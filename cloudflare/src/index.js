@@ -32,7 +32,8 @@ import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { creerAffluence } from './affluence.js';
 import { creerFinEssai } from './finessai.js';
 import { creerPremiere } from './premiere.js';
-import { creerBrevo } from './brevo.js';
+import { creerBrevo, envoyerHtml } from './brevo.js';
+import { creerChat } from './chat.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
@@ -72,6 +73,10 @@ function outils(env) {
   M.premiere = creerPremiere({ db, M });
   // Les contacts e-mail (opt-in, guide, statut) vers Brevo : file, 30 requêtes/minute.
   M.emails = creerBrevo({ db, env, fetchImpl: fetchCompte, reste: () => M.reste() });
+  // L'assistant de la page d'accueil (chat.js) : réponses, purge, rapport du lundi.
+  M.chat = creerChat({ db, env, fetchImpl: fetchCompte, M });
+  M.chatPurge = () => M.chat.purger();
+  M.rapportLundi = () => M.chat.rapportLundi((o) => envoyerHtml(env, fetchCompte, o));
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
@@ -185,6 +190,21 @@ export default {
       }
       if (url.pathname === '/lead/etat' && req.method === 'GET') {
         return reponse(JSON.stringify({ ouvert: outils(env).M.emails.leadOuvert() }), 200);
+      }
+      // L'ASSISTANT DE LA PAGE D'ACCUEIL (chat.js) : sans compte, limité par
+      // adresse IP comme /arrivee, puis 10 messages par visiteur et par jour,
+      // 300 conversations par jour et un budget mensuel, dans chat.js.
+      if (url.pathname === '/chat/etat' && req.method === 'GET') {
+        return reponse(JSON.stringify(await outils(env).M.chat.etat()), 200);
+      }
+      if (url.pathname === '/chat' && req.method === 'POST') {
+        let limite = null;
+        try { if (env.LIMITE_ARRIVEES && typeof env.LIMITE_ARRIVEES.limit === 'function') limite = await env.LIMITE_ARRIVEES.limit({ key: 'chat|' + ipDe(req) }); } catch (e) { limite = null; }
+        if (limite && limite.success === false) return reponse(JSON.stringify({ erreur: 'trop vite' }), 429);
+        let corps = null;
+        try { corps = await req.json(); } catch (e) { corps = null; }
+        const r = await outils(env).M.chat.repondre(corps, ipDe(req));
+        return reponse(JSON.stringify(r.corps), r.statut);
       }
       if (url.pathname === '/lead' && req.method === 'POST') {
         let corps = null;
