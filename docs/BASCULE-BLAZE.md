@@ -1,6 +1,10 @@
 # Bascule Blaze : survivre à un pic sans payer tant qu'il n'a pas lieu
 
-*Rédigé le 09/10/2026.* À lire **le jour où l'alerte « connexions simultanées »
+*Rédigé le 09/10/2026.*
+
+> **État au 10/10/2026 : le projet est en Blaze.** La limite de connexions
+> passe à 200 000 ; le vrai sujet devient la facture des téléchargements
+> (4,31 Go du 1er au 9 octobre). Mesure : workflow « Profil de la base ». À lire **le jour où l'alerte « connexions simultanées »
 arrive** sur ton téléphone.
 
 ---
