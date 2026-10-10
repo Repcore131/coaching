@@ -76,6 +76,15 @@ export function travaux(M) {
       un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
     // L'accueil d'un athlète coaché (lot C1) : bilan, programme, première séance.
     { nom: 'accueil', quand: (p) => apres(p, 17, 30) && p.heure < 21, une: (t) => (M.accueilRelances ? M.accueilRelances(t) : null) },
+    // La fin d'essai (10/10/2026) : J-3, J-1 et J0 à 18 h 30, avec les vrais
+    // chiffres de l'essai (finessai.js).
+    // Les inscrits sans première séance (premiere.js) : J1, J3, J6, à 17 h.
+    // Les alternatives à la résiliation (paypal.js) : la fin des pauses d'un
+    // mois, puis la reconquête à J+30 d'une résiliation.
+    { nom: 'reprises', quand: (p) => apres(p, 9, 10) && p.heure < 21, une: (t) => (M.paypal && M.paypal.reprisesQuotidien ? M.paypal.reprisesQuotidien(t) : null) },
+    { nom: 'reconquete', quand: (p) => apres(p, 12, 0) && p.heure < 21, une: (t) => (M.paypal && M.paypal.reconqueteQuotidien ? M.paypal.reconqueteQuotidien(t) : null) },
+    { nom: 'jamais_commence', quand: (p) => apres(p, 17, 0) && p.heure < 21, une: (t) => (M.premiere ? M.premiere.quotidien(t) : null) },
+    { nom: 'fin_essai', quand: (p) => apres(p, 18, 30) && p.heure < 21, une: (t) => (M.finEssai ? M.finEssai.quotidien(t) : null) },
     // Le parcours « Mise sous tension » : le rappel du 21e jour d'essai.
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur

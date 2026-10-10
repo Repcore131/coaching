@@ -127,6 +127,13 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
           startAt: JSON.stringify(debut), limitToFirst: limite ? String(limite) : undefined }), c);
         return v && typeof v === 'object' ? v : {};
       },
+      // ENTRE deux valeurs : `champ` dans [debut, fin], filtré par le serveur
+      // (".indexOn" requis). Rend { clé: valeur }.
+      async entre(champ, debut, fin, limite) {
+        const v = await lireJson(await appel('GET', c, undefined, { orderBy: JSON.stringify(champ),
+          startAt: JSON.stringify(debut), endAt: JSON.stringify(fin), limitToFirst: limite ? String(limite) : undefined }), c);
+        return v && typeof v === 'object' ? v : {};
+      },
       async shallow() {
         const v = await lireJson(await appel('GET', c, undefined, { shallow: 'true' }), c);
         return v && typeof v === 'object' ? Object.keys(v) : [];

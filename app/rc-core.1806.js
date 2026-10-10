@@ -631,6 +631,8 @@ function lienWhatsApp(texte){
 const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
+  // LA FIN D'ESSAI (10/10/2026) : l'écran vu, une offre cliquée.
+  'trial_end_viewed','trial_end_offer_clicked',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
   // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
   // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
@@ -2227,6 +2229,48 @@ function essaiBilanPhrase(u){
   if(m.length===1) return m[0];
   return m.slice(0,-1).join(', ')+' et '+m[m.length-1];
 }
+// ══ LE RÉSUMÉ DE L'ESSAI (10/10/2026) ═════════════════════════════════════
+// Quatre chiffres RÉELS, comptés dans la fenêtre de l'essai : séances
+// terminées, tonnage (le volume enregistré par finishWorkout), records battus
+// (_riteRecords, la même lecture que le rite des quatre semaines) et semaines
+// actives (au moins une séance). Ils nourrissent l'écran de fin d'essai et les
+// notifications du serveur (activite/<compte>.essai) — jamais un chiffre
+// inventé : un zéro reste un zéro, et le texte change.
+const ESSAI_AVATAR_SEANCES=12;   // le bonhomme atteint son dernier niveau à 12 séances
+/**
+ * PURE. Le résumé d'un essai.
+ * @param {Array<{date?:number, volume?:number}>} sessions les séances du dossier
+ * @param {Array|number} records les records battus pendant l'essai (liste ou nombre)
+ * @param {{debut?:number, fin?:number}=} fenetre bornes de l'essai (ms) ; absentes = tout
+ * @returns {{seances:number, tonnage:number, records:number, semaines:number, niveauAvatar:number}}
+ */
+function resumeEssai(sessions,records,fenetre){
+  const f=fenetre||{};
+  const d=Number(f.debut)||0, fi=Number(f.fin)||Infinity;
+  let seances=0,tonnage=0; const sem=new Set();
+  for(const x of (Array.isArray(sessions)?sessions:[])){
+    const t=Number(x&&x.date)||0;
+    if(!t||t<d||t>fi) continue;
+    seances++;
+    tonnage+=Math.max(0,Number(x.volume)||0);
+    const j=new Date(t); const lun=new Date(j.getFullYear(),j.getMonth(),j.getDate()-((j.getDay()+6)%7));
+    sem.add(lun.getFullYear()+'-'+lun.getMonth()+'-'+lun.getDate());
+  }
+  const r=Array.isArray(records)?records.length:Math.max(0,Math.floor(Number(records)||0));
+  const niveauAvatar=1+Math.round(Math.min(seances,ESSAI_AVATAR_SEANCES)*(WO_AVA_NIV-1)/ESSAI_AVATAR_SEANCES);
+  return {seances,tonnage:Math.round(tonnage),records:r,semaines:sem.size,niveauAvatar};
+}
+// Le résumé de l'essai de ce dossier (fenêtre : ouverture → fin).
+function essaiResumeDe(u){
+  const x=u||currentUser||{};
+  const fin=essaiFin(x);
+  let debut=Number(x.essai&&x.essai.ouvertLe)||0;
+  try{ const dr=droitsDe(x); if(dr.etat==='serveur'&&dr.essaiOuvertLe>0) debut=dr.essaiOuvertLe; }catch(e){}
+  if(!fin) return resumeEssai([],0);
+  if(!debut) debut=fin-essaiDuree(x)*864e5;
+  let recs=[]; try{ recs=_riteRecords(x,debut,fin); }catch(e){ recs=[]; }
+  return resumeEssai(x.sessions,recs,{debut,fin});
+}
 // PURE. LA SEQUENCE DE RELANCE, canal principal : le bandeau dans l'app.
 //
 // ⚠ C'EST LE SEUL CANAL QUI MARCHE PARTOUT. periodicsync (sw.js) n'existe ni
@@ -2712,8 +2756,8 @@ function _fileResilLire(){
   try{ const x=JSON.parse(localStorage.getItem(RESIL_FILE)||'null');
     return (x&&typeof x==='object')?x:null; }catch(e){ return null; }
 }
-function _fileResilPoser(email,ts){
-  try{ localStorage.setItem(RESIL_FILE,JSON.stringify({email:email,ts:ts})); }catch(e){}
+function _fileResilPoser(email,ts,menu){
+  try{ localStorage.setItem(RESIL_FILE,JSON.stringify({email:email,ts:ts,menu:String(menu||'')})); }catch(e){}
 }
 function _fileResilVider(){ try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }
 async function _rejouerResiliation(){
@@ -2723,13 +2767,17 @@ async function _rejouerResiliation(){
   if(!CLOUD.ok||!CLOUD.ok()) return false;
   try{
     await CLOUD.pushOne(currentUser.email,currentUser);
+    // L'AVIS AU SERVEUR (11/10/2026), APRÈS l'enregistrement : le motif du
+    // menu compté par mois (jamais le texte libre), et la reconquête à J+30.
+    // Un échec ici ne change rien à la résiliation, déjà enregistrée.
+    try{ await CLOUD._callFn('abonnement',{action:'resiliation',ts:f.ts,motif:String(f.menu||'')}); }catch(e){}
     _fileResilVider();   // exactement une fois
     return true;
   }catch(e){ return false; }
 }
 // Le motif est FACULTATIF, toujours. Il n'est jamais bloquant, et une chaîne
 // vide est un motif parfaitement acceptable.
-function demanderResiliation(motif){
+function demanderResiliation(motif,motifMenu){
   const u=currentUser;
   if(!u) return false;
   if(resiliationDemandee(u)) return false;   // pas redemandable
@@ -2738,7 +2786,7 @@ function demanderResiliation(motif){
   u.abonnement.resiliationDemandee={ts:ts,motif:String(motif||'').slice(0,300)};
   // Le LOCAL d'abord : hors ligne, l'utilisateur doit voir son accusé.
   try{ saveUser(); }catch(e){}
-  _fileResilPoser(u.email,ts);
+  _fileResilPoser(u.email,ts,RESIL_MOTIFS.indexOf(motifMenu)>=0?motifMenu:'');
   // Puis l'envoi. S'il aboutit, la file se vide ; sinon elle sera rejouée.
   _rejouerResiliation();
   return true;
@@ -3318,6 +3366,13 @@ function _renderAbonnement(){
           lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
           changé, le mot si. */''}
     ${(fin&&r)?l('Accès jusqu\'au',finTxt):''}
+    ${(()=>{ const a=abonnementDe(u), p=a.pause;
+      // LA PAUSE EN COURS (11/10/2026) : la date de reprise, et la reprise anticipée.
+      if(!r&&p&&Number(p.reprise)>Date.now()) return l('En pause jusqu\'au',new Date(p.reprise).toLocaleDateString('fr-FR'))
+        +`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:4px 0 0">Aucun prélèvement pendant la pause. Le ${escapeHtml(new Date(p.reprise).toLocaleDateString('fr-FR'))}, l'abonnement repart tout seul.</div>
+          <button type="button" class="btn btn-outline" style="width:100%;margin-top:10px" onclick="abonnementReprendre()">Reprendre maintenant</button>`;
+      if(!r&&a.changement&&a.changement.vers==='essentielle') return l('Passage à Essentielle',a.changement.effetLe?'le '+new Date(a.changement.effetLe).toLocaleDateString('fr-FR'):'à la prochaine échéance');
+      return ''; })()}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(texteResilMoyens(u))}</div>
@@ -3341,14 +3396,108 @@ function _ouvrirResiliation(){
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
     </select>
     <input id="resil-libre" type="text" maxlength="300" placeholder="Préciser (facultatif)" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:10px">
-    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>`;
+    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>
+    ${htmlAlternativesResiliation(currentUser)}`;
   return true;
+}
+// ══ LES ALTERNATIVES À LA RÉSILIATION (11/10/2026) ══════════════════════
+// ⚠ L215-1-1 NE BOUGE PAS : elles sont SOUS « Confirmer la résiliation », sur
+//   le même écran, en boutons secondaires. Pas un écran de plus, pas avant,
+//   pas de remise : la résiliation reste trois clics (Réglages, « Résilier
+//   mon abonnement », « Confirmer »). Le serveur léger parle à PayPal
+//   (cloudflare/src/paypal.js : suspend, activate, revise) et refait les mêmes
+//   contrôles (alternatives.js) : ce qui suit n'est que l'affichage.
+/**
+ * PURE. Les alternatives proposées (miroir de alternativesResiliation,
+ * cloudflare/src/alternatives.js) : la PAUSE pour un mensuel, ESSENTIELLE
+ * pour un Ultime ; ni l'une ni l'autre sous engagement, après une résiliation
+ * ou pendant une pause.
+ * @param {any} user
+ * @param {number} [maintenant]
+ * @returns {{pause:boolean, essentielle:boolean}}
+ */
+function alternativesResiliation(user,maintenant){
+  const u=user||{}, t=typeof maintenant==='number'?maintenant:Date.now();
+  const a=abonnementDe(u);
+  const base=u.role!=='coach'&&/^I-[A-Z0-9]{8,}$/.test(String(u.paypalSubscriptionId||''))
+    &&!resiliationDemandee(u)&&!(Number(a.engagementJusqu)>t);
+  const enPause=!!(a.pause&&Number(a.pause.reprise)>t);
+  return {pause:base&&!enPause&&a.palier!=='annuel',
+    essentielle:base&&!enPause&&a.formule==='ultime'&&!(a.changement&&a.changement.vers==='essentielle')};
+}
+const PAUSE_JOURS=30;
+// PURE. Les deux boutons, ou rien.
+function htmlAlternativesResiliation(user){
+  const al=alternativesResiliation(user);
+  if(!al.pause&&!al.essentielle) return '';
+  const annuel=abonnementDe(user).palier==='annuel';
+  const b=(attr,titre,sous)=>`<button type="button" class="btn btn-outline" ${attr} style="width:100%;margin:8px 0 0;padding:10px 12px;text-transform:none;letter-spacing:0;font-size:var(--fs-sm);line-height:1.4">
+      <span style="display:block;font-weight:700">${escapeHtml(titre)}</span><span style="display:block;color:var(--sub);font-weight:400;font-size:var(--fs-xs)">${escapeHtml(sous)}</span></button>`;
+  return `<div data-alternatives style="margin-top:12px;font-size:var(--fs-xs);color:var(--sub)">Ou, si tu préfères :</div>`
+    +(al.pause?b('data-alt="pause" onclick="abonnementPause()"','Mettre en pause 1 mois',
+      'Aucun prélèvement pendant '+PAUSE_JOURS+' jours, puis l’abonnement repart tout seul.'):'')
+    +(al.essentielle?b('data-alt="essentielle" onclick="abonnementEssentielle()"','Passer à Essentielle',
+      prixOffre('essentielle',annuel)+(annuel?' par an':' par mois')+', à partir de ta prochaine échéance. À valider chez PayPal.'):'');
+}
+let _altEnCours=false;
+async function abonnementPause(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'pause'});
+    if(!r||!r.ok){ toast('La pause n’a pas pu être posée chez PayPal. Rien n’a changé.','var(--orange)'); return false; }
+    if(!currentUser.abonnement||typeof currentUser.abonnement!=='object') currentUser.abonnement={};
+    currentUser.abonnement.pause=r.pause;
+    try{ saveUser(); }catch(e){}
+    _renderAbonnement();
+    toast('Abonnement en pause jusqu’au '+new Date(r.pause.reprise).toLocaleDateString('fr-FR')+' ✓','var(--green)');
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+async function abonnementReprendre(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'reprendre'});
+    if(!r||!r.ok){ toast('La reprise n’a pas pu se faire chez PayPal.','var(--orange)'); return false; }
+    if(currentUser.abonnement) delete currentUser.abonnement.pause;
+    try{ saveUser(); }catch(e){}
+    _renderAbonnement();
+    toast('Abonnement repris ✓','var(--green)');
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+async function abonnementEssentielle(){
+  if(_altEnCours) return false; _altEnCours=true;
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'essentielle'});
+    if(!r||!r.ok||!/^https:\/\/(www\.)?(sandbox\.)?paypal\.com\//.test(String(r.approuver||''))){
+      toast('Le changement n’a pas pu être préparé chez PayPal. Rien n’a changé.','var(--orange)'); return false; }
+    window.location.href=r.approuver;      // la personne valide chez PayPal
+    return true;
+  }catch(e){ toast('Serveur injoignable : rien n’a changé.','var(--orange)'); return false; }
+  finally{ _altEnCours=false; }
+}
+// Au retour de PayPal (?abo=essentielle) : le serveur relit le plan.
+async function abonnementRetourEssentielle(){
+  try{
+    const r=await CLOUD._callFn('abonnement',{action:'verifier_essentielle'});
+    if(r&&r.ok&&r.changement){
+      if(!currentUser.abonnement||typeof currentUser.abonnement!=='object') currentUser.abonnement={};
+      currentUser.abonnement.changement=r.changement;
+      try{ saveUser(); }catch(e){}
+      toast('Passage à Essentielle enregistré ✓','var(--green)');
+      return true;
+    }
+    toast('PayPal n’a pas encore confirmé le changement.','var(--sub)');
+  }catch(e){}
+  return false;
 }
 function _confirmerResiliation(){
   const m=(document.getElementById('resil-motif')||{}).value||'';
   const l=(document.getElementById('resil-libre')||{}).value||'';
   const motif=[m,l].filter(Boolean).join(' : ');
-  if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
+  if(!demanderResiliation(motif,m)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
   toast('Résiliation enregistrée ✓','var(--green)');
   return true;
@@ -7221,6 +7370,13 @@ function _validateAthletePkg(o){
     if(_bilanDeepLink) window._pendingBilanOpen=true;
     const _woDeepLink=params.get('wo')==='1';
     if(_woDeepLink) window._pendingWoOpen=true;
+    // ?wo=1&i=<0..6> (11/10/2026) : la notification « ta première séance »
+    // ouvre DIRECTEMENT ce créneau de sessions_config, pas le sélecteur.
+    if(_woDeepLink&&/^[0-6]$/.test(String(params.get('i')||''))) window._pendingWoIdx=Number(params.get('i'));
+    // ?abonnement=1 (la reconquête) : l'écran des formules. ?abo=essentielle :
+    // le retour de PayPal après le passage à Essentielle.
+    if(params.get('abonnement')==='1') window._pendingAboOpen=true;
+    if(params.get('abo')==='essentielle') window._pendingAboEssentielle=true;
     // ?diete=1 — AJOUTE POUR LE RACCOURCI DU MANIFESTE. « Nouvelle séance »
     // avait déjà son ?wo=1 ; la diète n'avait aucune adresse, et un raccourci
     // qui ouvre l'accueil au lieu de l'écran promis est un lien mort qui ne
@@ -8861,7 +9017,10 @@ function routeUser(){
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
-  if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
+  if(window._pendingAboOpen){window._pendingAboOpen=false;setTimeout(()=>{ try{ ouvrirAbonnementDepuisEssai(); }catch(e){} },900);}
+  if(window._pendingAboEssentielle){window._pendingAboEssentielle=false;setTimeout(()=>{ abonnementRetourEssentielle(); },1200);}
+  if(window._pendingWoOpen){window._pendingWoOpen=false;const _wi=window._pendingWoIdx;window._pendingWoIdx=null;
+    setTimeout(()=>{ try{ ouvrirSeanceLien(currentUser,_wi); }catch(e){ openSessionPicker(); } },900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
   if(window._pendingSanteEnvoyer){ window._pendingSanteEnvoyer=false;
@@ -22738,6 +22897,10 @@ function activiteResume(u,maintenant){
     seance1:ses.length>0,
     parcours:!!(p.fini&&!p.existant),
     finEssai:Number(u.essai&&u.essai.finit)||0,
+    // LE RÉSUMÉ DE L'ESSAI (10/10/2026) : quatre nombres, pour la notification
+    // de fin d'essai du serveur (« 12 séances, 3 records : on continue ? »).
+    ...((()=>{ if(!(Number(u.essai&&u.essai.finit)>0)) return {};
+      const e=essaiResumeDe(u); return {essai:{s:e.seances,t:e.tonnage,r:e.records,w:e.semaines}}; })()),
     payant:!!((u.origine&&u.origine.payeLe)||u.paypalSubscriptionId),
     lev:{parcours:!!(p.fini&&!p.existant&&Number(p.fini)<=fin30),checkin:ciTot>=3,notif,
       duel:Object.keys(u.duels||{}).length>0,
@@ -22824,7 +22987,22 @@ function htmlRetention(s){
         +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
     +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
     +escapeHtml(new Date(s.maj).toLocaleString('fr-FR'))+' sur '+(s.comptes||0)+' comptes, sans aucune donnée personnelle.</p>';
+  h+=htmlRelancePremiere(s.premiereSeance,s.seuilGroupe);
   return h;
+}
+// PURE. LA RELANCE DES INSCRITS SANS SÉANCE (11/10/2026, serveur léger,
+// premiere.js) : par push (J1, J3, J6), les envois et les premières séances
+// qui ont suivi (attribuées au dernier push parti, dans les 7 jours).
+const RELANCE_PREMIERE_LIB=Object.freeze({j1:'Push du 1er jour',j3:'Push du 3e jour',j6:'Push du 6e jour'});
+function htmlRelancePremiere(lignes,seuil){
+  const L=Array.isArray(lignes)?lignes:[];
+  if(!L.length) return '';
+  return '<div class="vir-t">Relance des inscrits sans séance</div>'
+    +'<div class="vir-tab"><table><tr><th>Push</th><th>Envoyés</th><th>1re séance</th><th>Taux</th></tr>'
+    +L.map(l=>'<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(RELANCE_PREMIERE_LIB[l.levier]||String(l.levier))
+      +(l.alerte?'<small>⚠ groupe &lt; '+(seuil||30)+' : pas encore significatif</small>':'')+'</td>'
+      +'<td>'+(Number(l.envoyes)||0)+'</td><td>'+(Number(l.seances)||0)+'</td><td>'+_vfPct(l.taux)+'</td></tr>').join('')
+    +'</table></div><p class="sub vir-note">Une première séance compte pour le dernier push parti avant elle, s’il date de moins de 7 jours. Un inscrit entre dans le tableau quand sa première séance arrive, ou 14 jours après l’inscription.</p>';
 }
 let _viral=null;   // {jours, semaines, periode, retention}
 // /stats/retention : lu par le créateur seul (règles).
@@ -48906,6 +49084,22 @@ function openSessionExercises(idx){
 // l'indice du jour : les jours de repos ne produisent pas de ligne, et compter
 // les jours laisserait des trous dans la cadence.
 let _spRang=0;
+// PURE. Le créneau qu'un lien ?wo=1&i=<n> peut ouvrir : actif, avec des
+// exercices ; sinon null (le sélecteur s'ouvre, comme avant).
+function creneauLienSeance(u,i){
+  if(i===null||i===undefined||i==='') return null;
+  const n=Number(i);
+  if(!(n>=0&&n<=6)||Math.floor(n)!==n) return null;
+  const s=((u&&u.sessions_config)||[])[n];
+  return (s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length)?n:null;
+}
+// Le lien d'une notification : la séance demandée, sinon le sélecteur.
+function ouvrirSeanceLien(u,i){
+  const n=creneauLienSeance(u,i);
+  if(n===null){ openSessionPicker(); return 'selecteur'; }
+  startWorkoutSession(n);
+  return 'seance';
+}
 function openSessionPicker(){
   // LOT C1 : ouvrir son programme, c'est l'étape « lis-le » de l'accueil.
   try{ accueilProgrammeLu(); }catch(e){}
@@ -82138,8 +82332,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante','premiere','reconquete']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), tant que ta première séance n’est pas faite (1, 3 et 6 jours après l’inscription), un seul message 30 jours après une résiliation, et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance','message']),
     detail:'quand ton coach t’écrit, répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -82305,6 +82499,8 @@ const PUSH_TYPES=Object.freeze([
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
+  {cle:'premiere',titre:'Ta première séance',txt:'1, 3 et 6 jours après ton inscription, tant que tu n’as fait aucune séance. Le message ouvre ta séance du jour.'},
+  {cle:'reconquete',titre:'Après une résiliation',txt:'Un seul message, 30 jours après ta résiliation : ce que tu as fait et l’offre du moment. Puis plus rien.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
   {cle:'relance',titre:'Rappel de ton coach',txt:'Un bilan en retard, un programme en préparation, un accès qui se termine : un message par semaine au plus, seulement si ton coach les a allumés.'},
   {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}
@@ -83032,44 +83228,67 @@ function rendreEssaiBilan(u){
   const z=document.getElementById('eb-corps');
   if(!z) return false;
   const x=u||currentUser||{};
-  const quoi=essaiBilanPhrase(x);
-  const faites=essaiBilan(x).faites;
-  const titre=quoi
-    ? 'Ton mois est terminé, et '+quoi+' sont toujours là.'
-    : 'Ton mois est terminé.';
-  const ligne=(t)=>'<li style="margin-bottom:6px">'+t+'</li>';
+  const r=essaiResumeDe(x);
+  try{ rcm('trial_end_viewed'); }catch(e){}
+  const nb=(n)=>escapeHtml(String(n));
+  // LES QUATRE CHIFFRES (10/10/2026), ou, sans séance, une phrase honnête.
+  const tuile=(v,lib)=>'<div class="eb-ch"><div class="eb-ch-v">'+v+'</div><div class="eb-ch-l">'+lib+'</div></div>';
+  const pl=(n,s1,s2)=>n>1?s2:s1;
+  const chiffres=r.seances
+    ? '<div class="eb-chiffres">'
+      +tuile(nb(r.seances),pl(r.seances,'séance','séances'))
+      +tuile(escapeHtml(_cpTonnage(r.tonnage)),'soulevés')
+      +tuile(nb(r.records),pl(r.records,'record battu','records battus'))
+      +tuile(nb(r.semaines),pl(r.semaines,'semaine active','semaines actives'))
+      +'</div>'
+    : '';
+  const titre=r.seances
+    ? (r.records?(r.seances+' séance'+pl(r.seances,'','s')+', '+r.records+' record'+pl(r.records,'','s')+' : on continue ?')
+                :(r.seances+' séance'+pl(r.seances,'','s')+' en un mois : on continue ?'))
+    : 'Ton mois d’essai est terminé.';
+  const sous=r.seances
+    ? 'Tout ce que tu as construit est toujours là. Rien n’est effacé.'
+    : 'Tu n’as pas encore fait de séance. Ton programme et ton compte sont toujours là, rien n’est effacé.';
+  let ava='';
+  try{ ava='<img class="eb-ava" alt="Ton avatar de progression" width="96" height="96" src="'
+    +escapeHtml(woSrcAvatar(r.niveauAvatar,woGenreAvatar(x),'face'))+'">'; }catch(e){ ava=''; }
+  // LES TROIS OFFRES : mensuel, annuel (remise calculée), un programme de la
+  // boutique. VERSION GOOGLE PLAY : aucune offre payante (canalApp).
+  const remise=texteRemiseAnnuelle('ultime');
+  const prixProg=(TARIFS.coaching&&TARIFS.coaching.boutique_prog)||{};
+  const offres=canalApp()==='play' ? htmlCanalPlay() :
+    '<div class="eb-carte">'
+      +'<div class="eb-c-nom">Ultime, chaque mois</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixOffre('ultime'))+' par mois</div>'
+      +'<button type="button" class="btn btn-red" style="width:100%" data-eb-offre="mensuel" '
+      +'onclick="essaiBilanOffre(\'mensuel\')">Continuer chaque mois</button>'
+    +'</div>'
+    +'<div class="eb-carte">'
+      +(remise?'<div class="eb-c-badge">'+escapeHtml(remise)+'</div>':'')
+      +'<div class="eb-c-nom">Ultime, à l’année</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixOffre('ultime',true))+' l’année en une fois</div>'
+      +'<button type="button" class="btn btn-outline" style="width:100%" data-eb-offre="annuel" '
+      +'onclick="essaiBilanOffre(\'annuel\')">Continuer à l’année</button>'
+    +'</div>'
+    +'<div class="eb-carte">'
+      +'<div class="eb-c-nom">Un programme de la boutique</div>'
+      +'<div class="eb-c-prix">'+(prixProg.prix?escapeHtml(_euros(prixProg.prix)):'')+' · à vie'
+      +(prixProg.mois?', avec '+escapeHtml(String(prixProg.mois*30))+' jours d’application':'')+'</div>'
+      +'<button type="button" class="btn btn-outline" style="width:100%" data-eb-offre="programme" '
+      +'onclick="essaiBilanOffre(\'programme\')">Voir les programmes</button>'
+    +'</div>';
   z.innerHTML=
     '<div class="eb-tete">Ton mois d’essai</div>'
+    +(ava?'<div class="eb-ava-z">'+ava+'</div>':'')
     +'<h1 class="eb-titre">'+escapeHtml(titre)+'</h1>'
-    +(faites?'<p class="eb-sous">'+faites+' séance'+(faites>1?'s':'')+' terminée'
-      +(faites>1?'s':'')+' pendant le mois. Rien n’est effacé.</p>'
-      :'<p class="eb-sous">Rien n’est effacé.</p>')
-    +'<div class="eb-carte">'
-      +'<div class="eb-c-nom">Ultime</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('ultime'))+'</div>'
-      +'<ul class="eb-c-l">'
-      +ligne('Le catalogue d’exercices, filmés et illustrés')
-      +ligne('La charge de ton bloc, semaine par semaine')
-      +ligne('Ta diète calculée et tes compléments')
-      +'</ul>'
-      +'<button type="button" class="btn btn-red" style="width:100%" '
-      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
-    +'</div>'
-    +'<div class="eb-carte">'
-      +'<div class="eb-c-nom">Essentielle</div>'
-      +'<div class="eb-c-prix">'+escapeHtml(prixDeuxFacons('essentielle'))+'</div>'
-      +'<ul class="eb-c-l">'
-      +ligne('Tes séances, ton historique et tes bilans')
-      +ligne('Ta nutrition et ton lifestyle')
-      +'</ul>'
-      +'<button type="button" class="btn btn-outline" style="width:100%" '
-      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
-    +'</div>'
+    +chiffres
+    +'<p class="eb-sous">'+escapeHtml(sous)+'</p>'
+    +offres
     +'<div class="eb-pied">'
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
-      +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
-      +'Voir les formules de coaching</a>'
+      +'<a class="eb-lien" data-eb-offre="coaching" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" '
+      +'onclick="try{rcm(\'trial_end_offer_clicked\')}catch(e){}">Voir les formules de coaching</a>'
       +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
       // SES PROGRAMMES ACHETÉS RESTENT LISIBLES (09/10/2026) : ils sont à vie,
       // et cet écran est celui où tout le reste est fermé.
@@ -83078,6 +83297,13 @@ function rendreEssaiBilan(u){
           +(n>1?'Lire mes '+n+' programmes':'Lire mon programme')+'</button>':''; })())
     +'</div>';
   return true;
+}
+// Un clic sur une offre de fin d'essai : compté, puis la suite.
+function essaiBilanOffre(quoi){
+  try{ rcm('trial_end_offer_clicked'); }catch(e){}
+  if(quoi==='programme'){ try{ ouvrirBoutique(); }catch(e){} return 'programme'; }
+  accueilChoisir('ultime',quoi==='annuel');
+  return quoi;
 }
 // Le seul chemin vers le paywall pendant l'essai, et il est VOLONTAIRE : on
 // ne le pousse pas, on le rend atteignable. C'est la difference entre une

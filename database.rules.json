@@ -389,6 +389,27 @@
             "motif": { ".validate": "newData.isString() && newData.val().length < 300" },
             "$autre": { ".validate": false }
           },
+          // ⚠ LES ALTERNATIVES A LA RESILIATION (11/10/2026), ecrites par le
+          //   serveur leger et DECLAREES ICI (liste blanche : un champ inconnu
+          //   ferait rejeter tout le PUT du dossier, en silence).
+          "pause": {
+            "depuis": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "reprise": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "accesJusqu": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "abo": { ".validate": "newData.isString() && newData.val().length < 40" },
+            "$autre": { ".validate": false }
+          },
+          // ⚠ LE PRIX SOUSCRIT (09/10/2026), pose par l app a la souscription et
+          //   JAMAIS declare jusqu au 11/10/2026 : chaque PUT d un dossier qui le
+          //   portait etait rejete en entier, en silence.
+          "prixSouscrit": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+          "pauseFinie": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "changement": {
+            "vers": { ".validate": "newData.isString() && newData.val().matches(/^essentielle$/)" },
+            "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "effetLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$autre": { ".validate": false }
+          },
           "renonciationRetractation": {
             "accepte": { ".validate": "newData.isBoolean()" },
             "ts": { ".validate": "newData.isNumber()" },
@@ -1426,7 +1447,7 @@
           //   Ils sont incrementes par rcq(), par paquets de quarante-cinq
           //   secondes, et lus par la carte « Capacite » du createur.
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo)$/)"
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|trial_end_viewed|trial_end_offer_clicked|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto|droits_ecart_vu|droits_ecart_essai|droits_ecart_suivi|droits_ecart_abo)$/)"
         }
       }
     },
@@ -2279,6 +2300,9 @@
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
+    "premiere_trace": { ".read": false, ".write": false },
+    "pauses":         { ".read": false, ".write": false },
+    "reconquete":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
@@ -2318,6 +2342,10 @@
       "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       // LES CONNEXIONS ESTIMEES (serveur leger, chaque minute) : le createur seul.
       "connexions": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LA RELANCE DES INSCRITS SANS SEANCE (serveur leger) : des compteurs, le createur seul.
+      "relance_premiere": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      // LES MOTIFS DE RESILIATION, par mois (serveur leger) : le createur seul.
+      "resiliations": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
       "$autre": { ".read": true }
     },
     // LA PRESENCE (09/10/2026) : « cet appareil est ouvert », pour estimer les
@@ -2341,6 +2369,10 @@
     // actifs et des oui/non, aucun contenu. Ecrit par son titulaire, lu par
     // le Worker seul (acces administrateur) ; efface avec le compte.
     "activite": {
+      // La fin d'essai (10/10/2026) : le serveur leger cherche les essais qui
+      // finissent dans les jours qui viennent, sans tout lire.
+      // Les inscrits sans premiere seance (11/10/2026) : par jour d inscription.
+      ".indexOn": ["finEssai", "inscrit"],
       "$k": {
         ".read": false,
         ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
@@ -2356,6 +2388,11 @@
         "parcours": { ".validate": "newData.isBoolean()" },
         "finEssai": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "payant":   { ".validate": "newData.isBoolean()" },
+        "essai":    { "s": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+                      "t": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+                      "r": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+                      "w": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+                      "$autre": { ".validate": false } },
         "lev":      { "$l": { ".validate": "$l.matches(/^(parcours|checkin|notif|duel|defi|coach|invite)$/) && newData.isBoolean()" } },
         "$autre":   { ".validate": false }
       }

@@ -30,6 +30,8 @@ import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { creerAffluence } from './affluence.js';
+import { creerFinEssai } from './finessai.js';
+import { creerPremiere } from './premiere.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
@@ -40,7 +42,9 @@ import { creerGarmin, garminOuvert } from './garmin.js';
 const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
 // garmin : relier sa montre Garmin (OAuth), l'état, la révocation (garmin.js).
 const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin };
+// abonnement : pause d'un mois, reprise, passage à Essentielle, avis de résiliation (paypal.js).
+const abonnement = (req, ctx) => ctx.M.paypal.appelAbonnement(req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
@@ -58,6 +62,9 @@ function outils(env) {
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
   // Les connexions simultanées estimées, chaque minute, et l'alerte à 70.
   M.affluence = creerAffluence({ db, M });
+  // La fin d'essai : J-3, J-1, J0 à 18 h 30, et l'étiquette Systeme.io à J-3.
+  M.finEssai = creerFinEssai({ db, M, env, fetchImpl: fetchCompte });
+  M.premiere = creerPremiere({ db, M });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });

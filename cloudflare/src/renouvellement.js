@@ -71,8 +71,9 @@ export function texteAvis(o) {
  * étiquette retirée puis remise (une automatisation « tag ajouté » se
  * redéclenche ainsi chaque année). Rend 'envoye', 'non_configure' ou lève.
  */
-export async function etiqueterSystemeio(env, fetchImpl, { email, prenom, date, montant }) {
-  const cle = String(env.SYSTEMEIO_API_KEY || '').trim(), tag = String(env.SYSTEMEIO_TAG_RENOUVELLEMENT || '').trim();
+export async function etiqueterSystemeio(env, fetchImpl, { email, prenom, date, montant, tag: tagDemande }) {
+  // `tag` : une autre étiquette que celle du renouvellement (fin d'essai, 10/10/2026).
+  const cle = String(env.SYSTEMEIO_API_KEY || '').trim(), tag = String((tagDemande !== undefined ? tagDemande : env.SYSTEMEIO_TAG_RENOUVELLEMENT) || '').trim();   // une étiquette demandée et non configurée ne retombe JAMAIS sur celle du renouvellement
   if (!cle || !/^\d+$/.test(tag)) return 'non_configure';
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'sans_email';
   const f = fetchImpl || fetch;
@@ -84,7 +85,7 @@ export async function etiqueterSystemeio(env, fetchImpl, { email, prenom, date, 
     return r.status === 204 || methode === 'DELETE' ? null : r.json();
   };
   const champs = [];
-  if (env.SYSTEMEIO_CHAMP_ECHEANCE) champs.push({ slug: String(env.SYSTEMEIO_CHAMP_ECHEANCE), value: date });
+  if (env.SYSTEMEIO_CHAMP_ECHEANCE && date) champs.push({ slug: String(env.SYSTEMEIO_CHAMP_ECHEANCE), value: date });
   if (env.SYSTEMEIO_CHAMP_MONTANT && montant) champs.push({ slug: String(env.SYSTEMEIO_CHAMP_MONTANT), value: montant });
   const trouve = await appel('GET', '/contacts?email=' + encodeURIComponent(email));
   let contact = trouve && Array.isArray(trouve.items) ? trouve.items[0] : null;

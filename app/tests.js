@@ -13040,7 +13040,7 @@ async function testExercices(){
           } finally { currentUser=sauve; window.saveUser=_sv; }})());
         ok('Aucun écran de rétention, aucune remise, aucune friction',(()=>{
           const src=String(_ouvrirResiliation)+String(_confirmerResiliation)
-            +String(demanderResiliation);
+            +String(demanderResiliation)+String(htmlAlternativesResiliation);
           // rcConfirm( AUTANT QUE confirm( : l'app a migré vers le dialogue
           // maison, et une friction posée avec le nouveau nom aurait glissé
           // sous cet interdit sans le déclencher. Vérifié sur la version
@@ -50793,7 +50793,7 @@ async function testExercices(){
       if(!r) return true;                      // règles non servies : regles.mjs le dit
       // Depuis le 28/09/2026 : /stats/retention au créateur seul, le reste
       // (badges, saisons) public par "$autre".
-      const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+900):'';
+      const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+2000):'';
       if(!m) return _echec('le nœud stats manque aux règles');
       if(!/"\$autre"\s*:\s*\{\s*"\.read"\s*:\s*true\s*\}/.test(m)) return _echec('stats n’est pas en lecture publique');
       if(!/"retention"\s*:\s*\{\s*"\.read"\s*:\s*"auth != null && auth\.token\.email === 'guellec\.coachingpro@gmail\.com'"/.test(m)) return _echec('la rétention n’est pas réservée au créateur');
@@ -51698,13 +51698,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,relance,retour,sante,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,premiere,reconquete,relance,retour,sante,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==11) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==13) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -55377,8 +55377,10 @@ async function testExercices(){
       if(!r.seance1||!r.parcours||r.payant||r.finEssai!==cree+30*_RETJ) return _echec('entonnoir');
       if(!r.lev.parcours||r.lev.checkin||!r.lev.coach||!r.lev.duel||!r.lev.invite) return _echec('leviers '+JSON.stringify(r.lev));
       const txt=JSON.stringify(r);
-      if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,''))) return _echec('un contenu a fui : '+txt);
-      if(Object.keys(r).sort().join()!=='debut,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
+      // LE RÉSUMÉ DE L'ESSAI (10/10/2026) : quatre totaux, rien d'autre.
+      if(!r.essai||Object.keys(r.essai).sort().join()!=='r,s,t,w'||Object.values(r.essai).some(v=>typeof v!=='number')) return _echec('résumé de l’essai : '+JSON.stringify(r.essai));
+      if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,'').replace(/"essai":\{[^}]*\}/,''))) return _echec('un contenu a fui : '+txt);
+      if(Object.keys(r).sort().join()!=='debut,essai,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
       if(activiteResume({role:'coach',createdAt:1},_RET)!==null||activiteResume({role:'athlete'},_RET)!==null) return _echec('coach ou sans date');
       return /activitePublier\(u\)/.test(String(loadClientHome))?true:_echec('publié depuis l’accueil');})());
     ok('Rétention : l’écran Viralité — actifs, cohortes et courbes SVG, entonnoir, leviers avec alerte sous 30',(()=>{
@@ -57991,44 +57993,249 @@ async function testExercices(){
       return /Plus que 2 jours/.test(j58)?true:_echec('jour 58 : '+j58);})());
 
     // LE BOUT DU MOIS : ce qu'on montre, c'est SON programme.
-    ok('LOT 6 — L’ÉCRAN DE FIN MONTRE SON PROGRAMME, ET DIT QUE RIEN N’EST EFFACÉ',(()=>{
-      const sv=currentUser;
+    // ══ LA FIN D'ESSAI, UN MOMENT DE CONVERSION (10/10/2026) ═══════════════
+    ok('FIN D’ESSAI — resumeEssai PURE : fenêtre, tonnage, records, semaines, avatar',(()=>{
+      const J=864e5, d=new Date(2026,8,7,12).getTime();   // un lundi midi
+      const ses=[{date:d-2*J,volume:999},{date:d,volume:1000.4},{date:d+J,volume:500},{date:d+8*J,volume:0},{date:d+40*J,volume:7}];
+      const r=resumeEssai(ses,[{nom:'SQUAT'},{nom:'DIPS'}],{debut:d,fin:d+30*J});
+      if(r.seances!==3) return _echec('séances : '+r.seances);
+      if(r.tonnage!==1500) return _echec('tonnage : '+r.tonnage);
+      if(r.records!==2) return _echec('records (liste) : '+r.records);
+      if(r.semaines!==2) return _echec('semaines : '+r.semaines);
+      if(resumeEssai(ses,4).records!==4||resumeEssai(ses,-3).records!==0) return _echec('records (nombre)');
+      const v=resumeEssai([],0);
+      if(v.seances||v.tonnage||v.records||v.semaines||v.niveauAvatar!==1) return _echec('vide : '+JSON.stringify(v));
+      if(resumeEssai(null,null).seances!==0) return _echec('entrée absente');
+      const plein=resumeEssai(Array.from({length:30},(_,i)=>({date:d+i*J})),0);
+      if(plein.niveauAvatar!==WO_AVA_NIV) return _echec('avatar plein : '+plein.niveauAvatar);
+      const mi=resumeEssai(Array.from({length:6},(_,i)=>({date:d+i*J})),0).niveauAvatar;
+      if(!(mi>1&&mi<WO_AVA_NIV)) return _echec('avatar à 6 séances : '+mi);
+      // PURE : l'entrée n'est pas touchée.
+      if(ses.length!==5||ses[1].volume!==1000.4) return _echec('entrée modifiée');
+      return true;})());
+
+    // L'écran, trois cas : sans séance, avec séances, version Google Play.
+    // ⚠ IL NE MONTRE QUE DES CHIFFRES RÉELS. Sans séance, aucun chiffre.
+    ok('FIN D’ESSAI — l’écran : 4 vrais chiffres avec séances, aucun sans, 3 offres, coaching, rien n’est effacé',(()=>{
+      const sv=currentUser, sR=window.rcm, sA=window.accueilChoisir, sB=window.ouvrirBoutique;
+      const vus=[], choix=[];
+      let canal=null; try{ canal=sessionStorage.getItem(CANAL_PLAY_CLE); sessionStorage.removeItem(CANAL_PLAY_CLE); }catch(e){}
       try{
-        const t0=Date.now()-40*86400000;
-        currentUser={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
-          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000},
-          sessions:[{date:1},{date:2},{date:3},{date:4}],
-          sessions_config:[
-            {day:'Lundi',active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE'},{name:'DIPS'}]},
-            {day:'Mardi',active:false,exercises:[]},
-            {day:'Mercredi',active:true,exercises:[{name:'TRACTIONS'}]}]};
+        window.rcm=n=>{ vus.push(n); };
+        window.accueilChoisir=(k,a)=>{ choix.push(k+(a?':an':':mois')); };
+        window.ouvrirBoutique=()=>{ choix.push('boutique'); };
+        const J=864e5, t0=Date.now()-40*J;
+        const base={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DIPS'}]}]};
+        const lire=()=>{ const z=document.getElementById('eb-corps'); return {z,txt:z.textContent.replace(/\s+/g,' ')}; };
+        const commun=(txt,z,qui)=>{
+          if(!/rien n’est effacé/i.test(txt)) return qui+' : rien n’est effacé n’est pas dit';
+          for(const o of ['mensuel','annuel','programme']) if(!z.querySelector('[data-eb-offre="'+o+'"]')) return qui+' : offre '+o+' absente';
+          const _nb=String.fromCharCode(160);
+          for(const p of [prixOffre('ultime'),prixOffre('ultime',true)]) if(txt.indexOf(p.split(_nb).join(' '))<0) return qui+' : prix '+p+' absent';
+          const rem=texteRemiseAnnuelle('ultime');
+          if(rem&&txt.indexOf(rem.split(_nb).join(' '))<0) return qui+' : la remise de l’annuel (« '+rem+' ») n’est pas dite';
+          if(!z.querySelector('a[href*="beacons.ai/kevin.gllc"]')) return qui+' : pas de lien coaching';
+          if(![...z.querySelectorAll('button')].some(b=>/ouvrirCodeCoach\(\)/.test(b.getAttribute('onclick')||''))) return qui+' : pas de porte code coach';
+          if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0) return qui+' : tiret cadratin';
+          for(const mot of ['palier','quota','capacité','synchronisation','garanti','résultats'])
+            if(new RegExp(mot,'i').test(txt)) return qui+' : mot interdit visible : '+mot;
+          return '';
+        };
+        // 1. SANS SÉANCE : pas de tuile, pas de chiffre dans le titre.
+        currentUser=Object.assign({},base,{sessions:[]});
         if(!rendreEssaiBilan(currentUser)) return _echec('l’écran ne se dessine pas');
-        const z=document.getElementById('eb-corps');
-        const txt=z.textContent.replace(/\s+/g,' ');
-        if(txt.indexOf('Rien n’est effacé')<0) return _echec('l’écran ne dit pas que rien n’est effacé');
-        if(!/2 séances/.test(txt)) return _echec('les séances de son programme ne sont pas comptées : « '+txt.slice(0,160)+' »');
-        if(!/4 séances? terminées?/.test(txt)) return _echec('les séances faites ne sont pas dites');
-        // LES DEUX FORMULES, AVEC LEURS PRIX, ET AUCUN AUTRE PRIX EN DUR.
-        // ⚠ LE TEXTE LU EST NORMALISE (\s avale l'espace insecable des prix) :
-        //   on normalise donc aussi le prix attendu, sans quoi « 24,90 € »
-        //   cherche un caractere que la lecture vient de remplacer.
-        const _nb=String.fromCharCode(160);
-        for(const p of [prixOffre('ultime'),prixOffre('ultime',true),prixOffre('essentielle'),prixOffre('essentielle',true)])
-          if(txt.indexOf(p.split(_nb).join(' '))<0) return _echec('le prix '+p+' ne se lit pas');
-        // ET DES PORTES, PAS UN MUR : Ultime, Essentielle, le coaching, le code.
-        const b=[...z.querySelectorAll('button,a')];
-        if(b.length<4) return _echec(b.length+' portes seulement');
-        if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
-          return _echec('aucune porte ne mène au coaching');
-        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('onclick')||'')))
-          return _echec('aucune porte ne mène au code coach');
-        // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
-        if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
-          return _echec('un tiret cadratin traîne sur l’écran de fin');
-        for(const mot of ['palier','quota','capacité','synchronisation'])
-          if(new RegExp(mot,'i').test(txt)) return _echec('mot technique visible : '+mot);
+        let L=lire();
+        if(L.z.querySelector('.eb-chiffres')) return _echec('sans séance : des tuiles de chiffres');
+        const t1=L.z.querySelector('.eb-titre').textContent;
+        if(/\d/.test(t1)) return _echec('sans séance : un chiffre dans le titre : '+t1);
+        if(!/pas encore fait de séance/.test(L.txt)) return _echec('sans séance : la phrase honnête manque');
+        let e=commun(L.txt,L.z,'sans séance'); if(e) return _echec(e);
+        if(vus.indexOf('trial_end_viewed')<0) return _echec('trial_end_viewed non compté');
+        // 2. AVEC SÉANCES : 4 tuiles, et le titre « N séances, R records : on continue ? ».
+        const ses=[
+          {date:t0+2*J,volume:2000,exercises:[{name:'SQUAT',sets:[{weight:100,reps:5,rir:2}]}]},
+          {date:t0+3*J,volume:1500,exercises:[{name:'DIPS',sets:[{weight:20,reps:8,rir:2}]}]},
+          {date:t0+10*J,volume:2500,exercises:[]},
+          {date:t0+80*J,volume:9999}];                    // après l'essai : pas compté
+        currentUser=Object.assign({},base,{sessions:ses});
+        const r=essaiResumeDe(currentUser);
+        if(r.seances!==3||r.tonnage!==6000||r.semaines<2) return _echec('résumé : '+JSON.stringify(r));
+        rendreEssaiBilan(currentUser); L=lire();
+        const tu=L.z.querySelectorAll('.eb-chiffres .eb-ch');
+        if(tu.length!==4) return _echec(tu.length+' tuiles au lieu de 4');
+        const t2=L.z.querySelector('.eb-titre').textContent;
+        if(t2!==r.seances+' séances, '+r.records+' record'+(r.records>1?'s':'')+' : on continue ?') return _echec('titre : '+t2);
+        if(r.records<1) return _echec('aucun record lu');
+        if(tu[0].textContent.indexOf('3')<0||tu[1].textContent.indexOf(_cpTonnage(6000).replace(String.fromCharCode(160),' ').slice(0,1))<0) return _echec('tuiles : '+L.z.querySelector('.eb-chiffres').textContent);
+        const ava=L.z.querySelector('img.eb-ava');
+        if(!ava||ava.getAttribute('src')!==woSrcAvatar(r.niveauAvatar,woGenreAvatar(currentUser),'face')) return _echec('avatar de progression');
+        e=commun(L.txt,L.z,'avec séances'); if(e) return _echec(e);
+        // LES OFFRES : comptées, puis la bonne porte.
+        vus.length=0;
+        L.z.querySelector('[data-eb-offre="mensuel"]').click();
+        L.z.querySelector('[data-eb-offre="annuel"]').click();
+        L.z.querySelector('[data-eb-offre="programme"]').click();
+        if(choix.join()!=='ultime:mois,ultime:an,boutique') return _echec('portes : '+choix.join());
+        if(vus.filter(n=>n==='trial_end_offer_clicked').length!==3) return _echec('clics comptés : '+vus.join());
+        for(const n of ['trial_end_viewed','trial_end_offer_clicked']) if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors de la liste fermée');
+        // 3. VERSION GOOGLE PLAY : aucune offre payante, le message Play.
+        sessionStorage.setItem(CANAL_PLAY_CLE,'play');
+        rendreEssaiBilan(currentUser); L=lire();
+        if(L.z.querySelector('[data-eb-offre="mensuel"],[data-eb-offre="annuel"],[data-eb-offre="programme"]')) return _echec('Play : une offre payante');
+        if(L.txt.indexOf(prixOffre('ultime').split(String.fromCharCode(160)).join(' '))>=0) return _echec('Play : un prix affiché');
         return true;
-      } finally { currentUser=sv; }})());
+      } finally {
+        currentUser=sv; window.rcm=sR; window.accueilChoisir=sA; window.ouvrirBoutique=sB;
+        try{ if(canal==null) sessionStorage.removeItem(CANAL_PLAY_CLE); else sessionStorage.setItem(CANAL_PLAY_CLE,canal); }catch(e){}
+      }})());
+
+    // DÉJÀ PAYANT : l'écran de fin d'essai ne s'ouvre pas, et le résumé
+    // publié au serveur dit « payant » (le worker ne relance pas).
+    ok('FIN D’ESSAI — déjà payant : pas d’écran de fin, et activiteResume publie le résumé de l’essai',(()=>{
+      const J=864e5, t0=Date.now()-40*J;
+      const u={id:'pp',email:'pp@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*J},sessions:[{date:t0+J,volume:100}]};
+      if(doitVoirLePaywall(u)) return _echec('un abonné voit l’écran de fin d’essai');
+      if(!doitVoirLePaywall(Object.assign({},u,{status:'FREE'}))) return _echec('le même essai, sans abonnement, ne mène pas à l’écran');
+      const a=activiteResume(Object.assign({},u,{status:'FREE'}));
+      if(!a.essai||a.essai.s!==1||a.essai.t!==100) return _echec('résumé publié : '+JSON.stringify(a.essai));
+      for(const k of Object.keys(a.essai)) if(['s','t','r','w'].indexOf(k)<0) return _echec('champ en trop : '+k);
+      return true;})());
+
+    // ══ LES INSCRITS SANS PREMIÈRE SÉANCE (11/10/2026) ═════════════════════
+    // Le push du serveur (premiere.js) ouvre ./?wo=1&i=<créneau> : la séance
+    // du jour DIRECTEMENT, pas le sélecteur. Un créneau absent ou vide → le
+    // sélecteur, comme avant.
+    ok('PREMIÈRE SÉANCE — le lien ?wo=1&i= ouvre la séance du jour, sinon le sélecteur',(()=>{
+      const sv=currentUser, sS=window.startWorkoutSession, sP=window.openSessionPicker;
+      const vus=[];
+      try{
+        window.startWorkoutSession=i=>{ vus.push('s'+i); };
+        window.openSessionPicker=()=>{ vus.push('picker'); };
+        const cfg=[{day:'Lundi',active:true,exercises:[{name:'SQUAT'}]},{day:'Mardi',active:false,exercises:[{name:'DIPS'}]},
+          {day:'Mercredi',active:true,exercises:[]}];
+        currentUser={role:'athlete',sessions_config:cfg};
+        if(creneauLienSeance(currentUser,0)!==0) return _echec('créneau actif refusé');
+        for(const i of [1,2,7,-1,'x',null,undefined,0.5]) if(creneauLienSeance(currentUser,i)!==null) return _echec('créneau accepté : '+i);
+        ouvrirSeanceLien(currentUser,0); ouvrirSeanceLien(currentUser,1); ouvrirSeanceLien(currentUser,null);
+        if(vus.join()!=='s0,picker,picker') return _echec('ouvertures : '+vus.join());
+        // Le drapeau est posé au chargement, et consommé au démarrage.
+        const src=_prodSrc();
+        if(src.indexOf("window._pendingWoIdx=Number(params.get('i'))")<0||src.indexOf('ouvrirSeanceLien(currentUser,_wi)')<0) return _echec('le lien n’est pas branché');
+        return true;
+      } finally { currentUser=sv; window.startWorkoutSession=sS; window.openSessionPicker=sP; }})());
+
+    ok('PREMIÈRE SÉANCE — le type « premiere » se coupe dans les réglages, et l’écran Viralité montre son taux',(()=>{
+      const t=PUSH_TYPES.find(x=>x.cle==='premiere');
+      if(!t||!/1, 3 et 6 jours/.test(t.txt)) return _echec('type absent des réglages');
+      const g=NOTIF_GROUPES.find(x=>x.types.indexOf('premiere')>=0);
+      if(!g||g.cle!=='seances'||!/première séance/.test(g.detail)) return _echec('case des séances');
+      if(pushPrefsDepuisChoix({},{seances:false,coach:true,invitations:true}).premiere!==false) return _echec('décocher les séances ne coupe pas la relance');
+      if(htmlRelancePremiere(null)!=='') return _echec('tableau sans données');
+      const d=document.createElement('div');
+      d.innerHTML=htmlRelancePremiere([{levier:'j1',envoyes:40,seances:10,taux:25,alerte:false},{levier:'j3',envoyes:5,seances:1,taux:20,alerte:true},{levier:'j6',envoyes:0,seances:0,taux:null,alerte:true}],30);
+      const txt=d.textContent.replace(/\s+/g,' ');
+      for(const x of ['Push du 1er jour','25 %','Push du 6e jour','pas encore significatif']) if(txt.indexOf(x)<0) return _echec('« '+x+' » absent : '+txt.slice(0,200));
+      if(d.querySelectorAll('tr.vir-alerte').length!==2) return _echec('alertes');
+      return htmlRetention({maj:1,premiereSeance:[{levier:'j1',envoyes:1,seances:0,taux:0,alerte:true}]}).indexOf('Relance des inscrits sans séance')>=0?true:_echec('section absente de l’écran');})());
+
+    // ══ LES ALTERNATIVES À LA RÉSILIATION (11/10/2026) — L215-1-1 INTACT ══
+    // Résilier : TROIS clics, comptés ici (Réglages, « Résilier mon
+    // abonnement », « Confirmer la résiliation »). Les alternatives sont SOUS
+    // la confirmation, sur le même écran, en boutons secondaires.
+    ok('RÉSILIATION — 3 clics, motif facultatif, « Confirmer » premier et seul en rouge, les alternatives dessous',(()=>{
+      const sv=currentUser, sS=window.saveUser, sC=CLOUD._callFn, sP=CLOUD.pushOne, sO=CLOUD.ok;
+      const appels=[];
+      try{
+        window.saveUser=()=>true; CLOUD.pushOne=async()=>true; CLOUD.ok=()=>false;
+        CLOUD._callFn=async(n,d)=>{ appels.push(n+':'+JSON.stringify(d)); return {ok:true}; };
+        try{ localStorage.removeItem(RESIL_FILE); }catch(e){}
+        currentUser={email:'r3@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paypalSubscriptionId:'I-MEN12345678',
+          abonnement:{palier:'mensuel',formule:'ultime'}};
+        let z=document.getElementById('cr-abo'); const cree=!z;
+        if(cree){ z=document.createElement('div'); z.id='cr-abo'; document.body.appendChild(z); }
+        try{
+          let clics=1;                                     // 1 : Réglages (l'écran qui porte #cr-abo)
+          _renderAbonnement();
+          const b1=[...z.querySelectorAll('button')].find(b=>/Résilier mon abonnement/.test(b.textContent));
+          if(!b1) return _echec('pas de bouton « Résilier mon abonnement »');
+          b1.click(); clics++;                             // 2
+          const zone=document.getElementById('cr-resil');
+          const boutons=[...zone.querySelectorAll('button')];
+          if(!/Confirmer la résiliation/.test(boutons[0]&&boutons[0].textContent)||!boutons[0].classList.contains('btn-red'))
+            return _echec('« Confirmer » n’est pas le premier bouton, en rouge');
+          if(boutons.slice(1).some(b=>b.classList.contains('btn-red'))) return _echec('une alternative aussi visible que Résilier');
+          const alt=boutons.slice(1).map(b=>b.getAttribute('data-alt'));
+          if(alt.join()!=='pause,essentielle') return _echec('alternatives : '+alt.join());
+          if(zone.querySelector('[data-alternatives]').compareDocumentPosition(boutons[0])&Node.DOCUMENT_POSITION_FOLLOWING) return _echec('alternatives avant la confirmation');
+          boutons[0].click(); clics++;                     // 3 : sans motif, ça passe
+          if(clics!==3) return _echec(clics+' clics');
+          const r=resiliationDemandee(currentUser);
+          if(!r||r.motif!=='') return _echec('résiliation non enregistrée sans motif');
+          // Rien d'autre à faire : l'écran dit que c'est fait, sans bouton de rattrapage.
+          if([...z.querySelectorAll('button')].some(b=>/pause|Essentielle|Résilier mon/i.test(b.textContent))) return _echec('des boutons restent après la résiliation');
+          return true;
+        } finally { if(cree) z.remove(); }
+      } finally { currentUser=sv; window.saveUser=sS; CLOUD._callFn=sC; CLOUD.pushOne=sP; CLOUD.ok=sO; try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }})());
+
+    ok('RÉSILIATION — le motif du menu part au serveur (compté par mois), jamais le texte libre',(()=>{
+      const sv=currentUser, sS=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser={email:'m@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{}};
+        demanderResiliation('Trop cher : la salle me suffit','Trop cher');
+        const f=_fileResilLire();
+        if(!f||f.menu!=='Trop cher') return _echec('motif du menu : '+JSON.stringify(f));
+        if(resiliationDemandee(currentUser).motif!=='Trop cher : la salle me suffit') return _echec('le texte libre reste dans le dossier');
+        localStorage.removeItem(RESIL_FILE); currentUser.abonnement={};
+        demanderResiliation('n’importe quoi','pas dans le menu');
+        if(_fileResilLire().menu!=='') return _echec('un motif hors menu part au serveur');
+        const src=String(_rejouerResiliation);
+        if(!/_callFn\('abonnement',\{action:'resiliation',ts:f\.ts,motif:String\(f\.menu\|\|''\)\}\)/.test(src)) return _echec('l’avis au serveur manque');
+        if(src.indexOf("_callFn('abonnement'")<src.indexOf('pushOne')) return _echec('l’avis part avant l’enregistrement');
+        return true;
+      } finally { currentUser=sv; window.saveUser=sS; try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }})());
+
+    ok('PAUSE — l’appel au serveur ; en pause : la date de reprise, « Reprendre maintenant », et Résilier toujours là',(()=>{
+      const sv=currentUser, sS=window.saveUser, sC=CLOUD._callFn;
+      const appels=[];
+      try{
+        window.saveUser=()=>true;
+        CLOUD._callFn=(n,d)=>{ appels.push(n+':'+d.action); return new Promise(()=>{}); };
+        currentUser={email:'p@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paypalSubscriptionId:'I-MEN12345678',abonnement:{palier:'mensuel',formule:'essentielle'}};
+        const al=alternativesResiliation(currentUser);
+        if(!al.pause||al.essentielle) return _echec('éligibilité : '+JSON.stringify(al));
+        if(alternativesResiliation(Object.assign({},currentUser,{abonnement:{palier:'annuel',formule:'ultime'}})).pause) return _echec('pause d’un annuel');
+        if(alternativesResiliation(Object.assign({},currentUser,{abonnement:{palier:'mensuel',formule:'ultime',engagementJusqu:Date.now()+864e5}})).pause) return _echec('pause sous engagement');
+        abonnementPause();
+        _altEnCours=false;
+        const reprise=Date.now()+30*864e5;
+        currentUser.abonnement.pause={depuis:Date.now(),reprise,abo:'I-MEN12345678',accesJusqu:Date.now()+5*864e5};
+        let z=document.getElementById('cr-abo'); const cree=!z;
+        if(cree){ z=document.createElement('div'); z.id='cr-abo'; document.body.appendChild(z); }
+        try{
+          _renderAbonnement();
+          const txt=z.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('En pause jusqu')<0||txt.indexOf(new Date(reprise).toLocaleDateString('fr-FR'))<0) return _echec('la date de reprise manque');
+          const rep=[...z.querySelectorAll('button')].find(b=>/Reprendre maintenant/.test(b.textContent));
+          if(!rep) return _echec('pas de reprise anticipée');
+          if(![...z.querySelectorAll('button')].some(b=>/Résilier mon abonnement/.test(b.textContent))) return _echec('Résilier a disparu pendant la pause');
+          rep.click();
+          // Et pendant la pause, la confirmation ne repropose rien.
+          if(htmlAlternativesResiliation(currentUser)!=='') return _echec('alternatives pendant la pause');
+        } finally { if(cree) z.remove(); }
+        return appels.join()==='abonnement:pause,abonnement:reprendre'?true:_echec('appels : '+appels.join());
+      } finally { currentUser=sv; window.saveUser=sS; CLOUD._callFn=sC; _altEnCours=false; }})());
+
+    ok('ABONNEMENT — les champs écrits par l’app et le serveur sont déclarés dans les règles (sinon tout le PUT est rejeté)',(()=>{
+      if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+      const i=window._RC_RULES.indexOf('"abonnement": {');
+      if(i<0) return _echec('bloc abonnement introuvable');
+      const bloc=window._RC_RULES.slice(i,i+9000);
+      for(const k of ['prixSouscrit','engagementJusqu','formule','palier','pause','pauseFinie','changement','resiliationDemandee'])
+        if(bloc.indexOf('"'+k+'"')<0) return _echec(k+' manque dans le bloc abonnement des règles');
+      return true;})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est

@@ -98,7 +98,7 @@ export function accumuler(acc0, r, t) {
 }
 const pct = (a, b) => (b > 0 ? Math.round(a / b * 1000) / 10 : null);
 /** Les statistiques publiées : des agrégats, rien d'autre. */
-export function resultat(acc0, t) {
+export function resultat(acc0, t, premiere) {
   const acc = acc0 && acc0.c ? acc0 : accVide();
   const cohortes = Object.keys(acc.c || {}).sort().slice(-COHORTES_MAX).map((sem) => {
     const c = acc.c[sem];
@@ -114,7 +114,56 @@ export function resultat(acc0, t) {
     return { cle: L.cle, lib: L.lib, avec: { n: x.an, j30: pct(x.ao, x.an) }, sans: { n: x.sn, j30: pct(x.so, x.sn) },
       alerte: x.an < SEUIL_GROUPE || x.sn < SEUIL_GROUPE };
   });
-  return { maj: t, comptes: Number(d.n) || 0,
+  return { maj: t, comptes: Number(d.n) || 0, premiereSeance: tauxPremiere(premiere),
     actifs: { dau: d.dau || 0, wau: d.wau || 0, mau: d.mau || 0, dauMau: d.mau > 0 ? Math.round(d.dau / d.mau * 1000) / 10 : null },
     cohortes, entonnoir: { sources, total }, leviers, seuilGroupe: SEUIL_GROUPE };
+}
+
+// ══ LA RELANCE DES INSCRITS SANS PREMIÈRE SÉANCE : L'ATTRIBUTION ═════════
+// (11/10/2026) Chaque push « premiere » (J1, J3, J6 après l'inscription) est
+// noté dans premiere_trace/<compte> = {inscrit, j1?, j3?, j6?} (l'instant
+// d'envoi). Une trace se CLÔT quand la première séance arrive, ou 14 jours
+// après l'inscription sans séance. À la clôture, chaque push envoyé compte
+// un envoi de son palier ; la première séance est ATTRIBUÉE au DERNIER push
+// parti avant elle, s'il date de moins de PREMIERE_FENETRE_J jours. Les
+// compteurs (stats/relance_premiere) ne gardent que des nombres.
+export const PREMIERE_LEVIERS = ['j1', 'j3', 'j6'];
+export const PREMIERE_FENETRE_J = 7;
+export const PREMIERE_CLOTURE_J = 14;
+/**
+ * PURE. Le bilan d'une trace.
+ * @param {{inscrit:string, j1?:number, j3?:number, j6?:number}} trace
+ * @param {number} seance1Le instant de la première séance (0 = aucune)
+ * @param {number} t maintenant
+ * @returns {{fini:boolean, envois:string[], attribue:?string}}
+ */
+export function bilanPremiere(trace, seance1Le, t) {
+  const x = trace || {};
+  const envois = PREMIERE_LEVIERS.filter((k) => Number(x[k]) > 0);
+  const s1 = Number(seance1Le) || 0;
+  const age = /^\d{4}-\d{2}-\d{2}$/.test(String(x.inscrit || '')) ? jours(x.inscrit, jourDe(t)) : PREMIERE_CLOTURE_J;
+  if (!(s1 > 0) && age < PREMIERE_CLOTURE_J) return { fini: false, envois, attribue: null };
+  let attribue = null, der = 0;
+  if (s1 > 0) for (const k of envois) {
+    const at = Number(x[k]);
+    if (at <= s1 && s1 - at < PREMIERE_FENETRE_J * J && at > der) { der = at; attribue = k; }
+  }
+  return { fini: true, envois, attribue };
+}
+/** PURE. Les compteurs après une trace close : {j1:{e,s}, …}. Ne touche pas l'entrée. */
+export function ajouterPremiere(stats, bilan) {
+  const o = {};
+  for (const k of PREMIERE_LEVIERS) { const v = (stats && stats[k]) || {}; o[k] = { e: Number(v.e) || 0, s: Number(v.s) || 0 }; }
+  if (!bilan || !bilan.fini) return o;
+  for (const k of bilan.envois) if (o[k]) o[k].e++;
+  if (bilan.attribue && o[bilan.attribue]) o[bilan.attribue].s++;
+  return o;
+}
+/** PURE. Le taux de première séance après chaque push, avec l'alerte des petits groupes. */
+export function tauxPremiere(stats) {
+  return PREMIERE_LEVIERS.map((k) => {
+    const v = (stats && stats[k]) || {};
+    const e = Number(v.e) || 0, s = Number(v.s) || 0;
+    return { levier: k, envoyes: e, seances: s, taux: pct(s, e), alerte: e < SEUIL_GROUPE };
+  });
 }

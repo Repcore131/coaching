@@ -30,6 +30,8 @@
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
 import { avisDu, texteAvis, etiqueterSystemeio } from './renouvellement.js';
+import * as AL from './alternatives.js';
+import TARIFS from '../../tarifs.json' with { type: 'json' };
 
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
@@ -148,6 +150,15 @@ async function lirePaypal(chemin, env, fetchImpl) {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error('PayPal ' + r.status + ' sur ' + chemin);
   return r.json();
+}
+// UNE ÉCRITURE CHEZ PAYPAL (suspendre, réactiver, changer de plan) : rend
+// {statut, corps} ; une erreur seulement si PayPal est injoignable.
+async function ecrirePaypal(chemin, corps, env, fetchImpl) {
+  const jeton = await jetonPaypal(env, fetchImpl);
+  const r = await (fetchImpl || fetch)(API + chemin, { method: 'POST',
+    headers: { Authorization: 'Bearer ' + jeton, 'Content-Type': 'application/json' }, body: JSON.stringify(corps || {}) });
+  let j = null; try { j = r.status === 204 ? null : await r.json(); } catch (e) { j = null; }
+  return { statut: r.status, corps: j };
 }
 const lireAbonnement = (id, env, f) => (/^I-[A-Z0-9]{8,}$/.test(id) ? lirePaypal('/v1/billing/subscriptions/' + id, env, f) : Promise.resolve(null));
 const lireCommande = (id, env, f) => (/^[A-Z0-9]{8,40}$/.test(id) ? lirePaypal('/v2/checkout/orders/' + id, env, f) : Promise.resolve(null));
@@ -736,7 +747,191 @@ export function creerPaypal(ctx) {
     return parti ? 'avis_envoye' : 'avis_en_echec';
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn };
+
+  // ══ LES ALTERNATIVES À LA RÉSILIATION (11/10/2026, alternatives.js) ════
+  // Trois gestes de l'app (/fn/abonnement), tous facultatifs et jamais sur le
+  // chemin de la résiliation : PAUSE d'un mois (suspend, puis activate à la
+  // date, tout seul), retour anticipé, passage à ESSENTIELLE (revise : la
+  // personne approuve chez PayPal). Plus l'AVIS DE RÉSILIATION, que l'app
+  // envoie après coup : le motif compté par mois, et la reconquête à J+30.
+  // Chaque geste laisse une ligne dans paypal_journal.
+  const APP_URL = () => String(env.APP_URL || 'https://repcore-sync.web.app/app/').trim();
+  async function abonneVerifie(cle) {
+    const [abo, role, status, a] = await Promise.all([lire('users/' + cle + '/paypalSubscriptionId'), lire('users/' + cle + '/role'),
+      lire('users/' + cle + '/status'), lire('users/' + cle + '/abonnement')]);
+    const dossier = { role, status, paypalSubscriptionId: abo, abonnement: a || {} };
+    if (!/^I-[A-Z0-9]{8,}$/.test(String(abo || ''))) return { dossier, refus: 'aucun_abonnement' };
+    const sub = await abonnement(abo);
+    if (!sub) return { dossier, refus: 'introuvable' };
+    const index = await lire('paypal_abonnes/' + abo);
+    if (!(sub.custom_id === cle || index === cle)) return { dossier, refus: 'autre_compte' };
+    return { dossier, abo, sub };
+  }
+  // L'accès rouvert après une pause : ce que fait un paiement revenu.
+  async function rouvrir(cle, abo, sub) {
+    const t = now(), b = 'users/' + cle + '/';
+    const role = await lire(b + 'role');
+    const maj = { [b + 'abonnement/statutPaypal']: 'ACTIVE', [b + 'abonnement/finAccesPaypal']: null, [b + 'abonnement/pause']: null,
+      [b + 'abonnement/pauseFinie']: t, [b + 'updatedAt']: t, ['paypal_fins/' + cle]: null, ['pauses/' + cle]: null };
+    if (role !== 'coach') maj[b + 'accessExpiry'] = null;
+    await db.ref().update(maj);
+    if (role !== 'coach') await droitsOuverts(cle, abo, OFFRES_PAYPAL[sub && sub.plan_id]);
+  }
+  async function pauser(cle) {
+    const t = now();
+    const v = await abonneVerifie(cle);
+    if (v.refus) return { ok: false, raison: v.refus };
+    if (!AL.alternativesResiliation(v.dossier, t).pause) return { ok: false, raison: 'non_eligible' };
+    if (v.sub.status !== 'ACTIVE') return { ok: false, raison: 'statut_' + String(v.sub.status || '').toLowerCase() };
+    const r = await ecrirePaypal('/v1/billing/subscriptions/' + v.abo + '/suspend', { reason: 'Pause d’un mois demandée par l’abonné' }, env, ctx.fetchImpl);
+    if (r.statut !== 204 && r.statut !== 200) { await journal({ type: 'pause_refusee', cle, abo: v.abo, statut: r.statut }); return { ok: false, raison: 'paypal_' + r.statut }; }
+    const reprise = t + AL.PAUSE_JOURS * 864e5;
+    const prochain = Date.parse((v.sub.billing_info && v.sub.billing_info.next_billing_time) || '') || 0;
+    const pause = { depuis: t, reprise, abo: v.abo, accesJusqu: prochain > t ? prochain : t };
+    await db.ref().update({ ['users/' + cle + '/abonnement/pause']: pause, ['users/' + cle + '/abonnement/statutPaypal']: 'SUSPENDED',
+      ['users/' + cle + '/updatedAt']: t, ['pauses/' + cle]: { abo: v.abo, reprise, depuis: t } });
+    await journal({ type: 'pause', cle, abo: v.abo, action: 'abonnement suspendu chez PayPal, reprise le ' + dateFr(reprise) });
+    return { ok: true, pause };
+  }
+  // LA REPRISE : à la date (travail « reprises »), ou plus tôt si la personne
+  // le demande. ⚠ UNE RÉSILIATION DEMANDÉE PENDANT LA PAUSE GAGNE : rien n'est
+  // réactivé, l'abonnement reste suspendu (aucun prélèvement).
+  async function reprendre(cle, source) {
+    const t = now();
+    const p = await lire('pauses/' + cle);
+    if (!p) return { ok: false, raison: 'pas_en_pause' };
+    const resil = await lire('users/' + cle + '/abonnement/resiliationDemandee');
+    if (resil && typeof resil === 'object') {
+      await db.ref().update({ ['pauses/' + cle]: null, ['users/' + cle + '/abonnement/pause']: null, ['users/' + cle + '/updatedAt']: t });
+      await journal({ type: 'pause_close', cle, abo: p.abo, action: 'résiliation demandée pendant la pause : rien n’est réactivé' });
+      return { ok: true, raison: 'resiliee' };
+    }
+    const r = await ecrirePaypal('/v1/billing/subscriptions/' + p.abo + '/activate', { reason: source === 'abonne' ? 'Reprise demandée par l’abonné' : 'Fin de la pause d’un mois' }, env, ctx.fetchImpl);
+    // 422 : déjà actif (réactivé chez PayPal par la personne) — on rouvre quand même.
+    if (r.statut !== 204 && r.statut !== 200 && r.statut !== 422) {
+      await journal({ type: 'reprise_refusee', cle, abo: p.abo, statut: r.statut });
+      return { ok: false, raison: 'paypal_' + r.statut };
+    }
+    const sub = await abonnement(p.abo);
+    if (!sub || sub.status !== 'ACTIVE') { await journal({ type: 'reprise_refusee', cle, abo: p.abo, statut: 'statut_' + String(sub && sub.status) }); return { ok: false, raison: 'statut' }; }
+    await rouvrir(cle, p.abo, sub);
+    await journal({ type: 'reprise', cle, abo: p.abo, action: source === 'abonne' ? 'reprise demandée par l’abonné' : 'reprise automatique après un mois' });
+    if (source !== 'abonne') {
+      try { await M.envoyerPush(cle, { type: 'acces', url: './', tag: 'reprise-' + p.reprise, title: 'Ton abonnement reprend aujourd’hui',
+        body: 'Ta pause d’un mois est terminée : ton accès est rouvert, et le prélèvement reprend.' }, { attendre: true }); } catch (e) { /* la reprise est faite, c'est l'essentiel */ }
+    }
+    return { ok: true };
+  }
+  async function reprisesQuotidien(t0) {
+    const t = t0 || now();
+    const l = (await lire('pauses')) || {};
+    const bilan = {};
+    for (const cle of Object.keys(l).sort()) {
+      if (!(Number(l[cle] && l[cle].reprise) <= t)) continue;
+      if (typeof M.reste === 'function' && M.reste() < 12) return false;
+      try { bilan[cle] = (await reprendre(cle, 'auto')).raison || 'repris'; } catch (e) { bilan[cle] = 'erreur'; }
+    }
+    return bilan;
+  }
+  async function versEssentielle(cle) {
+    const t = now();
+    const v = await abonneVerifie(cle);
+    if (v.refus) return { ok: false, raison: v.refus };
+    if (!AL.alternativesResiliation(v.dossier, t).essentielle) return { ok: false, raison: 'non_eligible' };
+    const plan = AL.planEssentielleDe(v.sub.plan_id);
+    if (!plan || v.sub.status !== 'ACTIVE') return { ok: false, raison: 'plan' };
+    const r = await ecrirePaypal('/v1/billing/subscriptions/' + v.abo + '/revise', { plan_id: plan,
+      application_context: { brand_name: 'RepCore', locale: 'fr-FR', shipping_preference: 'NO_SHIPPING',
+        return_url: APP_URL() + '?abo=essentielle', cancel_url: APP_URL() + '?abo=annule' } }, env, ctx.fetchImpl);
+    const lien = r.corps && Array.isArray(r.corps.links) ? (r.corps.links.find((x) => x && x.rel === 'approve') || {}).href : '';
+    if (r.statut !== 200 || !/^https:\/\/(www\.)?(sandbox\.)?paypal\.com\//.test(String(lien || ''))) {
+      await journal({ type: 'essentielle_refusee', cle, abo: v.abo, statut: r.statut });
+      return { ok: false, raison: 'paypal_' + r.statut };
+    }
+    await journal({ type: 'essentielle_demandee', cle, abo: v.abo, action: 'changement de plan proposé, en attente de l’accord chez PayPal' });
+    return { ok: true, approuver: lien };
+  }
+  // Au retour de PayPal (?abo=essentielle) : le plan a-t-il changé ?
+  async function verifierEssentielle(cle) {
+    const v = await abonneVerifie(cle);
+    if (v.refus) return { ok: false, raison: v.refus };
+    const plan = v.sub.plan_id;
+    const ok = plan === AL.PLAN_ESSENTIELLE_MENSUEL || plan === AL.PLAN_ESSENTIELLE_ANNUEL;
+    if (!ok) return { ok: false, raison: 'pas_encore' };
+    const prochain = Date.parse((v.sub.billing_info && v.sub.billing_info.next_billing_time) || '') || null;
+    const ch = { vers: 'essentielle', le: now(), effetLe: prochain };
+    if (!(v.dossier.abonnement.changement && v.dossier.abonnement.changement.vers === 'essentielle')) {
+      await db.ref().update({ ['users/' + cle + '/abonnement/changement']: ch, ['users/' + cle + '/updatedAt']: now() });
+      await journal({ type: 'essentielle', cle, abo: v.abo, action: 'passage à Essentielle approuvé chez PayPal' });
+    }
+    return { ok: true, changement: ch };
+  }
+  // L'AVIS DE RÉSILIATION (après la confirmation, jamais avant) : le motif
+  // compté, et la reconquête préparée. Une fois par demande (son ts).
+  async function resiliation(cle, data) {
+    const t = now();
+    const ts = Number(data && data.ts) || 0;
+    const resil = await lire('users/' + cle + '/abonnement/resiliationDemandee');
+    if (!resil || typeof resil !== 'object' || Number(resil.ts) !== ts) return { ok: false, raison: 'aucune_demande' };
+    const deja = await lire('reconquete/' + cle);
+    if (deja && Number(deja.ts) === ts) return { ok: true, raison: 'deja' };
+    const k = AL.motifCle(data && data.motif);
+    await db.ref('stats/resiliations/' + AL.moisParis(t) + '/' + k).transaction((n) => (Number(n) || 0) + 1);
+    const aboActuel = await lire('users/' + cle + '/paypalSubscriptionId');
+    await db.ref('reconquete/' + cle).set({ ts, le: t, abo: aboActuel || null });
+    // Une pause en cours ne reprendra pas (reprendre le relit) ; on le note tout de suite.
+    return { ok: true, motif: k };
+  }
+  // J+30 : un push (et l'étiquette Systeme.io « reconquête » si la personne a
+  // accepté les e-mails), avec son vrai historique et l'offre du moment.
+  async function reconqueteUn(cle, r, t) {
+    const d = AL.reconqueteDue(r && r.le, t);
+    if (d.perimee) { await db.ref('reconquete/' + cle).remove(); return 'perimee'; }
+    if (!d.due) return 'pas_encore';
+    const [resil, abo, status, fname, kg, consent, email] = await Promise.all(['abonnement/resiliationDemandee', 'paypalSubscriptionId', 'status',
+      'fname', 'tonnageTotal', 'consent/emailMarketing', 'email'].map((c) => lire('users/' + cle + '/' + c)));
+    // Revenu entre-temps : un autre abonnement, ou plus de résiliation.
+    if (!resil || Number(resil.ts) !== Number(r.ts) || (abo && r.abo && abo !== r.abo && status === 'AUTONOMIE_PREMIUM')) {
+      await db.ref('reconquete/' + cle).remove(); return 'revenu';
+    }
+    const seances = (await db.ref('users/' + cle + '/sessions').shallow()).length;
+    const m = AL.messageReconquete({ prenom: fname || '', seances, tonnageKg: kg, tarif: TARIFS.ultime });
+    const p = await M.envoyerPush(cle, m, { attendre: false });
+    if (p && p.raison === 'plafond') return 'plafond';          // demain, jusqu'à J+37
+    let mail = 'sans_accord';
+    if (consent === true) {
+      try { mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', tag: env.SYSTEMEIO_TAG_RECONQUETE || '' }); }
+      catch (e) { mail = 'erreur'; }
+    }
+    await db.ref('reconquete/' + cle).remove();
+    await journal({ type: 'reconquete', cle, action: 'push ' + (p && p.envoye ? 'parti' : String((p && p.raison) || 'non')) + ', e-mail ' + mail });
+    return p && p.envoye ? 'envoye' : String((p && p.raison) || 'non');
+  }
+  async function reconqueteQuotidien(t0) {
+    const t = t0 || now();
+    const l = (await lire('reconquete')) || {};
+    const bilan = {};
+    for (const cle of Object.keys(l).sort()) {
+      if (typeof M.reste === 'function' && M.reste() < 14) return false;
+      try { bilan[cle] = await reconqueteUn(cle, l[cle], t); } catch (e) { bilan[cle] = 'erreur'; }
+    }
+    return bilan;
+  }
+  // /fn/abonnement : {action: 'pause'|'reprendre'|'essentielle'|'verifier_essentielle'|'resiliation'}.
+  async function appelAbonnement(req) {
+    const cle = cleEmail(req && req.auth && req.auth.email);
+    if (!cle) return { ok: false, raison: 'compte' };
+    const a = String((req.data && req.data.action) || '');
+    if (a === 'pause') return pauser(cle);
+    if (a === 'reprendre') return reprendre(cle, 'abonne');
+    if (a === 'essentielle') return versEssentielle(cle);
+    if (a === 'verifier_essentielle') return verifierEssentielle(cle);
+    if (a === 'resiliation') return resiliation(cle, req.data);
+    return { ok: false, raison: 'action' };
+  }
+
+  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn,
+    appelAbonnement, pauser, reprendre, reprisesQuotidien, versEssentielle, verifierEssentielle, resiliation, reconqueteQuotidien };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════
