@@ -30,14 +30,18 @@ const NOTIF_TYPES = {
   challengeStart: { label: 'Défi lancé', ex: 'Défi Sprint avis lancé, fin dans 3 heures.', defaultOn: true, priority: 'normal', cooldownMin: 0,
     detect: c => Object.values(S.challenges || {}).filter(ch => ch.clubId === CLUB.id && ch.start > c.last && ch.start <= Date.now() && ch.end > Date.now() && ch.by !== c.uid).map(ch => ({ key: 'ch_' + ch.id, t: ch.title || 'Défi', end: ch.end })),
     build: p => ({ title: 'Défi lancé', body: `${p.t}, fin dans ${finDans(p.end)}.`, url: '#/leaderboard' }) },
-  kudos: { label: 'Bravos reçus', ex: '2 bravos reçus sur vos ventes.', defaultOn: true, priority: 'normal', cooldownMin: 60,
+  kudos: { label: 'Félicitations et bravos reçus', ex: '2 félicitations reçues.', defaultOn: true, priority: 'normal', cooldownMin: 60,
     detect: c => {
       let n = 0, max = Number(c.W.kudosAt || 0);
       for (const [eid, rx] of Object.entries(S.reactions || {})) { const e = S.entries[eid]; if (!e || e.userId !== c.uid) continue; for (const [u, v] of Object.entries((rx || {}).bravo || {})) if (u !== c.uid && typeof v === 'number' && v > Number(c.W.kudosAt || 0)) { n++; max = Math.max(max, v); } }
+      for (const k of Object.values(S.kudos || {})) if (k && k.to === c.uid && k.at > Number(c.W.kudosAt || 0)) { n++; max = Math.max(max, k.at); }
       if (c.W.kudosAt == null) { c.W.kudosAt = max || Date.now(); return []; } // premier passage : point de départ
       c.W.kudosAt = max; return n ? [{ key: 'kd_' + max, n }] : [];
     },
-    build: p => ({ title: 'Bravo', body: `${plur(p.n, 'bravo reçu', 'bravos reçus')} sur vos ventes.`, url: '#/pouls' }) },
+    build: p => ({ title: 'Bravo', body: `${plur(p.n, 'félicitation reçue', 'félicitations reçues')}.`, url: '#/pouls' }) },
+  kudosRappel: { label: 'Rappel du vendredi : féliciter l’équipe (managers)', ex: 'Personne n’a été félicité cette semaine.', defaultOn: true, priority: 'normal', cooldownMin: 1440,
+    detect: c => { const u = S.users[c.uid]; if (!u || (u.role !== 'manager' && u.role !== 'createur') || dateOf(c.jour).getDay() !== 5 || !entre(c.hm, '16:00', '17:00')) return []; const lundi = dateOf(weekStart(c.jour)).getTime(); return Object.values(S.kudos || {}).some(k => k && k.from === c.uid && k.at >= lundi) ? [] : [{ key: 'kr_' + c.jour }]; },
+    build: () => ({ title: 'Équipe', body: 'Personne n’a été félicité cette semaine.', url: '#/home' }) },
   palierNear: { label: 'Palier d’équipe tout proche (5 % ou moins)', ex: 'Palier 2 : plus que 4 contrats pour l’équipe.', defaultOn: true, priority: 'normal', cooldownMin: 0,
     detect: c => {
       const mk = c.jour.slice(0, 7); const out = [];

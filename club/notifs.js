@@ -107,6 +107,10 @@ function notifLive(before, after) {
     const u = after.users[e.userId], k = after.kpis[e.kpiId];
     const txt = u && k ? liveTexte(e) : null; if (txt) notify('live', txt, '#/pouls', { key: 'e_' + id });
   }
+  for (const id of Object.keys(after.kudos || {})) {
+    if ((before.kudos || {})[id]) continue; const k = after.kudos[id];
+    if (k && k.to === ME.id && k.from !== ME.id && Date.now() - k.at < 600000 && after.users[k.from]) notify('kudos', `${after.users[k.from].first} vous félicite : ${(typeof KUDOS_RAISONS === 'object' && KUDOS_RAISONS[k.reason]) || 'bravo'}.`, '#/profile', { key: 'kudos_' + id });
+  }
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];
     if (!mine(r.clubId) || r.userId === ME.id || r.by === ME.id || (r.at && Date.now() - r.at > 600000)) continue;

@@ -84,3 +84,24 @@ test('I2 : défi d’équipe, barre commune et réussite partagée', () => {
   run(`S.challenges['${ch.id}'].start -= 3600e3; S.entries.ta0.at -= 3600e3; S.entries.ta1.at -= 3600e3; S.challenges['${ch.id}'].end = Date.now() - 1000; REV++`);
   assert.deepEqual(J(run, `allTrophies().filter(t => /Défi d’équipe réussi/.test(t.label)).map(t => t.userId).sort()`), ['a0', 'a1']);
 });
+test('I3 : féliciter en 2 taps depuis l’accueil manager ; fil et profil ; pas à soi-même', () => {
+  const run = appli(reseau(), 'ma');
+  run(`S.entries.x1 = { id: 'x1', userId: 'a1', clubId: 'a', kpiId: 'contrats', date: today(), value: 1, source: 'manual', at: Date.now() }; REV++; globalThis.OUV = null; openModal = o => { globalThis.OUV = o; }`);
+  const tuile = run('bienJoueTile()'); assert.match(tuile, /Bien joué aujourd’hui/); assert.match(tuile, /data-act="kudosOuvrir" data-u="a1"/);
+  run(`ACTIONS.kudosOuvrir({ dataset: { u: 'a1' } })`); assert.match(run('OUV.body'), /data-act="kudosEnvoyer" data-u="a1" data-r="vente"/); // tap 1
+  run(`ACTIONS.kudosEnvoyer({ dataset: { u: 'a1', r: 'vente' } })`); // tap 2, sans texte
+  const k = J(run, 'Object.values(S.kudos)'); assert.equal(k.length, 1); assert.equal(k[0].to, 'a1'); assert.equal(k[0].reason, 'vente');
+  assert.ok(J(run, `feedEvents(['a']).some(e => e.type === 'kudos' && /félicite/.test(e.label))`));
+  run(`ME = S.users.a1; UI.profTab = 'perf'`); assert.match(run('PAGES.profile.render()'), /Félicitations reçues ce mois : 1/);
+  run(`ME = S.users.ma`); assert.equal(J(run, `kudosOps('ma', 'vente')`).length, 0);
+  run(`ACTIONS.kudosEpingler({ dataset: { id: '${k[0].id}' } })`); assert.equal(J(run, `feedEvents(['a']).find(e => e.type === 'kudos').pinned`), true);
+});
+test('I3 : un collègue ne peut pas envoyer un quatrième bravo dans la journée ; trophée Coup de coeur', () => {
+  const run = appli(reseau(), 'a0'); let msg = '';
+  run(`globalThis.MSG = ''; toast = m => { globalThis.MSG = m; }; ['a1','a2','a3','a4'].forEach((u, i) => { S.entries['r' + i] = { id: 'r' + i, userId: u, clubId: 'a', kpiId: 'contrats', date: today(), value: 1, source: 'manual', at: Date.now() }; }); REV++`);
+  for (let i = 0; i < 4; i++) run(`ACTIONS.react({ dataset: { id: 'r${i}', em: 'bravo' } })`);
+  msg = run('MSG'); assert.equal(J(run, `bravosDonnes()`), 3); assert.match(msg, /^3 bravos par jour au plus/);
+  assert.equal(run(`!!(S.reactions.r3 && S.reactions.r3.bravo && S.reactions.r3.bravo.a0)`), false);
+  run(`ME = S.users.ma; CLUB = S.clubs.a; db.set(['clubs', 'a', 'coeur', addMonths(curMonth(), -1)], 'a2')`);
+  assert.ok(J(run, `allTrophies().some(t => t.userId === 'a2' && /^Coup de coeur du manager/.test(t.label))`));
+});

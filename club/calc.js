@@ -411,6 +411,8 @@ function allTrophies() {
     if (typeof tropheesLigue === 'function') out.push(...tropheesLigue());
     // duels gagnés et défis d'équipe réussis (duels.js)
     if (typeof tropheesDuels === 'function') out.push(...tropheesDuels());
+    // Coup de coeur du manager (kudos.js)
+    if (typeof tropheesCoeur === 'function') out.push(...tropheesCoeur());
     // sprints termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now() || ch.type === 'team') continue;

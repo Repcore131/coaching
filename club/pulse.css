@@ -1472,3 +1472,8 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .duel-c.nous .duel-bar i { background: var(--fil-or, #F2C500); }
 .duel-l { padding: 8px 0; border-bottom: 1px solid var(--line); gap: 6px; }
 .defi-e { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+/* Félicitations du manager */
+.bj-r { min-height: 48px; border-bottom: 1px solid var(--line); gap: 8px; }
+.kudos-raisons { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 8px; }
+.kudos-raisons .btn { min-height: 48px; }
+.fil-epingle { margin-top: 8px; font-size: var(--t-12); font-weight: 700; color: var(--fil-or-texte, #8A6D00); }
