@@ -26,6 +26,7 @@ import { passageResiliations, gmailReel } from './fitpulse-resmail.mjs';
 import { passageImports, sourcesReelles, stockerGcs } from './fitpulse-autoimport.mjs';
 import { passageBrief } from './fitpulse-brief.mjs';
 import { REGLE_ORGS } from './fitpulse-regles-orgs.mjs';
+import { INGEST_CONFIG } from './fitpulse-regles-ingest.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -60,7 +61,12 @@ const MGR = `(${MANAGER})`;
 const SAISIE = `${MGR} || (${MEMBRE} && (newData.exists() ? (newData.child('userId').val() === ${SOI} || (newData.child('by').val() === ${SOI} && (newData.child('kpiId').val() === 'sauvetage' || newData.child('kpiId').val() === 'impayes'))) : (data.child('userId').val() === ${SOI} || data.child('by').val() === ${SOI})))`;
 const FICHE = `${MGR} && (${CREATEUR} || (data.child('role').val() !== 'createur' && (!newData.exists() || newData.child('role').val() === 'membre' || newData.child('role').val() === data.child('role').val())))`;
 const SOIMEME = `${MEMBRE} && $uid === ${SOI}`;
+// /ingest/{club} (rapports d'import, lignes en attente, quarantaine) : lecture par le manager du club
+// et le créateur, écriture par le serveur seulement (compte de service, hors règles).
+const DU_CLUB = `(${ROLE} === 'createur' || ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `root.child('pulse/users/' + ${SOI} + '/clubs/${i}').val() === $club`).join(' || ')})`;
+const INGEST_LECTURE = `${MGR} && ${DU_CLUB}`;
 export const REGLE = `${DEBUT}
+    "ingest": { "$club": { ".read": ${j(INGEST_LECTURE)}, ".write": false } },
     "pulse": {
       ".read": ${j(MEMBRE)},
       ".write": ${j(`${CREATEUR} || (${MEMBRE} && !data.exists())`)},
@@ -97,6 +103,7 @@ export const REGLE = `${DEBUT}
       "clients": { ".write": ${j(MEMBRE)} },
       "loyalty": { ".write": ${j(MEMBRE)} },
       "transferts": { ".write": ${j(MEMBRE)} },
+      "ingestConfig": ${INGEST_CONFIG(MGR)},
       "leagues": { ".write": ${j(MEMBRE)} }, "leagueMember": { ".write": ${j(MEMBRE)} }, "duels": { ".write": ${j(MEMBRE)} }, "comments": { ".write": ${j(MEMBRE)} },
       // Dossiers relevés dans la boîte accueil (« ml… ») : créés et tenus à jour par le seul compte de service
       // (fonction ingestResiliations) ; l'équipe les traite (statut, responsable, journal) sans toucher au fil e-mail.

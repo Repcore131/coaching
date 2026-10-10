@@ -1,0 +1,7 @@
+# Copier en wrangler.toml, puis : npx wrangler secret put FP_INGEST_MAIL_SECRET
+name = "fitpulse-import-mail"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+INGEST_MAIL_URL = "https://europe-west1-VOTRE-PROJET.cloudfunctions.net/ingestMail"

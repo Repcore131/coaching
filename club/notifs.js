@@ -74,7 +74,7 @@ ACTIONS.bell = () => {
     foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
 };
 const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: TXT.notifs.cloture, dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: TXT.mots.sprint, live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
-const NOTIF_ICON = { dayStart: 'sun', dueFollowup: 'phone', overtaken: 'ranking', challengeStart: 'bolt', kudos: 'sparkle', palierNear: 'flag', dayWrap: 'chart', wrapReady: 'report', info: 'bell', am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
+const NOTIF_ICON = { import_failed: 'alert', dayStart: 'sun', dueFollowup: 'phone', overtaken: 'ranking', challengeStart: 'bolt', kudos: 'sparkle', palierNear: 'flag', dayWrap: 'chart', wrapReady: 'report', info: 'bell', am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
 ACTIONS.notifOpen = el => { const L = inbox(); const x = L.find(m => m.id === el.dataset.id); if (!x) return; x.readAt = Date.now(); saveInbox(L); closeModal(); bellRefresh(); if (x.url) location.hash = x.url; };
 ACTIONS.notifAllRead = () => { const L = inbox(); L.forEach(x => { x.readAt = x.readAt || Date.now(); }); saveInbox(L); closeModal(); bellRefresh(); };
 
@@ -114,7 +114,7 @@ function notifLive(before, after) {
   }
   for (const id of Object.keys(after.kudos || {})) {
     if ((before.kudos || {})[id]) continue; const k = after.kudos[id];
-    if (k && k.to === ME.id && k.from !== ME.id && Date.now() - k.at < 600000 && after.users[k.from]) notify('kudos', `${after.users[k.from].first} vous félicite : ${(typeof KUDOS_RAISONS === 'object' && KUDOS_RAISONS[k.reason]) || 'bravo'}.`, '#/profile', { key: 'kudos_' + id });
+    if (k && k.to === ME.id && k.from !== ME.id && Date.now() - k.at < 600000 && after.users[k.from]) { const t = `${after.users[k.from].first} vous félicite : ${(typeof KUDOS_RAISONS === 'object' && KUDOS_RAISONS[k.reason]) || 'bravo'}.`; if (ruleOn('kudos') && !inbox().some(x => x.key === 'kudos_' + id)) { notify('kudos', t, '#/profile', { key: 'kudos_' + id, toastIt: false }); if (!document.hidden) fx.kudos(t); } }
   }
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];

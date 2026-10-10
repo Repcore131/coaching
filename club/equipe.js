@@ -74,7 +74,7 @@ ACTIONS.eqPoint = el => {
   foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="eqPointOk" data-u="${esc(uid)}">Enregistrer la fiche</button>` });
 };
 ACTIONS.eqPointOk = el => {
-  const uid = el.dataset.u; const f = formData($('#eqf')); if (!f.eng.trim() || !f.engDate) { toast('Indiquez l’engagement et sa date.'); return; }
+  const uid = el.dataset.u; const f = formData($('#eqf')); if (!f.eng.trim() || !f.engDate) { fx.error('Indiquez l’engagement et sa date.'); return; }
   const mk = curMonth(); const snap = {}; eqKpis(mk).forEach(k => { const c = eqCell(CLUB.id, uid, k, mk); if (c.niveau !== 'none') snap[k.id] = { realise: c.realise, objectif: c.objectif, ecart: c.ecart }; });
   db.set(['coaching', uid, today()], { date: today(), by: ME.id, at: Date.now(), clubId: CLUB.id, mk, forces: [f.f1.trim(), f.f2.trim()], axes: [f.a1.trim(), f.a2.trim()], engagement: { texte: f.eng.trim(), date: f.engDate }, kpis: snap });
   closeModal(); toast('1 fiche enregistrée');

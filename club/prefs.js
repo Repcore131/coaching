@@ -99,17 +99,7 @@ function prefsSync() {
 }
 function choisirTheme(t) { appliquerTheme(t); if (ME && S) { setPrefPath(['theme'], t === 'dark' || t === 'light' ? t : 'auto'); PREFS_APPLIQUE = ''; } render(); }
 
-// ── Retours sensoriels ────────────────────────────────────────────────────
-function vibrer(motif) { try { if (ME && prefsOf().sense.haptics && navigator.vibrate) navigator.vibrate(motif); } catch (_) { /* pas de vibreur */ } }
-let AUDIO = null;
-function bip(fort = false) {
-  try {
-    if (!ME || !prefsOf().sense.sound) return;
-    const C = window.AudioContext || window.webkitAudioContext; if (!C) return; AUDIO = AUDIO || new C();
-    const o = AUDIO.createOscillator(), g = AUDIO.createGain(); o.frequency.value = fort ? 880 : 660; g.gain.value = 0.05;
-    o.connect(g); g.connect(AUDIO.destination); o.start(); o.stop(AUDIO.currentTime + (fort ? 0.18 : 0.08));
-  } catch (_) { /* pas de son */ }
-}
+// Retours sensoriels : voir fx.js (vibrer, bip et fx).
 
 // ── Profil > Mon compte : carte « Mon appli » ─────────────────────────────
 function monAppliCard() {

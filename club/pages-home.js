@@ -47,13 +47,10 @@ function celebrate(title, sub, { kind = 'team', art = '', cle = null } = {}) {
   const [club, mk, kpi, n] = cle; const deja = Number(deepGet(S, ['celebrated', club, mk, kpi])) || 0;
   if (deja >= n) return;
   db.set(['celebrated', club, mk, kpi], n);
-  const el = document.createElement('div'); el.className = 'celebrate'; el.setAttribute('role', 'status');
-  el.innerHTML = `<div class="celebrate-in card">${art ? `<div class="cel-art">${art}</div>` : ''}<div class="celebrate-t">${esc(title)}</div><div class="celebrate-s">${esc(sub || '')}</div><div class="row" style="justify-content:center;gap:8px;margin-top:12px"><button class="btn sm cel-share" data-act="celShare">Partager au fil</button><button class="btn sm primary">Fermer</button></div></div>`;
-  el.dataset.title = title; el.dataset.sub = sub || '';
-  document.body.appendChild(el); el.addEventListener('click', e => { if (!e.target.closest('.cel-share')) el.remove(); }); setTimeout(() => el.remove(), 6000);
+  fx.win(title, sub, art);
 }
 // palier franchi par cette saisie ? (comparaison avant / après)
-ACTIONS.celShare = el => { const c = el.closest('.celebrate'); sendChat({ text: `${c.dataset.title} : ${c.dataset.sub}` }); c.remove(); toast('1 message partagé dans le chat de l’équipe'); };
+ACTIONS.celShare = el => { const c = el.closest('.celebrate'); sendChat({ text: `${c.dataset.title} : ${c.dataset.sub}` }); fxFermerCelebration(); toast('1 message partagé dans le chat de l’équipe'); };
 function palierSnapshot() { const mk = curMonth(); return Object.keys(paliersFor(CLUB.id, mk)).map(k => { const s = palierState(CLUB.id, mk, k); return s ? s.reached : 0; }); }
 function checkPalierCrossed(before) {
   const mk = curMonth(); const keys = Object.keys(paliersFor(CLUB.id, mk));
@@ -70,10 +67,12 @@ function quickAdd(kpiId, value, userId = ME.id) {
   const rk0 = ranking(CLUB.id, r).find(x => x.u.id === userId);
   const id = newId();
   db.set(['entries', id], { id, userId, clubId: CLUB.id, kpiId, date: today(), value, source: 'manual', at: Date.now(), by: ME.id });
+  if (typeof usageAction === 'function') usageAction();
   const k = S.kpis[kpiId];
   const row = (statsFor(CLUB.id, userId, r, { kpiIds: [kpiId] }).rows[0]) || null;
   const rk = ranking(CLUB.id, r).find(x => x.u.id === userId);
-  const parts = [`${k.label} : +${fmtU(value, k)}`];
+  // Première phrase lue par le lecteur d'écran : « 1 contrat enregistré ».
+  const parts = [saisieEnregistree(k, value)];
   let tierHit = null;
   if (row && row.target > 0) {
     parts.push(`${fmtU(row.real, k)} sur ${fmtU(row.target, k)}`);
@@ -83,12 +82,17 @@ function quickAdd(kpiId, value, userId = ME.id) {
   }
   if (rk0 && rk && rk.rank < rk0.rank) parts.push(`vous passez ${rk.rank}${rk.rank === 1 ? 'er' : 'e'}`);
   let pending = null;
-  if (tierHit) pending = setTimeout(() => stepBanner(`${k.label} : ${tierHit * 100} % de l’objectif, ${fmtU(row.real, k)}`), 300);
-  vibrer(tierHit ? [30, 40, 30, 40, 30] : 15); bip(tierHit);
+  if (tierHit) pending = setTimeout(() => fx.step(`${k.label} : ${tierHit * 100} % de l’objectif, ${fmtU(row.real, k)}`), 300);
+  else fx.tap(parts[0]);
   toastUndo(parts.join('. '), () => { clearTimeout(pending); db.set(['entries', id], null); });
   checkPalierCrossed(before);
 }
-function stepBanner(t) { const el = document.createElement('div'); el.className = 'step-banner'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 1600); }
+// « 1 contrat enregistré », « 45 € de nutrition enregistrés ».
+function saisieEnregistree(k, v) {
+  if (k.unit === 'eur') return `${fmtE(v)} de ${k.label.toLowerCase()} enregistrés`;
+  const n = Math.round(v || 0); return `${fmtN(n)} ${uniteKpi(k, n)} ${Math.abs(n) >= 2 ? 'enregistrés' : 'enregistré'}`;
+}
+function stepBanner(t) { fxBandeau(t); }
 function toastUndo(msg, undo) {
   if (CFG.capture) return;
   const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span><button>Annuler</button>`;
@@ -131,7 +135,7 @@ ACTIONS.qEur = el => {
         if (b) { const x = b.dataset.p; if (x === '⌫') s = s.slice(0, -1); else if (x === ',') { if (!s.includes(',')) s = (s || '0') + ','; } else if (!/,\d\d$/.test(s)) s += x; show(); }
         if (q) { s = q.dataset.q; show(); }
       });
-      $('#pad-ok', m).addEventListener('click', () => { const v = Math.round(toNum(s) * 100) / 100; if (!v) { toast('Saisissez un montant.'); return; } closeModal(); quickAdd(el.dataset.k, v); });
+      $('#pad-ok', m).addEventListener('click', () => { const v = Math.round(toNum(s) * 100) / 100; if (!v) { fx.error('Saisissez un montant.'); return; } closeModal(); quickAdd(el.dataset.k, v); });
     } });
 };
 

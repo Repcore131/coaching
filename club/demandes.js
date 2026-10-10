@@ -100,7 +100,7 @@ ACTIONS.rrqResilier = el => {
   foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="rrqResilierOk" data-id="${esc(r.id)}">Créer le dossier</button>` });
 };
 ACTIONS.rrqResilierOk = el => {
-  const r = rrqGet(el.dataset.id); if (!r) return; const f = formData($('#rrqf')); if (!f.effective) { toast('Indiquez la date d’effet.'); return; }
+  const r = rrqGet(el.dataset.id); if (!r) return; const f = formData($('#rrqf')); if (!f.effective) { fx.error('Indiquez la date d’effet.'); return; }
   const id = 'mail_' + safeKey(r.id); const owner = r.ownerId || ME.id;
   db.batch([...rrqStatusOps(r, 'resilie', { resiliationId: id }),
     [['resiliations', id], { id, clubId: CLUB.id, client: rrqName(r), clientId: r.clientId || null, date: isoOf(new Date(r.receivedAt || Date.now())), effective: f.effective, reason: f.reason, status: 'resiliee', saved: false, ownerId: owner, userId: owner, source: 'mail', requestId: r.id, at: Date.now(), log: { [newId()]: { at: Date.now(), by: ME.id, label: 'Résiliation enregistrée (demande reçue par e-mail)' } } }]]);

@@ -69,13 +69,13 @@ PAGES.imports = {
   manager: true,
   render() {
     const tab = UI.impTab || 'rsm';
-    const body = { rsm: impRsm, auto: rsmAutoTab, new: impNew, history: impHistory, manual: impManual }[tab]();
+    const body = { rsm: impRsm, auto: rsmAutoTab, automatique: ingestAutoTab, new: impNew, history: impHistory, manual: impManual }[tab]();
     return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div><span class="spacer"></span><button class="btn" data-act="rsmCopyPrompt" title="Copier un prompt pour Claude dans Chrome : il récupère tous les exports Resamania d’un coup">${ico('copy')} Copier le prompt</button></div>
-      ${tabs('impTab', [['rsm', 'Resamania'], ['auto', `Arrivées automatiques${rsmMissing(CLUB.id).length ? ' (' + rsmMissing(CLUB.id).length + ' en retard)' : ''}`], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
+      ${tabs('impTab', [['rsm', 'Resamania'], ['auto', `Arrivées automatiques${rsmMissing(CLUB.id).length ? ' (' + rsmMissing(CLUB.id).length + ' en retard)' : ''}`], ['automatique', 'Automatique'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
     if ((UI.impTab || 'rsm') === 'rsm') { mountRsm(); return; }
-    if (UI.impTab === 'auto') return;
+    if (UI.impTab === 'auto' || UI.impTab === 'automatique') return;
     const drop = $('#drop'); if (!drop) return;
     const input = $('#file');
     drop.addEventListener('click', () => input.click());
@@ -162,7 +162,7 @@ ACTIONS.wizNext = () => {
   const w = UI.wiz; const c = w.col; const get = (r, k) => c[k] === '' ? '' : r[Number(c[k])];
   const plan = { type: w.type, skipped: 0 };
   if (w.type === 'kpi') {
-    if (c.date === '' || c.user === '' || (w.mode === 'sum' && c.amount === '') || (w.kpi === '_cat' && c.cat === '')) { toast('Choisissez les colonnes obligatoires.'); return; }
+    if (c.date === '' || c.user === '' || (w.mode === 'sum' && c.amount === '') || (w.kpi === '_cat' && c.cat === '')) { fx.error('Choisissez les colonnes obligatoires.'); return; }
     // empreinte des saisies deja importees et actives, pour ignorer les doublons
     // On compte les occurrences : deux ventes identiques dans le MEME fichier
     // sont deux ventes ; ce qui est en trop, c'est ce qu'un import actif a deja.
@@ -188,7 +188,7 @@ ACTIONS.wizNext = () => {
     });
     Object.assign(plan, { entries, dups, from, to, summary: Object.values(sum).sort((a, b) => fullName(S.users[a.userId]).localeCompare(fullName(S.users[b.userId]))), empty: !entries.length });
   } else {
-    if (c.name === '' || (w.type === 'soldes' && c.balance === '') || (w.type === 'resil' && c.date === '')) { toast('Choisissez les colonnes obligatoires.'); return; }
+    if (c.name === '' || (w.type === 'soldes' && c.balance === '') || (w.type === 'resil' && c.date === '')) { fx.error('Choisissez les colonnes obligatoires.'); return; }
     const existing = Object.values(w.type === 'resil' ? S.resiliations : S.clients).filter(x => x.clubId === CLUB.id);
     const findC = (name, email, birth) => existing.find(x => (email && x.email && norm(x.email) === norm(email)) || (norm(x.name || x.client) === norm(name) && (!birth || !x.birth || x.birth === birth)));
     const items = []; let created = 0, updated = 0;
@@ -524,6 +524,7 @@ function clubSettings() {
     ${reperesCard()}
     ${typeof ligueReglageCard === 'function' ? ligueReglageCard() : ''}
     ${releveCard()}
+    ${typeof arriveeExportsCard === 'function' ? arriveeExportsCard() : ''}
     ${typeof resModelesCard === 'function' ? resModelesCard() : ''}
     ${ordreKpiCard()}
     ${isCreator() ? `<div class="card"><div class="card-head"><h3>KPI suivis</h3><span class="spacer"></span>${isCreator() ? `<button class="btn sm" data-act="kpiReco">Appliquer le barème recommandé</button>` : ''}</div>

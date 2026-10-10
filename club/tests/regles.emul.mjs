@@ -103,5 +103,21 @@ await check('responsable ajoute un numéro', await req('PUT', 'private/resiliati
 await check('champ inconnu refusé', await req('PUT', 'private/resiliations/niort/rp1/note', 'x', who('mgr')), false);
 await check('manager ne falsifie pas la dernière relève', await req('PUT', 'pulse/clubs/niort/mailSync', { at: 9999, ok: true }, who('mgr')), false);
 await check('manager règle son club sans toucher à la relève', await req('PUT', 'pulse/clubs/niort/name', 'Club Centre', who('mgr')), true);
+// Arrivée des exports : forme stricte, aucun secret possible (lot J, point 4).
+await check('manager configure la boîte d’import', await req('PUT', 'pulse/ingestConfig/niort/mail', { address: 'niort-ab12@import.fitpulse.app', status: 'actif', rotatedAt: 1 }, who('mgr')), true);
+await check('manager active le dépôt manuel', await req('PUT', 'pulse/ingestConfig/niort/manual', true, who('mgr')), true);
+await check('aucun jeton dans la configuration (manager)', await req('PUT', 'pulse/ingestConfig/niort/api', { status: 'actif', since: 1, token: 'abc' }, who('mgr')), false);
+await check('aucun mot de passe dans la configuration (créateur)', await req('PUT', 'pulse/ingestConfig/niort/mail/password', 'x', who('crea')), false);
+await check('état de canal inconnu refusé', await req('PUT', 'pulse/ingestConfig/niort/drive', { folderId: '1AbCdEfGhIjKlMn', status: 'ouvert' }, who('mgr')), false);
+await check('membre ne configure pas les canaux', await req('PUT', 'pulse/ingestConfig/niort/manual', true, who('mem')), false);
+// /ingest : rapports d'un club lisibles par son manager et le créateur seulement (lot J, point 10).
+await fetch(url(''), { method: 'PATCH', headers: owner, body: JSON.stringify({ [`pulse_boot/${key('mgr2')}`]: 'mgr2', 'pulse/users/mgr2': { id: 'mgr2', role: 'manager', status: 'active', clubs: ['lyon'] }, 'ingest/niort/reports/r1': { file: 'v.csv', status: 'done', at: 1 }, 'ingest/lyon/reports/r2': { file: 'w.csv', status: 'done', at: 1 } }) });
+await check('manager lit les rapports de son club', await req('GET', 'ingest/niort/reports', undefined, who('mgr')), true);
+await check('créateur lit les rapports d’un club', await req('GET', 'ingest/lyon/reports', undefined, who('crea')), true);
+await check('manager d’un autre club ne lit pas ces rapports', await req('GET', 'ingest/niort/reports', undefined, who('mgr2')), false);
+await check('manager ne lit pas les rapports d’un autre club', await req('GET', 'ingest/lyon', undefined, who('mgr')), false);
+await check('membre ne lit pas les rapports', await req('GET', 'ingest/niort', undefined, who('mem')), false);
+await check('personne ne lit tout /ingest', await req('GET', 'ingest', undefined, who('crea')), false);
+await check('manager n’écrit pas dans /ingest', await req('PUT', 'ingest/niort/reports/r9', { status: 'done' }, who('mgr')), false);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

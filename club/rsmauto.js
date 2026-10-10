@@ -18,7 +18,8 @@ async function rsmIngestFile(file, { clubId, by = 'auto', now = Date.now(), sour
   let tables;
   try { tables = await readAnyFile(file); } catch (e) { log.erreurs.push('Lecture impossible : ' + String(e.message || e).slice(0, 160)); return { ops: [[['rsm', 'autoLog', clubId, log.id], log]], log }; }
   const month = addMonths(curMonth(), -1);
-  const B = tables.map(t => { try { return analyzeTable(t, { clubId, month }); } catch (e) { log.erreurs.push(`${t.name} : ${String(e.message || e).slice(0, 120)}`); return { name: t.name, def: null, rowsCount: 0, entries: [], recov: [], clients: {}, clientsByName: [], resil: [], controls: [], prospects: [], companies: {}, flags: {}, counts: {}, warnings: [], skipped: {} }; } });
+  const B = analyzeTables(tables, { clubId, month, state: S });
+  B.forEach(r => (r.warnings || []).filter(w => /^Lecture impossible/.test(w)).forEach(w => log.erreurs.push(`${r.name} : ${w}`)));
   for (const t of tables) if (t.skipped) log.avertissements.push(`${t.name} : ${t.skipped}`);
   const known = B.filter(r => r.def && !r.def.silent);
   log.defs = [...new Set(known.map(r => r.def.id))];
@@ -32,7 +33,9 @@ async function rsmIngestFile(file, { clubId, by = 'auto', now = Date.now(), sour
     (r.warnings || []).filter(w => !/2 000 lignes/.test(w)).forEach(w => log.avertissements.push(`${r.name} : ${w}`));
   }
   if (!known.length) return { ops: [[['rsm', 'autoLog', clubId, log.id], log]], log };
-  const { ops, summary } = rsmCommitPlan(B, { club: clubId, choices: {}, by, now });
+  // Même moteur que l'écran Imports ; auteur 'auto:mail', 'auto:drive' ou 'auto:api'.
+  const auteur = String(by).startsWith('auto:') ? by : source === 'drive' ? 'auto:drive' : source === 'api' ? 'auto:api' : 'auto:mail';
+  const { ops, summary } = planImport(B, S, {}, { club: clubId, by: auteur, now });
   const vus = new Set();
   for (const [p] of ops) if (p.length === 2 && RSM_SUIVIS.includes(p[0]) && !vus.has(p[0] + '/' + p[1])) { vus.add(p[0] + '/' + p[1]); if (!(S[p[0]] || {})[p[1]]) log.nouvelles++; }
   log.resume = { saisies: summary.entries, dejaConnues: summary.updated, regularisations: summary.recov, clients: summary.clients, resiliations: summary.resil };

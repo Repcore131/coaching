@@ -223,7 +223,7 @@ function prospForm(p) {
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="prFormSave" data-id="${p ? p.id : ''}">Enregistrer</button>` });
 }
 ACTIONS.prFormSave = el => {
-  const f = formData($('#pnw')); if (!(f.prenom || '').trim() && !(f.nom || '').trim()) { toast('Indiquez au moins un prénom ou un nom.'); return; }
+  const f = formData($('#pnw')); if (!(f.prenom || '').trim() && !(f.nom || '').trim()) { fx.error('Indiquez au moins un prénom ou un nom.'); return; }
   const ph = f.phone ? phoneE164(f.phone) : null; if (f.phone && !ph) { toast('Téléphone invalide.'); return; }
   const em = (f.email || '').trim(); if (em && !/^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(em)) { toast('E-mail invalide.'); return; }
   const old = el.dataset.id ? S.prospects[el.dataset.id] : null; const id = old ? old.id : 'pm' + newId();

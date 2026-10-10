@@ -240,7 +240,7 @@ function planReglages() {
 
 // ── Actions ───────────────────────────────────────────────────────────────
 const planPath = (...k) => ['plans', CLUB.id, PLAN_DEFAULT.id, ...k];
-ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { toast('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('1 relevé d’avis noté'); };
+ACTIONS.planAvis = () => { const n = parseInt(($('#avf [name=n]') || {}).value, 10); if (!(n > 0)) { fx.error('Indiquez le nombre d’avis Google affiché aujourd’hui.'); return; } db.set(planPath('avis', today()), n); toast('1 relevé d’avis noté'); };
 ACTIONS.planSave = () => {
   const f = formData($('#plf')); const num = k => { const v = parseMontant(f[k]); return Number.isNaN(v) ? null : v; }; const mk = curMonth();
   const t = {}; ['ca', 'ventes', 'engagementPct', 'optionsPct', 'boutique', 'avis', 'transfoEquipe', 'transfoMin'].forEach(k => { const v = num(k); if (v != null) t[k] = v; });

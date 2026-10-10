@@ -1,5 +1,11 @@
 # Journal des versions de Fit Pulse
 
+## 2026.10.11 (octobre 2026)
+- Retours sensoriels gradués (fx.tap, step, win, kudos, error) : vibrations et sons Web Audio coupés par défaut, jamais à l'ouverture ni en arrière-plan ; célébration de 1,8 s au plus, fermée à Échap ou au tap ; animations réduites : texte seul ; pastilles de santé avec libellé ; cibles tactiles de 44 px.
+- Mesure d'usage maison : ouvertures au premier plan (5 minutes d'écart), écrans, actions, une écriture par minute ; page Engagement de l'équipe (managers et créateur) avec tendance sur 4 semaines ; indicateurs produit pour le créateur ; purge à 13 mois.
+- Arrivée des exports : carte des 4 canaux (API Resamania, boîte d'import e-mail, dossier Drive, dépôt manuel toujours actif), sans aucun secret enregistré ; onglet Imports > Automatique (30 derniers rapports, lignes en attente, quarantaine).
+- Moteur d'import commun (resamania-core.js) pour l'écran Imports et le serveur ; adresse d'import par club, script Gmail, relève Drive, API Resamania (côté serveur) ; documents d'intégration Resamania.
+
 ## 2026.10.10 (octobre 2026)
 - Ligues hebdomadaires du réseau : bronze, argent, or, platine ; groupes de 8 à 12 commerciaux, clubs mélangés ; 3 montent, 2 descendent ; saisons de 4 semaines ; Classement > Ma ligue ; un club peut ne pas participer, chacun peut masquer son nom hors de son club.
 - Duels de clubs d'une semaine comparés au pourcentage de l'objectif, carte Duel en cours, trophée Duel gagné ; défis d'équipe à objectif commun (Classement > Défis).

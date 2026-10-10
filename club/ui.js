@@ -206,6 +206,7 @@ const NAV = [
   ['imports', TXT.nav.imports, 'import', true],
   ['controle', TXT.nav.controle, 'check', true],
   ['confiance', TXT.nav.confiance, 'shield', true],
+  ['engagement', 'Engagement', 'chart', true],
 ];
 // Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
 const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
@@ -303,7 +304,7 @@ function renderNowInner() {
   if (typeof cguGate === 'function') cguGate();
   // Lecteurs d'écran : boutons icône nommés par leur infobulle, pastilles de santé lisibles.
   $$('button[title]:not([aria-label]),a[title]:not([aria-label])', app).forEach(b => { if (!b.textContent.trim()) b.setAttribute('aria-label', b.title); });
-  $$('.hdot[title]:not([role])', app).forEach(i => { i.setAttribute('role', 'img'); i.setAttribute('aria-label', i.title); });
+  $$('.hdot[title]:not([data-lib])', app).forEach(i => { i.dataset.lib = '1'; i.setAttribute('aria-hidden', 'true'); const t = document.createElement('span'); t.className = 'hdot-t'; t.textContent = i.title; i.after(t); });
   tickCountdown();
   if (typeof guideReancrer === 'function') guideReancrer();
   window.scrollTo(0, keepScroll);
@@ -321,6 +322,7 @@ document.addEventListener('click', e => {
   const f = ACTIONS[el.dataset.act];
   if (f) {
     e.preventDefault(); f(el, e);
+    if (typeof USAGE_ACTIONS !== 'undefined' && USAGE_ACTIONS.has(el.dataset.act)) usageAction();
     // Lien interne qui porte aussi une action : l'action d'abord, puis la page visée.
     const href = el.tagName === 'A' ? el.getAttribute('href') || '' : '';
     if (href.startsWith('#/')) { if (location.hash !== href) location.hash = href; else render(); }
@@ -368,7 +370,7 @@ function monthNav(key, mk) {
     <b style="min-width:130px;text-align:center">${monthLabel(mk)}</b>
     <button class="btn icon sm" data-act="ui" data-key="${key}" data-val="${addMonths(mk, 1)}" aria-label="Mois suivant">${ico('chevR')}</button></div>`;
 }
-function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (typeof usageNote === 'function') usageNote(null, true); if (!location.hash) location.hash = '#/home'; render(); }
+function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (typeof usageNote === 'function') { usageNote(null, true); const pg = usagePurgeOps(user.id); if (pg.length && !user.virtual) db.batch(pg); } if (!location.hash) location.hash = '#/home'; render(); }
 async function logout() { if (typeof pushForget === 'function' && backend.mode === 'firebase') await pushForget(); ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') { await backend.signOut(); S = null; } render(); }
 
 // CSV pour Excel : point-virgule, BOM UTF-8, et neutralisation des cellules qui

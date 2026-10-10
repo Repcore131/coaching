@@ -219,9 +219,24 @@ export async function passagePush(api, tk, S, mail = null, { catalogue: catTest 
     // Mesure : un type ouvert moins de 5 % du temps sur 30 jours est mis en pause pour ce compte, avec un message dans la boîte.
     const labels = run ? JSON.parse(run('JSON.stringify(Object.fromEntries(Object.entries(NOTIF_TYPES).map(([k, v]) => [k, v.label])))')) : {};
     const pz = pausesAuto(S, ib, Date.now(), labels);
+    // Mesure produit : taux d'ouverture par type (page Engagement, créateur) ; purge de l'usage de plus de 13 mois.
+    await api(tk, 'pulse/serveur/ouvertures.json', { method: 'PUT', body: JSON.stringify({ at: Date.now(), types: ouverturesParType(ib, Date.now()) }) });
+    const vieux = usagePurge(S, P.day); if (Object.keys(vieux).length) await api(tk, 'pulse/usage.json', { method: 'PATCH', body: JSON.stringify(vieux) });
     if (Object.keys(pz.prefs).length) await api(tk, 'pulse/prefs.json', { method: 'PATCH', body: JSON.stringify(pz.prefs) });
     if (Object.keys(pz.inbox).length) await api(tk, 'pulse_inbox.json', { method: 'PATCH', body: JSON.stringify(pz.inbox) }); }
   return { sent, planned: items.length, inbox: Object.keys(inbox).length, dead: dead.length, devices: Object.values(subs).reduce((s, x) => s + Object.keys(x || {}).length, 0) };
+}
+// Taux d'ouverture des alertes poussées par type, sur 30 jours, tous comptes confondus.
+export function ouverturesParType(ib, now) {
+  const lim = now - 30 * 864e5; const by = {};
+  for (const L of Object.values(ib || {})) Object.values(L || {}).forEach(x => { if (!x || !x.push || !x.kind || x.at < lim) return; const b = by[x.kind] = by[x.kind] || { n: 0, o: 0 }; b.n++; if (x.readAt) b.o++; });
+  return by;
+}
+// Usage (S.usage[uid][date]) de plus de 13 mois : chemins à effacer.
+export function usagePurge(S, jour) {
+  const [y, m] = jour.slice(0, 7).split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 - 13, 1)); const lim = t.toISOString().slice(0, 7) + jour.slice(7);
+  const del = {}; for (const [u, D] of Object.entries((S && S.usage) || {})) for (const d of Object.keys(D || {})) if (d < lim) del[`${u}/${d}`] = null;
+  return del;
 }
 // Envois des 30 derniers jours par compte et par type : au moins 20 alertes poussées et moins de 5 % ouvertes = pause.
 export const PAUSE_MIN_ENVOIS = 20;

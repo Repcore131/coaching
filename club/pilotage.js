@@ -82,7 +82,7 @@ ACTIONS.cmpShare = () => { const t = $$('.card h3').find(h => h.textContent === 
 // ── Envoi au directeur, exports, bilan individuel imprimable ─────────────
 ACTIONS.recapMail = () => {
   const c = S.clubs[CLUB.id]; const mk = UI.recapMonth || addMonths(curMonth(), -1); const pm = addMonths(mk, -1);
-  if (!c.directorEmail) { toast('Renseignez l’e-mail du directeur.'); ACTIONS.clubForm({ dataset: { id: CLUB.id } }); return; }
+  if (!c.directorEmail) { fx.error('Renseignez l’e-mail du directeur.'); ACTIONS.clubForm({ dataset: { id: CLUB.id } }); return; }
   const F = monthFigures(CLUB.id, mk), P = monthFigures(CLUB.id, pm);
   const d = (a, b, eur) => { if (a == null || b == null) return ''; const x = a - b; return ` (${x >= 0 ? '+' : ''}${eur ? fmtE(x) : fmtN(x)}${b ? `, ${x >= 0 ? '+' : ''}${Math.round(x / b * 100)} %` : ''})`; };
   const L = [`Récapitulatif ${c.name}, ${monthLabel(mk).toLowerCase()}`, '', `Contrats : ${fmtN(F.contrats)}${d(F.contrats, P.contrats)}`, `Nouveaux entrants : ${fmtN(F.entrants)}${d(F.entrants, P.entrants)}`, `Résiliations : ${fmtN(F.resiliees)}${d(F.resiliees, P.resiliees)}`, `Taux de résiliation : ${F.tauxResil == null ? 'n.d.' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %'}`, `Impayés en cours : ${F.du == null ? 'n.d.' : fmtE(F.du)}`, `Impayés récupérés par l’équipe : ${fmtE(F.impayesEquipe)}${d(F.impayesEquipe, P.impayesEquipe, true)}`, `Avis Google : ${fmtN(F.avis)}${d(F.avis, P.avis)}`, `Boutique : ${fmtE(F.boutique)}${d(F.boutique, P.boutique, true)}`, ''];

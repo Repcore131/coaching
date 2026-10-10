@@ -329,7 +329,7 @@ tr.click:hover td { background: var(--fp-soft); }
 .celebrate-in { text-align: center; }
 .celebrate-t { font-weight: 600; font-size: var(--t-32); color: var(--text); line-height: 1.1; }
 .celebrate-s { color: var(--muted); font-size: var(--t-16); margin-top: 10px; font-weight: 500; }
-.celebrate i { position: absolute; top: -20px; width: 10px; height: 18px; border-radius: 2px; animation: drop 2.2s linear forwards; }
+.celebrate i { position: absolute; top: -20px; width: 10px; height: 18px; border-radius: 2px; animation: drop 1.8s linear forwards; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } }
 @keyframes drop { to { transform: translateY(110vh) rotate(540deg); } }
 @media (prefers-reduced-motion: reduce) {
@@ -718,7 +718,7 @@ img, svg, video, canvas { max-width: 100%; }
 .zone-black { background: var(--surface); color: var(--text); }
 .celebrate { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; overflow: hidden; background: color-mix(in srgb, var(--bg) 94%, transparent); cursor: pointer; }
 .celebrate .celebrate-in { position: relative; z-index: 1; display: grid; justify-items: center; gap: 10px; text-align: center; padding: 20px; }
-.celebrate .cel-art { animation: celIn .45s cubic-bezier(.2,.9,.3,1.3) both; }
+.celebrate .cel-art { animation: celIn .3s cubic-bezier(.2,.9,.3,1.3) both; }
 .celebrate .cel-art .art { width: min(220px, 50vw); height: auto; }
 .celebrate .celebrate-t { font-size: var(--t-32); color: var(--text); line-height: 1.1; }
 .celebrate .celebrate-s { color: var(--muted); font-size: var(--t-16); max-width: 34ch; }
@@ -1402,7 +1402,11 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 }
 .appels-liste { display: grid; gap: 10px; }
 /* Animations réduites choisies dans Mon appli (préférence du compte) */
-html[data-motion=reduced] *, html[data-motion=reduced] *::before, html[data-motion=reduced] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+/* Animations réduites (fx.js) : aucune animation, aucune transition, le texte seul. */
+html[data-motion=reduced] *, html[data-motion=reduced] *::before, html[data-motion=reduced] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
 /* Accueil personnalisable */
 .home-perso { display: flex; justify-content: center; margin: 18px 0 8px; }
 .hc-liste { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
@@ -1501,3 +1505,19 @@ html[data-theme=dark] .fil-c.fil-win .fil-t { color: var(--fil-or, #F2C500); }
 .story-corps { min-height: 360px; }
 .story-liste { display: grid; gap: 6px; }
 .story-liste .row { min-height: 48px; border: 1px solid var(--line); border-radius: var(--r-md); padding: 0 10px; gap: 10px; }
+
+/* ── Retours sensoriels (fx.js) ─────────────────────────────────────────── */
+/* La célébration laisse passer le geste suivant : seule la carte capte les clics. */
+.celebrate { pointer-events: none; }
+.celebrate .celebrate-in { pointer-events: auto; }
+.celebrate.fx-texte .celebrate-in { animation: none; }
+/* Cibles tactiles d'au moins 44 x 44 px : réactions et pavé. */
+.reacts button, .msg .tools button[data-em] { min-height: 44px; min-width: 44px; justify-content: center; }
+.pad button { min-height: 44px; min-width: 44px; }
+/* Pastille de santé : la couleur et un libellé texte. */
+.hdot-t { font-size: var(--t-12); font-weight: 500; color: var(--muted); margin-left: 4px; white-space: nowrap; }
+.ingest-actif { background: var(--ok-soft); color: var(--ok); }
+.ingest-en-attente { background: var(--warn-soft); color: var(--warn); }
+.ingest-inactif { background: var(--surface-2); color: var(--muted); }
+.aide-etapes { padding-left: 20px; display: grid; gap: 6px; }
+.aide-capture { border: 1px dashed var(--line); border-radius: var(--r-md); padding: 22px; text-align: center; margin-top: 10px; }
