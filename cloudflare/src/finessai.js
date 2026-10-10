@@ -11,12 +11,12 @@
 // semaines actives. Sans séance, un autre message, sans chiffre.
 //
 // À J-3, si le compte a accepté les e-mails (users/<clé>/consentements/email.accepte === true),
-// le contact entre dans la liste Brevo BREVO_LISTE_FIN_ESSAI : c'est
-// l'automatisation de Brevo qui envoie la séquence. Sans accord ou sans
+// le serveur envoie l'e-mail de fin d'essai (modèle Brevo
+// BREVO_MODELE_FIN_ESSAI, avec le lien de désinscription). Sans accord, après une désinscription, ou sans
 // configuration, rien ne part.
 
 import { paris } from './metier.js';
-import { inscrireListe } from './brevo.js';
+import { envoyerModele, lienDesinscription } from './brevo.js';
 
 const JOUR = 864e5;
 export const PALIERS_FIN_ESSAI = Object.freeze({ j3: 3, j1: 1, j0: 0 });
@@ -95,7 +95,9 @@ export function creerFinEssai(ctx) {
     if (palier === 'j3' && (await lire('users/' + cle + '/consentements/email/accepte')) === true) {
       try {
         const email = (await lire('users/' + cle + '/email')) || cle.replace(/,/g, '.');
-        mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', liste: env.BREVO_LISTE_FIN_ESSAI });
+        if (await lire('desinscrits/' + cle)) mail = 'desinscrit';
+        else mail = await envoyerModele(env, ctx.fetchImpl, { email: String(email), prenom: fname || '', modele: env.BREVO_MODELE_FIN_ESSAI,
+          params: { DESINSCRIPTION: await lienDesinscription(env, String(email)) } });
       } catch (e) { mail = 'erreur'; }
     }
     // UNE FOIS PAR PALIER ET PAR ESSAI, qu'un appareil ait reçu ou non : le

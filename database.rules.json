@@ -2320,6 +2320,8 @@
     // compteurs d IP (haches) : le serveur seul.
     "email_file":     { ".read": false, ".write": false },
     "email_echecs":   { ".read": false, ".write": false },
+    "email_envoyes":  { ".read": false, ".write": false },
+    "desinscrits":    { ".read": false, ".write": false },
     "leads":          { ".read": false, ".write": false },
     "lead_ip":        { ".read": false, ".write": false },
     // Le drapeau de l inscription (« Recois mes conseils par e-mail ») : ecrit

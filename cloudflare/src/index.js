@@ -173,6 +173,11 @@ export default {
       // LE GUIDE OFFERT (page d'accueil) : prénom + e-mail → file Brevo.
       // GET /lead/etat dit à la page si le formulaire est ouvert (clé posée et
       // LEAD_OUVERT=oui) : rien ne promet un guide qui n'arriverait pas.
+      // LA DÉSINSCRIPTION des e-mails de conseils (lien signé des e-mails).
+      if (url.pathname === '/desinscription' && req.method === 'GET') {
+        const r = await outils(env).M.emails.desinscrire(url.searchParams.get('e'), url.searchParams.get('s'));
+        return new Response(r.html, { status: r.statut, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+      }
       if (url.pathname === '/email/etat' && req.method === 'GET') {
         return reponse(JSON.stringify(await outils(env).M.emails.etat()), 200);
       }

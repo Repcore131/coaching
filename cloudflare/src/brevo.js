@@ -4,11 +4,21 @@
 // d'outil ne demanderait que de remplacer ce module. (Systeme.io reste celui
 // de la PROSPECTION de Kevin, hors de l'app : plan gratuit limité à 2 000
 // contacts.)
-// ⚠ LE WORKER N'ENVOIE JAMAIS D'E-MAIL LUI-MÊME. Il crée ou met à jour un
-//   contact et l'inscrit dans une liste ; ce sont les automatisations de
-//   Brevo (« contact ajouté à la liste ») qui écrivent, et le lien de
-//   désinscription est le leur. L'app, elle, n'appelle aucun service
-//   d'e-mail (un test l'interdit) : elle ne fait que cocher une case.
+// ⚠ C'EST LE SERVEUR QUI DÉCLENCHE CHAQUE E-MAIL (11/10/2026), par l'API
+//   d'envoi de Brevo (envoyerModele : un modèle Brevo + ses paramètres).
+//   Brevo achemine (délivrabilité, quota gratuit de 300 par jour) ; le
+//   serveur décide QUAND et À QUI, sans automatisation à régler dans Brevo.
+//   L'app, elle, n'appelle aucun service d'e-mail (un test l'interdit) :
+//   elle ne fait que cocher une case.
+//
+// LES E-MAILS (un modèle Brevo chacun, identifiants dans wrangler.toml) :
+//   · BIENVENUE : une fois, après la case cochée à l'inscription ;
+//   · AVIS DE RENOUVELLEMENT (L215-1) : à tout abonné annuel, avant chaque
+//     échéance — information contractuelle, envoyée même sans accord e-mail ;
+//   · FIN D'ESSAI (J-3) et RECONQUÊTE (J+30) : seulement avec l'accord e-mail.
+// Chaque e-mail de conseil porte un LIEN DE DÉSINSCRIPTION signé (HMAC) :
+// /desinscription retire l'accord dans le dossier, note desinscrits/<clé> et
+// bloque l'adresse chez Brevo.
 //
 // D'OÙ VIENNENT LES CONTACTS (liste BREVO_LISTE, « RepCore » par défaut)
 //   · l'INSCRIPTION, case « Reçois mes conseils et les nouveautés par e-mail »
@@ -20,10 +30,6 @@
 //     e-mail + accord, champ piège, 5 envois par jour et par adresse IP (l'IP
 //     n'est jamais gardée : un hachage salé du jour) ;
 //   · le PREMIER PAIEMENT d'un compte qui a consenti : STATUT passe à « payant ».
-//
-// LES LISTES D'ÉVÉNEMENT (inscrireListe) : l'avis de renouvellement annuel
-// (L215-1), la fin d'essai (J-3), la reconquête (J+30). Le contact est retiré
-// puis remis dans la liste, pour que l'automatisation se redéclenche.
 //
 // LA FILE (email_file/<id>) : une opération par entrée, traitée chaque minute.
 //   · 30 REQUÊTES PAR MINUTE au plus vers Brevo (compteur gardé d'une
@@ -41,8 +47,9 @@
 // guide), et retire toute création encore en file.
 //
 // SECRET : BREVO_API_KEY. VARIABLES (facultatives) : BREVO_LISTE (nom de la
-// liste des contacts, « RepCore »), BREVO_LISTE_RENOUVELLEMENT,
-// BREVO_LISTE_FIN_ESSAI, BREVO_LISTE_RECONQUETE (identifiants numériques),
+// liste des contacts, « RepCore »), BREVO_MODELE_BIENVENUE,
+// BREVO_MODELE_RENOUVELLEMENT, BREVO_MODELE_FIN_ESSAI, BREVO_MODELE_RECONQUETE
+// (identifiants des modèles Brevo, dans wrangler.toml),
 // BREVO_ATTR_PRENOM (« PRENOM », l'attribut d'un compte Brevo en français),
 // LEAD_OUVERT=oui (ouvre le formulaire du guide).
 
@@ -111,24 +118,45 @@ async function upsert(api, env, { email, prenom, attributs, listIds }) {
   return note;
 }
 
+const WORKER = (env) => String(env.WORKER_URL || 'https://repcore-serveur.repcore.workers.dev').trim();
+// LA SIGNATURE DU LIEN DE DÉSINSCRIPTION : HMAC-SHA256 de l'adresse, avec un
+// secret du serveur. Personne ne peut désinscrire l'adresse d'un autre.
+async function signer(env, email) {
+  const secret = String(env.ADMIN_SECRET || env.BREVO_API_KEY || '').trim();
+  if (!secret) return '';
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode('desinscription|' + secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(email || '').trim().toLowerCase())));
+  return btoa(String.fromCharCode(...sig.slice(0, 18))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+/** Le lien de désinscription d'une adresse (signé). */
+export async function lienDesinscription(env, email) {
+  const e = String(email || '').trim().toLowerCase();
+  return WORKER(env) + '/desinscription?e=' + encodeURIComponent(e) + '&s=' + (await signer(env, e));
+}
+/** La signature d'un lien est-elle juste ? (comparaison à temps constant) */
+export async function signatureDesinscription(env, email, sig) {
+  const attendu = await signer(env, email);
+  const donne = String(sig || '');
+  if (!attendu || attendu.length !== donne.length) return false;
+  let d = 0; for (let i = 0; i < attendu.length; i++) d |= attendu.charCodeAt(i) ^ donne.charCodeAt(i);
+  return d === 0;
+}
+
 /**
- * Inscrire un contact dans une LISTE D'ÉVÉNEMENT (renouvellement, fin d'essai,
- * reconquête) : contact créé ou mis à jour, retiré puis remis dans la liste
- * (l'automatisation de Brevo se redéclenche ainsi). Rend 'envoye',
- * 'non_configure', 'sans_email', ou lève.
+ * ENVOYER UN E-MAIL : un modèle Brevo (identifiant numérique) et ses
+ * paramètres ({{ params.X }} dans le modèle). Rend 'envoye', 'non_configure'
+ * (pas de clé ou pas de modèle), 'sans_email', ou lève.
  * @param {any} env
  * @param {Function} fetchImpl
- * @param {{email:string, prenom?:string, liste?:string, attributs?:Object}} o
+ * @param {{email:string, prenom?:string, modele?:string|number, params?:Object}} o
  */
-export async function inscrireListe(env, fetchImpl, { email, prenom, liste, attributs }) {
-  const id = String(liste || '').trim();
+export async function envoyerModele(env, fetchImpl, { email, prenom, modele, params }) {
+  const id = String(modele || '').trim();
   if (!String(env.BREVO_API_KEY || '').trim() || !/^\d+$/.test(id)) return 'non_configure';
   if (!emailValide(email)) return 'sans_email';
   const api = client(env, fetchImpl);
-  await upsert(api, env, { email, prenom, attributs });
-  // Retirer : un contact absent de la liste répond 400, ce n'est pas une erreur.
-  exiger(await api('POST', '/contacts/lists/' + id + '/contacts/remove', { emails: [email] }), 'liste_retrait', [200, 201, 204, 400]);
-  exiger(await api('POST', '/contacts/lists/' + id + '/contacts/add', { emails: [email] }), 'liste_ajout');
+  const to = [Object.assign({ email: String(email).trim() }, prenom ? { name: String(prenom).slice(0, 40) } : {})];
+  exiger(await api('POST', '/smtp/email', { to, templateId: Number(id), params: Object.assign({ PRENOM: prenom || 'à toi' }, params || {}) }), 'envoi', [200, 201, 202]);
   return 'envoye';
 }
 
@@ -148,14 +176,14 @@ export function creerBrevo(ctx) {
     return ref.key;
   }
   // Le compte qui consent : relu dans SON dossier, jamais sur la foi du drapeau.
-  async function contactDuCompte(k, statutForce) {
+  async function contactDuCompte(k, statutForce, bienvenue) {
     const [c, email, fname, status, origine] = await Promise.all(['consentements/email', 'email', 'fname', 'status', 'origine']
       .map((x) => lire('users/' + k + '/' + x)));
     if (!(c && c.accepte === true)) return 'sans_consentement';
     const e = String(email || k.replace(/,/g, '.')).trim();
     if (!emailValide(e)) return 'sans_email';
     await enfiler({ op: 'contact', email: e, prenom: net(fname, 40), source: srcNet(origine && origine.src),
-      date: jourParis(Number(c.le) || now()), statut: statutForce || statutContact({ status }), compte: k });
+      date: jourParis(Number(c.le) || now()), statut: statutForce || statutContact({ status }), compte: k, bienvenue: bienvenue === true });
     return 'en_file';
   }
   // Les drapeaux posés par l'app à l'inscription. Le dossier part de l'app
@@ -166,7 +194,7 @@ export function creerBrevo(ctx) {
     const maj = {}; const bilan = {};
     const t = now();
     for (const k of Object.keys(l).sort().slice(0, LOT)) {
-      bilan[k] = await contactDuCompte(k);
+      bilan[k] = await contactDuCompte(k, undefined, true);
       if (bilan[k] === 'sans_consentement' && t - (Number(l[k] && l[k].le) || 0) < 3600e3) continue;
       maj['email_optin/' + k] = null;
     }
@@ -215,7 +243,17 @@ export function creerBrevo(ctx) {
     if (op.source) attributs.SOURCE = String(op.source);
     if (op.date) attributs.DATE_INSCRIPTION = String(op.date);
     if (op.statut) attributs.STATUT = String(op.statut);
-    return upsert(api, env, { email, prenom: op.prenom, attributs, listIds: [Number(await listeId(api))] });
+    const note = await upsert(api, env, { email, prenom: op.prenom, attributs, listIds: [Number(await listeId(api))] });
+    // LA BIENVENUE, une fois par compte, après la case cochée (jamais à un désinscrit).
+    if (op.bienvenue && op.compte) {
+      const [deja, desinscrit] = await Promise.all([lire('email_envoyes/' + op.compte + '/bienvenue'), lire('desinscrits/' + op.compte)]);
+      if (!deja && !desinscrit) {
+        const r = await envoyerModele(env, ctx.fetchImpl, { email, prenom: op.prenom, modele: env.BREVO_MODELE_BIENVENUE,
+          params: { DESINSCRIPTION: await lienDesinscription(env, email) } });
+        if (r === 'envoye') await db.ref('email_envoyes/' + op.compte + '/bienvenue').set(now());
+      }
+    }
+    return note;
   }
 
   // ── CHAQUE MINUTE ──────────────────────────────────────────────────────
@@ -304,6 +342,24 @@ export function creerBrevo(ctx) {
     return { statut: 200, corps: { ok: true } };
   }
 
+  // ── LA DÉSINSCRIPTION (GET /desinscription?e=…&s=…, lien des e-mails) ──
+  // Rend {statut, html}. Signature fausse : 403, rien ne change.
+  async function desinscrire(email, sig) {
+    const t = now();
+    const e = String(email || '').trim().toLowerCase();
+    if (!emailValide(e) || !(await signatureDesinscription(env, e, sig))) return { statut: 403, html: pageDesinscription(false) };
+    const k = cleEmail(e);
+    const maj = { ['desinscrits/' + k]: t, ['leads/' + k]: null, ['email_optin/' + k]: null };
+    if (await lire('users/' + k + '/email')) {
+      maj['users/' + k + '/consentements/email'] = { accepte: false, le: t, texte: 'desinscription-lien' };
+      maj['users/' + k + '/updatedAt'] = t;
+    }
+    await db.ref().update(maj);
+    // Et chez Brevo : l'adresse ne reçoit plus d'e-mail de conseil.
+    if (configure()) { try { await client(env, ctx.fetchImpl)('PUT', '/contacts/' + encodeURIComponent(e), { emailBlacklisted: true }); } catch (x) { /* noté chez nous, c'est ce qui compte */ } }
+    return { statut: 200, html: pageDesinscription(true) };
+  }
+
   // ── /fn/email (appelé par l'app, compte authentifié) ───────────────────
   async function appel(req) {
     const k = cleEmail(req && req.auth && req.auth.email);
@@ -335,5 +391,16 @@ export function creerBrevo(ctx) {
       job: job ? { periode: job.jour || null, fini: !!job.fini, erreur: job.erreur ? String(job.erreur).slice(0, 120) : null } : null };
   }
 
-  return { minute, enfiler, contactDuCompte, lead, leadOuvert, appel, executer, etat };
+  return { minute, enfiler, contactDuCompte, lead, leadOuvert, appel, executer, etat, desinscrire };
+}
+
+/** PURE. La page rendue après un clic sur le lien de désinscription. */
+export function pageDesinscription(ok) {
+  const t = ok ? 'C’est fait : tu ne recevras plus nos e-mails de conseils.' : 'Ce lien de désinscription n’est pas valide.';
+  const d = ok ? 'Les e-mails liés à ton abonnement (comme l’avis avant un renouvellement annuel) restent envoyés, la loi les impose. Tu peux te réabonner aux conseils à tout moment en nous écrivant.'
+    : 'Réponds simplement à l’un de nos e-mails pour te désinscrire.';
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RepCore</title></head>'
+    + '<body style="margin:0;background:#080808;color:#f2f2f2;font-family:Arial,Helvetica,sans-serif"><main style="max-width:520px;margin:0 auto;padding:48px 20px">'
+    + '<p style="color:#ff4d4d;letter-spacing:3px;font-weight:bold;font-size:12px">REPCORE</p><h1 style="font-size:22px;line-height:1.4">' + t + '</h1>'
+    + '<p style="color:#b5b5b5;line-height:1.6">' + d + '</p></main></body></html>';
 }
