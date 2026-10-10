@@ -51698,13 +51698,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,relance,retour,sante,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,premiere,relance,retour,sante,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==11) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==12) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -58102,6 +58102,43 @@ async function testExercices(){
       if(!a.essai||a.essai.s!==1||a.essai.t!==100) return _echec('résumé publié : '+JSON.stringify(a.essai));
       for(const k of Object.keys(a.essai)) if(['s','t','r','w'].indexOf(k)<0) return _echec('champ en trop : '+k);
       return true;})());
+
+    // ══ LES INSCRITS SANS PREMIÈRE SÉANCE (11/10/2026) ═════════════════════
+    // Le push du serveur (premiere.js) ouvre ./?wo=1&i=<créneau> : la séance
+    // du jour DIRECTEMENT, pas le sélecteur. Un créneau absent ou vide → le
+    // sélecteur, comme avant.
+    ok('PREMIÈRE SÉANCE — le lien ?wo=1&i= ouvre la séance du jour, sinon le sélecteur',(()=>{
+      const sv=currentUser, sS=window.startWorkoutSession, sP=window.openSessionPicker;
+      const vus=[];
+      try{
+        window.startWorkoutSession=i=>{ vus.push('s'+i); };
+        window.openSessionPicker=()=>{ vus.push('picker'); };
+        const cfg=[{day:'Lundi',active:true,exercises:[{name:'SQUAT'}]},{day:'Mardi',active:false,exercises:[{name:'DIPS'}]},
+          {day:'Mercredi',active:true,exercises:[]}];
+        currentUser={role:'athlete',sessions_config:cfg};
+        if(creneauLienSeance(currentUser,0)!==0) return _echec('créneau actif refusé');
+        for(const i of [1,2,7,-1,'x',null,undefined,0.5]) if(creneauLienSeance(currentUser,i)!==null) return _echec('créneau accepté : '+i);
+        ouvrirSeanceLien(currentUser,0); ouvrirSeanceLien(currentUser,1); ouvrirSeanceLien(currentUser,null);
+        if(vus.join()!=='s0,picker,picker') return _echec('ouvertures : '+vus.join());
+        // Le drapeau est posé au chargement, et consommé au démarrage.
+        const src=_prodSrc();
+        if(src.indexOf("window._pendingWoIdx=Number(params.get('i'))")<0||src.indexOf('ouvrirSeanceLien(currentUser,_wi)')<0) return _echec('le lien n’est pas branché');
+        return true;
+      } finally { currentUser=sv; window.startWorkoutSession=sS; window.openSessionPicker=sP; }})());
+
+    ok('PREMIÈRE SÉANCE — le type « premiere » se coupe dans les réglages, et l’écran Viralité montre son taux',(()=>{
+      const t=PUSH_TYPES.find(x=>x.cle==='premiere');
+      if(!t||!/1, 3 et 6 jours/.test(t.txt)) return _echec('type absent des réglages');
+      const g=NOTIF_GROUPES.find(x=>x.types.indexOf('premiere')>=0);
+      if(!g||g.cle!=='seances'||!/première séance/.test(g.detail)) return _echec('case des séances');
+      if(pushPrefsDepuisChoix({},{seances:false,coach:true,invitations:true}).premiere!==false) return _echec('décocher les séances ne coupe pas la relance');
+      if(htmlRelancePremiere(null)!=='') return _echec('tableau sans données');
+      const d=document.createElement('div');
+      d.innerHTML=htmlRelancePremiere([{levier:'j1',envoyes:40,seances:10,taux:25,alerte:false},{levier:'j3',envoyes:5,seances:1,taux:20,alerte:true},{levier:'j6',envoyes:0,seances:0,taux:null,alerte:true}],30);
+      const txt=d.textContent.replace(/\s+/g,' ');
+      for(const x of ['Push du 1er jour','25 %','Push du 6e jour','pas encore significatif']) if(txt.indexOf(x)<0) return _echec('« '+x+' » absent : '+txt.slice(0,200));
+      if(d.querySelectorAll('tr.vir-alerte').length!==2) return _echec('alertes');
+      return htmlRetention({maj:1,premiereSeance:[{levier:'j1',envoyes:1,seances:0,taux:0,alerte:true}]}).indexOf('Relance des inscrits sans séance')>=0?true:_echec('section absente de l’écran');})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est

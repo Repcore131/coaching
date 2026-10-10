@@ -31,6 +31,7 @@ import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { creerAffluence } from './affluence.js';
 import { creerFinEssai } from './finessai.js';
+import { creerPremiere } from './premiere.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
@@ -61,6 +62,7 @@ function outils(env) {
   M.affluence = creerAffluence({ db, M });
   // La fin d'essai : J-3, J-1, J0 à 18 h 30, et l'étiquette Systeme.io à J-3.
   M.finEssai = creerFinEssai({ db, M, env, fetchImpl: fetchCompte });
+  M.premiere = creerPremiere({ db, M });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
