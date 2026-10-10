@@ -225,14 +225,14 @@ function sparkline(v, { w = 96, h = 24 } = {}) {
   return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 }
 function kpiTable(rows, exp, r, who) {
-  const tri = pref('dashSort', { k: 'ordre', d: 1 }); const ordre = kpiList().map(k => k.id);
+  const tri = pref('dashSort', { k: 'ordre', d: 1 }); const ordre = kpiOrdreMoi(CLUB.id); const auDoigt = tri.k === 'ordre' && tri.d > 0;
   const jour = r.to < today() ? r.to : today();
   const L = rows.map(x => { const attendu = x.target ? x.target * exp : null; const t30 = tendance30(who, x.k.id); return { ...x, attendu, ecart: attendu == null ? null : x.real - attendu, t30, tendance: t30.reduce((s, v) => s + v, 0), ordre: ordre.indexOf(x.k.id) }; });
   const val = (x, k) => k === 'ordre' ? x.ordre : x[k] == null ? -Infinity : x[k];
   L.sort((a, b) => (val(a, tri.k) > val(b, tri.k) ? 1 : val(a, tri.k) < val(b, tri.k) ? -1 : a.ordre - b.ordre) * (tri.d || 1));
   const ecartTxt = x => { if (x.ecart == null) return '<span class="muted">sans objectif</span>'; const e = x.k.unit === 'qty' ? (x.ecart < 0 ? -Math.ceil(-x.ecart - 1e-9) : Math.floor(x.ecart + 1e-9)) : Math.round(x.ecart); return `<span class="${e < 0 ? 'bad' : e > 0 ? 'ok' : ''}">${e > 0 ? '+' : e < 0 ? '−' : ''}${esc(fmtU(Math.abs(e), x.k))}</span>`; };
-  return `<div class="card kpi-table-card"><div class="table-wrap"><table class="t kpi-table" id="kpi-table"><thead><tr>${KPI_TRI.map(([k, l], i) => `<th class="${i ? 'num ' : ''}sortable${tri.k === k ? ' tri' : ''}" data-act="dashSort" data-k="${k}" aria-sort="${tri.k === k ? (tri.d > 0 ? 'ascending' : 'descending') : 'none'}">${l}${tri.k === k ? (tri.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('')}</tr></thead><tbody>
-    ${L.map(x => `<tr data-kpi="${x.k.id}"><td><div class="row" style="gap:8px"><span class="kpi-ico">${kpiIcon(x.k)}</span><div><b>${esc(x.k.label)}</b>${x.k.required ? ' <span class="badge req" title="KPI obligatoire du classement">Obligatoire</span>' : ''}<div class="muted small kpi-msg">${esc(paceMessage(x, exp, jour))}</div></div></div></td>
+  return `<div class="card kpi-table-card"><div class="table-wrap"><table class="t kpi-table" id="kpi-table"><thead><tr>${KPI_TRI.map(([k, l], i) => `<th class="${i ? 'num ' : ''}sortable${tri.k === k ? ' tri' : ''}" data-act="dashSort" data-k="${k}" aria-sort="${tri.k === k ? (tri.d > 0 ? 'ascending' : 'descending') : 'none'}">${l}${tri.k === k ? (tri.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('')}</tr></thead><tbody${auDoigt ? ' data-tri="kpi"' : ''}>
+    ${L.map(x => `<tr data-kpi="${x.k.id}"${auDoigt ? ` data-tri-id="${x.k.id}"` : ''}><td><div class="row" style="gap:8px">${auDoigt ? triPoignee(x.k.id, x.k.label) : ''}<span class="kpi-ico">${kpiIcon(x.k)}</span><div><b data-tri-label>${esc(x.k.label)}</b>${x.k.required ? ' <span class="badge req" title="KPI obligatoire du classement">Obligatoire</span>' : ''}<div class="muted small kpi-msg">${esc(paceMessage(x, exp, jour))}</div></div></div></td>
       <td class="num"><span class="trace-n"${traceAttr({ t: 'kpi', club: CLUB.id, user: who || null, kpi: x.k.id, from: r.from, to: r.to, v: x.real })}>${esc(fmtU(x.real, x.k))}</span>${x.k.id === 'sauvetage' && x.real > 0 ? `<div class="small muted">${fmtE(sauvValeur(who, r))} gardés</div>` : ''}</td>
       <td class="num">${x.target ? esc(fmtU(x.target, x.k)) : '<span class="muted">aucun</span>'}</td>
       <td class="num">${x.attendu == null ? '<span class="muted">sans objectif</span>' : esc(fmtU(x.k.unit === 'qty' ? Math.round(x.attendu) : Math.round(x.attendu), x.k))}</td>
@@ -240,6 +240,9 @@ function kpiTable(rows, exp, r, who) {
       <td class="num" title="${esc(fmtU(x.tendance, x.k))} sur 30 jours">${sparkline(x.t30)}<div class="small muted">${esc(fmtU(x.tendance, x.k))}</div></td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
+// Ordre de MES indicateurs dans ce club (prefs.kpiOrder[club]), sinon l'ordre du club.
+function kpiOrdreMoi(clubId) { const club = kpiList().map(k => k.id); const mien = (prefsOf().kpiOrder || {})[clubId]; if (!Array.isArray(mien)) return club; return [...mien.filter(id => club.includes(id)), ...club.filter(id => !mien.includes(id))]; }
+TRI_CIBLES.kpi = ids => { const tout = kpiOrdreMoi(CLUB.id); setPrefPath(['kpiOrder', CLUB.id], [...ids, ...tout.filter(id => !ids.includes(id))]); };
 ACTIONS.dashSort = el => { const k = el.dataset.k; const cur = pref('dashSort', { k: 'ordre', d: 1 }); setPref('dashSort', { k, d: cur.k === k ? -cur.d : k === 'ordre' ? 1 : -1 }); };
 // Valeur gardée par les sauvetages d'une période (mensualités x mois restants).
 function sauvValeur(uid, r) {

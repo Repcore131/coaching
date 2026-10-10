@@ -34,3 +34,18 @@ test('H1 : aucune case ne promet un envoi inexistant ; carte Mon appli', () => {
   const m = run('monAppliCard()'); for (const t of ['Thème', 'Vibrations', 'Sons', 'Animations réduites', 'Heures calmes']) assert.match(m, new RegExp(t));
   run(`ACTIONS.senseSet({ dataset: { k: 'motion' }, checked: true })`); assert.equal(run('S.prefs.u.sense.motion'), 'reduced');
 });
+test('H2 : cartes de l’accueil par compte, jamais de cockpit pour un membre, accueil conseillé', () => {
+  const run = appli({ prefs: { v: { v: 2, home: { cards: ['cockpit', 'top', 'day'], hidden: [] } } } }, 'v');
+  assert.deepEqual(J(run, 'homeCartes()'), ['top', 'day']);
+  run(`UI.homeEdit = { ordre: homeToutes(), on: Object.fromEntries(homeToutes().map(id => [id, id !== 'top'])) }; ACTIONS.homeEditSave()`);
+  assert.ok(!J(run, 'homeCartes()').includes('top')); assert.equal(run('!!(S.prefs.u && S.prefs.u.home)'), false);
+  run(`ACTIONS.homeConseille()`); assert.deepEqual(J(run, 'homeCartes()'), J(run, 'HOME_CONSEILLE.membre'));
+  run(`ME = S.users.u`); assert.equal(J(run, 'homeCartes()')[1], 'cockpit');
+});
+test('H2 : ordre des KPI par club dans prefs.kpiOrder', () => {
+  const run = appli({ prefs: { u: { v: 2 } } });
+  const club = J(run, 'kpiOrdreMoi("k")');
+  run(`TRI_CIBLES.kpi(['avis', 'contrats'])`); run(`CLUB = S.clubs.k2`); run(`TRI_CIBLES.kpi(['impayes'])`);
+  const o = J(run, 'S.prefs.u.kpiOrder'); assert.deepEqual(o.k.slice(0, 2), ['avis', 'contrats']); assert.equal(o.k2[0], 'impayes'); assert.equal(o.k.length, club.length);
+  assert.deepEqual(J(run, 'kpiOrdreMoi("k")').slice(0, 2), ['avis', 'contrats']);
+});

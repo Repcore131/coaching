@@ -1403,3 +1403,24 @@ mark.tpl-manque { background: color-mix(in srgb, var(--warn) 30%, transparent); 
 .appels-liste { display: grid; gap: 10px; }
 /* Animations réduites choisies dans Mon appli (préférence du compte) */
 html[data-motion=reduced] *, html[data-motion=reduced] *::before, html[data-motion=reduced] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+/* Accueil personnalisable */
+.home-perso { display: flex; justify-content: center; margin: 18px 0 8px; }
+.hc-liste { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.hc-l { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.hc-l.off .spacer, .hc-l.off .hc-ic { color: var(--muted); }
+.hc-ic { display: inline-grid; color: var(--muted); }
+.hc-b, .tri-poignee { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; }
+.tri-poignee { border: 0; background: none; color: var(--muted); cursor: grab; padding: 0; border-radius: var(--r-md); touch-action: none; }
+.tri-poignee:focus-visible { outline: 2px solid var(--accent); }
+[data-tri] [data-tri-id] { -webkit-touch-callout: none; }
+.tri-cache { display: none !important; }
+.tri-place td, li.tri-place, div.tri-place { background: var(--surface-2, var(--line)); border: 1px dashed var(--muted); border-radius: var(--r-md); list-style: none; }
+.tri-clone { position: fixed; z-index: 90; pointer-events: none; display: flex; align-items: center; padding: 0 14px; background: var(--surface); border: 1px solid var(--accent); border-radius: var(--r-md); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); font-weight: 600; transform: rotate(-1deg); }
+body.tri-en-cours { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+.switch { position: relative; display: inline-block; width: 52px; height: 30px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; width: 100%; height: 100%; cursor: pointer; z-index: 1; }
+.switch i { position: absolute; inset: 0; border-radius: 15px; background: var(--line); transition: background .15s; }
+.switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(22px); }
+.switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }

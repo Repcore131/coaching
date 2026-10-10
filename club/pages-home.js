@@ -186,12 +186,15 @@ PAGES.home = {
     const top5 = rk.filter(x => x.score != null).slice(0, 5);
     const manager = isManager();
     const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const rg = { from: m + '-01', to: `${m}-${daysIn(m)}` }; const parts = recoveredParts(CLUB.id, rg); if (parts.equipe_na) { parts.equipe += parts.equipe_na; delete parts.equipe_na; } out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: recoveredFor(CLUB.id, rg) }); } return out; })() : [];
+    const ctx = { mk, r, st, rk, me, acc, mission, palierKeys, stR, myPct, myHealth, top5, manager, recovRows };
+    // Bannière et messages du moment en tête, puis MES cartes dans MON ordre (home-cartes.js).
+    const cartes = homeCartes().map(id => { try { const h = HOME_CARDS[id].render(ctx); return h ? `<!--carte:${id}-->${h.replace(/^(\s*<div class=")/, `$1hc-${id} `)}` : ''; } catch (e) { console.error('carte', id, e); return ''; } }).join('');
     return `<div class="home2">${manager ? miseEnRouteCard() : ''}
       <section class="banner">
         <div class="banner-in"><div class="eyebrow light">${esc(nomAffiche())} · ${monthLabel(mk)}</div>
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
           <div class="row wrap banner-meta"><span class="jtag" title="${esc(compteRebours().titre)}">${esc(compteRebours().texte)}</span>${weather ? `${healthChip(weather)}<span class="muted-l">Projection des paliers</span>` : `<span class="muted-l">Projection disponible le ${PROJ_JOUR_MIN}</span>`}</div>
-          <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>${me.rank}<sup>${me.rank === 1 ? 'er' : 'e'}</sup> sur ${rk.length}</b><small>Série : ${plur(acc.streak, 'jour', 'jours')}</small></a>` : ''}</div></div></section>
+          <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>${me.rank}<sup>${me.rank === 1 ? 'er' : 'e'}</sup> sur ${rk.length}</b><small>${esc(serieTexteCourt(ME.id))}</small></a>` : ''}</div></div></section>
       ${typeof planHomeCard === 'function' ? planHomeCard() : ''}
       ${weekDigestCard()}
       ${manager ? saisonBanner() : ''}
@@ -199,31 +202,12 @@ PAGES.home = {
       ${manager ? '' : parcoursCard()}
       ${manager ? '' : myPlanCard()}
       ${manager ? '' : primeCard()}
-      ${typeof appelsDuJour === 'function' ? appelsDuJour(3) : ''}
-      <div class="g12 home-now">
-        <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
-          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres} j</b><span>${compteRebours().ouvres > 1 ? 'ouvrés restants' : 'ouvré restant'}</span></div>${healthChip(myHealth)}</div>
-          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
-          ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>
-        <div class="card col6"><div class="race-h"><div><div class="eyebrow">Classé en euros attendus</div><h3>Vos 5 actions les plus rentables aujourd’hui</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/opportunites">Tout voir</a></div>${oppHomeList(5)}</div>
-      </div>
       ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
       ${manager ? localTransferCard() : ''}
       ${manager ? badgeVerifies(CLUB.id) : ''}
       ${manager ? briefDuJourCard() : ''}
-      ${manager ? managerCockpit() : ''}
-      <div class="g12">
-        <div class="card col8"><details class="race-det" ${innerWidth > 860 ? 'open' : ''}><summary>Voir la projection des paliers</summary>${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</details></div>
-        <div class="card col4 paliers"><div class="race-h"><div><div class="eyebrow light">Prime d’équipe</div><h3>Paliers du mois</h3></div><span class="spacer"></span>${manager ? '<a class="btn ghost sm light" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>${palierKeys.map(k => palierBlock(CLUB.id, mk, k, false)).join('') || '<p class="muted">Aucun palier collectif.</p>'}</div>
-        <div class="card col5"><div class="race-h"><div><div class="eyebrow">Saisie rapide</div><h3>Saisir</h3></div></div>${quickPad()}</div>
-        <div class="card col3"><div class="race-h"><div><div class="eyebrow">Mes objectifs</div><h3>Ma progression</h3></div></div>
-          <div class="center">${ring(myPct == null ? null : Math.min(myPct, 1), { label: fmtP(myPct), sub: 'score du mois', color: myHealth.color })}${healthChip(myHealth)}</div>
-          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus</p>'}</div>
-        <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Les 5 premiers</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
-          ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span>${manager || x.u.id === ME.id ? `<i class="hdot ${h.cls}" title="${h.label}"></i>` : ''}<b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>
-        ${manager ? `<div class="card col3"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, mk)}</div>
-        <div class="card col3"><div class="race-h"><div><div class="eyebrow">Tous canaux</div><h3>Impayés récupérés</h3></div></div>${stackRows(recovRows, Object.entries(RECOV_CHANNELS).map(([key, c]) => ({ key, label: c.label, color: c.color })))}</div>` : ''}
-      </div></div>`;
+      <div class="g12 home-cartes">${cartes || '<div class="card col12"><p class="muted" style="margin:0">Aucune carte sur votre accueil.</p></div>'}</div>
+      <div class="home-perso"><button class="btn" data-act="homePerso">${ico('edit')} Personnaliser</button></div></div>`;
   },
 };
 // Donnees saisies sur cet appareil AVANT le mode partage (ancien mode local) :
@@ -261,6 +245,15 @@ ACTIONS.localTransfer = () => {
 };
 ACTIONS.localTransferSkip = () => { safeLS.set('fitpulse.transferred', '1'); render(); };
 ACTIONS.goPaliers = () => { UI.memTab = 'paliers'; location.hash = '#/members'; };
+// Carte « Ma journée » (score, rang, jours restants, objectifs du jour).
+function maJourneeCard(ctx) {
+  const { rk, me, myPct, myHealth, mission } = ctx;
+  return `<div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
+    <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${plur(rk.length, 'commercial', 'commerciaux')}</span></div><div title="${esc(compteRebours().titre)}"><b class="num-l">${compteRebours().ouvres} j</b><span>${compteRebours().ouvres > 1 ? 'ouvrés restants' : 'ouvré restant'}</span></div>${healthChip(myHealth)}</div>
+    ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : esc(fmtU(m.per, m.k)) + ' aujourd’hui'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
+    ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>`;
+}
+const serieTexteCourt = uid => `Série : ${plur(accomplishments(uid).streak, 'jour', 'jours')}`;
 function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;
   const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0); const dunTot = dun.reduce((s, c) => s + Number(c.balance), 0); const dunNobody = dun.filter(c => !dunOf(c).ownerId).length; const dunDueN = dun.filter(dunDue).length;
