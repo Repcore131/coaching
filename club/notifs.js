@@ -114,7 +114,7 @@ function notifLive(before, after) {
   }
   for (const id of Object.keys(after.kudos || {})) {
     if ((before.kudos || {})[id]) continue; const k = after.kudos[id];
-    if (k && k.to === ME.id && k.from !== ME.id && Date.now() - k.at < 600000 && after.users[k.from]) notify('kudos', `${after.users[k.from].first} vous félicite : ${(typeof KUDOS_RAISONS === 'object' && KUDOS_RAISONS[k.reason]) || 'bravo'}.`, '#/profile', { key: 'kudos_' + id });
+    if (k && k.to === ME.id && k.from !== ME.id && Date.now() - k.at < 600000 && after.users[k.from]) { const t = `${after.users[k.from].first} vous félicite : ${(typeof KUDOS_RAISONS === 'object' && KUDOS_RAISONS[k.reason]) || 'bravo'}.`; if (ruleOn('kudos') && !inbox().some(x => x.key === 'kudos_' + id)) { notify('kudos', t, '#/profile', { key: 'kudos_' + id, toastIt: false }); if (!document.hidden) fx.kudos(t); } }
   }
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];

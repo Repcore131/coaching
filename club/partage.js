@@ -15,7 +15,7 @@ const cleCommentaire = evId => 'c' + graineTexte(evId).toString(36);
 let REACT_APPUI = null; let REACT_LONG = false;
 document.addEventListener('pointerdown', e => {
   const b = e.target.closest && e.target.closest('[data-noms]'); if (!b) return; REACT_LONG = false;
-  REACT_APPUI = setTimeout(() => { REACT_LONG = true; toast(b.dataset.noms || 'Personne pour l’instant'); vibrer(10); }, 500);
+  REACT_APPUI = setTimeout(() => { REACT_LONG = true; toast(b.dataset.noms || 'Personne pour l’instant'); fx.tap(); }, 500);
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => document.addEventListener(t, () => { clearTimeout(REACT_APPUI); }, true));
 document.addEventListener('click', e => { if (REACT_LONG && e.target.closest && e.target.closest('[data-noms]')) { e.stopPropagation(); e.preventDefault(); REACT_LONG = false; } }, true);

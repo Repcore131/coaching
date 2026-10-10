@@ -162,7 +162,7 @@ ACTIONS.wizNext = () => {
   const w = UI.wiz; const c = w.col; const get = (r, k) => c[k] === '' ? '' : r[Number(c[k])];
   const plan = { type: w.type, skipped: 0 };
   if (w.type === 'kpi') {
-    if (c.date === '' || c.user === '' || (w.mode === 'sum' && c.amount === '') || (w.kpi === '_cat' && c.cat === '')) { toast('Choisissez les colonnes obligatoires.'); return; }
+    if (c.date === '' || c.user === '' || (w.mode === 'sum' && c.amount === '') || (w.kpi === '_cat' && c.cat === '')) { fx.error('Choisissez les colonnes obligatoires.'); return; }
     // empreinte des saisies deja importees et actives, pour ignorer les doublons
     // On compte les occurrences : deux ventes identiques dans le MEME fichier
     // sont deux ventes ; ce qui est en trop, c'est ce qu'un import actif a deja.
@@ -188,7 +188,7 @@ ACTIONS.wizNext = () => {
     });
     Object.assign(plan, { entries, dups, from, to, summary: Object.values(sum).sort((a, b) => fullName(S.users[a.userId]).localeCompare(fullName(S.users[b.userId]))), empty: !entries.length });
   } else {
-    if (c.name === '' || (w.type === 'soldes' && c.balance === '') || (w.type === 'resil' && c.date === '')) { toast('Choisissez les colonnes obligatoires.'); return; }
+    if (c.name === '' || (w.type === 'soldes' && c.balance === '') || (w.type === 'resil' && c.date === '')) { fx.error('Choisissez les colonnes obligatoires.'); return; }
     const existing = Object.values(w.type === 'resil' ? S.resiliations : S.clients).filter(x => x.clubId === CLUB.id);
     const findC = (name, email, birth) => existing.find(x => (email && x.email && norm(x.email) === norm(email)) || (norm(x.name || x.client) === norm(name) && (!birth || !x.birth || x.birth === birth)));
     const items = []; let created = 0, updated = 0;

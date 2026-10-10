@@ -53,7 +53,7 @@ ACTIONS.yearPreview = el => {
     <tr class="total"><td>Total</td>${ks.map(p => `<td class="num">${fmtN(p.months.reduce((s, x) => s + x, 0))}</td>`).join('')}</tr></tbody></table></div><p class="muted small">Coefficients : ${ks.map(p => `${esc(p.k.label)} ${p.source}`).join(' · ')}. Les mois passés ne sont pas modifiés.</p>` : '<p class="muted small">Saisissez au moins un objectif annuel.</p>';
 };
 ACTIONS.yearSave = async el => {
-  const y = Number(el.dataset.y); const { plan, members } = yearPlanCompute(y); if (!Object.keys(plan).length) { toast('Saisissez au moins un objectif annuel.'); return; }
+  const y = Number(el.dataset.y); const { plan, members } = yearPlanCompute(y); if (!Object.keys(plan).length) { fx.error('Saisissez au moins un objectif annuel.'); return; }
   // valeurs retouchées dans l'aperçu
   $$('#yp-prev [data-yp]').forEach(i => { const p = plan[i.dataset.yp]; const v = parseMontant(i.value); if (p && !Number.isNaN(v)) { const m = Number(i.dataset.m); p.months[m] = v; const w = p.users[m].map(x => x || 0.0001); p.users[m] = splitRound(v, w, 0); } });
   if (!await confirmDlg(`Enregistrer les objectifs mensuels de ${y} (mois à venir uniquement) ?`, { ok: 'Valider' })) return;

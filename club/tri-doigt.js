@@ -17,7 +17,7 @@ function triFin(root, ids) { const f = TRI_CIBLES[root.dataset.tri]; if (f) f(id
 
 function triDemarrer() {
   const t = TRI; if (!t || t.actif) return;
-  t.actif = true; vibrer(10);
+  t.actif = true; fx.tap();
   const r = t.it.getBoundingClientRect(); t.dx = t.x - r.left; t.dy = t.y - r.top;
   const place = document.createElement(t.it.tagName === 'TR' ? 'tr' : t.it.tagName === 'LI' ? 'li' : 'div'); place.className = 'tri-place';
   if (t.it.tagName === 'TR') { const td = document.createElement('td'); td.colSpan = t.it.children.length; place.appendChild(td); }

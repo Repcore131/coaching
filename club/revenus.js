@@ -105,7 +105,7 @@ ACTIONS.guestNew = () => {
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="guestSave">Enregistrer</button>` });
 };
 ACTIONS.guestSave = () => {
-  const f = formData($('#gstf')); if (!f.nom.trim()) { toast('Indiquez le nom de l’invité.'); return; }
+  const f = formData($('#gstf')); if (!f.nom.trim()) { fx.error('Indiquez le nom de l’invité.'); return; }
   const tel = f.tel ? phoneE164(f.tel) : null; if (f.tel && !tel) { toast('Téléphone invalide.'); return; }
   const num = (f.parrain.match(/· (\S+)$/) || [])[1]; const par = f.parrain ? activeClients(CLUB.id).find(c => (num && String(c.num) === num) || tokensKey(c.name || '') === tokensKey(f.parrain)) : null;
   const id = newId(); db.set(['guests', id], { id, clubId: CLUB.id, nom: f.nom.trim().slice(0, 80), phone: tel, date: f.date || today(), parrainId: par ? par.id : null, by: ME.id, at: Date.now() });
@@ -428,7 +428,7 @@ ACTIONS.coEdit = el => {
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="coSave" data-id="${co.id || ''}">Enregistrer</button>` });
 };
 ACTIONS.coSave = el => {
-  const f = formData($('#cof')); if (!f.nom.trim()) { toast('Indiquez le nom de l’entreprise.'); return; }
+  const f = formData($('#cof')); if (!f.nom.trim()) { fx.error('Indiquez le nom de l’entreprise.'); return; }
   const id = el.dataset.id || 'co' + newId(); const old = S.companies[id] || {}; const eff = parseInt(f.effectif, 10);
   const co = { ...old, id, clubId: CLUB.id, nom: f.nom.trim().slice(0, 100), secteur: f.secteur.trim(), effectif: eff > 0 ? eff : null, contact: f.contact.trim(), tel: phoneE164(f.tel) || f.tel.trim(), statut: f.statut, ownerId: f.ownerId || null, prochaineAction: f.prochaineAction || null, offre: f.offre.trim(), notes: f.notes.trim().slice(0, 2000), at: old.at || Date.now() };
   const ops = [[['companies', id], co]];

@@ -176,7 +176,7 @@ ACTIONS.goalNew = el => {
 };
 ACTIONS.goalSave = el => {
   const f = formData($('#gf')); const t = parseMontant(f.target);
-  if (!f.label.trim() || Number.isNaN(t) || !f.due) { toast('Renseignez quoi, la cible et l’échéance.'); return; }
+  if (!f.label.trim() || Number.isNaN(t) || !f.due) { fx.error('Renseignez quoi, la cible et l’échéance.'); return; }
   if (f.due > addDays(today(), 90)) { toast('Échéance à 90 jours au plus.'); return; }
   if (!f.ok) { toast('Validez l’objectif avec le commercial (case Réaliste).'); return; }
   const id = newId(); db.set(['coaching', el.dataset.u, 'goals', id], { id, createdAt: Date.now(), by: ME.id, label: f.label.trim().slice(0, 120), kpiId: f.kpiId || null, metric: f.kpiId ? f.metric : 'activite', target: t, from: today(), due: f.due, status: 'en_cours' });

@@ -303,7 +303,7 @@ function renderNowInner() {
   if (typeof cguGate === 'function') cguGate();
   // Lecteurs d'écran : boutons icône nommés par leur infobulle, pastilles de santé lisibles.
   $$('button[title]:not([aria-label]),a[title]:not([aria-label])', app).forEach(b => { if (!b.textContent.trim()) b.setAttribute('aria-label', b.title); });
-  $$('.hdot[title]:not([role])', app).forEach(i => { i.setAttribute('role', 'img'); i.setAttribute('aria-label', i.title); });
+  $$('.hdot[title]:not([data-lib])', app).forEach(i => { i.dataset.lib = '1'; i.setAttribute('aria-hidden', 'true'); const t = document.createElement('span'); t.className = 'hdot-t'; t.textContent = i.title; i.after(t); });
   tickCountdown();
   if (typeof guideReancrer === 'function') guideReancrer();
   window.scrollTo(0, keepScroll);

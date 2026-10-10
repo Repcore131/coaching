@@ -216,8 +216,8 @@ ACTIONS.resSaveIt = el => {
 };
 ACTIONS.resSaveOk = el => {
   const r = S.resiliations[el.dataset.id]; const f = formData($('#rsf'));
-  if (!f.offer || !RES_OFFERS.includes(f.offer) || f.offer === 'Aucune') { toast('Choisissez l’offre acceptée.'); return; }
-  if (!(f.note || '').trim()) { toast('Indiquez une note sur le sauvetage.'); return; }
+  if (!f.offer || !RES_OFFERS.includes(f.offer) || f.offer === 'Aucune') { fx.error('Choisissez l’offre acceptée.'); return; }
+  if (!(f.note || '').trim()) { fx.error('Indiquez une note sur le sauvetage.'); return; }
   const owner = r.ownerId || ME.id; const v = valeurEnJeu(r).euros; const now = Date.now();
   db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], v], [['resiliations', r.id, 'valeur'], v], [['resiliations', r.id, 'ownerId'], owner],
     [['resiliations', r.id, 'outcome'], 'sauvee'], [['resiliations', r.id, 'closedAt'], now], [['resiliations', r.id, 'closedBy'], ME.id], [['resiliations', r.id, 'closedReason'], 'fitpulse'],
@@ -270,7 +270,7 @@ ACTIONS.resDetailSave = el => {
 ACTIONS.resNew = () => openModal({ title: 'Nouvelle demande de résiliation', body: `<form id="rf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="client" required></label><label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${today()}"></label><label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${addDays(today(), 30)}"></label><label class="field"><span>Motif</span><select class="input" name="reason">${RES_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label><label class="field"><span>Reçue</span><select class="input" name="source"><option value="accueil">À l’accueil</option><option value="manuel">Par téléphone ou courrier</option><option value="mail">Par e-mail</option></select></label><label class="field"><span>Demande</span><select class="input" name="type"><option value="resiliation">Résiliation</option><option value="suspension">Suspension</option></select></label><label class="row full small"><input type="checkbox" name="mine" checked> Je m’en occupe</label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="resCreate">Créer le dossier</button>' });
 ACTIONS.resCreate = () => {
-  const f = formData($('#rf')); if (!f.client.trim()) { toast('Indiquez le nom du client.'); return; }
+  const f = formData($('#rf')); if (!f.client.trim()) { fx.error('Indiquez le nom du client.'); return; }
   const id = newId();
   // Réception : maintenant pour une demande du jour, sinon minuit (Paris) du jour indiqué.
   const now = Date.now(); const date = f.date || today(); const receivedAt = date === today() ? now : minuitParis(date);

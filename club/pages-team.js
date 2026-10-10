@@ -64,7 +64,7 @@ ACTIONS.saveMember = async el => {
   if (!isCreator() && f.role !== 'membre' && !(el.dataset.id && S.users[el.dataset.id].role === f.role)) { toast('Seul le créateur peut nommer un manager.'); return; }
   if (!f.first.trim()) { toast('Le prénom est obligatoire.'); return; }
   const clubs = Object.keys(S.clubs).filter(id => f['club_' + id]);
-  if (!clubs.length) { toast('Choisissez au moins un club.'); return; }
+  if (!clubs.length) { fx.error('Choisissez au moins un club.'); return; }
   const email = (f.email || '').trim().toLowerCase();
   const id = el.dataset.id || newId();
   const old = S.users[id];
