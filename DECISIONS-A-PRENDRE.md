@@ -61,13 +61,13 @@ lisent là.
 - **c. L'information avant chaque renouvellement annuel (art. L215-1) — CODÉE
   le 09/10/2026** (`cloudflare/src/renouvellement.js`). Le worker note la date
   anniversaire de chaque annuel payé (`renouvellements/<clé>`) et, à J-60,
-  envoie une notification et pose l'étiquette Systeme.io qui déclenche
-  l'e-mail. **Reste à Kevin** : dans Systeme.io, créer l'étiquette, les champs
-  `date_renouvellement` et `montant_renouvellement`, et la règle « étiquette
-  ajoutée → e-mail » ; puis poser les secrets du worker `SYSTEMEIO_API_KEY`,
-  `SYSTEMEIO_TAG_RENOUVELLEMENT` (et les variables `SYSTEMEIO_CHAMP_ECHEANCE`,
-  `SYSTEMEIO_CHAMP_MONTANT`). Sans eux, seule la notification part : la loi
-  demande un écrit (e-mail), la notification seule ne suffit pas.
+  envoie une notification et inscrit le contact dans une liste **Brevo**
+  (11/10/2026 : Brevo remplace Systeme.io pour l'app ; attributs `ECHEANCE` et
+  `MONTANT`, créés par le worker). **Reste à Kevin** : la clé API Brevo (secret
+  `BREVO_API_KEY`) et, dans Brevo, l'automatisation « contact ajouté à la liste
+  Renouvellement → e-mail ». Claude pose ensuite `BREVO_LISTE_RENOUVELLEMENT`.
+  Sans eux, seule la notification part : la loi demande un écrit (e-mail), la
+  notification seule ne suffit pas.
 - **d. Le renouvellement des ANCIENS annuels engagés.** Les CGV de l'époque disent
   « à l'issue des douze mois, reconduction mois par mois », mais leur plan PayPal
   est annuel : PayPal reprélèvera 114 € / 298,80 € pour une nouvelle année. Option

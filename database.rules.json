@@ -2315,11 +2315,11 @@
     "push_log":     { ".read": false, ".write": false },
     "premiere_trace": { ".read": false, ".write": false },
     "pauses":         { ".read": false, ".write": false },
-    // LES CONTACTS E-MAIL (11/10/2026, serveur leger : systemeio.js). La file
-    // vers Systeme.io, ses echecs, la preuve du consentement du guide et les
+    // LES CONTACTS E-MAIL (11/10/2026, serveur leger : brevo.js). La file
+    // vers Brevo, ses echecs, la preuve du consentement du guide et les
     // compteurs d IP (haches) : le serveur seul.
-    "sio_file":       { ".read": false, ".write": false },
-    "sio_echecs":     { ".read": false, ".write": false },
+    "email_file":     { ".read": false, ".write": false },
+    "email_echecs":   { ".read": false, ".write": false },
     "leads":          { ".read": false, ".write": false },
     "lead_ip":        { ".read": false, ".write": false },
     // Le drapeau de l inscription (« Recois mes conseils par e-mail ») : ecrit

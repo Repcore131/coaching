@@ -1,11 +1,12 @@
 // L'avis avant le renouvellement d'un annuel (art. L215-1), sur une base en
-// mémoire, un faux PayPal et un faux Systeme.io.
+// mémoire, un faux PayPal et un faux Brevo.
 //   node cloudflare/test/renouvellement.test.mjs
 import assert from 'node:assert/strict';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
 import { creerPaypal, recevoirWebhook, OFFRES_PAYPAL, PLANS_ANNUELS_SANS_ENGAGEMENT } from '../src/paypal.js';
-import { avisDu, texteAvis, etiqueterSystemeio, AVIS_JOURS, AVIS_MIN_JOURS, AVIS_MAX_JOURS } from '../src/renouvellement.js';
+import { avisDu, texteAvis, AVIS_JOURS, AVIS_MIN_JOURS, AVIS_MAX_JOURS } from '../src/renouvellement.js';
+import { fauxBrevo } from './faux-brevo.mjs';
 import { travaux } from '../src/planif.js';
 import { fausseBase } from './fausse-base.mjs';
 
@@ -20,20 +21,14 @@ const CLE = 'lea@t,fr', ABO = 'I-ANN12345678';
 function monde(initial, o) {
   const F = fausseBase(initial);
   const opt = o || {};
-  const w = { F, t: T0, abos: opt.abonnements || {}, sio: [], pushs: [], sioPanne: false };
+  const w = { F, t: T0, abos: opt.abonnements || {}, pushs: [], B: fauxBrevo({ listes: [{ id: 42, name: 'Renouvellement' }], attributs: ['PRENOM', 'ECHEANCE', 'MONTANT'] }) };
   const fetchImpl = async (url, init) => {
     const u = String(url);
     if (u.endsWith('/v1/oauth2/token')) return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 32400 }) };
     if (u.endsWith('/v1/notifications/verify-webhook-signature')) return { ok: true, status: 200, json: async () => ({ verification_status: 'SUCCESS' }) };
     const m = u.match(/\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)$/);
     if (m) { const s = w.abos[m[1]]; return s ? { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(s)) } : { ok: false, status: 404, json: async () => ({}) }; }
-    if (u.startsWith('https://api.systeme.io/')) {
-      w.sio.push({ methode: init.method, chemin: u.slice('https://api.systeme.io/api'.length), corps: init.body ? JSON.parse(init.body) : null, cle: init.headers['X-API-Key'] });
-      if (w.sioPanne) return { ok: false, status: 500, json: async () => ({}) };
-      if (init.method === 'GET') return { ok: true, status: 200, json: async () => ({ items: opt.contactExiste ? [{ id: 77, email: 'lea@t.fr' }] : [] }) };
-      if (init.method === 'POST' && u.endsWith('/contacts')) return { ok: true, status: 201, json: async () => ({ id: 88 }) };
-      return { ok: true, status: init.method === 'DELETE' ? 404 : 204, json: async () => null };
-    }
+    if (w.B.gere(u)) return w.B.fetch(url, init);
     return F.fetchImpl(url, init);
   };
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl });
@@ -52,7 +47,7 @@ let n = 0;
 const evt = (type, ress) => ({ id: 'WH-' + (++n), event_type: type, resource: ress, create_time: iso(T0 + n * 1000) });
 const vente = (abo, montant) => ({ id: 'S' + (++n), billing_agreement_id: abo, amount: { total: montant, currency: 'EUR' } });
 const LEA = () => ({ [CLE]: { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', email: 'lea@t.fr' } });
-const SIO = { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_RENOUVELLEMENT: '42', SYSTEMEIO_CHAMP_ECHEANCE: 'date_renouvellement', SYSTEMEIO_CHAMP_MONTANT: 'montant_renouvellement' };
+const SIO = { BREVO_API_KEY: 'k', BREVO_LISTE_RENOUVELLEMENT: '42' };
 
 await test('PURE avisDu : la fenêtre légale (au plus tôt 3 mois, au plus tard 1 mois), une fois par échéance', async () => {
   assert.ok(AVIS_MIN_JOURS < AVIS_JOURS && AVIS_JOURS < AVIS_MAX_JOURS);
@@ -100,17 +95,16 @@ await test('une résiliation retire l’échéance : plus de reconduction, plus 
   assert.equal(w.F.lire('renouvellements/' + CLE), null);
 });
 
-await test('l’avis part à J-60 : notification urgente et étiquette Systeme.io, une seule fois', async () => {
+await test('l’avis part à J-60 : notification urgente et liste Brevo (date et montant en attributs), une seule fois', async () => {
   const ech = T0 + 60 * J;
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: ech, formule: 'essentielle', montant: 9500 } } }, { env: SIO });
   assert.equal(await w.PP.avisRenouvellementUn(CLE, T0), 'avis_envoye');
   assert.equal(w.pushs.length, 1);
   assert.equal(w.pushs[0].oo.urgent, true);
   assert.match(w.pushs[0].message.body, /reconduit pour un an/);
-  const ch = w.sio.map((x) => x.methode + ' ' + x.chemin);
-  assert.deepEqual(ch, ['GET /contacts?email=lea%40t.fr', 'POST /contacts', 'DELETE /contacts/88/tags/42', 'POST /contacts/88/tags']);
-  assert.deepEqual(w.sio[1].corps.fields.map((f) => f.slug), ['first_name', 'date_renouvellement', 'montant_renouvellement']);
-  assert.deepEqual(w.sio[3].corps, { tagId: 42 });
+  assert.deepEqual(w.B.appels, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
+  assert.deepEqual(w.B.contacts['lea@t.fr'].attributs, { PRENOM: 'Léa', ECHEANCE: texteAvis({ echeance: ech }).date, MONTANT: texteAvis({ echeance: ech, montantCentimes: 9500 }).montant });
+  assert.deepEqual(w.B.listes[0].membres, ['lea@t.fr']);
   const r = w.F.lire('renouvellements/' + CLE);
   assert.equal(r.avisPour, ech); assert.equal(r.avisLe, T0); assert.equal(r.email, 'envoye'); assert.equal(r.push, 1);
   // Le lendemain : rien de plus.
@@ -119,26 +113,28 @@ await test('l’avis part à J-60 : notification urgente et étiquette Systeme.i
   assert.equal(w.pushs.length, 1);
 });
 
-await test('contact Systeme.io existant : ses champs sont mis à jour, pas de doublon', async () => {
-  const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 40 * J, formule: 'ultime' } } }, { env: SIO, contactExiste: true });
+await test('contact Brevo existant : ses attributs sont mis à jour, pas de doublon', async () => {
+  const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 40 * J, formule: 'ultime' } } }, { env: SIO });
+  w.B.contacts['lea@t.fr'] = { email: 'lea@t.fr', attributs: { PRENOM: 'L', ECHEANCE: 'avant' }, id: 77 };
   await w.PP.avisRenouvellementUn(CLE, T0);
-  assert.deepEqual(w.sio.map((x) => x.methode + ' ' + x.chemin), ['GET /contacts?email=lea%40t.fr', 'PATCH /contacts/77', 'DELETE /contacts/77/tags/42', 'POST /contacts/77/tags']);
+  assert.equal(Object.keys(w.B.contacts).length, 1);
+  assert.equal(w.B.contacts['lea@t.fr'].attributs.ECHEANCE, texteAvis({ echeance: T0 + 40 * J }).date);
 });
 
-await test('sans Systeme.io configuré : la notification seule, noté « non_configure »', async () => {
+await test('sans Brevo configuré : la notification seule, noté « non_configure »', async () => {
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 45 * J, formule: 'essentielle' } } });
   assert.equal(await w.PP.avisRenouvellementUn(CLE, T0), 'avis_envoye');
-  assert.equal(w.sio.length, 0);
+  assert.equal(w.B.appels.length, 0);
   assert.equal(w.F.lire('renouvellements/' + CLE + '/email'), 'non_configure');
 });
 
 await test('aucun canal n’a porté : l’avis n’est pas noté parti, il se retente le lendemain', async () => {
   const w = monde({ users: LEA(), renouvellements: { [CLE]: { abo: ABO, echeance: T0 + 45 * J, formule: 'essentielle' } } }, { env: SIO, sansTelephone: true });
-  w.sioPanne = true;
+  w.B.forcer['POST /contacts'] = { statut: 500 };
   assert.equal(await w.PP.avisRenouvellementUn(CLE, T0), 'avis_en_echec');
   assert.equal(w.F.lire('renouvellements/' + CLE + '/avisPour'), null);
-  assert.match(w.F.lire('renouvellements/' + CLE + '/dernierEchec/email'), /^erreur : Systeme\.io GET/);
-  w.sioPanne = false; w.t = T0 + J;
+  assert.match(w.F.lire('renouvellements/' + CLE + '/dernierEchec/email'), /^erreur : Brevo contact 500/);
+  delete w.B.forcer['POST /contacts']; w.t = T0 + J;
   assert.equal(await w.PP.avisRenouvellementUn(CLE, w.t), 'avis_envoye');
   assert.equal(w.F.lire('renouvellements/' + CLE + '/dernierEchec'), null);
 });
@@ -164,13 +160,5 @@ await test('le travail quotidien « renouvellement » existe et lit renouvelleme
   assert.equal(await job.un(CLE, T0), 'avis_envoye');
 });
 
-await test('etiqueterSystemeio : sans clé ou étiquette non numérique, rien ne part', async () => {
-  let appels = 0;
-  const f = async () => { appels++; return { ok: true, status: 200, json: async () => ({}) }; };
-  assert.equal(await etiqueterSystemeio({}, f, { email: 'a@b.fr' }), 'non_configure');
-  assert.equal(await etiqueterSystemeio({ SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_RENOUVELLEMENT: 'abc' }, f, { email: 'a@b.fr' }), 'non_configure');
-  assert.equal(await etiqueterSystemeio(SIO, f, { email: 'pas-une-adresse' }), 'sans_email');
-  assert.equal(appels, 0);
-});
 
 console.log('\n' + ok + ' tests verts (avis L215-1).');

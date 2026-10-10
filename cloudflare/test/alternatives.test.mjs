@@ -9,6 +9,7 @@ import { alternativesResiliation, motifCle, planEssentielleDe, remiseAnnuelle, m
   MOTIFS_RESILIATION, PLAN_ESSENTIELLE_MENSUEL } from '../src/alternatives.js';
 import { travaux } from '../src/planif.js';
 import { fausseBase } from './fausse-base.mjs';
+import { fauxBrevo } from './faux-brevo.mjs';
 import TARIFS from '../../tarifs.json' with { type: 'json' };
 import { readFileSync } from 'node:fs';
 
@@ -22,7 +23,8 @@ const CLE = 'lea@t,fr', ABO = 'I-MEN12345678';
 function monde(initial, o) {
   const F = fausseBase(initial);
   const opt = o || {};
-  const w = { F, t: T0, abos: opt.abonnements || {}, appels: [], pushs: [], sio: [], refus: opt.refus || {} };
+  const w = { F, t: T0, abos: opt.abonnements || {}, appels: [], pushs: [], refus: opt.refus || {}, B: fauxBrevo({ listes: [{ id: 31, name: 'Reconquête' }, { id: 42, name: 'Renouvellement' }] }) };
+  w.sio = w.B.appels;
   const fetchImpl = async (url, init) => {
     const u = String(url);
     if (u.endsWith('/v1/oauth2/token')) return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 32400 }) };
@@ -40,11 +42,7 @@ function monde(initial, o) {
     }
     const m = u.match(/\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)$/);
     if (m) { const s = w.abos[m[1]]; return s ? { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(s)) } : { ok: false, status: 404, json: async () => ({}) }; }
-    if (u.startsWith('https://api.systeme.io/')) {
-      w.sio.push((init.method || 'GET') + ' ' + u.slice('https://api.systeme.io/api'.length));
-      if (init.method === 'GET') return { ok: true, status: 200, json: async () => ({ items: [{ id: 5 }] }) };
-      return { ok: true, status: init.method === 'DELETE' ? 404 : 204, json: async () => null };
-    }
+    if (w.B.gere(u)) return w.B.fetch(url, init);
     return F.fetchImpl(url, init);
   };
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl });
@@ -192,10 +190,10 @@ await test('MOTIF : compté par mois sous sa clé, une fois par résiliation ; j
   assert.deepEqual(s.F.lire('stats/resiliations/2026-10'), { sans_reponse: 1 });
 });
 
-await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de tarifs.json ; étiquette Systeme.io seulement avec accord ; revenu → rien', async () => {
+await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de tarifs.json ; liste Brevo seulement avec accord ; revenu → rien', async () => {
   const base = (consent) => lea({ resiliationDemandee: { ts: 7, motif: '' } }, { tonnageTotal: 12500, sessions: [{ date: 1 }, { date: 2 }, { date: 3 }],
     consentements: consent ? { email: { accepte: true, le: 1 } } : undefined });
-  const env = { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_RECONQUETE: '31', SYSTEMEIO_TAG_RENOUVELLEMENT: '42' };
+  const env = { BREVO_API_KEY: 'k', BREVO_LISTE_RECONQUETE: '31', BREVO_LISTE_RENOUVELLEMENT: '42' };
   const w = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env });
   w.t = T0 + 20 * J;
   assert.equal((await w.PP.reconqueteQuotidien(w.t))[CLE], 'pas_encore');
@@ -203,15 +201,17 @@ await test('RECONQUÊTE J+30 : push avec l’historique réel et l’offre de ta
   assert.equal((await w.PP.reconqueteQuotidien(w.t))[CLE], 'envoye');
   assert.equal(w.pushs[0].message.body, '3 séances et 12,5 t soulevées : tout est gardé. Ultime à l’année : 249 €, soit 2 mois offerts.');
   assert.equal(w.pushs[0].message.type, 'reconquete');
-  assert.deepEqual(w.sio, ['GET /contacts?email=lea%40t.fr', 'DELETE /contacts/5/tags/31', 'POST /contacts/5/tags']);
+  assert.deepEqual(w.sio, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
+  assert.deepEqual(w.B.listes[0].membres, ['lea@t.fr']);
   assert.equal(w.F.lire('reconquete/' + CLE), null);
-  // Sans accord : pas d'e-mail ; sans étiquette configurée : JAMAIS celle du renouvellement.
+  // Sans accord : pas d'e-mail ; sans liste configurée : JAMAIS celle du renouvellement.
   const n = monde({ users: base(false), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env });
   n.t = T0 + 30 * J; await n.PP.reconqueteQuotidien(n.t);
   assert.deepEqual(n.sio, []);
-  const t = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env: { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_RENOUVELLEMENT: '42' } });
+  const t = monde({ users: base(true), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) }, env: { BREVO_API_KEY: 'k', BREVO_LISTE_RENOUVELLEMENT: '42' } });
   t.t = T0 + 30 * J; await t.PP.reconqueteQuotidien(t.t);
-  assert.ok(!t.sio.some((x) => /tags\/42|tags$/.test(x)));
+  assert.deepEqual(t.sio, []);
+  assert.deepEqual(t.B.listes[1].membres, []);
   // Revenue entre-temps (plus de résiliation) : rien.
   const r = monde({ users: lea(), reconquete: { [CLE]: { ts: 7, le: T0, abo: ABO } } }, { abonnements: { [ABO]: sub(ULT_M) } });
   r.t = T0 + 30 * J;

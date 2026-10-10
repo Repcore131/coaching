@@ -5,6 +5,7 @@ import { creerBase } from '../src/base.js';
 import { creerFinEssai, palierFinEssai, texteFinEssai } from '../src/finessai.js';
 import { travaux } from '../src/planif.js';
 import { fausseBase } from './fausse-base.mjs';
+import { fauxBrevo } from './faux-brevo.mjs';
 
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
@@ -16,14 +17,11 @@ const finDans = (n) => Date.parse('2026-10-10T22:00:00Z') + (n - 1) * J + 3 * 36
 function monde(initial, o) {
   const opt = o || {};
   const F = fausseBase(initial);
-  const sio = [];
+  const B = fauxBrevo({ listes: [{ id: 9, name: 'Fin d’essai' }] });
+  const sio = B.appels;
   const fetchImpl = async (url, init) => {
     const u = String(url);
-    if (u.startsWith('https://api.systeme.io/')) {
-      sio.push((init.method || 'GET') + ' ' + u.slice('https://api.systeme.io/api'.length));
-      if (init.method === 'GET') return { ok: true, status: 200, json: async () => ({ items: [{ id: 5 }] }) };
-      return { ok: true, status: init.method === 'DELETE' ? 404 : 204, json: async () => null };
-    }
+    if (B.gere(u)) return B.fetch(url, init);
     return F.fetchImpl(url, init);
   };
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl });
@@ -83,20 +81,20 @@ await test('DÉJÀ PAYANT : ni notification ni e-mail (activite.payant ou statut
   const w = monde({
     activite: { 'pay@t,fr': act(finDans(3), { s: 5, r: 1 }, { payant: true }), 'abo@t,fr': act(finDans(3), { s: 5, r: 1 }) },
     users: { 'pay@t,fr': { role: 'athlete', status: 'FREE' }, 'abo@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', consentements: { email: { accepte: true, le: 1 } } } },
-  }, { env: { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_FIN_ESSAI: '9' } });
+  }, { env: { BREVO_API_KEY: 'k', BREVO_LISTE_FIN_ESSAI: '9' } });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['pay@t,fr'], 'payant'); assert.equal(b['abo@t,fr'], 'payant');
   assert.equal(w.pushs.length, 0); assert.equal(w.sio.length, 0);
 });
 
-await test('J-3 avec accord e-mail : étiquette « fin d’essai » posée dans Systeme.io ; sans accord, rien', async () => {
-  const env = { SYSTEMEIO_API_KEY: 'k', SYSTEMEIO_TAG_FIN_ESSAI: '9' };
+await test('J-3 avec accord e-mail : liste « fin d’essai » dans Brevo ; sans accord, rien', async () => {
+  const env = { BREVO_API_KEY: 'k', BREVO_LISTE_FIN_ESSAI: '9' };
   const w = monde({ activite: { 'oui@t,fr': act(finDans(3), { s: 2, r: 0 }), 'non@t,fr': act(finDans(3), { s: 2, r: 0 }) },
     users: { 'oui@t,fr': { role: 'athlete', status: 'FREE', email: 'oui@t.fr', consentements: { email: { accepte: true, le: 1 } } }, 'non@t,fr': { role: 'athlete', status: 'FREE' } } }, { env });
   const b = await w.FE.quotidien(T0);
   assert.equal(b['oui@t,fr'].mail, 'envoye');
   assert.equal(b['non@t,fr'].mail, 'sans_accord');
-  assert.deepEqual(w.sio, ['GET /contacts?email=oui%40t.fr', 'DELETE /contacts/5/tags/9', 'POST /contacts/5/tags']);
+  assert.deepEqual(w.sio, ['POST /contacts', 'POST /contacts/lists/:id/contacts/remove', 'POST /contacts/lists/:id/contacts/add']);
 });
 
 await test('sans appareil abonné : rien ne part, le palier est quand même noté (pas de doublon le lendemain)', async () => {

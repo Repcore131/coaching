@@ -29,7 +29,8 @@
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
-import { avisDu, texteAvis, etiqueterSystemeio } from './renouvellement.js';
+import { avisDu, texteAvis } from './renouvellement.js';
+import { inscrireListe } from './brevo.js';
 import * as AL from './alternatives.js';
 import TARIFS from '../../tarifs.json' with { type: 'json' };
 
@@ -407,7 +408,7 @@ export function creerPaypal(ctx) {
     await M.ambassadeurPaiement(cle, { montant, le: Date.parse(ress.create_time || '') || t, abonnement: abo, venteId: ress.id }).catch(() => null);
     await M.attributionPaiement(cle).catch(() => null);
     // Le contact e-mail (s'il a consenti) passe au statut « payant ».
-    if (M.systemeio) await M.systemeio.contactDuCompte(cle, 'payant').catch(() => null);
+    if (M.emails) await M.emails.contactDuCompte(cle, 'payant').catch(() => null);
     return true;
   }
 
@@ -723,7 +724,7 @@ export function creerPaypal(ctx) {
 
   // ── L'AVIS AVANT LE RENOUVELLEMENT ANNUEL (art. L215-1) ────────────────
   // Une clé par jour de travail (planif.js). Notification urgente ET e-mail
-  // Systeme.io (s'il est configuré) ; l'avis est noté parti dès qu'UN des
+  // Brevo (s'il est configuré) ; l'avis est noté parti dès qu'UN des
   // deux canaux a porté, sinon il se retente le lendemain.
   const renouvellementsCles = async () => Object.keys((await lire('renouvellements')) || {});
   async function avisRenouvellementUn(cle, t0) {
@@ -740,7 +741,7 @@ export function creerPaypal(ctx) {
       push = Number(p && p.envoye) || 0;
     } catch (e) { push = 0; }
     try {
-      mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', date: x.date, montant: x.montant });
+      mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', liste: env.BREVO_LISTE_RENOUVELLEMENT, attributs: { ECHEANCE: x.date, MONTANT: x.montant || '' } });
     } catch (e) { mail = 'erreur : ' + String(e && e.message || e).slice(0, 80); }
     const parti = push > 0 || mail === 'envoye';
     await db.ref('renouvellements/' + cle).update(parti
@@ -884,7 +885,7 @@ export function creerPaypal(ctx) {
     // Une pause en cours ne reprendra pas (reprendre le relit) ; on le note tout de suite.
     return { ok: true, motif: k };
   }
-  // J+30 : un push (et l'étiquette Systeme.io « reconquête » si la personne a
+  // J+30 : un push (et la liste Brevo « reconquête » si la personne a
   // accepté les e-mails), avec son vrai historique et l'offre du moment.
   async function reconqueteUn(cle, r, t) {
     const d = AL.reconqueteDue(r && r.le, t);
@@ -902,7 +903,7 @@ export function creerPaypal(ctx) {
     if (p && p.raison === 'plafond') return 'plafond';          // demain, jusqu'à J+37
     let mail = 'sans_accord';
     if (consent === true) {
-      try { mail = await etiqueterSystemeio(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', tag: env.SYSTEMEIO_TAG_RECONQUETE || '' }); }
+      try { mail = await inscrireListe(env, ctx.fetchImpl, { email: String(email || cle.replace(/,/g, '.')), prenom: fname || '', liste: env.BREVO_LISTE_RECONQUETE }); }
       catch (e) { mail = 'erreur'; }
     }
     await db.ref('reconquete/' + cle).remove();
