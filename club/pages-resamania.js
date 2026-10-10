@@ -134,7 +134,7 @@ async function rsmRead(files) {
   }
   const month = addMonths(curMonth(), -1);
   UI.rsmTables = tables;
-  UI.rsmBatch = tables.map(t => { try { return analyzeTable(t, { clubId: CLUB.id, month }); } catch (e) { return { name: t.name, def: null, rowsCount: 0, entries: [], recov: [], clients: {}, clientsByName: [], resil: [], controls: [], warnings: ['Lecture impossible : ' + e.message], skipped: {} }; } });
+  UI.rsmBatch = analyzeTables(tables, { clubId: CLUB.id, month, state: S });
   UI.rsmChoices = {};
   UI.rsmBusy = false; render();
 }
@@ -387,10 +387,10 @@ function rsmCommitPlan(B, { club, choices = {}, by, now = Date.now() }) {
   return { ops, summary };
 }
 ACTIONS.rsmCommit = () => {
-  const { ops, summary } = rsmCommitPlan(UI.rsmBatch, { club: CLUB.id, choices: UI.rsmChoices || {}, by: ME.id });
-  db.batch(ops);
-  // Après l'import : doublons fusionnés, dossiers fermés d'après l'état Resamania (avec « Annuler »).
-  resDedupe(CLUB.id); resAutoClose(CLUB.id);
+  // Même moteur que les imports automatiques (resamania-core.js) ; après l'écriture : doublons
+  // fusionnés, dossiers fermés d'après l'état Resamania (avec « Annuler »).
+  const plan = planImport(UI.rsmBatch, S, {}, { club: CLUB.id, choices: UI.rsmChoices || {}, by: ME.id }); const summary = plan.summary;
+  applyOps(plan.ops);
   UI.rsmBatch = null; UI.rsmDone = summary; render();
   toast(`Import Resamania terminé : ${plur(summary.files, 'fichier', 'fichiers')}`);
 };

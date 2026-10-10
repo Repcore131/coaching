@@ -143,3 +143,45 @@ test('J5 : aucun identifiant ni en-tête Resamania dans le front (sources du bun
   const dist = new URL('../_dist/fitpulse.html', import.meta.url);
   if (existsSync(dist)) assert.doesNotMatch(readFileSync(dist, 'utf8'), INTERDIT, '_dist/fitpulse.html');
 });
+
+// ── Point 9 : moteur d'import pur ──────────────────────────────────────────
+const demo = () => { const run = chargerAppli({}); run(`S = normalizeState(demoState()); ME = Object.values(S.users).find(u => u.role === 'manager'); CLUB = S.clubs[DEMO_CLUB.id]; REV++; toast = () => {};`); return run; };
+const viaAncien = (run, nom, csv) => J(run, `(() => { const B = [analyzeTable({ name: ${JSON.stringify(nom)}, ...parseCSV(${JSON.stringify(csv)}) }, { clubId: CLUB.id, month: addMonths(curMonth(), -1) })]; return rsmCommitPlan(B, { club: CLUB.id, by: 'u1', now: 1 }).summary; })()`);
+const viaMoteur = async (run, nom, csv, by = 'u1', choices = {}) => JSON.parse(await run(`(async () => { const b = new TextEncoder().encode(${JSON.stringify(csv)}); const B = await analyzeFile(b, ${JSON.stringify(nom)}, { clubId: CLUB.id, state: S }); const P = planImport(B, S, {}, { club: CLUB.id, by: ${JSON.stringify(by)}, choices: ${JSON.stringify(choices)}, now: 1 }); return JSON.stringify({ summary: P.summary, pending: P.pending, ops: P.ops, lignes: lignesVendeur(B, (P.pending.find(p => p.kind === 'seller') || {}).keys) }); })()`));
+
+test('J9 : les fichiers de démonstration donnent le même résumé avant et après le moteur commun', async () => {
+  for (const [type, nom] of [['ventes', 'RSM_ventes-abonnements_exemple.csv'], ['incidents', 'RSM_clients-en-incident_exemple.csv'], ['resiliations', 'RSM_resiliations_exemple.csv']]) {
+    const run = demo(); const csv = run(`demoCsv(${JSON.stringify(type)})`);
+    const avant = viaAncien(run, nom, csv); const apres = (await viaMoteur(demo(), nom, csv)).summary;
+    assert.deepEqual(apres, avant, type); assert.ok(avant.files === 1, type);
+  }
+});
+test('J9 : import automatique, vendeur inconnu : aucune saisie à son nom, une ligne en attente, rejouée au rattachement sans doublon', async () => {
+  const run = demo(); const d = run(`addDays(today(), -3).split('-').reverse().join('/')`);
+  const csv = ['Numéro du client;Date de création;Prénom;Nom;Nom du produit;Nom de l’offre;Échéancier;État;Canal;Prix toutes taxes;Prénom du commercial initial;Nom du commercial initial;Code du commercial initial',
+    `90001;${d};Lina;Petit;Abonnement Premium;Premium;Mensuel;Validé;Club;39,99;Zoé;Inconnue;ZINC`, `90002;${d};Marc;Roux;Abonnement Premium;Premium;Mensuel;Validé;Club;39,99;Zoé;Inconnue;ZINC`].join('\r\n');
+  const P = await viaMoteur(run, 'RSM_ventes.csv', csv, 'auto:mail');
+  const vendeur = P.pending.find(p => p.kind === 'seller'); assert.ok(vendeur, JSON.stringify(P.pending)); assert.equal(vendeur.count, 2);
+  assert.equal(P.ops.filter(([p]) => p[0] === 'entries' && p.length === 2).length, 0, 'aucune saisie au nom d’un vendeur inconnu');
+  assert.equal(P.lignes[0].entries.length, 2);
+  assert.equal(P.ops.find(([p]) => p[0] === 'imports' && p.length === 2)[1].by, 'auto:mail');
+  // Le manager rattache le vendeur : les lignes en attente sont rejouées, une fois.
+  const uid = run(`commerciaux(CLUB.id).find(u => u.role === 'membre').id`);
+  const ops1 = J(run, `rejouerOps(${JSON.stringify({ id: 'p1', label: vendeur.label, lignes: P.lignes })}, '${uid}', { club: CLUB.id, by: ME.id, now: 2, state: S })`);
+  assert.equal(ops1.filter(([p]) => p[0] === 'entries').length, 2);
+  run(`db.batch(${JSON.stringify(ops1)}); REV++;`);
+  const ops2 = J(run, `rejouerOps(${JSON.stringify({ id: 'p1', label: vendeur.label, lignes: P.lignes })}, '${uid}', { club: CLUB.id, by: ME.id, now: 3, state: S })`);
+  assert.deepEqual(ops2, [], 'rejouer une deuxième fois ne change rien');
+  // Le même fichier, une fois le vendeur connu : mêmes clés de saisie (hkey), aucune nouvelle ligne.
+  const P2 = await viaMoteur(run, 'RSM_ventes.csv', csv, 'auto:mail', { [vendeur.keys[0]]: uid });
+  assert.deepEqual(P2.ops.filter(([p]) => p[0] === 'entries' && p.length === 2).map(([p]) => p[1]).sort(), ops1.filter(([p]) => p[0] === 'entries').map(([p]) => p[1]).sort());
+  assert.equal(P2.summary.entries, 0); assert.equal(P2.summary.updated, 2);
+  assert.throws(() => run(`planImport([], S, {}, { club: CLUB.id, by: 'auto:fax' })`) && run(`planImport([], S, {}, { club: CLUB.id, by: 'n’importe quoi' })`));
+});
+test('J9 : le moteur ne touche ni au DOM ni à l’état de l’appli ; rsmCommit applique simplement le plan', () => {
+  const src = readFileSync(new URL('../resamania-core.js', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  const pur = src.slice(0, src.indexOf('function applyOps'));
+  assert.doesNotMatch(pur, /document\.|window\.|\$\(|UI\.|ME\.|CLUB\.|render\(/);
+  const run = demo(); const avant = run(`JSON.stringify(S)`); run(`planImport([], S, {}, { club: CLUB.id, by: 'auto:api' })`); assert.equal(run(`JSON.stringify(S)`), avant);
+  assert.match(readFileSync(new URL('../pages-resamania.js', import.meta.url), 'utf8'), /applyOps\(plan\.ops\);/);
+});
