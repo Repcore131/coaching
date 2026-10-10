@@ -47,7 +47,9 @@ const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
 const abonnement = (req, ctx) => ctx.M.paypal.appelAbonnement(req);
 // email : la suppression du contact Brevo quand le compte est supprimé (brevo.js).
 const email = (req, ctx) => ctx.M.emails.appel(req);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement, email };
+// coaching : les formules de Kevin, commande et capture contrôlées (coaching.js, via paypal.js).
+const coaching = (req, ctx) => ctx.M.paypal.appelCoaching(req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin, abonnement, email, coaching };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {

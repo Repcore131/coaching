@@ -29,6 +29,7 @@
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
+import { creerCoaching, lireCustomIdCoaching } from './coaching.js';
 import { avisDu, texteAvis } from './renouvellement.js';
 import { envoyerModele, lienDesinscription } from './brevo.js';
 import * as AL from './alternatives.js';
@@ -180,6 +181,13 @@ export function creerPaypal(ctx) {
   // LE PAIEMENT DIRECT AU COACH : ses commandes portent un custom_id à TROIS
   // segments (« <coach>|<athlète>|<formule> ») et suivent leur propre chemin.
   const PC = creerPaiementsCoach(ctx);
+  // LES FORMULES DE KEVIN (coaching.js) : custom_id à QUATRE segments
+  // (« ck|<athlète>|<formule>|<entrée> »), argent sur le compte de l'app.
+  // Le premier paiement et le registre des transactions sont ceux d'ici.
+  const CK = creerCoaching(Object.assign({}, ctx, {
+    pp: { lire: (ch) => lirePaypal(ch, env, ctx.fetchImpl), ecrire: (ch, corps) => ecrirePaypal(ch, corps, env, ctx.fetchImpl) },
+    premierPaiement: (cle, abo, ress) => premierPaiement(cle, abo, ress),
+    noterTransaction: (id, rec) => noterTransaction(id, rec) }));
 
   // ── À QUI EST CET ABONNEMENT ? ─────────────────────────────────────────
   // L'index paypal_abonnes d'abord. Sinon, l'abonnement lui-même, lu chez
@@ -350,6 +358,7 @@ export function creerPaypal(ctx) {
     const idCommande = String((rel && rel.order_id) || '');
     const commande = idCommande ? await lireCommande(idCommande, env, ctx.fetchImpl) : null;
     const pu = commande && Array.isArray(commande.purchase_units) ? commande.purchase_units[0] : null;
+    if (pu && lireCustomIdCoaching(pu.custom_id)) return CK.evenementCapture(evt, commande);
     if (pu && lireCustomId(pu.custom_id)) return PC.evenementCapture(evt, commande);
     const [cle, prog] = String((pu && pu.custom_id) || '').split('|');
     if (!pu || !cle || /[.#$\[\]\/]/.test(cle) || (await lire('users/' + cle + '/role')) === null) {
@@ -500,6 +509,8 @@ export function creerPaypal(ctx) {
   // L'ACCÈS DU REMBOURSÉ, fermé à la date du remboursement.
   async function fermerAcces(rec, t) {
     const b = 'users/' + rec.cle + '/';
+    // Un coaching : sa durée payée est retirée par coaching.js (annuler), pas l'abonnement.
+    if (rec.type === 'coaching') return null;
     if (rec.type === 'programme') {
       // REMBOURSÉ, LE PROGRAMME N'EST PLUS ACQUIS : l'accès à vie tombe avec
       // l'argent (rembourseLe, lu par programmeAcquis dans l'app).
@@ -529,6 +540,8 @@ export function creerPaypal(ctx) {
     const actions = [];
     const c = await M.commissionVente(rec.id, 'annuler');
     if (c) actions.push('commission ' + c.code + ' annulée (' + euros(Math.round(c.avant * 100)) + ')' + (c.dejaPayee ? ' — déjà versée, à reprendre' : ''));
+    // UN COACHING REMBOURSÉ perd sa durée payée, premier paiement ou non.
+    if (rec.type === 'coaching') { const ck = await CK.rembourse(rec, t); if (ck) actions.push(ck); }
     if (rec.premier) {
       const m = await M.retirerMoisOffert(rec.cle, t);
       if (m) actions.push({ reserve_retiree: 'mois offert retiré de la réserve de ', mois_retire: 'mois offert retiré de l’accès de ',
@@ -939,6 +952,7 @@ export function creerPaypal(ctx) {
   }
 
   return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements, renouvellementsCles, avisRenouvellementUn,
+    appelCoaching: CK.appel, coaching: CK,
     appelAbonnement, pauser, reprendre, reprisesQuotidien, versEssentielle, verifierEssentielle, resiliation, reconqueteQuotidien };
 }
 

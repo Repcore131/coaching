@@ -21,7 +21,8 @@
     "pro": { "athletes": null, "moisCode": 12 }
   },
   "coaching": {
-    "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi." },
+    "_reponse": "« reponse » : le délai affiché sur l'écran des formules (s-coaching-kevin). Écrit seulement quand Kevin l'a donné : celui du programme personnalisé vient de son message d'invitation (« ton programme sera prêt sous 24 h », 29/09/2026). Sans valeur, l'écran n'affiche aucun délai.",
+    "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi.", "reponse": "Ton programme est prêt sous 24 h après ton bilan de départ." },
     "revision_prog": { "prix": 40, "mois": 1, "lib": "Révision de programme", "comprend": "Ton programme ajusté quand tu en as besoin, sans échéance." },
     "boutique_prog": { "prix": 14.9, "mois": 1, "acces": "vie", "_lisezmoi": "Un programme de la boutique : le programme à vie (acces), et mois × 30 jours d'app complète (Ultime) à partir de l'achat. Ensuite, il se relit toujours ; pour l'utiliser en séance, Essentielle suffit. Le worker (cloudflare/src/paypal.js, PROGRAMME_MS) suit cette valeur : un test les compare." },
     "coaching_essentiel": { "prix": 150, "mois": 1, "lib": "Coaching Essentiel", "comprend": "Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach." },

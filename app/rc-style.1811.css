@@ -16331,6 +16331,42 @@ label.ta-choix:has(input:checked){border-color:var(--red)}
 #s-tests-compat .pad{padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
 
 /* LES PARTENAIRES (11/10/2026) : une carte sobre, la mention « Lien partenaire » toujours visible. */
+/* ══ LES FORMULES DE COACHING DE KEVIN (11/10/2026) ══ */
+.ck-intro{font-size:var(--fs-sm);line-height:1.6;color:var(--text);margin:0 0 14px}
+.ck-raison{font-size:var(--fs-sm);line-height:1.5;color:var(--orange,#f59e0b);border:1px solid var(--border);border-radius:var(--r-2,8px);padding:10px 12px;margin:0 0 14px}
+.ck-fam{margin:0 0 20px}
+.ck-fam h3{font-size:var(--fs-md);margin:0 0 2px}
+.ck-fam-s{margin:0 0 10px;font-size:var(--fs-xs)}
+.ck-f{background:var(--surface-1,#111);border:1px solid var(--border,#1e1e1e);border-radius:var(--r-3,12px);padding:14px 16px;margin-bottom:10px}
+.ck-f-tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.ck-f-tete b{font-size:var(--fs-md);color:var(--text)}
+.ck-prix{font-weight:800;font-size:var(--fs-lg,20px);color:var(--text);white-space:nowrap}
+.ck-duree{font-size:var(--fs-xs);color:var(--sub);margin-top:2px}
+.ck-comprend{font-size:var(--fs-sm);line-height:1.55;color:var(--text);margin:10px 0 0}
+.ck-reponse{font-size:var(--fs-xs);line-height:1.5;color:var(--sub);margin:8px 0 0}
+.ck-choisir{width:100%;margin-top:12px;min-height:44px}
+.ck-confirmer{background:var(--surface-2,#161616);border:1px solid var(--border);border-radius:var(--r-3,12px);padding:14px 16px;margin:0 0 16px}
+.ck-exec{display:flex;gap:10px;align-items:flex-start;font-size:var(--fs-sm);line-height:1.5;margin:12px 0 4px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text)}
+.ck-exec input{width:20px;height:20px;flex-shrink:0;margin:2px 0 0}
+.ck-actions{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.ck-actions .btn{width:100%;min-height:44px}
+.ck-err{color:var(--red-light,#ff6b6b);font-size:var(--fs-xs);min-height:1em;margin:6px 0}
+.ck-pied,.ck-secours{font-size:var(--fs-xs);line-height:1.5;margin:6px 0}
+.ck-pied a,.ck-secours a{color:var(--text);text-decoration:underline}
+.ck-carte{position:relative;margin-bottom:16px;padding:16px}
+.ck-carte-t{font-weight:800;font-size:var(--fs-md);margin-bottom:4px;padding-right:32px}
+.ck-carte .btn{width:100%;margin-top:10px;min-height:44px}
+.ck-carte-x{position:absolute;top:6px;right:6px;width:44px;height:44px;background:none;border:0;color:var(--sub);font-size:22px;cursor:pointer}
+.ck-q .ck-l{display:block;margin-bottom:12px}
+.ck-q .ck-l>span{display:block;font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;text-transform:none;letter-spacing:0}
+.ck-q input,.ck-q select,.ck-q textarea{width:100%;font-size:16px;padding:10px 12px}
+.ck-q .ck-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.ck-q .ck-c{display:flex;gap:10px;align-items:flex-start;font-size:var(--fs-sm);margin:4px 0 12px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text)}
+.ck-q .ck-c input{width:20px;height:20px;flex-shrink:0;margin:2px 0 0}
+.ck-sante{font-size:var(--fs-xs);line-height:1.5}
+.ck-fi{font-size:var(--fs-sm);margin-bottom:8px}
+.ck-fi-l{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-sm);margin-bottom:8px}
+.ck-fi-l span{font-size:var(--fs-xs);color:var(--sub)}
 .ptn-carte{margin:14px 0 0;background:var(--surface-1,#111);border:1px solid var(--border,#1e1e1e);border-radius:var(--r-3,12px);padding:12px 14px;text-align:left}
 .ptn-tete{display:flex;align-items:center;gap:10px}
 .ptn-logo{width:40px;height:40px;border-radius:var(--r-2,8px);object-fit:contain;background:#fff;flex-shrink:0}

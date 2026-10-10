@@ -636,6 +636,8 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // LES PARTENAIRES (11/10/2026) : vues et clics, par emplacement.
   'partenaire_vue_complements','partenaire_vue_defi','partenaire_vue_wrapped','partenaire_vue_accueil',
   'partenaire_clic_complements','partenaire_clic_defi','partenaire_clic_wrapped','partenaire_clic_accueil',
+  // LES FORMULES DE KEVIN (11/10/2026) : l'écran, le choix, le paiement, la carte de l'accueil.
+  'coaching_vue','coaching_choix','coaching_paye','coaching_carte_vue','coaching_carte_clic',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
   // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
   // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
@@ -1259,7 +1261,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":0,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"contrats_engages":{"engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8}},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"quotas_coach":{"libre":{"athletes":1,"moisCode":1},"coach":{"athletes":15,"moisCode":6},"pro":{"athletes":null,"moisCode":12}},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi.","reponse":"Ton programme est prêt sous 24 h après ton bilan de départ."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":1,"acces":"vie"},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -1536,7 +1538,7 @@ function rcVerrouBloc(capacite){
     try{ prix='<div class="vrr-p">Ultime : '+prixDeuxFacons('ultime')+'.</div>'; }catch(e){ prix=''; }
   }
   const action=(v.vers==='coaching')
-    ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin(\'lien\',event)">'
       +escapeHtml(voie.bouton)+'</a>'
     :'<button type="button" class="vrr-b" onclick="rcVerrouUltime()">'+escapeHtml(voie.bouton)+'</button>';
   return '<div class="vrr" data-verrou="'+escapeHtml(capacite)+'">'
@@ -7315,7 +7317,7 @@ function _validateAthletePkg(o){
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
-      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
+      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')||!!params.get('coaching')
       ||!!params.get('garmin')||params.get('messages')==='1');
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
@@ -7398,6 +7400,10 @@ function _validateAthletePkg(o){
     // jusqu'à la connexion. ?paiement_coach=retour|annule&token=<commande> : le retour de PayPal.
     if(params.get('payer')){ try{ localStorage.setItem('rc_payer',JSON.stringify({brut:String(params.get('payer')).slice(0,90),at:Date.now()})); }catch(e){} }
     if(params.get('paiement_coach')) window._pendingPaiementCoach={etat:String(params.get('paiement_coach')),commande:String(params.get('token')||'')};
+    // ?coaching=retour|annule&token=<commande> : le retour de PayPal (formules de Kevin) ; ?coaching=1 : l'écran.
+    {const _ck=String(params.get('coaching')||'');
+     if(_ck==='retour'||_ck==='annule') window._pendingCoachingRetour={etat:_ck,commande:String(params.get('token')||'')};
+     else if(_ck) window._pendingCoachingOpen=String(params.get('src')||'')==='landing'?'landing':'lien';}
     // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
     // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
     //   pendant le chargement du script, AVANT que les constantes du module
@@ -7563,6 +7569,8 @@ const CHAMPS_SANTE=Object.freeze([
   // Douleur, drapeaux, suspension : de la donnee de sante pure
   'drapeauRouge','drapeauGeneral','historiqueDrapeaux','journalDouleur',
   'contraintesSante','suspension','sante','santeSignal','santeSource',
+  // Le questionnaire d'entrée du coaching (11/10/2026) : blessures et cycle.
+  'questionnaireCoaching',
   'tracesSante','constantes','analyses','encartOsseuxVu',
   // L'analyse morphologique initiale (lot 8) : des longueurs de segments en
   // centimetres, lues une fois sur une photo de bilan et figees. Aucune image
@@ -7608,6 +7616,8 @@ const CHAMPS_SANTE=Object.freeze([
 // consentir a quoi que ce soit d'autre que la politique de confidentialite.
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
+  // Le coaching acheté (copie du serveur) et la carte « Passer au coaching » : un achat et un affichage.
+  'coachingAchat','carteCoaching',
   // L'opt-in e-mail (11/10/2026) : un consentement horodaté, pas une donnée de santé.
   'consentements',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
@@ -7846,7 +7856,8 @@ const SANTE_MOTIFS=Object.freeze({
   pas:        'Ton nombre de pas quotidiens est une donnée de santé.',
   energie:    'Ton niveau d\'énergie est une donnée de santé.',
   age:        'Ta date de naissance sert à calculer tes repères : c\'est une donnée de santé.',
-  ressenti:   'Ton ressenti de séance (fatigue, sensations) est une donnée de santé.'
+  ressenti:   'Ton ressenti de séance (fatigue, sensations) est une donnée de santé.',
+  coaching:   'Tes blessures et ton cycle sont des données de santé : ton coach en a besoin pour construire ton programme.'
 });
 // ── LES DEUX AUTRES DEPLACEMENTS ────────────────────────────────────────
 //
@@ -8972,7 +8983,10 @@ function routeUser(){
   try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){}
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
-  if(!currentUser) return go('s-welcome');
+  if(!currentUser){ go('s-welcome');
+    // ?coaching=1 sans compte : l'écran des formules se lit sans être connecté.
+    if(window._pendingCoachingOpen){ const _e=window._pendingCoachingOpen; window._pendingCoachingOpen=false; setTimeout(()=>{ try{ ouvrirCoachingKevin(_e); }catch(e){} },400); }
+    return; }
   // Session corrompue (objet sans email) : seul cas où la purge est justifiée.
   if(!currentUser.email){silentLogout();return go('s-welcome');}
   // Registre des comptes de l'appareil. Ici et nulle part ailleurs : ce point
@@ -8998,6 +9012,13 @@ function routeUser(){
     if(window._pendingMessagesOpen){ window._pendingMessagesOpen=false; setTimeout(()=>{ try{ ouvrirMessages(); }catch(e){} },1000); }
     return;}
   // Athlète : vérifier l'accès
+  // LE RETOUR DE PAYPAL (formules de Kevin) AVANT LA BARRIÈRE : la capture
+  // ouvre l'accès, elle ne doit donc pas attendre derrière le paywall.
+  if(window._pendingCoachingRetour){ const _ck=window._pendingCoachingRetour; window._pendingCoachingRetour=false;
+    setTimeout(()=>{ try{ ckRetourPaypal(_ck.etat,_ck.commande); }catch(e){} },900); }
+  else if(window._pendingCoachingOpen){ const _e=window._pendingCoachingOpen; window._pendingCoachingOpen=false;
+    setTimeout(()=>{ try{ ouvrirCoachingKevin(_e); }catch(e){} },900); }
+  else setTimeout(()=>{ try{ ckReprendre(); }catch(e){} },900);
   const s=currentUser.status||'FREE';
   // Athlète FREE = inscrit mais pas encore activé. Ce n'est pas un compte
   // invalide : on conserve sa session et on l'amène à l'écran qui propose le
@@ -22676,6 +22697,352 @@ function pcCopierLienPayer(formule,btn){
   toast(l); return true;
 }
 
+// ══ LES FORMULES DE COACHING DE KEVIN, VENDUES DANS L'APP (11/10/2026) ══════
+//
+// L'écran s-coaching-kevin remplace le lien beacons.ai : deux familles,
+// « Avec suivi » et « Sans suivi », lues dans TARIFS.coaching (tarifs.json) —
+// ce qui est inclus (`comprend`), le délai (`reponse`, affiché SEULEMENT s'il
+// est écrit), le prix, et un bouton de paiement.
+//
+// LE PAIEMENT. Le serveur léger (cloudflare/src/coaching.js) crée la commande
+// PayPal au prix de tarifs.json, la capture au retour et CONTRÔLE le montant ;
+// il ouvre les droits, relie l'athlète à Kevin et attribue l'achat. L'app ne
+// fixe aucun prix : elle envoie une formule et l'entrée (le bouton touché).
+//
+// ⚠ LE DÉMARRAGE IMMÉDIAT EST DEMANDÉ EXPRESSÉMENT (art. L221-25 du code de la
+//   consommation) : une case, jamais pré-cochée, sans laquelle le bouton ne
+//   part pas. Le serveur la redemande.
+// ⚠ BEACONS RESTE LE SECOURS. Chaque lien beacons.ai de l'app garde son
+//   adresse : ouvrirCoachingKevin intercepte le clic et ouvre l'écran ; si
+//   l'écran manque, le lien part comme avant. Et si le paiement échoue,
+//   l'écran montre le lien beacons.
+// ⚠ VERSION GOOGLE PLAY : aucun paiement ni lien de paiement (DECISIONS §6).
+// ⚠ AUCUNE PROMESSE DE RÉSULTAT : les textes sont ceux de tarifs.json.
+
+const CK_FAMILLES=Object.freeze({
+  suivi:Object.freeze(['coaching_essentiel','coaching_transfo','coaching_evolution']),
+  sans_suivi:Object.freeze(['programme_perso','revision_prog'])});
+const CK_FORMULES=Object.freeze(CK_FAMILLES.suivi.concat(CK_FAMILLES.sans_suivi));
+// Le bouton touché : la même liste que le serveur (coaching.js, ENTREES).
+const CK_ENTREES=Object.freeze(['ecran','carte','accueil','bienvenue','abonnement','essai','reglages','landing','vitrine','lien']);
+const CK_BEACONS='https://beacons.ai/kevin.gllc';
+const CK_INTENTION_CLE='rc_coaching_intention';
+const CK_INTENTION_MS=3600e3;
+// LA CARTE « PASSER AU COACHING » : après 3 mois d'abonnement payé et 20 séances.
+const CK_CARTE_MOIS=3, CK_CARTE_SEANCES=20;
+const CK_CARTE_VISIBLE_MS=24*3600e3;
+const CK_EXEC_TEXTE='Je demande que ma formule commence dès le paiement, avant la fin du délai de rétractation de 14 jours. Si je me rétracte ensuite, je paierai la part du service déjà fournie.';
+const CK_OBJECTIFS=Object.freeze({force:'Gagner en force',muscle:'Prendre du muscle',perte:'Perdre du gras',forme:'Être en forme, bouger plus',sport:'Préparer un sport ou une épreuve',reprise:'Reprendre après une pause',autre:'Autre'});
+const CK_MATERIELS=Object.freeze({salle:'Salle complète',salle_basique:'Petite salle (peu de machines)',maison:'Maison avec haltères',sans:'Poids du corps, sans matériel'});
+const CK_DUREES=Object.freeze([30,45,60,75,90]);
+
+// ── PURES ──────────────────────────────────────────────────────────────────
+/** PURE. 'suivi' | 'sans_suivi' | null. */
+function ckFamille(f){
+  if(CK_FAMILLES.suivi.indexOf(f)>=0) return 'suivi';
+  if(CK_FAMILLES.sans_suivi.indexOf(f)>=0) return 'sans_suivi';
+  return null;
+}
+/** PURE. L'entrée bornée à la liste ; 'ecran' sinon. */
+function ckEntree(v){ const s=String(v||'').toLowerCase(); return CK_ENTREES.indexOf(s)>=0?s:'ecran'; }
+/**
+ * PURE. Ce que l'écran dit d'une formule, tout entier lu dans TARIFS.coaching.
+ * @returns {{cle:string,lib:string,prix:string,comprend:string,reponse:string,duree:string,famille:string}|null}
+ */
+function ckFormule(f){
+  const t=TARIFS.coaching&&TARIFS.coaching[f], fam=ckFamille(f);
+  if(!t||!fam||!(Number(t.prix)>0)) return null;
+  const m=Number(t.mois)||0;
+  const duree=fam==='suivi'?(m+' mois de suivi'):(m+' mois d’app inclus');
+  return {cle:f,lib:String(t.lib||f),prix:_euros(Number(t.prix)),comprend:String(t.comprend||''),
+    reponse:String(t.reponse||''),duree,famille:fam};
+}
+/**
+ * PURE. Qui peut payer ici, et sinon pourquoi.
+ * 'ok' | 'compte' (pas connecté) | 'coach' | 'autre_coach' | 'play' | 'createur'
+ */
+function ckPeutPayer(u,canal){
+  if(canal==='play') return 'play';
+  if(!u) return 'compte';
+  if(u.email===CREATOR_EMAIL) return 'createur';
+  if(u.role==='coach') return 'coach';
+  const ck=String(u.coachEmailKey||'');
+  if(ck&&ck!==String(CREATOR_EMAIL).replace(/\./g,',')) return 'autre_coach';
+  return 'ok';
+}
+const CK_RAISONS=Object.freeze({
+  play:'Le paiement n’est pas disponible dans cette version de l’application.',
+  coach:'Ces formules s’adressent aux athlètes.',
+  createur:'C’est ton écran de vente : tes athlètes voient exactement ceci.',
+  autre_coach:'Tu es suivi par ton coach : ces formules sont celles de Kevin Guellec. Pour en changer, détache-toi d’abord dans tes réglages.'});
+/** PURE. Une carte de formule. */
+function htmlCarteFormule(f,peut){
+  const o=ckFormule(f); if(!o) return '';
+  const E=escapeHtml, cle=E(o.cle);
+  return '<div class="ck-f" data-formule="'+cle+'">'
+    +'<div class="ck-f-tete"><b>'+E(o.lib)+'</b><span class="ck-prix">'+E(o.prix)+'</span></div>'
+    +'<div class="ck-duree">'+E(o.duree)+'</div>'
+    +'<p class="ck-comprend">'+E(o.comprend)+'</p>'
+    +(o.reponse?'<p class="ck-reponse">'+E(o.reponse)+'</p>':'')
+    +(peut==='ok'||peut==='compte'
+      ?'<button type="button" class="btn btn-red ck-choisir" onclick="ckChoisir(\''+cle+'\')">Choisir '+E(o.lib)+'</button>':'')
+    +'</div>';
+}
+/** PURE. L'écran entier. */
+function htmlCoachingKevin(u,canal){
+  const peut=ckPeutPayer(u,canal);
+  const fam=(cle,titre,sous)=>'<section class="ck-fam"><h3>'+titre+'</h3><p class="sub ck-fam-s">'+sous+'</p>'
+    +CK_FAMILLES[cle].map(f=>htmlCarteFormule(f,peut)).join('')+'</section>';
+  return '<p class="ck-intro">Kevin Guellec, coach sportif diplômé d’État, construit ton programme et, avec le suivi, l’ajuste avec toi dans l’application.</p>'
+    +(CK_RAISONS[peut]?'<p class="ck-raison">'+escapeHtml(CK_RAISONS[peut])+'</p>':'')
+    +fam('suivi','Avec suivi','Ton coach suit tes séances et tes bilans, et te répond.')
+    +fam('sans_suivi','Sans suivi','Un programme construit pour toi, que tu suis seul.')
+    +'<div id="ck-confirmer" class="ck-confirmer" style="display:none"></div>'
+    +'<p class="sub ck-pied">Paiement unique par PayPal, sans abonnement ni reconduction. Conditions : <a href="../terms.html#coaching" target="_blank" rel="noopener">CGV, section coaching</a>.</p>'
+    +(peut==='play'?'':'<p class="sub ck-secours" id="ck-secours" style="display:none">Le paiement ne passe pas ? Mes formules sont aussi sur <a href="'+CK_BEACONS+'" target="_blank" rel="noopener">ma page</a>.</p>');
+}
+/** PURE. Le bloc de confirmation d'une formule : récapitulatif, case L221-25, paiement. */
+function htmlConfirmerFormule(f,connecte){
+  const o=ckFormule(f); if(!o) return '';
+  const E=escapeHtml, cle=E(o.cle);
+  if(!connecte) return '<b>'+E(o.lib)+' · '+E(o.prix)+'</b>'
+    +'<p class="sub">Ton coaching s’ouvre dans ton compte RepCore : crée-le (gratuit) ou connecte-toi, tu reviendras ici.</p>'
+    +'<div class="ck-actions"><button type="button" class="btn btn-red" onclick="ckVersCompte(\'register\')">Créer mon compte</button>'
+    +'<button type="button" class="btn btn-outline" onclick="ckVersCompte(\'login\')">J’ai déjà un compte</button></div>';
+  return '<b>'+E(o.lib)+' · '+E(o.prix)+'</b><div class="sub">'+E(o.duree)+'</div>'
+    +'<label class="ck-exec"><input type="checkbox" id="ck-exec"> <span>'+E(CK_EXEC_TEXTE)+'</span></label>'
+    +'<p class="ck-err" id="ck-err" role="alert"></p>'
+    +'<div class="ck-actions"><button type="button" class="btn btn-red" id="ck-payer" onclick="ckPayer(\''+cle+'\',this)">Payer '+E(o.prix)+' avec PayPal</button>'
+    +'<button type="button" class="btn btn-outline" onclick="ckAnnulerChoix()">Retour</button></div>';
+}
+/**
+ * PURE. LA CARTE « PASSER AU COACHING » est-elle due ? Une seule fois :
+ * après CK_CARTE_MOIS mois d'abonnement payé (depuis le premier paiement,
+ * origine.payeLe) et CK_CARTE_SEANCES séances, pour un abonné encore payant,
+ * sans coach ni achat de coaching. Visible un jour à partir de sa première
+ * apparition, puis plus jamais (carteCoaching.vueLe).
+ */
+function ckCarteDue(u,palier,t,canal){
+  if(!u||u.role==='coach'||canal==='play') return false;
+  if(u.coachEmailKey||u.coachId||u.coachingAchat) return false;
+  if(palier!=='essentielle'&&palier!=='ultime') return false;
+  if(!u.paypalSubscriptionId) return false;
+  const paye=Number(u.origine&&u.origine.payeLe)||0;
+  if(!(paye>0)||t-paye<CK_CARTE_MOIS*_MONTH_MS) return false;
+  if(((u.sessions&&u.sessions.length)||0)<CK_CARTE_SEANCES) return false;
+  const c=u.carteCoaching||{};
+  if(c.fermeeLe) return false;
+  if(Number(c.vueLe)>0&&t-Number(c.vueLe)>=CK_CARTE_VISIBLE_MS) return false;
+  return true;
+}
+/** PURE. La carte de l'accueil. Les chiffres sont ceux du dossier. */
+function htmlCarteCoaching(u){
+  const n=(u&&u.sessions&&u.sessions.length)||0;
+  return '<div class="card ck-carte">'
+    +'<button type="button" class="ck-carte-x" aria-label="Fermer" onclick="ckFermerCarte()">×</button>'
+    +'<div class="ck-carte-t">Passer au coaching</div>'
+    +'<p class="sub">'+n+' séances enregistrées. Si tu veux qu’un coach construise ton programme et le suive avec toi, voici les formules de Kevin.</p>'
+    +'<button type="button" class="btn btn-red" onclick="ckCarteClic()">Voir les formules</button></div>';
+}
+/**
+ * PURE. Le questionnaire d'entrée, depuis le formulaire. Objectif, jours et
+ * durée, matériel : obligatoires. Blessures : facultatif (vide = aucune
+ * déclarée). Cycle : facultatif.
+ * @returns {{ok:true,q:object}|{ok:false,err:string}}
+ */
+function ckQuestionnaireDepuisFormulaire(f,formule,t){
+  const x=f||{}, s=(v,n)=>String(v==null?'':v).trim().slice(0,n);
+  if(!CK_OBJECTIFS[x.objectif]) return {ok:false,err:'Choisis ton objectif.'};
+  const jours=Math.round(Number(x.jours));
+  if(!(jours>=1&&jours<=7)) return {ok:false,err:'Combien de jours par semaine peux-tu t’entraîner ?'};
+  const duree=Number(x.duree);
+  if(CK_DUREES.indexOf(duree)<0) return {ok:false,err:'Choisis la durée d’une séance.'};
+  if(!CK_MATERIELS[x.materiel]) return {ok:false,err:'Dis-nous où tu t’entraînes.'};
+  const q={objectif:x.objectif,objectifDetail:s(x.objectifDetail,300),jours,duree,materiel:x.materiel,
+    materielDetail:s(x.materielDetail,300),blessures:s(x.blessures,600),formule:String(formule||''),le:Number(t)||Date.now()};
+  if(x.cycle===true||x.cycle==='on'){
+    const d=Math.round(Number(x.cycleDuree));
+    q.cycle={suivi:true};
+    if(d>=21&&d<=45) q.cycle.duree=d;
+    else if(String(x.cycleDuree||'').trim()) return {ok:false,err:'La durée de ton cycle : entre 21 et 45 jours, ou laisse vide.'};
+  }
+  return {ok:true,q};
+}
+/** PURE. Le formulaire. */
+function htmlQuestionnaireCoaching(u){
+  const E=escapeHtml, q=(u&&u.questionnaireCoaching)||{};
+  const opt=(o,v)=>Object.keys(o).map(k=>'<option value="'+k+'"'+(k===v?' selected':'')+'>'+E(o[k])+'</option>').join('');
+  const f=ckFormule(u&&u.coachingAchat&&u.coachingAchat.formule);
+  return '<form id="ck-q" class="ck-q" onsubmit="event.preventDefault();ckEnregistrerQuestionnaire(this)">'
+    +(f?'<p class="sub">Ta formule : <b>'+E(f.lib)+'</b>. Ces réponses vont à Kevin, pour construire ton programme.</p>':'')
+    +'<label class="ck-l"><span>Ton objectif</span><select name="objectif"><option value="">Choisir…</option>'+opt(CK_OBJECTIFS,q.objectif)+'</select></label>'
+    +'<label class="ck-l"><span>En quelques mots (facultatif)</span><input name="objectifDetail" maxlength="300" value="'+E(q.objectifDetail||'')+'"></label>'
+    +'<div class="ck-2"><label class="ck-l"><span>Jours par semaine</span><select name="jours"><option value="">…</option>'
+      +[1,2,3,4,5,6,7].map(n=>'<option'+(n===q.jours?' selected':'')+'>'+n+'</option>').join('')+'</select></label>'
+    +'<label class="ck-l"><span>Durée d’une séance</span><select name="duree"><option value="">…</option>'
+      +CK_DUREES.map(n=>'<option value="'+n+'"'+(n===q.duree?' selected':'')+'>'+(n===90?'90 min ou plus':n+' min')+'</option>').join('')+'</select></label></div>'
+    +'<label class="ck-l"><span>Où tu t’entraînes</span><select name="materiel"><option value="">Choisir…</option>'+opt(CK_MATERIELS,q.materiel)+'</select></label>'
+    +'<label class="ck-l"><span>Ton matériel, précisément (facultatif)</span><input name="materielDetail" maxlength="300" value="'+E(q.materielDetail||'')+'"></label>'
+    +'<label class="ck-l"><span>Blessures, douleurs ou contre-indications (laisse vide s’il n’y en a pas)</span><textarea name="blessures" maxlength="600" rows="3">'+E(q.blessures||'')+'</textarea></label>'
+    +'<label class="ck-c"><input type="checkbox" name="cycle"'+(q.cycle&&q.cycle.suivi?' checked':'')+'> <span>Je veux que mon cycle menstruel soit pris en compte (facultatif)</span></label>'
+    +'<label class="ck-l"><span>Durée habituelle de ton cycle, en jours (facultatif)</span><input name="cycleDuree" type="number" min="21" max="45" inputmode="numeric" value="'+E(String((q.cycle&&q.cycle.duree)||''))+'"></label>'
+    +'<p class="sub ck-sante">Tes blessures et ton cycle sont des données de santé : elles ne servent qu’à ton coach, pour ton programme.</p>'
+    +'<p class="ck-err" role="alert"></p>'
+    +'<button type="submit" class="btn btn-red" style="width:100%">Envoyer à Kevin</button></form>';
+}
+/** PURE. Le bloc de la fiche, côté coach : la formule achetée et le questionnaire. */
+function htmlFicheCoaching(c){
+  const a=c&&c.coachingAchat, q=c&&c.questionnaireCoaching;
+  if(!a&&!q) return '';
+  const E=escapeHtml, f=a&&ckFormule(a.formule);
+  const d=(t)=>new Date(Number(t)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
+  let h='';
+  if(f) h+='<div class="ck-fi"><b>'+E(f.lib)+'</b> · '+E(f.prix)+' · payé le '+E(d(a.le))+'</div>';
+  if(!q) return h+'<div class="sub">Questionnaire d’entrée pas encore rempli.</div>';
+  const l=(k,v)=>v?'<div class="ck-fi-l"><span>'+E(k)+'</span><b>'+E(v)+'</b></div>':'';
+  return h+l('Objectif',(CK_OBJECTIFS[q.objectif]||'')+(q.objectifDetail?' : '+q.objectifDetail:''))
+    +l('Disponibilités',q.jours?q.jours+' jour'+(q.jours>1?'s':'')+' par semaine, '+(q.duree===90?'90 min ou plus':q.duree+' min'):'')
+    +l('Matériel',(CK_MATERIELS[q.materiel]||'')+(q.materielDetail?' : '+q.materielDetail:''))
+    +l('Blessures',q.blessures||'Aucune déclarée')
+    +l('Cycle',q.cycle&&q.cycle.suivi?('À prendre en compte'+(q.cycle.duree?' ('+q.cycle.duree+' jours)':'')):'')
+    +'<div class="sub">Rempli le '+E(d(q.le))+'</div>';
+}
+
+// ── L'ÉCRAN ────────────────────────────────────────────────────────────────
+let _ckEntree='ecran', _ckChoix='';
+// Le point d'entrée de tous les liens « formules de coaching ». Rend false
+// quand l'écran s'est ouvert (le lien beacons ne part pas), true sinon.
+function ouvrirCoachingKevin(entree,ev){
+  const z=document.getElementById('ck-ecran');
+  if(!z) return true;
+  try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(e){}
+  _ckEntree=ckEntree(entree); _ckChoix='';
+  try{ rcm('coaching_vue'); }catch(e){}
+  try{ (typeof goAvecRetour==='function'?goAvecRetour:go)('s-coaching-kevin'); }catch(e){ go('s-coaching-kevin'); }
+  z.innerHTML=htmlCoachingKevin(typeof currentUser!=='undefined'?currentUser:null,canalApp());
+  return false;
+}
+function ckChoisir(f){
+  if(!ckFormule(f)) return false;
+  _ckChoix=f;
+  try{ rcm('coaching_choix'); }catch(e){}
+  const z=document.getElementById('ck-confirmer'); if(!z) return false;
+  z.innerHTML=htmlConfirmerFormule(f,!!(typeof currentUser!=='undefined'&&currentUser));
+  z.style.display='';
+  try{ z.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+  return true;
+}
+function ckAnnulerChoix(){ _ckChoix=''; const z=document.getElementById('ck-confirmer'); if(z){ z.style.display='none'; z.innerHTML=''; } }
+// Pas de compte : l'intention est gardée une heure, reprise après la connexion.
+function ckVersCompte(quoi){
+  try{ localStorage.setItem(CK_INTENTION_CLE,JSON.stringify({formule:_ckChoix,entree:_ckEntree,at:Date.now()})); }catch(e){}
+  if(quoi==='login') go('s-login');
+  else { go('s-register'); setTimeout(()=>{ try{ selectRole('athlete',true); }catch(e){} },50); }
+}
+function ckReprendre(){
+  let o=null; try{ o=JSON.parse(localStorage.getItem(CK_INTENTION_CLE)||'null'); }catch(e){}
+  try{ localStorage.removeItem(CK_INTENTION_CLE); }catch(e){}
+  if(!o||!(Date.now()-Number(o.at)<CK_INTENTION_MS)||!currentUser) return false;
+  ouvrirCoachingKevin(o.entree);
+  if(ckFormule(o.formule)) ckChoisir(o.formule);
+  return true;
+}
+async function ckPayer(f,btn){
+  const err=document.getElementById('ck-err');
+  const c=document.getElementById('ck-exec');
+  if(!c||!c.checked){ if(err) err.textContent='Coche la case pour demander le démarrage immédiat, ou reviens en arrière.'; return false; }
+  if(ckPeutPayer(currentUser,canalApp())!=='ok') return false;
+  if(btn){ btn.disabled=true; btn.textContent='Ouverture de PayPal…'; }
+  let r=null;
+  try{ r=await CLOUD._callFn('coaching',{formule:f,executionImmediate:true,entree:_ckEntree}); }
+  catch(e){ if(err) err.textContent=e.message||'Le paiement n’a pas pu s’ouvrir.'; }
+  if(r&&r.lien){ location.href=r.lien; return true; }
+  if(btn){ btn.disabled=false; btn.textContent='Réessayer'; }
+  if(r&&!r.lien&&err) err.textContent='PayPal n’a pas renvoyé de lien de paiement.';
+  const s=document.getElementById('ck-secours'); if(s) s.style.display='';
+  return false;
+}
+// Le retour de PayPal : ?coaching=retour|annule&token=<commande>.
+async function ckRetourPaypal(etat,commande){
+  if(etat==='annule'){ toast('Paiement annulé : rien n’a été prélevé.','var(--sub)'); return false; }
+  if(etat!=='retour'||!/^[A-Z0-9]{8,40}$/.test(String(commande||''))) return false;
+  let r=null;
+  try{ r=await CLOUD._callFn('coaching',{action:'capturer',commande}); }
+  catch(e){ toast(e.message||'Le paiement n’a pas pu être confirmé.','var(--orange)',6000); return false; }
+  if(r&&r.statut==='recu'){
+    try{ rcm('coaching_paye'); }catch(e){}
+    // La copie locale de ce que le serveur vient d'écrire : sans elle, le
+    // prochain envoi du dossier repartirait sans le lien au coach.
+    if(r.coach){ currentUser.coachEmailKey=r.coach.coachEmailKey; if(r.coach.coachId) currentUser.coachId=r.coach.coachId;
+      if(r.coach.coachName) currentUser.coachName=r.coach.coachName; if(r.famille==='suivi') currentUser.status='COACHING_SUIVI'; }
+    currentUser.coachingAchat={formule:r.formule,commande,le:Date.now(),famille:r.famille};
+    try{ saveUser(); }catch(e){}
+    try{ CLOUD.pushAnnuaire(currentUser); }catch(e){}
+    try{ await rafraichirDroits(currentUser,true); }catch(e){}
+    toast('Paiement reçu ✓ Il reste ton questionnaire d’entrée.','var(--green)',5000);
+    ouvrirQuestionnaireCoaching();
+    return true;
+  }
+  if(r&&r.statut==='deja'){ try{ await rafraichirDroits(currentUser,true); }catch(e){} toast('Ce paiement est déjà enregistré ✓','var(--green)'); return true; }
+  if(r&&r.statut==='refuse'){ toast('Le paiement n’a pas passé le contrôle : écris à Kevin, rien n’a été ouvert.','var(--orange)',8000); return false; }
+  toast('PayPal n’a pas encore confirmé le paiement : ta formule s’ouvrira dès qu’il le fera.','var(--orange)',6000);
+  return false;
+}
+
+// ── LE QUESTIONNAIRE D'ENTRÉE ─────────────────────────────────────────────
+function ouvrirQuestionnaireCoaching(){
+  const z=document.getElementById('ck-questionnaire'); if(!z) return false;
+  go('s-coaching-entree');
+  z.innerHTML=htmlQuestionnaireCoaching(currentUser);
+  return true;
+}
+function ckEnregistrerQuestionnaire(form){
+  const g=(n)=>{ const el=form.elements[n]; return el?(el.type==='checkbox'?el.checked:el.value):''; };
+  const r=ckQuestionnaireDepuisFormulaire({objectif:g('objectif'),objectifDetail:g('objectifDetail'),jours:g('jours'),duree:g('duree'),
+    materiel:g('materiel'),materielDetail:g('materielDetail'),blessures:g('blessures'),cycle:g('cycle'),cycleDuree:g('cycleDuree')},
+    currentUser&&currentUser.coachingAchat&&currentUser.coachingAchat.formule,Date.now());
+  const err=form.querySelector('.ck-err');
+  if(!r.ok){ if(err) err.textContent=r.err; return false; }
+  // Des données de santé : le consentement de l'article 9 d'abord, une fois.
+  if(!demanderConsentementSante('coaching',()=>ckEnregistrerQuestionnaire(form))) return false;
+  currentUser.questionnaireCoaching=r.q;
+  // LE « ✓ » ATTEND LE SERVEUR (N3.18) : Kevin ne lit que ce qui y est arrivé.
+  let local=false; try{ local=saveUser(); }catch(e){ local=false; }
+  toastSync(local,CLOUD.pushOne(currentUser.email,currentUser),'Envoyé à Kevin ✓','ton questionnaire est');
+  go('s-client-home'); try{ loadClientHome(); }catch(e){}
+  return true;
+}
+
+// ── LA CARTE DE L'ACCUEIL ─────────────────────────────────────────────────
+function renderCarteCoaching(){
+  const z=document.getElementById('clh-coaching'); if(!z) return false;
+  const u=currentUser; let p='aucun'; try{ p=palierDe(u); }catch(e){}
+  if(!ckCarteDue(u,p,Date.now(),canalApp())){ z.innerHTML=''; return false; }
+  // LA PREMIÈRE APPARITION est notée : la carte vit un jour, puis plus jamais.
+  if(!(u.carteCoaching&&Number(u.carteCoaching.vueLe)>0)){
+    u.carteCoaching={vueLe:Date.now()};
+    try{ saveUser(); }catch(e){}
+    try{ rcm('coaching_carte_vue'); }catch(e){}
+  }
+  z.innerHTML=htmlCarteCoaching(u);
+  return true;
+}
+function ckCarteClic(){ try{ rcm('coaching_carte_clic'); }catch(e){} return ouvrirCoachingKevin('carte'); }
+function ckFermerCarte(){
+  if(!currentUser) return;
+  currentUser.carteCoaching=Object.assign({},currentUser.carteCoaching||{},{fermeeLe:Date.now()});
+  try{ saveUser(); }catch(e){}
+  const z=document.getElementById('clh-coaching'); if(z) z.innerHTML='';
+}
+// La fiche de l'athlète, côté coach.
+function renderFicheCoaching(c){
+  const z=document.getElementById('ccd-coaching'); if(!z) return false;
+  const h=htmlFicheCoaching(c);
+  z.innerHTML=h;
+  const s=z.closest('section'); if(s) s.style.display=h?'':'none';
+  return !!h;
+}
+
 // ── La vitrine d'un coach ──────────────────────────────────────────────────
 // PURE. « Kévin Guellec » → « kevin-guellec ».
 function slugDe(prenom,nom){
@@ -34910,6 +35277,7 @@ function openClientDetail(cid,_refresh,_force){
   // La file d'une ligne groupée « À traiter » (Athlète suivant).
   try{ _rendreFileSignal(c.id); }catch(e){}
   try{ renderPaiementsFiche(c); }catch(e){}
+  try{ renderFicheCoaching(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
@@ -46109,6 +46477,7 @@ function _repeindreSiJourChange(){
 function loadClientHome(){
   // LE PARTENAIRE DE L'ACCUEIL (11/10/2026), en bas, s'il est actif et prévu ici.
   try{ const zp=document.getElementById('clh-partenaire'); if(zp) zp.innerHTML=htmlEmplacementPartenaire('accueil'); }catch(e){}
+  try{ renderCarteCoaching(); }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par
@@ -47793,7 +48162,7 @@ function ouvrirMerciAchat(id){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65">'
     +'Tu veux que j’adapte ce programme à toi&nbsp;? Le programme personnalisé, c’est '
     +escapeHtml(prixOffre('programme_perso'))+'.</div>'
-    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin(\'lien\',event)">'
     +'Voir les formules de coaching</a></div>'
     +'<button class="btn btn-red" style="width:100%" onclick="closeModal();loadSessionManager()">'
     +'Voir mes séances</button>'
@@ -48066,7 +48435,7 @@ function _htmlRelanceTransformation(u){
   return '<div class="vrr" style="margin-bottom:14px">'
     +'<div class="vrr-t">Tu en es à '+escapeHtml(total)+' de révisions. Transformation, '
     +'c’est '+escapeHtml(_euros(t.prix))+' pour trois mois où je te suis vraiment.</div>'
-    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin(\'lien\',event)">'
     +'Voir les formules de coaching</a></div>';
 }
 // LE REMERCIEMENT D'UNE REVISION. Il dit ce qui se passe ensuite, parce que
@@ -83216,7 +83585,7 @@ function htmlSortiePack(u,maintenant){
   const reprendre=href
     ?'<a class="vrr-b" href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener">'
       +'Reprendre mon suivi</a>'
-    :'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    :'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" onclick="return ouvrirCoachingKevin(\'lien\',event)">'
       +'Reprendre mon suivi</a>';
   return '<div class="vrr">'
     +'<div class="vrr-t">'+escapeHtml(phraseSortiePack(x,maintenant))+'</div>'
@@ -83334,7 +83703,7 @@ function rendreEssaiBilan(u){
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
       +'<a class="eb-lien" data-eb-offre="coaching" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener" '
-      +'onclick="try{rcm(\'trial_end_offer_clicked\')}catch(e){}">Voir les formules de coaching</a>'
+      +'onclick="try{rcm(\'trial_end_offer_clicked\')}catch(e){}return ouvrirCoachingKevin(\'essai\',event)">Voir les formules de coaching</a>'
       +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
       // SES PROGRAMMES ACHETÉS RESTENT LISIBLES (09/10/2026) : ils sont à vie,
       // et cet écran est celui où tout le reste est fermé.
